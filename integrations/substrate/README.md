@@ -1,21 +1,44 @@
-# Substrate egress compatibility patch
+# Substrate egress and actor attestation patches
 
 Upstream: `github.com/agent-substrate/substrate`, commit
 `672533541dbfcd29084e4de2475267088bda3651`, Apache-2.0 (see LICENSE).
-`egress-policy.patch` changes only the egress gateway handler and its tests. The
-reference checkout stays untouched. Rebuild with:
+`egress-policy.patch` changes the egress gateway handler and tests.
+`actor-attestation.patch` extends the gVisor worker's `atunnel` and its tests.
+The reference checkout stays untouched. Rebuild with:
 
 ```sh
 bash integrations/substrate/build.sh ../reference/substrate /tmp/blaxsmith-substrate-build
 ```
 
-The build exports the pinned commit, applies the patch, runs the `atenet` tests
-and `go vet`, builds Linux/AMD64 `atenet`, and records source/patch/binary hashes.
+The build exports the pinned commit, applies both patches, runs focused tests
+and `go vet`, builds Linux/AMD64 `atenet` and `ateom-gvisor`, and records
+source/patch/binary hashes.
 On the prepared development node, `deploy/dev/publish-atenet.sh` adds that binary
 to a pinned Alpine image. Deploy its digest to the `atenet-egress` `ext-proc`
 container with `/usr/local/bin/atenet` as command. The ingress gateway is not
 changed. [Linux build provenance](provenance.json) and the [live AX/gVisor
 probe](../../docs/egress-probe.json) record this tested combination.
+
+For actor attestation, `deploy/dev/publish-ateom.sh` adds the verified worker
+binary to a digest-pinned upstream `ateom-gvisor` image. The
+[attestation provenance](provenance-attestation.json) and
+[live proof report](../../docs/actor-attestation-probe.json) record the tested
+build. A fresh 32-byte connector nonce sent to the actor's challenge route
+causes `atunnel` to sign that nonce and the exact guest response with its
+activation-specific actor key. The response carries the actor certificate and
+signature; the key never enters the gVisor guest. The product's
+`internal/bootstrap.Verify` checks the cluster CA, actor UID/name/atespace,
+certificate purpose, signature, nonce, and guest challenge lifetime. The live
+probe rejected a wrong UID, changed nonce/response, wrong CA, malformed nonce,
+and wrong actor route. It left the synthetic task suspended.
+
+The ingress client is still unauthenticated and the verifier is deliberately
+side-effect-free. This is an identity proof, **not** permission to release a
+credential. The connector must authenticate to the router, bind the nonce to
+a durable pending attempt and consume it once, recheck current actor/owner and
+effective policy immediately before release, and prove encrypted private Git
+setup. Until then, this endpoint carries no secret and only synthetic tasks
+run on this node.
 
 The gateway now checks the current actor egress policy on every new CONNECT,
 after verifying the actor certificate, UID, and RUNNING state. No policy or no

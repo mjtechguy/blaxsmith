@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Export the pinned Substrate revision, apply the egress patch, test, build.
+# Export the pinned Substrate revision, apply both patches, test, build.
 set -euo pipefail
 test "$#" -eq 2 || { echo 'usage: build.sh SUBSTRATE_SOURCE OUTPUT_DIRECTORY' >&2; exit 2; }
 source=$(cd "$1" && pwd)
@@ -7,7 +7,7 @@ output=$2
 integration=$(cd "$(dirname "$0")" && pwd)
 expected=672533541dbfcd29084e4de2475267088bda3651
 test "$(git -C "$source" rev-parse HEAD)" = "$expected" || {
-  echo 'Substrate revision changed; review and revalidate the egress patch.' >&2
+  echo 'Substrate revision changed; review and revalidate both patches.' >&2
   exit 1
 }
 mkdir "$output"
@@ -18,20 +18,25 @@ git -C "$source" archive "$expected" | tar -x -C "$build"
 cd "$build"
 git apply --check --whitespace=error-all "$integration/egress-policy.patch"
 git apply "$integration/egress-policy.patch"
-go test ./cmd/atenet/...
-go vet ./cmd/atenet/...
+git apply --check --whitespace=error-all "$integration/actor-attestation.patch"
+git apply "$integration/actor-attestation.patch"
+go test ./cmd/atenet/... ./internal/atunnel ./cmd/ateom-gvisor
+go vet ./cmd/atenet/... ./internal/atunnel ./cmd/ateom-gvisor
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o "$output/atenet" ./cmd/atenet
-python3 - "$output" "$integration/egress-policy.patch" "$expected" <<'PY'
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o "$output/ateom-gvisor" ./cmd/ateom-gvisor
+python3 - "$output" "$integration/egress-policy.patch" "$integration/actor-attestation.patch" "$expected" <<'PY'
 import hashlib, json, pathlib, subprocess, sys
-output, patch, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
+output, patch, attestation_patch, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), sys.argv[4]
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 record = {
     'upstream_commit': revision,
     'patch_sha256': sha(patch),
+    'attestation_patch_sha256': sha(attestation_patch),
     'go_version': subprocess.check_output(['go', 'version'], text=True).strip(),
     'platform': 'linux/amd64',
     'binary_sha256': sha(output / 'atenet'),
+    'ateom_gvisor_sha256': sha(output / 'ateom-gvisor'),
 }
 (output / 'provenance.json').write_text(json.dumps(record, indent=2) + '\n')
 PY
-echo "Verified Substrate egress binary and provenance: $output"
+echo "Verified Substrate egress/worker binaries and provenance: $output"

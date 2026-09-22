@@ -1,0 +1,386 @@
+diff --git a/cmd/ateom-gvisor/main.go b/cmd/ateom-gvisor/main.go
+index 9dde4d7..a31b327 100644
+--- a/cmd/ateom-gvisor/main.go
++++ b/cmd/ateom-gvisor/main.go
+@@ -1163,7 +1163,11 @@ func (s *AteomService) terminateWorkload(ctx context.Context, actorRef resources
+ }
+ 
+ func (s *AteomService) activateActorNetworking(atespace, actorName string, egress *actorEgress) error {
+-	if err := s.atunnelIngress.Activate(atespace, actorName); err != nil {
++	var attestor *atunnel.BrokerCertificateSource
++	if egress != nil {
++		attestor = egress.certificateSource
++	}
++	if err := s.atunnelIngress.ActivateAttested(atespace, actorName, attestor); err != nil {
+ 		return fmt.Errorf("while activating actor ingress: %w", err)
+ 	}
+ 	if egress == nil {
+diff --git a/internal/atunnel/bootstrap_test.go b/internal/atunnel/bootstrap_test.go
+new file mode 100644
+index 0000000..673b369
+--- /dev/null
++++ b/internal/atunnel/bootstrap_test.go
+@@ -0,0 +1,121 @@
++package atunnel
++
++import (
++	"bytes"
++	"context"
++	"crypto/ecdsa"
++	"crypto/elliptic"
++	"crypto/rand"
++	"crypto/sha256"
++	"crypto/tls"
++	"crypto/x509"
++	"encoding/base64"
++	"encoding/pem"
++	"math/big"
++	"net/http"
++	"net/http/httptest"
++	"net/url"
++	"testing"
++	"time"
++
++	"github.com/agent-substrate/substrate/internal/atenet"
++)
++
++type testBootstrapAttestor struct {
++	nonce, body []byte
++}
++
++func (*testBootstrapAttestor) ActorIdentity() (string, string, string) {
++	return "team-a", "actor-1", "uid-1"
++}
++
++func (a *testBootstrapAttestor) SignBootstrapProof(nonce, body []byte) ([]byte, []byte, error) {
++	a.nonce, a.body = bytes.Clone(nonce), bytes.Clone(body)
++	return []byte("certificate"), []byte("signature"), nil
++}
++
++func TestBootstrapProofRoutesOnlyCurrentActor(t *testing.T) {
++	guest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		if r.URL.Path != bootstrapChallengePath || r.Header.Get(BootstrapChallengeHeader) != "" {
++			t.Errorf("unexpected guest request: %s %s", r.Method, r.URL.Path)
++		}
++		_, _ = w.Write([]byte(`{"nonce":"guest","expires_at":123,"atespace":"team-a","task":"actor-1"}`))
++	}))
++	defer guest.Close()
++	upstream, _ := url.Parse(guest.URL)
++	s := newTestServer(t, upstream)
++	attestor := &testBootstrapAttestor{}
++	if err := s.ActivateAttested("team-a", "actor-1", attestor); err != nil {
++		t.Fatal(err)
++	}
++	defer s.Deactivate(context.Background())
++	var nonce [32]byte
++	if _, err := rand.Read(nonce[:]); err != nil {
++		t.Fatal(err)
++	}
++	request := func(actor, challenge string) *httptest.ResponseRecorder {
++		r := httptest.NewRequest(http.MethodGet, "https://worker"+bootstrapChallengePath, nil)
++		r.Header.Set(atenet.TargetActorHeader, actor)
++		r.Header.Set(BootstrapChallengeHeader, challenge)
++		w := httptest.NewRecorder()
++		s.ServeHTTP(w, r)
++		return w
++	}
++	validNonce := base64.RawURLEncoding.EncodeToString(nonce[:])
++	if got := request("team-a/other", validNonce).Code; got != http.StatusMisdirectedRequest {
++		t.Fatalf("wrong actor status = %d", got)
++	}
++	if got := request("team-a/actor-1", "bad").Code; got != http.StatusBadRequest {
++		t.Fatalf("malformed nonce status = %d", got)
++	}
++	response := request("team-a/actor-1", validNonce)
++	if response.Code != http.StatusOK || !bytes.Equal(attestor.nonce, nonce[:]) || !bytes.Equal(attestor.body, response.Body.Bytes()) {
++		t.Fatalf("proof response = %d, nonce/body mismatch", response.Code)
++	}
++	if response.Header().Get(BootstrapCertificateHeader) != base64.StdEncoding.EncodeToString([]byte("certificate")) ||
++		response.Header().Get(BootstrapSignatureHeader) != base64.StdEncoding.EncodeToString([]byte("signature")) {
++		t.Fatal("signed proof headers missing")
++	}
++}
++
++func TestBootstrapSourceSignsCurrentCertificate(t *testing.T) {
++	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
++	if err != nil {
++		t.Fatal(err)
++	}
++	now := time.Now()
++	template := &x509.Certificate{SerialNumber: big.NewInt(1), NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour)}
++	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
++	if err != nil {
++		t.Fatal(err)
++	}
++	leaf, err := x509.ParseCertificate(der)
++	if err != nil {
++		t.Fatal(err)
++	}
++	source := &BrokerCertificateSource{
++		privateKey:  key,
++		certificate: &tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key, Leaf: leaf},
++	}
++	nonce := bytes.Repeat([]byte{7}, 32)
++	body := []byte(`{"nonce":"guest"}`)
++	chain, signature, err := source.SignBootstrapProof(nonce, body)
++	if err != nil {
++		t.Fatal(err)
++	}
++	block, _ := pem.Decode(chain)
++	if block == nil || !bytes.Equal(block.Bytes, der) {
++		t.Fatal("proof did not carry current certificate")
++	}
++	hash := sha256.Sum256(append(append([]byte("blaxsmith/actor-proof/v1\x00"), nonce...), body...))
++	if !ecdsa.VerifyASN1(&key.PublicKey, hash[:], signature) {
++		t.Fatal("proof signature invalid")
++	}
++	_, otherSignature, err := source.SignBootstrapProof(nonce, []byte("different"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if ecdsa.VerifyASN1(&key.PublicKey, hash[:], otherSignature) {
++		t.Fatal("proof did not bind the guest response")
++	}
++}
+diff --git a/internal/atunnel/credential.go b/internal/atunnel/credential.go
+index 83cde97..d7fcfe6 100644
+--- a/internal/atunnel/credential.go
++++ b/internal/atunnel/credential.go
+@@ -19,8 +19,10 @@ import (
+ 	"crypto/ecdsa"
+ 	"crypto/elliptic"
+ 	"crypto/rand"
++	"crypto/sha256"
+ 	"crypto/tls"
+ 	"crypto/x509"
++	"encoding/pem"
+ 	"fmt"
+ 	"slices"
+ 	"sync"
+@@ -166,3 +168,31 @@ func (s *BrokerCertificateSource) GetClientCertificate(*tls.CertificateRequestIn
+ 	}
+ 	return s.certificate, nil
+ }
++
++// ActorIdentity identifies the activation whose key and certificate this source owns.
++func (s *BrokerCertificateSource) ActorIdentity() (string, string, string) {
++	return s.actorAtespace, s.actorName, s.actorUID
++}
++
++// SignBootstrapProof binds a connector nonce and guest response to the current
++// actor certificate. The private key stays in atunnel; no credential is sent
++// into the guest or embedded in the signed response.
++func (s *BrokerCertificateSource) SignBootstrapProof(nonce, body []byte) ([]byte, []byte, error) {
++	cert, err := s.GetClientCertificate(nil)
++	if err != nil {
++		return nil, nil, err
++	}
++	h := sha256.New()
++	h.Write([]byte("blaxsmith/actor-proof/v1\x00"))
++	h.Write(nonce)
++	h.Write(body)
++	signature, err := ecdsa.SignASN1(rand.Reader, s.privateKey, h.Sum(nil))
++	if err != nil {
++		return nil, nil, fmt.Errorf("atunnel: sign bootstrap proof: %w", err)
++	}
++	var chain []byte
++	for _, der := range cert.Certificate {
++		chain = append(chain, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
++	}
++	return chain, signature, nil
++}
+diff --git a/internal/atunnel/ingress.go b/internal/atunnel/ingress.go
+index a0c167f..ba9cae3 100644
+--- a/internal/atunnel/ingress.go
++++ b/internal/atunnel/ingress.go
+@@ -16,9 +16,11 @@
+ package atunnel
+ 
+ import (
++	"bytes"
+ 	"context"
+ 	"crypto/tls"
+ 	"crypto/x509"
++	"encoding/base64"
+ 	"errors"
+ 	"fmt"
+ 	"io"
+@@ -38,6 +40,13 @@ import (
+ )
+ 
+ const (
++	// BootstrapChallengeHeader carries a fresh connector nonce. It is signed
++	// with the guest challenge response by the current actor's atunnel key.
++	BootstrapChallengeHeader   = "X-Blaxsmith-Request-Nonce"
++	BootstrapCertificateHeader = "X-Blaxsmith-Actor-Certificate"
++	BootstrapSignatureHeader   = "X-Blaxsmith-Actor-Signature"
++	bootstrapChallengePath     = "/blaxsmith/bootstrap/challenge"
++	maxBootstrapBody           = 2048
+ 	// DefaultConnectPort is the worker port on which atunnel accepts inbound
+ 	// mTLS CONNECT tunnels from the ingress router.
+ 	DefaultConnectPort = 8443
+@@ -85,10 +94,16 @@ type Server struct {
+ }
+ 
+ type activation struct {
+-	ref    resources.ActorRef
+-	ctx    context.Context
+-	cancel context.CancelFunc
+-	wg     sync.WaitGroup
++	ref      resources.ActorRef
++	attestor bootstrapAttestor
++	ctx      context.Context
++	cancel   context.CancelFunc
++	wg       sync.WaitGroup
++}
++
++type bootstrapAttestor interface {
++	ActorIdentity() (atespace, actorName, actorUID string)
++	SignBootstrapProof(nonce, body []byte) (chainPEM, signature []byte, err error)
+ }
+ 
+ // NewServer creates a Server and validates its TLS material.
+@@ -299,7 +314,7 @@ func (s *Server) ServeConnectHTTP(w http.ResponseWriter, r *http.Request) {
+ 		http.Error(w, "CONNECT required", http.StatusMethodNotAllowed)
+ 		return
+ 	}
+-	ref, ctx, release, ok := s.authorize(r)
++	active, ctx, release, ok := s.authorize(r)
+ 	if !ok {
+ 		s.reject(w)
+ 		return
+@@ -319,7 +334,7 @@ func (s *Server) ServeConnectHTTP(w http.ResponseWriter, r *http.Request) {
+ 	dialer := &net.Dialer{Timeout: 5 * time.Second}
+ 	upstream, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(s.upstream.Hostname(), port))
+ 	if err != nil {
+-		slog.WarnContext(r.Context(), "atunnel CONNECT upstream failed", slog.Any("actor", ref), slog.Any("err", err))
++		slog.WarnContext(r.Context(), "atunnel CONNECT upstream failed", slog.Any("actor", active.ref), slog.Any("err", err))
+ 		http.Error(w, "bad gateway", http.StatusBadGateway)
+ 		return
+ 	}
+@@ -408,9 +423,21 @@ func (w flushingWriter) Write(p []byte) (int, error) {
+ // Activate allows requests for actorName in atespace. There can be only one
+ // active actor per worker.
+ func (s *Server) Activate(atespace, actorName string) error {
++	return s.ActivateAttested(atespace, actorName, nil)
++}
++
++// ActivateAttested enables actor-bound bootstrap proofs for this activation.
++// An absent attestor preserves ordinary ingress but cannot produce a proof.
++func (s *Server) ActivateAttested(atespace, actorName string, attestor bootstrapAttestor) error {
+ 	if !resources.IsValidResourceName(atespace) || !resources.IsValidResourceName(actorName) {
+ 		return fmt.Errorf("atunnel: invalid actor reference %q/%q", atespace, actorName)
+ 	}
++	if attestor != nil {
++		a, n, uid := attestor.ActorIdentity()
++		if a != atespace || n != actorName || uid == "" {
++			return fmt.Errorf("atunnel: attestor is not for actor %s/%s", atespace, actorName)
++		}
++	}
+ 	s.mu.Lock()
+ 	defer s.mu.Unlock()
+ 	if s.active != nil {
+@@ -418,9 +445,10 @@ func (s *Server) Activate(atespace, actorName string) error {
+ 	}
+ 	ctx, cancel := context.WithCancel(context.Background())
+ 	s.active = &activation{
+-		ref:    resources.ActorRef{Atespace: atespace, Name: actorName},
+-		ctx:    ctx,
+-		cancel: cancel,
++		ref:      resources.ActorRef{Atespace: atespace, Name: actorName},
++		attestor: attestor,
++		ctx:      ctx,
++		cancel:   cancel,
+ 	}
+ 	return nil
+ }
+@@ -462,27 +490,31 @@ func (s *Server) closeIdleUpstreamConnections() {
+ 
+ // ServeHTTP validates the actor routing header on every request before proxying it.
+ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+-	_, requestCtx, release, ok := s.authorize(r)
++	active, requestCtx, release, ok := s.authorize(r)
+ 	if !ok {
+ 		s.reject(w)
+ 		return
+ 	}
+ 	defer release()
++	if r.URL.Path == bootstrapChallengePath && r.Header.Get(BootstrapChallengeHeader) != "" {
++		s.serveBootstrapChallenge(w, r.WithContext(requestCtx), active)
++		return
++	}
+ 
+ 	s.proxy.ServeHTTP(w, r.WithContext(requestCtx))
+ }
+ 
+-func (s *Server) authorize(r *http.Request) (resources.ActorRef, context.Context, func(), bool) {
++func (s *Server) authorize(r *http.Request) (*activation, context.Context, func(), bool) {
+ 	ref, err := atenet.ParseTargetActor(r.Header.Get(atenet.TargetActorHeader))
+ 	if err != nil {
+-		return resources.ActorRef{}, nil, nil, false
++		return nil, nil, nil, false
+ 	}
+ 
+ 	s.mu.Lock()
+ 	active := s.active
+ 	if active == nil || active.ref != ref {
+ 		s.mu.Unlock()
+-		return resources.ActorRef{}, nil, nil, false
++		return nil, nil, nil, false
+ 	}
+ 	active.wg.Add(1)
+ 	s.mu.Unlock()
+@@ -493,7 +525,52 @@ func (s *Server) authorize(r *http.Request) (resources.ActorRef, context.Context
+ 		stop()
+ 		cancel()
+ 	}
+-	return ref, requestCtx, release, true
++	return active, requestCtx, release, true
++}
++
++func (s *Server) serveBootstrapChallenge(w http.ResponseWriter, r *http.Request, active *activation) {
++	if r.Method != http.MethodGet || active.attestor == nil {
++		http.Error(w, "bootstrap proof unavailable", http.StatusServiceUnavailable)
++		return
++	}
++	nonce, err := base64.RawURLEncoding.DecodeString(r.Header.Get(BootstrapChallengeHeader))
++	if err != nil || len(nonce) != 32 {
++		http.Error(w, "invalid bootstrap nonce", http.StatusBadRequest)
++		return
++	}
++	upstream := *s.upstream
++	upstream.Path = bootstrapChallengePath
++	upstream.RawQuery = ""
++	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, upstream.String(), nil)
++	if err != nil {
++		http.Error(w, "bootstrap unavailable", http.StatusBadGateway)
++		return
++	}
++	response, err := s.proxy.Transport.RoundTrip(req)
++	if err != nil {
++		http.Error(w, "bootstrap unavailable", http.StatusBadGateway)
++		return
++	}
++	defer response.Body.Close()
++	if response.StatusCode != http.StatusOK {
++		http.Error(w, "bootstrap unavailable", http.StatusBadGateway)
++		return
++	}
++	body, err := io.ReadAll(io.LimitReader(response.Body, maxBootstrapBody+1))
++	if err != nil || len(body) > maxBootstrapBody || r.Context().Err() != nil {
++		http.Error(w, "bootstrap unavailable", http.StatusBadGateway)
++		return
++	}
++	chain, signature, err := active.attestor.SignBootstrapProof(nonce, body)
++	if err != nil {
++		http.Error(w, "bootstrap unavailable", http.StatusServiceUnavailable)
++		return
++	}
++	w.Header().Set("Content-Type", "application/json")
++	w.Header().Set("Cache-Control", "no-store")
++	w.Header().Set(BootstrapCertificateHeader, base64.StdEncoding.EncodeToString(chain))
++	w.Header().Set(BootstrapSignatureHeader, base64.StdEncoding.EncodeToString(signature))
++	_, _ = io.Copy(w, bytes.NewReader(body))
+ }
+ 
+ func (s *Server) reject(w http.ResponseWriter) {

@@ -26,9 +26,11 @@ multi-tenant worker environment.
 The [AX compatibility patch](integrations/ax/README.md) now blocks observed
 startup failures, enforces the tested new-connection egress path, and adds a
 synthetic pre-workspace release gate. The [live bootstrap probe](docs/bootstrap-gate-probe.json)
-passed release and replay checks across suspend/resume. Actor attestation,
-credential delivery, and private Git checkout remain prerequisites for
-sensitive work.
+passed release and replay checks across suspend/resume. A separate
+[actor proof](docs/actor-attestation-probe.json) now validates the current
+actor UID and guest challenge against the Substrate cluster CA. Authenticated
+connector transport, one-time authorization, credential delivery, and private
+Git checkout remain prerequisites for sensitive work.
 
 Recipes now accept Claude Code, Codex, and OpenCode profiles. The updated plan
 includes a recent tool-version catalog with latest stable selected for new

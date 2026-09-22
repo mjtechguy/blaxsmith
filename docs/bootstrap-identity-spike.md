@@ -70,7 +70,7 @@ guest metadata, logs, or snapshots. Resume requires a fresh proof and access
 decision. Existing egress and AX `PoliciesApplied` status are inputs to
 preflight, not substitutes for this identity exchange.
 
-## Next proof
+## Synthetic gate and actor proof
 
 The [AX runner gate](../integrations/ax/README.md) and [synthetic gVisor
 probe](bootstrap-gate-probe.json) now demonstrate pre-workspace blocking,
@@ -79,11 +79,21 @@ rejection. They also revealed that Substrate must use transport `/healthz` to
 activate a gated actor while AX keeps workspace `/readyz` closed. One-worker
 golden-snapshot warmup and cold startup need explicit sequencing.
 
-Next, implement the smallest atunnel-to-guest attestation surface and
-credential-free connector verifier in version-pinned overlays. The test
-must reject a forged actor name/UID, wrong cluster or audience, another attempt,
-replayed/expired challenge, stale execution owner, cloned golden-snapshot key,
-and actor replacement between challenge and delivery. It must prove private
-checkout completes before command launch, failure blocks the command, and no
-raw access survives into a snapshot or ordinary telemetry. Do not admit real
-accounts or private repositories before these checks pass.
+The [Substrate overlay](../integrations/substrate/README.md) now signs the
+connector nonce and exact guest challenge with the activated actor's existing
+`atunnel` key. The key remains outside gVisor, and the product's
+`internal/bootstrap.Verify` validates the current actor UID against the cluster
+CA. The [live probe](actor-attestation-probe.json) accepted that proof and
+rejected a wrong UID, nonce, response, CA, malformed request, and wrong actor
+route. It used no credential and left the task suspended.
+
+This proof is intentionally not a grant. The current ingress client lacks
+authentication; a verifier call alone does not consume the nonce or prove the
+current execution owner. Next, authenticate the connector-to-router leg, store
+an attempt/cluster/owner-bound pending nonce and consume it transactionally,
+then recheck actor UID, owner, template, image, pool, and effective policy
+before signing release. Probe another attempt, expired/replayed challenges,
+owner and actor replacement, and data/full-snapshot resume. Finally, deliver
+an encrypted single-use private Git setup payload before workspace checkout,
+show failure blocks the command, and trace snapshots/logs for raw access. No
+real accounts or private repositories are admitted until those checks pass.

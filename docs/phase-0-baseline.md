@@ -81,9 +81,22 @@ signed pre-workspace release and fresh challenge after data-snapshot resume.
 The first live run exposed that Substrate's `/readyz` probe deadlocks before
 bootstrap; the patch gives gated templates a separate `/healthz` transport
 probe while AX retains `/readyz` for workspace readiness. Golden-template
-warmup can also contend with the task on a one-worker pool. Actor UID proof,
+warmup can also contend with the task on a one-worker pool. At that point,
+actor UID proof,
 connector/client authentication, credential delivery, private Git, and
 full-snapshot/revocation behavior remain open. P0-04 is not complete.
+
+The next [Substrate overlay](../integrations/substrate/README.md) uses its
+activation-specific `atunnel` key to sign the guest challenge and a fresh
+connector nonce. The [live actor proof](actor-attestation-probe.json) passed
+cluster-CA/current-actor-UID verification and rejected a wrong UID, nonce,
+body, CA, malformed nonce, and wrong route. The key remains outside gVisor;
+the task ended suspended. The source and Linux build are pinned in
+[attestation provenance](../integrations/substrate/provenance-attestation.json).
+This adds evidence for worker identity, but the ingress client remains
+unauthenticated and there is no durable, one-time pending challenge or
+owner/actor recheck at release. There is still no credential delivery or
+private checkout, so P0-04/05 remain open.
 
 ## Guild adoption map
 

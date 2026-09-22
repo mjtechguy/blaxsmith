@@ -246,7 +246,52 @@ releases and suspends the cold actor, then waits for the golden snapshot before
 resuming. An earlier run with Substrate pointed at `/readyz` deadlocked actor
 activation. This is only a synthetic startup/replay proof. The signer is chosen
 by the Task, the ingress client is unauthenticated, and no actor-UID attestation
-or credential delivery occurs.
+or credential delivery occurs in this gate probe.
+
+## Probe activation-bound actor attestation
+
+Build both pinned Substrate overlays from an exported source revision and
+publish the verified worker binary atop the original digest-pinned worker
+image. Use a new build directory each time:
+
+```sh
+cd /opt/blaxsmith-dev/blaxsmith
+built=/opt/blaxsmith-dev/ateom-attest-build-$(date +%s)
+bash integrations/substrate/build.sh /opt/blaxsmith-dev/substrate \
+  "$built"
+bash deploy/dev/publish-ateom.sh "$built" \
+  "$(cat /opt/blaxsmith-dev/worker-image.txt)"
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+kubectl -n ax-system patch workerpool blaxsmith-smoke --type=merge \
+  -p "{\"spec\":{\"workerImage\":\"$(cat "$built/ateom-gvisor.image")\"}}"
+```
+
+Wait for the worker pool to become ready, then probe the existing suspended
+synthetic gated Task through the in-cluster router:
+
+```sh
+python3 deploy/dev/probe-attestation.py blaxsmith-gate-2bb31a39f4 \
+  gated-runner http://10.43.36.216 \
+  "/opt/blaxsmith-dev/attestation-probe-evidence-$(date +%s)"
+```
+
+The probe resumes the task, reads the current actor UID, requests a fresh
+signed challenge, verifies the certificate against the cluster actor CA, and
+checks wrong UID/nonce/body/CA plus malformed nonce and wrong actor route. It
+suspends the task in its cleanup path. Use a new evidence directory for a
+rerun. The [passing report](../../docs/actor-attestation-probe.json) and
+[build provenance](../../integrations/substrate/provenance-attestation.json)
+record the tested result. The deployed worker image is
+`127.0.0.1:5001/blaxsmith-ateom-gvisor@sha256:355c526a5c7c1aefe619d942a00670db17b3699a0e33744972573606a9e9ebcd`.
+The proof and CA files in the remote evidence directory contain no secrets;
+only the summary report is checked in.
+
+This endpoint is still reachable by an unauthenticated ingress client. It
+provides actor identity evidence, not authorization or private Git access.
+The connector must authenticate to the router, consume a pending nonce once,
+recheck current actor and owner, then deliver encrypted access before sensitive
+work is permitted. The synthetic Task's release signer is not a platform trust
+root.
 
 ## Original baseline task
 
