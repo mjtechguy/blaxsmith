@@ -4,6 +4,7 @@
 import base64
 import http.client
 import json
+import os
 import pathlib
 import socket
 import ssl
@@ -12,21 +13,18 @@ import sys
 import time
 import uuid
 
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+import yaml
 
-if len(sys.argv) != 4 or "@sha256:" not in sys.argv[1]:
-    sys.exit("usage: probe-bootstrap.py PINNED_RUNNER_IMAGE ROUTER_IP NEW_EVIDENCE_DIRECTORY")
+if len(sys.argv) != 4 or "@sha256:" not in sys.argv[1] or not os.environ.get("BLAXSMITH_DEV_SIGNING_KEY_FILE"):
+    sys.exit("usage: BLAXSMITH_DEV_SIGNING_KEY_FILE=... probe-bootstrap.py PINNED_RUNNER_IMAGE ROUTER_IP NEW_EVIDENCE_DIRECTORY")
 
 image, router_ip, output = sys.argv[1], sys.argv[2], pathlib.Path(sys.argv[3])
 router_host = "atenet-router.ate-system.svc"
 output.mkdir()
 space = "blaxsmith-gate-" + uuid.uuid4().hex[:10]
 task = "gated-runner"
-signer = Ed25519PrivateKey.generate()
-public = signer.public_key().public_bytes(
-    encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
-)
+signer = Ed25519PrivateKey.from_private_bytes(pathlib.Path(os.environ["BLAXSMITH_DEV_SIGNING_KEY_FILE"]).read_bytes())
 report = {"atespace": space, "image": image, "checks": []}
 
 
@@ -164,13 +162,35 @@ manifest = {
     "metadata": {"name": task, "atespace": space},
     "spec": {
         "image": image,
-        "env": [{"name": "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY", "value": base64.b64encode(public).decode()}],
         "command": ["/bin/sh", "-c", "echo released > /workspace/bootstrap-result"],
     },
 }
 (output / "task.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
+
+def denied_task(name, spec, reason):
+    rejected = {"apiVersion": "ax.io/v1alpha1", "kind": "Task",
+                "metadata": {"name": name, "atespace": space}, "spec": spec}
+    task_file = output / (name + ".json")
+    task_file.write_text(json.dumps(rejected, indent=2) + "\n")
+    ax("apply", "-f", str(task_file))
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        status = yaml.safe_load(ax("get", "task", name)).get("status", {})
+        if status.get("phase") == "Failed":
+            if not any(c.get("reason") == reason for c in status.get("conditions", [])):
+                raise RuntimeError(f"{name} failed for a reason other than {reason}")
+            report["checks"].append(name + " blocked before actor launch")
+            return
+        time.sleep(1)
+    raise RuntimeError(f"{name} did not fail closed")
+
 try:
+    denied_task("task-signer-override", {"image": image,
+        "env": [{"name": "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY", "value": base64.b64encode(bytes(32)).decode()}],
+        "command": ["touch", "/workspace/override-ran"]}, "BootstrapKeyOverride")
+    denied_task("unapproved-runner", {"image": image[:-1] + ("0" if image[-1] != "0" else "1"),
+        "command": ["touch", "/workspace/unapproved-ran"]}, "RunnerImageDenied")
     ax("apply", "-f", str(output / "task.json"))
     activate_initial()
     current_uid = ate("get", "actor", task, "-a", space, "-o", "json")["actors"][0]["metadata"]["uid"]

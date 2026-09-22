@@ -1,0 +1,254 @@
+diff --git a/cmd/ax-controller/main.go b/cmd/ax-controller/main.go
+index 9d1020e..258842e 100644
+--- a/cmd/ax-controller/main.go
++++ b/cmd/ax-controller/main.go
+@@ -16,10 +16,14 @@ package main
+ 
+ import (
+ 	"context"
++	"crypto/ed25519"
++	"encoding/base64"
+ 	"flag"
++	"fmt"
+ 	"log/slog"
+ 	"os"
+ 	"os/signal"
++	"strings"
+ 	"syscall"
+ 
+ 	"github.com/google/ax/internal/controller"
+@@ -38,6 +42,8 @@ func main() {
+ 		substratePlaintext      bool
+ 		defaultTemplate         string
+ 		defaultTemplateAtespace string
++		bootstrapPublicKey      string
++		bootstrapRunnerImage    string
+ 		redisAddr               string
+ 		redisPassword           string
+ 		redisGroup              string
+@@ -56,7 +62,16 @@ func main() {
+ 	flag.BoolVar(&substratePlaintext, "substrate-plaintext", false, "Use insecure plaintext gRPC connection to Substrate")
+ 	flag.StringVar(&defaultTemplate, "template", "default-template", "Default Substrate ActorTemplate name")
+ 	flag.StringVar(&defaultTemplateAtespace, "template-atespace", "ax-system", "Default Substrate ActorTemplate atespace")
++	flag.StringVar(&bootstrapPublicKey, "blaxsmith-bootstrap-public-key", "", "Controller-owned Ed25519 public key; gates every task when set")
++	flag.StringVar(&bootstrapRunnerImage, "blaxsmith-runner-image", "", "Pinned AX runner image allowed when bootstrap gating is enabled")
+ 	flag.Parse()
++	if bootstrapPublicKey != "" {
++		key, err := base64.StdEncoding.DecodeString(bootstrapPublicKey)
++		if err != nil || len(key) != ed25519.PublicKeySize || !strings.Contains(bootstrapRunnerImage, "@sha256:") {
++			fmt.Fprintln(os.Stderr, "bootstrap requires a valid public key and pinned runner image")
++			os.Exit(2)
++		}
++	}
+ 
+ 	if envRedis := os.Getenv("REDIS_ADDR"); envRedis != "" {
+ 		redisAddr = envRedis
+@@ -92,6 +107,8 @@ func main() {
+ 	defer subClient.Close()
+ 
+ 	reconciler := controller.NewTaskReconciler(subClient, defaultTemplate, defaultTemplateAtespace)
++	reconciler.BootstrapPublicKey = bootstrapPublicKey
++	reconciler.BootstrapRunnerImage = bootstrapRunnerImage
+ 
+ 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+ 	defer cancel()
+diff --git a/internal/controller/reconciler.go b/internal/controller/reconciler.go
+index 100f96e..33d67cb 100644
+--- a/internal/controller/reconciler.go
++++ b/internal/controller/reconciler.go
+@@ -54,6 +54,8 @@ type TaskReconciler struct {
+ 	httpClient              *http.Client
+ 	defaultTemplate         string
+ 	defaultTemplateAtespace string
++	BootstrapPublicKey      string
++	BootstrapRunnerImage    string
+ 
+ 	// WorkspaceReadyTimeout bounds how long Reconcile waits for the actor's workspace
+ 	// to report ready before recording it as still initializing.
+@@ -101,6 +103,9 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, task *v1alpha1.Task, gat
+ 	slog.Info("reconciling task", "name", task.Metadata.Name, "atespace", atespace, "image", task.Spec.Image)
+ 
+ 	now := time.Now()
++	if r.BootstrapPublicKey != "" && task.Spec.Image != r.BootstrapRunnerImage {
++		return r.blockExecution(ctx, task, "RunnerImageDenied", fmt.Errorf("task runner image is not approved"), now)
++	}
+ 
+ 	// 1. Ensure the Atespace exists in Substrate
+ 	if err := r.client.EnsureAtespace(ctx, atespace); err != nil {
+@@ -163,11 +168,17 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, task *v1alpha1.Task, gat
+ 	extraEnv := make(map[string]string)
+ 	if task.Spec != nil {
+ 		for _, e := range task.Spec.Env {
++			if e.Name == "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY" {
++				return r.blockExecution(ctx, task, "BootstrapKeyOverride", fmt.Errorf("task cannot choose bootstrap signer"), now)
++			}
+ 			if e.Name != "" {
+ 				extraEnv[e.Name] = e.Value
+ 			}
+ 		}
+ 	}
++	if r.BootstrapPublicKey != "" {
++		extraEnv["BLAXSMITH_BOOTSTRAP_PUBLIC_KEY"] = r.BootstrapPublicKey
++	}
+ 
+ 	// Only launch inputs belong in the template. Status, creation time and the
+ 	// suspend control flag change across reconciles without changing the runner.
+diff --git a/internal/controller/reconciler_test.go b/internal/controller/reconciler_test.go
+index 43e6fb4..cadf406 100644
+--- a/internal/controller/reconciler_test.go
++++ b/internal/controller/reconciler_test.go
+@@ -434,6 +434,9 @@ func TestBlaxsmithLaunchBoundaries(t *testing.T) {
+ 		{name: "resume permission failure", reason: "ActorResumeFailed", server: mockControlServer{resumeErrs: []error{status.Error(codes.PermissionDenied, "denied")}}},
+ 		{name: "missing gateway", reason: "GatewayUnavailable"},
+ 		{name: "missing workspace", reason: "WorkspaceUnavailable"},
++		{name: "task signer override", reason: "BootstrapKeyOverride"},
++		{name: "controller signer injected"},
++		{name: "unapproved runner image", reason: "RunnerImageDenied"},
+ 		{name: "empty egress allowlist"},
+ 	} {
+ 		t.Run(tc.name, func(t *testing.T) {
+@@ -452,6 +455,13 @@ func TestBlaxsmithLaunchBoundaries(t *testing.T) {
+ 			}
+ 			defer client.Close()
+ 			r := controller.NewTaskReconciler(client, "default-template", "ax-system")
++			if tc.name == "controller signer injected" || tc.name == "task signer override" || tc.name == "unapproved runner image" {
++				r.BootstrapPublicKey = "controller-public-key"
++				r.BootstrapRunnerImage = "example.invalid/runner"
++				if tc.name == "unapproved runner image" {
++					r.BootstrapRunnerImage = "example.invalid/other"
++				}
++			}
+ 			r.WorkspaceReadyTimeout = time.Millisecond
+ 			task := &v1alpha1.Task{Metadata: &v1alpha1.ObjectMeta{Name: "boundary", Atespace: "test"}, Spec: &v1alpha1.TaskSpec{Image: "example.invalid/runner", Suspend: tc.suspend}, Status: &v1alpha1.TaskStatus{WorkerIp: "prior-worker"}}
+ 			var gateway *v1alpha1.Gateway
+@@ -461,6 +471,9 @@ func TestBlaxsmithLaunchBoundaries(t *testing.T) {
+ 			if tc.name == "missing workspace" {
+ 				task.Spec.Workspaces = []*v1alpha1.WorkspaceRef{{Name: "missing"}}
+ 			}
++			if tc.name == "task signer override" {
++				task.Spec.Env = []*v1alpha1.EnvVar{{Name: "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY", Value: "task-public-key"}}
++			}
+ 			if tc.name == "empty egress allowlist" {
+ 				gateway = &v1alpha1.Gateway{Spec: &v1alpha1.GatewaySpec{Egress: &v1alpha1.EgressConfig{Allowlist: &v1alpha1.EgressAllowlist{}}}}
+ 			}
+@@ -507,13 +520,20 @@ func TestBlaxsmithLaunchBoundaries(t *testing.T) {
+ 				t.Fatal("suspend depended on provisioning")
+ 			}
+ 			if tc.server.createdTemplate != nil {
++				foundControllerKey := false
+ 				for _, c := range tc.server.createdTemplate.GetContainers() {
+ 					for _, e := range c.GetEnv() {
++						if e.GetName() == "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY" && e.GetValue() == "controller-public-key" {
++							foundControllerKey = true
++						}
+ 						if e.GetName() == "GEMINI_API_KEY" || strings.Contains(e.GetValue(), "blaxsmith-synthetic-ambient-key") {
+ 							t.Fatal("ambient controller credential entered template")
+ 						}
+ 					}
+ 				}
++				if tc.name == "controller signer injected" && !foundControllerKey {
++					t.Fatal("controller key missing from task template")
++				}
+ 			}
+ 		})
+ 	}
+diff --git a/runner/bootstrap.go b/runner/bootstrap.go
+index 67ff51e..bc201ab 100644
+--- a/runner/bootstrap.go
++++ b/runner/bootstrap.go
+@@ -8,6 +8,7 @@ import (
+ 	"fmt"
+ 	"io"
+ 	"net/http"
++	"os"
+ 	"strconv"
+ 	"sync"
+ 	"time"
+@@ -32,18 +33,13 @@ type bootstrapGate struct {
+ }
+ 
+ func newBootstrapGate(task *v1alpha1.Task) (*bootstrapGate, error) {
+-	var encoded string
+-	var present bool
+ 	for _, env := range task.GetSpec().GetEnv() {
+ 		if env.GetName() == bootstrapKeyEnv {
+-			if present {
+-				return nil, fmt.Errorf("duplicate %s", bootstrapKeyEnv)
+-			}
+-			present = true
+-			encoded = env.GetValue()
++			return nil, fmt.Errorf("task cannot choose %s", bootstrapKeyEnv)
+ 		}
+ 	}
+-	if !present {
++	encoded := os.Getenv(bootstrapKeyEnv)
++	if encoded == "" {
+ 		return nil, nil
+ 	}
+ 	key, err := base64.StdEncoding.DecodeString(encoded)
+diff --git a/runner/bootstrap_test.go b/runner/bootstrap_test.go
+index 599dd66..e5fb9c8 100644
+--- a/runner/bootstrap_test.go
++++ b/runner/bootstrap_test.go
+@@ -21,14 +21,19 @@ import (
+ 
+ func TestBlaxsmithBootstrapRejectsInvalidKey(t *testing.T) {
+ 	for _, value := range []string{"", "not-a-public-key"} {
+-		h := newHarness(t)
+-		h.task.Spec.Env = []*v1alpha1.EnvVar{{Name: "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY", Value: value}}
+-		if err := runner.Run(context.Background(), h.cfg); err == nil {
+-			t.Fatalf("key %q did not fail closed", value)
+-		}
+-		if _, err := os.Stat(h.wsPath); !os.IsNotExist(err) {
+-			t.Fatalf("workspace created with invalid key: %v", err)
+-		}
++		t.Run(value, func(t *testing.T) {
++			t.Setenv("BLAXSMITH_BOOTSTRAP_PUBLIC_KEY", value)
++			h := newHarness(t)
++			if value == "" {
++				h.task.Spec.Env = []*v1alpha1.EnvVar{{Name: "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY", Value: "task-key"}}
++			}
++			if err := runner.Run(context.Background(), h.cfg); err == nil {
++				t.Fatalf("key %q did not fail closed", value)
++			}
++			if _, err := os.Stat(h.wsPath); !os.IsNotExist(err) {
++				t.Fatalf("workspace created with invalid key: %v", err)
++			}
++		})
+ 	}
+ }
+ 
+@@ -37,10 +42,9 @@ func TestBlaxsmithBootstrapGatesWorkspaceAndCommand(t *testing.T) {
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
++	t.Setenv("BLAXSMITH_BOOTSTRAP_PUBLIC_KEY", base64.StdEncoding.EncodeToString(public))
+ 	newGated := func() *harness {
+-		h := newHarness(t)
+-		h.task.Spec.Env = []*v1alpha1.EnvVar{{Name: "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY", Value: base64.StdEncoding.EncodeToString(public)}}
+-		return h
++		return newHarness(t)
+ 	}
+ 	h := newGated()
+ 	started := filepath.Join(t.TempDir(), "started")
+diff --git a/runner/runner.go b/runner/runner.go
+index aebc879..4b7af5e 100644
+--- a/runner/runner.go
++++ b/runner/runner.go
+@@ -147,13 +147,13 @@ func Run(ctx context.Context, cfg Config) error {
+ 
+ 	metadataURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+ 	_ = os.Setenv("AX_METADATA_URL", metadataURL)
+-	for _, e := range cfg.Task.GetSpec().GetEnv() {
+-		_ = os.Setenv(e.GetName(), e.GetValue())
+-	}
+ 	gate, err := newBootstrapGate(cfg.Task)
+ 	if err != nil {
+ 		return fmt.Errorf("configuring bootstrap gate: %w", err)
+ 	}
++	for _, e := range cfg.Task.GetSpec().GetEnv() {
++		_ = os.Setenv(e.GetName(), e.GetValue())
++	}
+ 
+ 	metaServer := metadata.NewServer(port, cfg.Task, workspaces, metadata.ServerOptions{WorkspacePath: wsPath, Bootstrap: gate})
+ 	if err := metaServer.Start(); err != nil {

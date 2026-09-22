@@ -113,6 +113,14 @@ preserving valid proof and replay behavior. The ledger now provides
 compare-and-swap `Assign`/`Deactivate` owner transitions; real scheduler and
 connector wiring, authorization, and access delivery remain open.
 
+The [AX platform-key patch](../integrations/ax/README.md) now takes the
+bootstrap public key from the controller, gates every task on the configured
+digest-pinned runner, and rejects a Task-supplied signer. The
+[live probe](bootstrap-platform-key-probe.json) blocked a forged signer and
+unapproved image before actor launch, then passed release and replay checks
+with a root-owned synthetic signer outside the repo. No product connector or
+private Git access is involved yet.
+
 ## Guild adoption map
 
 | Guild capability | Platform destination | Evidence / next work |

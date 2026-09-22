@@ -2,7 +2,8 @@
 
 Upstream: `github.com/google/ax`, commit
 `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`, Apache-2.0 (see LICENSE).
-`fail-closed.patch`, `egress-policy.patch`, and `bootstrap-gate.patch` change the files named in their
+`fail-closed.patch`, `egress-policy.patch`, `bootstrap-gate.patch`, and
+`platform-bootstrap-key.patch` change the files named in their
 diffs; the reference checkout stays untouched. This is a temporary integration overlay, not a claim that AX
 has accepted these changes or that secure bootstrap is finished.
 
@@ -41,40 +42,46 @@ it ran on the Linux development node.
 bash integrations/ax/build.sh ../reference/ax /tmp/blaxsmith-ax-build
 ```
 
-The script exports committed source into a temporary directory, applies all three
+The script exports committed source into a temporary directory, applies all four
 patches without changing the checkout, runs the full AX test suite and `go vet`,
 and builds the controller and runner. It records source/patch/binary hashes in
 `provenance.json`. Changing the upstream revision fails before building; update
 the patch intentionally and repeat the runtime probes when adopting a new AX pin.
 The [initial provenance](provenance.json), [egress follow-up
-provenance](provenance-egress.json), and [bootstrap-gate provenance](provenance-bootstrap.json) are evidence of tested Linux builds, not
+provenance](provenance-egress.json), [bootstrap-gate provenance](provenance-bootstrap.json),
+and [platform-key provenance](provenance-platform-key.json) are evidence of tested Linux builds, not
 signatures.
 
 ## Synthetic bootstrap gate
 
-When a Task supplies `BLAXSMITH_BOOTSTRAP_PUBLIC_KEY` as a base64 Ed25519 public
-key, the runner serves a short-lived random challenge at
+When the controller supplies `BLAXSMITH_BOOTSTRAP_PUBLIC_KEY` as a base64 Ed25519
+public key, the runner serves a short-lived random challenge at
 `/blaxsmith/bootstrap/challenge` and waits **before workspace setup and command
 launch**. A release signed over the challenge, expiry, atespace, and task name
-opens setup once. An empty, duplicate, or malformed configured key fails closed.
+opens setup once. An invalid configured key or any Task-level override fails closed;
+the Blaxsmith deployment must enable the controller flag for every Task.
 The challenge is generated on demand after activation; normal AX data-snapshot
 resumes restore the pre-bootstrap golden runner and need a new release. The
 actor template uses `/healthz` for Substrate transport readiness in this mode,
 while AX keeps `/readyz` closed until workspace setup finishes.
 
-The [live synthetic probe](../../docs/bootstrap-gate-probe.json) passed
+The [original live synthetic probe](../../docs/bootstrap-gate-probe.json) passed
 blocked-before-release, release, and old-release rejection after suspend/resume
-on gVisor. `deploy/dev/probe-bootstrap.py` reproduces it with an ephemeral test
-signer. The first live attempt exposed a `/readyz` activation deadlock; another
+on gVisor. The first live attempt exposed a `/readyz` activation deadlock; another
 showed one-worker golden-snapshot/cold-start contention. The probe now releases
 the cold actor before waiting for the golden snapshot. Full AX tests and vet
 passed on macOS and Linux after the readiness fix.
 
-This gate is not authorization by itself: Task authors can choose a public key,
-Substrate ingress is not client-authenticated, and the runner does not know its
-actor UID or current execution owner. The future connector must inject and pin
-the trusted signer key, verify activation-bound atunnel evidence and ownership,
-then sign a release. No credential is accepted by this endpoint. Private Git
+The [platform-key follow-up](platform-bootstrap-key.patch) makes the AX
+controller inject a configured public key into every Task template, rejects
+Task-supplied signer keys, and admits only the configured digest-pinned runner
+image while gating is enabled. The runner rejects a signer in Task YAML and
+reads only its injected process environment. The [live probe](../../docs/bootstrap-platform-key-probe.json)
+blocked a forged signer and another image before actor launch, then passed
+release and replay checks using a root-owned test signer outside the repo.
+This gate is not authorization by itself: the product connector must verify
+the activation-bound actor proof, current execution owner, and policy before
+signing. No credential is accepted by this endpoint. Private Git
 checkout, encrypted payload delivery, full-snapshot behavior, and revocation
 remain open; do not use this slice for sensitive work.
 

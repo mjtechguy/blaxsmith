@@ -38,6 +38,8 @@ credential delivery, and private Git checkout remain prerequisites for
 sensitive work.
 The [actor-UID fence](docs/bootstrap-actor-fence-proof.json) now rejects a
 stale target at both router and worker ingress in the dev cluster.
+The [controller-owned bootstrap key](docs/bootstrap-platform-key-probe.json)
+also blocks Task-supplied signers and unapproved runner images before launch.
 
 Recipes now accept Claude Code, Codex, and OpenCode profiles. The updated plan
 includes a recent tool-version catalog with latest stable selected for new

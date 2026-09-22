@@ -114,3 +114,10 @@ The [live proof](bootstrap-actor-fence-proof.json) and
 [gate run](bootstrap-actor-fence-gate.json) reject stale-UID requests. This
 closes the direct bootstrap route's name-to-UID gap, but the product connector
 still must supply the ledger's UID and make the final authorization decision.
+
+The [AX platform-key overlay](../integrations/ax/README.md) now injects a
+controller-configured public key into a pinned runner image. Task-provided
+signers and other runner images are blocked before actor launch. The
+[live probe](bootstrap-platform-key-probe.json) used a root-owned synthetic
+private key outside the repo and passed release/replay checks without a key in
+Task YAML. Platform signing still needs ledger and policy authorization.

@@ -26,21 +26,24 @@ git apply --check --whitespace=error-all "$integration/egress-policy.patch"
 git apply "$integration/egress-policy.patch"
 git apply --check --whitespace=error-all "$integration/bootstrap-gate.patch"
 git apply "$integration/bootstrap-gate.patch"
+git apply --check --whitespace=error-all "$integration/platform-bootstrap-key.patch"
+git apply "$integration/platform-bootstrap-key.patch"
 go test ./...
 go vet ./...
 for component in ax-controller ax-task-runner; do
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
     -ldflags='-s -w' -o "$output/$component" "./cmd/$component"
 done
-python3 - "$output" "$integration/fail-closed.patch" "$integration/egress-policy.patch" "$integration/bootstrap-gate.patch" "$expected" <<'PY'
+python3 - "$output" "$integration/fail-closed.patch" "$integration/egress-policy.patch" "$integration/bootstrap-gate.patch" "$integration/platform-bootstrap-key.patch" "$expected" <<'PY'
 import hashlib, json, pathlib, subprocess, sys
-output, patch, egress_patch, bootstrap_patch, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), sys.argv[5]
+output, patch, egress_patch, bootstrap_patch, platform_key_patch, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5]), sys.argv[6]
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 record = {
     'upstream_commit': revision,
     'patch_sha256': sha(patch),
     'egress_patch_sha256': sha(egress_patch),
     'bootstrap_patch_sha256': sha(bootstrap_patch),
+    'platform_key_patch_sha256': sha(platform_key_patch),
     'go_version': subprocess.check_output(['go', 'version'], text=True).strip(),
     'platform': 'linux/amd64',
     'binaries': {name: sha(output / name) for name in ['ax-controller', 'ax-task-runner']},

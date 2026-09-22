@@ -223,20 +223,21 @@ credential revocation remain unproved. Only synthetic tasks run here.
 
 ## Probe the synthetic bootstrap gate
 
-Build and publish the three AX overlays, then update the AX controller image
-and command as in the launch-patch section. The resulting controller must
+Build and publish the four AX overlays, then update the AX controller image
+and command as in the platform-key section below. The resulting controller must
 construct gated ActorTemplates with Substrate `/healthz` transport readiness;
 the runner still reports workspace readiness on `/readyz`. The tested Linux
 build is [recorded here](../../integrations/ax/provenance-bootstrap.json).
-The dev node has Python's `cryptography` package for the ephemeral Ed25519 test
-signer. Run with the router's in-cluster service IP; the probe verifies its
+The dev node has Python's `cryptography` package for the root-owned synthetic
+Ed25519 signer below. Run with the router's in-cluster service IP; the probe verifies its
 HTTPS certificate and uses a short-lived connector-audience token only on
 bootstrap routes:
 
 ```sh
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+export BLAXSMITH_DEV_SIGNING_KEY_FILE=/opt/blaxsmith-dev/platform-bootstrap-signing.key
 python3 deploy/dev/probe-bootstrap.py \
-  "$(cat /opt/blaxsmith-dev/ax-bootstrap-ready-build/ax-task-runner.image)" \
+  "$(cat /opt/blaxsmith-dev/ax-platform-key-build-1790118073/ax-task-runner.image)" \
   10.43.36.216 /opt/blaxsmith-dev/bootstrap-probe-evidence-4
 ```
 
@@ -248,8 +249,42 @@ releases and suspends the cold actor, then waits for the golden snapshot before
 resuming. An earlier run with Substrate pointed at `/readyz` deadlocked actor
 activation. The later [actor-fence run](../../docs/bootstrap-actor-fence-gate.json)
 also rejects a stale actor UID under connector-authenticated HTTPS. This is
-only a synthetic startup/replay proof: the signer is chosen by the Task, and
-there is no platform credential delivery.
+only a synthetic startup/replay proof; there is no platform credential delivery.
+
+## Require the platform bootstrap key and pinned runner
+
+Build and publish the AX overlays, including `platform-bootstrap-key.patch`.
+Create the **synthetic dev** private signing key once on this node, outside the
+repository; keep its file owner-only. The controller receives only its public
+key and the exact runner image digest. Existing older runner images are denied
+when the controller is gated.
+
+```sh
+cd /opt/blaxsmith-dev/blaxsmith
+built=/opt/blaxsmith-dev/ax-platform-key-build-$(date +%s)
+bash integrations/ax/build.sh /opt/blaxsmith-dev/ax "$built"
+bash deploy/dev/publish-ax.sh "$built"
+python3 - <<'PY'
+import os
+path = '/opt/blaxsmith-dev/platform-bootstrap-signing.key'
+fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+os.write(fd, os.urandom(32))
+os.close(fd)
+PY
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+python3 deploy/dev/enable-platform-bootstrap.py "$built" \
+  /opt/blaxsmith-dev/platform-bootstrap-signing.key
+```
+
+If the key already exists, skip the creation block. The current tested
+controller and runner digests are
+`127.0.0.1:5001/blaxsmith-ax-controller@sha256:984fb0875f8db1905cf289e803b16df05a30979cb3f91d2e4a33664b4c8f8052`
+and
+`127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:40f40e9ad34c3d89c5c4c084dfe1233cf639535e0c8a666a86eb4a292d2c12e4`.
+The [live probe](../../docs/bootstrap-platform-key-probe.json) confirmed
+that a Task-level signer or different runner image fails before actor launch;
+the valid task has no signer in its YAML and remains gated until a signed
+release. This key is a dev test authority, not product custody.
 
 ## Probe activation-bound actor attestation
 
