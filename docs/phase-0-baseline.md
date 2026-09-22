@@ -68,6 +68,13 @@ pass: an unrelated control-API integration test timed out at 10 minutes and an
 envtest check required a Git checkout. The changed `atenet` package tests and
 vet passed on macOS and the Linux node.
 
+The [worker-identity spike](bootstrap-identity-spike.md) found no projected
+pod-identity certificate or service-account token in the tested AX/gVisor
+guest. Substrate keeps the actor certificate/key with `atunnel`; task metadata
+and AX guest access are not authenticated bootstrap proofs. P0-04 now targets
+an activation-bound attestation and pre-workspace gate, with synthetic replay,
+snapshot-clone, and actor-replacement checks before any credential delivery.
+
 ## Guild adoption map
 
 | Guild capability | Platform destination | Evidence / next work |
