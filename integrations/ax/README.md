@@ -1,9 +1,9 @@
-# AX launch compatibility patch
+# AX runtime compatibility overlays
 
 Upstream: `github.com/google/ax`, commit
 `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`, Apache-2.0 (see LICENSE).
-`fail-closed.patch` changes the files named in the diff; the reference checkout
-stays untouched. This is a temporary integration overlay, not a claim that AX
+`fail-closed.patch` and `egress-policy.patch` change the files named in their
+diffs; the reference checkout stays untouched. This is a temporary integration overlay, not a claim that AX
 has accepted these changes or that secure bootstrap is finished.
 
 The patch closes observed launch failures at their source:
@@ -20,6 +20,15 @@ The patch closes observed launch failures at their source:
   bootstrap, failed skills/state setup, and marker-write errors stop the runner
   before command launch. A Git failure also prevents bootstrap execution.
 - Resume probes the current runner instead of trusting an old Ready condition.
+- The egress follow-up rejects hostname and port rules the pinned Substrate
+  gateway cannot enforce, keeps `0.0.0.0/0` as IPv4 CIDR rather than treating it
+  as all destinations, defaults tasks without a gateway to deny-all, and updates
+  an existing policy to empty deny-all.
+- Task templates now contain stable launch inputs, excluding status, creation
+  time, and the suspend flag from their hash. This stops each resume from
+  creating another template and racing its golden snapshot. AX retries only
+  transient capacity or golden-snapshot readiness failures, at most four resume
+  calls, and attempts to stop the actor when resume ultimately fails.
 
 ## Rebuild and verify
 
@@ -32,17 +41,21 @@ it ran on the Linux development node.
 bash integrations/ax/build.sh ../reference/ax /tmp/blaxsmith-ax-build
 ```
 
-The script exports committed source into a temporary directory, applies the
-patch without changing the checkout, runs the full AX test suite and `go vet`,
+The script exports committed source into a temporary directory, applies both
+patches without changing the checkout, runs the full AX test suite and `go vet`,
 and builds the controller and runner. It records source/patch/binary hashes in
 `provenance.json`. Changing the upstream revision fails before building; update
 the patch intentionally and repeat the runtime probes when adopting a new AX pin.
-The checked-in provenance is evidence of the tested Linux build, not a signature.
+The [initial provenance](provenance.json) and [egress follow-up
+provenance](provenance-egress.json) are evidence of tested Linux builds, not
+signatures.
 
-The added regression tests were also run against unmodified upstream production
-code. They failed on template fallback, policy failure, hidden stop failure,
+The initial launch regression tests were also run against unmodified upstream
+production code. They failed on template fallback, policy failure, hidden stop failure,
 ambient credentials, missing inputs, ignored empty allowlists, stale resume
-readiness, and incomplete workspace setup. They pass with the patch. Existing
+readiness, and incomplete workspace setup. The follow-up tests cover policy
+translation, deny-by-default, stable template names, and bounded resume retry.
+They pass with the patches. Existing
 positive command, exit-code, process shutdown, workspace and controller tests
 also pass. No model or production credential is needed for these tests.
 
@@ -54,15 +67,14 @@ actor creation, and file persistence after suspend/resume. Run it using
 `deploy/dev/probe-launch.py` on the prepared dedicated node. The developer
 runbook describes publishing and deploying the verified binaries.
 
-**Egress enforcement failed its live check.** The same dev-registry endpoint
-remained reachable after replacing the actor's allow-all policy with an empty
-allowlist and reconciling. At this Substrate pin, inspection of
-`cmd/atenet/internal/router/egress/egress.go` shows actor identity authentication
-followed by forwarding; it does not consult the stored destination rules.
-`GatewayReady / PoliciesApplied` is therefore not evidence of effective isolation.
-Do not release credentials based on that condition. Repair the dataplane and
-prove allowed/denied destinations, protocols, private ranges and enforcement
-convergence before admitting sensitive or untrusted work.
+The first [live probe](../../docs/launch-probe.json) exposed missing dataplane
+enforcement: an empty policy still reached the registry. The follow-up
+[Substrate patch](../substrate/README.md) closes that CONNECT path; the new
+[probe](../../docs/egress-probe.json) passes allow-all, empty, matching-CIDR,
+nonmatching-CIDR and missing-gateway cases against one reachable endpoint. `GatewayReady /
+PoliciesApplied` still only reports successful storage, not a measured dataplane
+check. Complete network bypass, existing-tunnel revocation, and credential
+boundaries remain open before sensitive or untrusted work.
 
 This patch does not authenticate a worker, implement Connection → Grant → Binding
 → Lease, authorize startup, pin a private Git checkout, fence late results, or

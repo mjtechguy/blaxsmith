@@ -142,11 +142,84 @@ on this node; the first invocation lacked `KUBECONFIG` for `kubectl-ate` and
 stopped before creating a runner. [The report](../../docs/launch-probe.json) and
 [build provenance](../../integrations/ax/provenance.json) are retained in Git.
 
-The egress probe separately reports **UNENFORCED**: the dev registry was reachable
-both with allow-all and with an empty actor egress policy. This is a failed
-security gate, not a passing networking test. AX's `PoliciesApplied` status proves
-only storage at this revision. Keep credentials and untrusted tasks out until
-destination enforcement and authenticated bootstrap are implemented and tested.
+That first egress probe reported **UNENFORCED**: the dev registry remained
+reachable under an empty actor policy. It is retained as the failing baseline.
+
+## Deploy and check the egress follow-up
+
+The [Substrate gateway overlay](../../integrations/substrate/README.md) checks
+IP/CIDR policy for every new CONNECT. The second AX overlay rejects hostnames
+and ports that gateway cannot enforce and persists empty deny-all policies.
+Build both from exported pinned sources on this node:
+
+```sh
+cd /opt/blaxsmith-dev/blaxsmith
+bash integrations/substrate/build.sh /opt/blaxsmith-dev/substrate \
+  /opt/blaxsmith-dev/substrate-egress-build-1
+bash deploy/dev/publish-atenet.sh /opt/blaxsmith-dev/substrate-egress-build-1
+bash integrations/ax/build.sh /opt/blaxsmith-dev/ax \
+  /opt/blaxsmith-dev/ax-egress-build-4
+bash deploy/dev/publish-ax.sh /opt/blaxsmith-dev/ax-egress-build-4
+```
+
+Build output directories must be new. The published `*.image` files contain
+digest-pinned image names. Apply both images with their entrypoints and patch
+hashes, then wait for both rollouts:
+
+```sh
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+python3 - <<'PY'
+import json, pathlib
+root = pathlib.Path('/opt/blaxsmith-dev')
+for build_name, patch_name, container, command, annotation in [
+    ('substrate-egress-build-1', 'deployment-patch.json', 'ext-proc', 'atenet',
+     'blaxsmith.dev/substrate-egress-patch-sha256'),
+    ('ax-egress-build-4', 'controller-patch.json', 'controller', 'ax-controller',
+     'blaxsmith.dev/ax-egress-patch-sha256'),
+]:
+    build = root / build_name
+    record = json.loads((build / 'provenance.json').read_text())
+    annotations = {annotation: record.get('egress_patch_sha256', record['patch_sha256'])}
+    if command == 'ax-controller':
+        annotations['blaxsmith.dev/ax-patch-sha256'] = record['patch_sha256']
+    patch = {'spec': {'template': {
+        'metadata': {'annotations': annotations},
+        'spec': {'containers': [{'name': container,
+            'image': (build / (command + '.image')).read_text().strip(),
+            'command': ['/usr/local/bin/' + command]}]}}}}
+    (build / patch_name).write_text(json.dumps(patch))
+PY
+kubectl -n ate-system patch deployment atenet-egress --type=strategic \
+  --patch-file=/opt/blaxsmith-dev/substrate-egress-build-1/deployment-patch.json
+kubectl -n ax-system patch deployment ax-controller --type=strategic \
+  --patch-file=/opt/blaxsmith-dev/ax-egress-build-4/controller-patch.json
+kubectl -n ate-system rollout status deployment atenet-egress --timeout=120s
+kubectl -n ax-system rollout status deployment ax-controller --timeout=120s
+```
+
+The exact applied patch JSON files are retained in the remote build directories.
+Both rollouts completed. Run the probe with the new runner image:
+
+```sh
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+python3 deploy/dev/probe-launch.py \
+  "$(cat /opt/blaxsmith-dev/ax-egress-build-4/ax-task-runner.image)" \
+  /opt/blaxsmith-dev/launch-probe-egress-5
+```
+
+The [new report](../../docs/egress-probe.json) records one dev registry
+endpoint reachable under allow-all and a matching `/32`, then blocked by an
+empty and a nonmatching policy. A task without a gateway also could not reach
+the endpoint. The probe repeats launch and resume checks and leaves both tasks
+suspended. The live images were Substrate
+`atenet@sha256:23b063647b818fd2d48534b198a5eda3bd120abc1e37a39342b1f98674a0a12b`,
+AX controller
+`@sha256:b07abc5372d2976a81c78b0c3da0e90ebb9fe69395f634088319b002ffcc8514`,
+and AX runner
+`@sha256:ea1ac8a6c3f5752957594e19754eb0adf2ca14e1238387d266e9201252a44067`.
+This proves policy enforcement on those **new connections** in the tested path;
+existing tunnels, alternate egress paths, tenant isolation, bootstrap, and
+credential revocation remain unproved. Only synthetic tasks run here.
 
 ## Original baseline task
 

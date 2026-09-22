@@ -20,7 +20,7 @@ for component in ax-controller ax-task-runner; do
   tar -C "$image_build" -cf "$image_build/layer.tar" "usr/local/bin/$component"
   go run github.com/google/go-containerregistry/cmd/crane@v0.21.7 append \
     --base "$base" --new_layer "$image_build/layer.tar" \
-    --new_tag "127.0.0.1:5001/blaxsmith-$component:fail-closed" \
+    --new_tag "127.0.0.1:5001/blaxsmith-$component:egress-guarded" \
     > "$build/$component.image"
 done
 # The controller Deployment must explicitly use /usr/local/bin/ax-controller;

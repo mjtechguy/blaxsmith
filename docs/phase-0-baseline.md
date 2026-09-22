@@ -44,13 +44,29 @@ New regression checks fail against unmodified upstream code. The
 [live report](launch-probe.json) records blocked missing inputs, five runner
 failure cases, valid command execution, and suspend/resume file persistence.
 
-The empty-egress-policy test **failed enforcement**: traffic to the controlled
-dev-registry endpoint still succeeded after allow-all was replaced with an empty
-policy. The inspected pinned gateway authenticates actor identity but does not
-consult destination rules. Treat stored policy and effective enforcement as
-separate checks; this blocks credentials/untrusted workloads. No worker identity,
+The first empty-egress-policy test **failed enforcement**: the pinned gateway
+authenticated actor identity but ignored stored destination rules. A separate
+[Substrate overlay](../integrations/substrate/README.md) now checks policy on
+new CONNECTs, and the [AX follow-up](../integrations/ax/README.md) rejects
+unsupported hostname/port rules, defaults missing gateways to deny-all, and
+updates empty policies. The new
+[gVisor probe](egress-probe.json) passed allow-all, empty, matching-CIDR and
+nonmatching-CIDR cases against the same registry endpoint, plus deny-by-default
+without a gateway. This is one tested
+dataplane path, not a complete egress or revocation boundary. No worker identity,
 bootstrap replay protection, credential custody/lease lifecycle, private checkout,
 or real model adapter has been implemented in this slice. P0-04/05 remain open.
+
+The follow-up probe also exposed an AX resume race: its task-template hash
+included mutable status and the suspend flag, generating a new template during
+resume before its golden snapshot was usable. The AX overlay now hashes stable
+launch inputs and uses a bounded retry for the observed transient snapshot and
+capacity errors. A later [probe](egress-probe.json) passed suspend/resume and
+the egress cases together. This does not prove arbitrary restart or snapshot
+recovery. The full Substrate `make verify` attempt on a source export did not
+pass: an unrelated control-API integration test timed out at 10 minutes and an
+envtest check required a Git checkout. The changed `atenet` package tests and
+vet passed on macOS and the Linux node.
 
 ## Guild adoption map
 
@@ -90,8 +106,8 @@ but still starts the command; AX does not collect the command exit result; the
 runner stays alive after command exit; resume restores files with a new process
 tree. The bridge needs explicit preconditions and durable result reporting.
 `AX_TASK_YAML` and metadata can expose raw task environment fields, so credentials
-must not be placed there. These are inspected behaviors, not a completed security
-test or a validated worker contract.
+must not be placed there. The launch overlay blocks observed setup failures, but
+these are not a completed security test or a validated worker contract.
 
 Additional inspected upstream blockers: unpatched AX falls back to the default template
 when creating a task-specific template fails, and continues after an egress

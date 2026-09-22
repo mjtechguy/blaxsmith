@@ -1,0 +1,60 @@
+{
+  "atespace": "blaxsmith-launch-95350846d8",
+  "runner_image": "127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:ea1ac8a6c3f5752957594e19754eb0adf2ca14e1238387d266e9201252a44067",
+  "checks": [
+    {
+      "check": "missing-gateway",
+      "result": "blocked-before-actor"
+    },
+    {
+      "check": "missing-workspace",
+      "result": "blocked-before-actor"
+    },
+    {
+      "check": "valid-command",
+      "result": "passed"
+    },
+    {
+      "check": "runner-missing",
+      "result": "command-not-started"
+    },
+    {
+      "check": "runner-directory",
+      "result": "command-not-started"
+    },
+    {
+      "check": "runner-git",
+      "result": "command-not-started"
+    },
+    {
+      "check": "runner-skills",
+      "result": "command-not-started"
+    },
+    {
+      "check": "runner-goal",
+      "result": "command-not-started"
+    },
+    {
+      "check": "resume-file-persistence",
+      "result": "passed"
+    },
+    {
+      "check": "egress-policy-revisions",
+      "result": "passed"
+    },
+    {
+      "check": "no-gateway-deny-default",
+      "result": "passed"
+    }
+  ],
+  "egress_policy": {
+    "destination": "10.43.126.89:5001/v2/",
+    "allow_all_reachable": true,
+    "empty_denied": true,
+    "matching_cidr_allowed": true,
+    "nonmatching_cidr_denied": true,
+    "no_gateway_denied": true
+  },
+  "final_no-gateway_phase": "Suspended",
+  "final_runner_phase": "Suspended"
+}

@@ -1,0 +1,416 @@
+diff --git a/internal/substrate/client.go b/internal/substrate/client.go
+--- a/internal/substrate/client.go
++++ b/internal/substrate/client.go
+@@ -452,19 +452,19 @@
+ 		return fmt.Errorf("egress allowlist is required")
+ 	}
+ 
+-	var patterns []string
+ 	var allowAll bool
+ 	var cidrs []string
+ 
+ 	for _, h := range allowlist.Hosts {
+-		if h.Host == "*" || h.Host == "0.0.0.0/0" {
++		if h == nil || h.GetHost() == "" || h.GetPort() != 0 {
++			return fmt.Errorf("egress rule requires an IP CIDR or * with no port: %v", h)
++		}
++		if h.Host == "*" {
+ 			allowAll = true
+-			break
+-		}
+-		if strings.Contains(h.Host, "/") {
++		} else if strings.Contains(h.Host, "/") {
+ 			cidrs = append(cidrs, h.Host)
+-		} else if h.Host != "" {
+-			patterns = append(patterns, h.Host)
++		} else {
++			return fmt.Errorf("hostname egress rule %q cannot be enforced by the IP gateway", h.Host)
+ 		}
+ 	}
+ 
+@@ -474,13 +474,6 @@
+ 			All: &emptypb.Empty{},
+ 		})
+ 	} else {
+-		if len(patterns) > 0 {
+-			rules = append(rules, &ateapipb.EgressRule{
+-				Hostnames: &ateapipb.HostnameRule{
+-					Patterns: patterns,
+-				},
+-			})
+-		}
+ 		if len(cidrs) > 0 {
+ 			rules = append(rules, &ateapipb.EgressRule{
+ 				Cidrs: &ateapipb.CIDRRule{
+@@ -514,10 +507,14 @@
+ 			existing, getErr := c.control.GetActorEgressPolicy(ctx, &ateapipb.GetActorEgressPolicyRequest{
+ 				Actor: actorRef,
+ 			})
+-			if getErr == nil && existing != nil && existing.Metadata != nil {
+-				egressPolicy.Metadata.Uid = existing.Metadata.Uid
+-				egressPolicy.Metadata.Version = existing.Metadata.Version
+-			}
++			if getErr != nil {
++				return fmt.Errorf("reading existing egress policy on %s/%s: %w", atespace, actorName, getErr)
++			}
++			if existing == nil || existing.Metadata == nil {
++				return fmt.Errorf("existing egress policy on %s/%s has no metadata", atespace, actorName)
++			}
++			egressPolicy.Metadata.Uid = existing.Metadata.Uid
++			egressPolicy.Metadata.Version = existing.Metadata.Version
+ 			updateReq := &ateapipb.UpdateActorEgressPolicyRequest{
+ 				Actor:        actorRef,
+ 				EgressPolicy: egressPolicy,
+diff --git a/internal/substrate/client_test.go b/internal/substrate/client_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/substrate/client_test.go
+@@ -0,0 +1,92 @@
++// Copyright 2026 Google LLC
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++package substrate
++
++import (
++	"context"
++	"testing"
++
++	"github.com/agent-substrate/substrate/pkg/proto/ateapipb"
++	"github.com/google/ax/pkg/apis/v1alpha1"
++	"google.golang.org/grpc"
++	"google.golang.org/grpc/codes"
++	"google.golang.org/grpc/status"
++)
++
++type policyClient struct {
++	ateapipb.ControlClient
++	create *ateapipb.EgressPolicy
++	update *ateapipb.EgressPolicy
++	exists bool
++}
++
++func (m *policyClient) CreateActorEgressPolicy(_ context.Context, req *ateapipb.CreateActorEgressPolicyRequest, _ ...grpc.CallOption) (*ateapipb.EgressPolicy, error) {
++	m.create = req.EgressPolicy
++	if m.exists {
++		return nil, status.Error(codes.AlreadyExists, "exists")
++	}
++	return req.EgressPolicy, nil
++}
++
++func (m *policyClient) GetActorEgressPolicy(context.Context, *ateapipb.GetActorEgressPolicyRequest, ...grpc.CallOption) (*ateapipb.EgressPolicy, error) {
++	return &ateapipb.EgressPolicy{Metadata: &ateapipb.ResourceMetadata{Uid: "old", Version: 2}}, nil
++}
++
++func (m *policyClient) UpdateActorEgressPolicy(_ context.Context, req *ateapipb.UpdateActorEgressPolicyRequest, _ ...grpc.CallOption) (*ateapipb.EgressPolicy, error) {
++	m.update = req.EgressPolicy
++	return req.EgressPolicy, nil
++}
++
++func TestApplyEgressPolicy(t *testing.T) {
++	for _, tc := range []struct {
++		name      string
++		hosts     []*v1alpha1.HostRule
++		exists    bool
++		wantRules int
++		wantErr   bool
++	}{
++		{"empty policy is persisted", nil, true, 0, false},
++		{"CIDR is persisted", []*v1alpha1.HostRule{{Host: "192.0.2.0/24"}}, false, 1, false},
++		{"wildcard is persisted", []*v1alpha1.HostRule{{Host: "*"}}, false, 1, false},
++		{"hostname rejected", []*v1alpha1.HostRule{{Host: "example.com"}}, false, 0, true},
++		{"port rejected", []*v1alpha1.HostRule{{Host: "*", Port: 443}}, false, 0, true},
++		{"unsupported rule after wildcard rejected", []*v1alpha1.HostRule{{Host: "*"}, {Host: "example.com"}}, false, 0, true},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			mock := &policyClient{exists: tc.exists}
++			client := &Client{control: mock}
++			err := client.ApplyEgressPolicy(context.Background(), "default", "actor", &v1alpha1.EgressAllowlist{Hosts: tc.hosts})
++			if (err != nil) != tc.wantErr {
++				t.Fatalf("ApplyEgressPolicy() error = %v, wantErr = %t", err, tc.wantErr)
++			}
++			if tc.wantErr {
++				if mock.create != nil {
++					t.Fatal("unsupported rule reached the control API")
++				}
++				return
++			}
++			policy := mock.create
++			if tc.exists {
++				policy = mock.update
++				if policy == nil || policy.Metadata.Uid != "old" || policy.Metadata.Version != 2 {
++					t.Fatalf("policy update lost resource preconditions: %v", policy)
++				}
++			}
++			if policy == nil || len(policy.Rules) != tc.wantRules {
++				t.Fatalf("policy rules = %v, want %d", policy, tc.wantRules)
++			}
++		})
++	}
++}
+diff --git a/internal/controller/reconciler.go b/internal/controller/reconciler.go
+--- a/internal/controller/reconciler.go
++++ b/internal/controller/reconciler.go
+@@ -32,6 +32,7 @@
+ 	"github.com/google/ax/pkg/apis/v1alpha1"
+ 	"google.golang.org/grpc/codes"
+ 	"google.golang.org/grpc/status"
++	"google.golang.org/protobuf/proto"
+ 	"google.golang.org/protobuf/types/known/timestamppb"
+ 	"gopkg.in/yaml.v3"
+ )
+@@ -168,13 +169,28 @@
+ 		}
+ 	}
+ 
+-	// Inject Task YAML specification into container environment
+-	if taskYAML, err := yaml.Marshal(task); err == nil {
+-		extraEnv["AX_TASK_YAML"] = string(taskYAML)
+-	}
++	// Only launch inputs belong in the template. Status, creation time and the
++	// suspend control flag change across reconciles without changing the runner.
++	templateSpec := proto.Clone(task.Spec).(*v1alpha1.TaskSpec)
++	templateSpec.Suspend = false
++	templateTask := &v1alpha1.Task{
++		ApiVersion: task.ApiVersion,
++		Kind:       task.Kind,
++		Metadata:   &v1alpha1.ObjectMeta{Name: task.Metadata.Name, Atespace: atespace},
++		Spec:       templateSpec,
++	}
++	taskYAML, err := yaml.Marshal(templateTask)
++	if err != nil {
++		return r.blockExecution(ctx, task, "TaskEncodingFailed", err, now)
++	}
++	extraEnv["AX_TASK_YAML"] = string(taskYAML)
+ 
+ 	// Inject the bound Workspace specs as a multi-document YAML stream.
+-	if wsYAML, err := marshalWorkspaces(workspaces); err == nil && wsYAML != "" {
++	wsYAML, err := marshalWorkspaces(workspaces)
++	if err != nil {
++		return r.blockExecution(ctx, task, "WorkspaceEncodingFailed", err, now)
++	}
++	if wsYAML != "" {
+ 		extraEnv["AX_WORKSPACES_YAML"] = wsYAML
+ 	}
+ 
+@@ -195,7 +211,7 @@
+ 		}
+ 	}
+ 
+-	_, err := r.client.EnsureActor(ctx, atespace, actorName, templateAtespace, templateName)
++	_, err = r.client.EnsureActor(ctx, atespace, actorName, templateAtespace, templateName)
+ 	if err != nil {
+ 		r.setNotReady(task, "ActorCreationFailed", err.Error(), now)
+ 		task.Status.Phase = "Failed"
+@@ -207,27 +223,41 @@
+ 	if gateway != nil && gateway.Spec != nil && gateway.Spec.Egress != nil && gateway.Spec.Egress.Allowlist != nil {
+ 		egressAllowlist = gateway.Spec.Egress.Allowlist
+ 	} else {
+-		// Default to allow all egress if no explicit gateway restriction is set
+-		egressAllowlist = &v1alpha1.EgressAllowlist{
+-			Hosts: []*v1alpha1.HostRule{
+-				{Host: "*", Port: 443},
+-			},
+-		}
++		// No explicit gateway restriction means deny all egress.
++		egressAllowlist = &v1alpha1.EgressAllowlist{}
+ 	}
+ 	if err := r.client.ApplyEgressPolicy(ctx, atespace, actorName, egressAllowlist); err != nil {
+ 		r.setCondition(task, condGatewayReady, "False", "PolicyApplyFailed", err.Error(), now)
+ 		return r.blockExecution(ctx, task, "PolicyApplyFailed", err, now)
+ 	} else {
+-		r.setCondition(task, condGatewayReady, "True", "PoliciesApplied", "Network policies active", now)
++		r.setCondition(task, condGatewayReady, "True", "PoliciesApplied", "Actor egress policy stored", now)
+ 	}
+ 
+ 	// Resume the Actor to activate container execution
+ 	slog.Info("resuming actor on Substrate worker", "actor", actorName)
+-	_, workerIP, err := r.client.ResumeActor(ctx, atespace, actorName)
++	var workerIP string
++	for attempt := 0; attempt < 4; attempt++ {
++		_, workerIP, err = r.client.ResumeActor(ctx, atespace, actorName)
++		if err == nil {
++			break
++		}
++		retryable := status.Code(err) == codes.ResourceExhausted ||
++			(status.Code(err) == codes.FailedPrecondition && strings.Contains(err.Error(), "Golden data resume requires the ActorTemplate golden snapshot"))
++		if !retryable || attempt == 3 {
++			break
++		}
++		slog.Warn("actor resume prerequisite not ready", "actor", actorName, "attempt", attempt+1, "error", err)
++		select {
++		case <-ctx.Done():
++		case <-time.After(2 * time.Second):
++		}
++		if ctx.Err() != nil {
++			err = ctx.Err()
++			break
++		}
++	}
+ 	if err != nil {
+-		r.setNotReady(task, "ActorResumeFailed", err.Error(), now)
+-		task.Status.Phase = "Failed"
+-		return task, fmt.Errorf("resuming actor: %w", err)
++		return r.blockExecution(ctx, task, "ActorResumeFailed", fmt.Errorf("resuming actor: %w", err), now)
+ 	}
+ 
+ 	task.Status.WorkerIp = workerIP
+@@ -471,6 +501,9 @@
+ 			return "", err
+ 		}
+ 	}
++	if sb.Len() == 0 {
++		return "", nil
++	}
+ 	if err := enc.Close(); err != nil {
+ 		return "", err
+ 	}
+diff --git a/internal/controller/reconciler_test.go b/internal/controller/reconciler_test.go
+--- a/internal/controller/reconciler_test.go
++++ b/internal/controller/reconciler_test.go
+@@ -35,20 +35,23 @@
+ 
+ type mockControlServer struct {
+ 	ateapipb.UnimplementedControlServer
+-	workerIP         string
+-	createdAtespaces []string
+-	createdActors    []string
+-	resumedActors    []string
+-	suspendedActors  []string
+-	createdPolicies  []string
+-	deletedActors    []string
+-	actorTemplates   map[string]bool
+-	deletedTemplates []string
+-	templateErr      error
+-	policyErr        error
+-	suspendErr       error
+-	badTemplate      bool
+-	createdTemplate  *ateapipb.ActorTemplate
++	workerIP             string
++	createdAtespaces     []string
++	createdActors        []string
++	resumedActors        []string
++	suspendedActors      []string
++	createdPolicies      []string
++	lastPolicy           *ateapipb.EgressPolicy
++	deletedActors        []string
++	actorTemplates       map[string]bool
++	deletedTemplates     []string
++	templateErr          error
++	policyErr            error
++	suspendErr           error
++	resumeErrs           []error
++	badTemplate          bool
++	createdTemplate      *ateapipb.ActorTemplate
++	createdTemplateNames []string
+ }
+ 
+ func (m *mockControlServer) GetActorTemplate(context.Context, *ateapipb.GetActorTemplateRequest) (*ateapipb.ActorTemplate, error) {
+@@ -60,6 +63,7 @@
+ 		return nil, m.templateErr
+ 	}
+ 	m.createdTemplate = req.ActorTemplate
++	m.createdTemplateNames = append(m.createdTemplateNames, req.ActorTemplate.GetMetadata().GetName())
+ 	if m.badTemplate {
+ 		return &ateapipb.ActorTemplate{}, nil
+ 	}
+@@ -95,6 +99,11 @@
+ 		name = req.Actor.Name
+ 	}
+ 	m.resumedActors = append(m.resumedActors, name)
++	if len(m.resumeErrs) > 0 {
++		err := m.resumeErrs[0]
++		m.resumeErrs = m.resumeErrs[1:]
++		return nil, err
++	}
+ 	wIP := "10.244.1.42"
+ 	if m.workerIP != "" {
+ 		wIP = m.workerIP
+@@ -124,6 +133,7 @@
+ }
+ 
+ func (m *mockControlServer) CreateActorEgressPolicy(ctx context.Context, req *ateapipb.CreateActorEgressPolicyRequest) (*ateapipb.EgressPolicy, error) {
++	m.lastPolicy = req.EgressPolicy
+ 	actorName := ""
+ 	if req.Actor != nil {
+ 		actorName = req.Actor.Name
+@@ -207,8 +217,7 @@
+ 			Egress: &v1alpha1.EgressConfig{
+ 				Allowlist: &v1alpha1.EgressAllowlist{
+ 					Hosts: []*v1alpha1.HostRule{
+-						{Host: "api.anthropic.com", Port: 443},
+-						{Host: "github.com", Port: 443},
++						{Host: "192.0.2.0/24"},
+ 					},
+ 				},
+ 			},
+@@ -398,6 +407,14 @@
+ 	}
+ 	assertCondition(t, reconciledResumed, "WorkspaceReady", "False", "Initializing")
+ 	assertCondition(t, reconciledResumed, "Ready", "False", "WorkspaceInitializing")
++	if len(mockSrv.createdTemplateNames) < 2 {
++		t.Fatal("did not check the task template on resume")
++	}
++	for _, name := range mockSrv.createdTemplateNames[1:] {
++		if name != mockSrv.createdTemplateNames[0] {
++			t.Fatalf("template changed across status/suspend/resume: %v", mockSrv.createdTemplateNames)
++		}
++	}
+ }
+ 
+ func TestBlaxsmithLaunchBoundaries(t *testing.T) {
+@@ -412,6 +429,9 @@
+ 		{name: "stop failure", reason: "PolicyApplyFailed", server: mockControlServer{policyErr: errors.New("policy denied"), suspendErr: errors.New("stop denied")}},
+ 		{name: "suspend bypasses broken provisioning", suspend: true, server: mockControlServer{templateErr: errors.New("template denied"), policyErr: errors.New("policy denied")}},
+ 		{name: "no ambient credential"},
++		{name: "no gateway defaults deny"},
++		{name: "snapshot readiness retry", server: mockControlServer{resumeErrs: []error{status.Error(codes.FailedPrecondition, "a Golden data resume requires the ActorTemplate golden snapshot, which is not available")}}},
++		{name: "resume permission failure", reason: "ActorResumeFailed", server: mockControlServer{resumeErrs: []error{status.Error(codes.PermissionDenied, "denied")}}},
+ 		{name: "missing gateway", reason: "GatewayUnavailable"},
+ 		{name: "missing workspace", reason: "WorkspaceUnavailable"},
+ 		{name: "empty egress allowlist"},
+@@ -448,12 +468,21 @@
+ 			if tc.name == "empty egress allowlist" && len(tc.server.createdPolicies) != 1 {
+ 				t.Fatal("empty allowlist did not install a deny policy")
+ 			}
++			if tc.name == "no gateway defaults deny" && (tc.server.lastPolicy == nil || len(tc.server.lastPolicy.Rules) != 0) {
++				t.Fatal("missing gateway installed permissive policy")
++			}
++			if tc.name == "snapshot readiness retry" && len(tc.server.resumedActors) != 2 {
++				t.Fatalf("expected one bounded retry, got %d resume calls", len(tc.server.resumedActors))
++			}
+ 			if tc.reason != "" {
+ 				if err == nil || got.Status.Phase != "Failed" {
+ 					t.Fatalf("expected blocked execution, got %v / %v", got.Status, err)
+ 				}
+ 				assertCondition(t, got, "Ready", "False", tc.reason)
+-				if len(tc.server.resumedActors) != 0 {
++				if tc.reason == "ActorResumeFailed" && len(tc.server.resumedActors) != 1 {
++					t.Fatal("retried a nonretryable resume failure")
++				}
++				if tc.reason != "ActorResumeFailed" && len(tc.server.resumedActors) != 0 {
+ 					t.Fatal("resumed despite failed prerequisite")
+ 				}
+ 				if tc.reason == "TemplateCreationFailed" && len(tc.server.createdActors) != 0 {
+diff --git a/internal/controller/worker_test.go b/internal/controller/worker_test.go
+--- a/internal/controller/worker_test.go
++++ b/internal/controller/worker_test.go
+@@ -65,7 +65,7 @@
+ 		Spec: &v1alpha1.GatewaySpec{
+ 			Egress: &v1alpha1.EgressConfig{
+ 				Allowlist: &v1alpha1.EgressAllowlist{
+-					Hosts: []*v1alpha1.HostRule{{Host: "api.openai.com"}},
++					Hosts: []*v1alpha1.HostRule{{Host: "192.0.2.0/24"}},
+ 				},
+ 			},
+ 		},

@@ -22,19 +22,22 @@ git -C "$ax_source" archive "$expected" | tar -x -C "$ax_build"
 cd "$ax_build"
 git apply --check --whitespace=error-all "$integration/fail-closed.patch"
 git apply "$integration/fail-closed.patch"
+git apply --check --whitespace=error-all "$integration/egress-policy.patch"
+git apply "$integration/egress-policy.patch"
 go test ./...
 go vet ./...
 for component in ax-controller ax-task-runner; do
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
     -ldflags='-s -w' -o "$output/$component" "./cmd/$component"
 done
-python3 - "$output" "$integration/fail-closed.patch" "$expected" <<'PY'
+python3 - "$output" "$integration/fail-closed.patch" "$integration/egress-policy.patch" "$expected" <<'PY'
 import hashlib, json, pathlib, subprocess, sys
-output, patch, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
+output, patch, egress_patch, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), sys.argv[4]
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 record = {
     'upstream_commit': revision,
     'patch_sha256': sha(patch),
+    'egress_patch_sha256': sha(egress_patch),
     'go_version': subprocess.check_output(['go', 'version'], text=True).strip(),
     'platform': 'linux/amd64',
     'binaries': {name: sha(output / name) for name in ['ax-controller', 'ax-task-runner']},

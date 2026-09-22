@@ -1,0 +1,183 @@
+diff --git a/cmd/atenet/internal/router/egress/egress.go b/cmd/atenet/internal/router/egress/egress.go
+--- a/cmd/atenet/internal/router/egress/egress.go
++++ b/cmd/atenet/internal/router/egress/egress.go
+@@ -31,6 +31,7 @@
+ 	"encoding/pem"
+ 	"fmt"
+ 	"log/slog"
++	"net/netip"
+ 	"net/url"
+ 	"slices"
+ 	"strings"
+@@ -123,6 +124,9 @@
+ 	if err := h.validateActor(ctx, identity); err != nil {
+ 		return extproc.Result{}, err
+ 	}
++	if err := h.authorizeDestination(ctx, identity, md.Host); err != nil {
++		return extproc.Result{}, err
++	}
+ 
+ 	slog.InfoContext(ctx, "egress identity authenticated",
+ 		slog.String("atespace", identity.Atespace),
+@@ -132,12 +136,63 @@
+ 		// (IP:port).
+ 		slog.String("destination", md.Host))
+ 
+-	// Identity is authenticated; let the CONNECT proceed unchanged.
++	// Identity and destination are authorized; let the CONNECT proceed unchanged.
+ 	return extproc.Result{
+ 		Response: &extprocv3.HeadersResponse{
+ 			Response: &extprocv3.CommonResponse{},
+ 		},
+ 	}, nil
++}
++
++// authorizeDestination checks the current policy for each new CONNECT. The
++// tunnel carries an original destination IP, not a trustworthy DNS name, so
++// hostname rules cannot be enforced here and fail closed.
++func (h *Handler) authorizeDestination(ctx context.Context, identity *substratex509.ActorIdentity, destination string) error {
++	addrPort, err := netip.ParseAddrPort(destination)
++	if err != nil || addrPort.Port() == 0 || addrPort.Addr().Zone() != "" {
++		return extproc.NewReqError(envoy_type.StatusCode_Forbidden,
++			"egress denied: invalid IP destination %q", destination)
++	}
++	addr := addrPort.Addr().Unmap()
++	policy, err := h.apiClient.GetActorEgressPolicy(ctx, &ateapipb.GetActorEgressPolicyRequest{
++		Actor: &ateapipb.ObjectRef{Atespace: identity.Atespace, Name: identity.ActorName},
++	})
++	if err != nil {
++		return mapEgressIdentityError(identity.Atespace, identity.ActorName, err)
++	}
++	if policy == nil || policy.GetMetadata().GetAtespace() != identity.Atespace || policy.GetMetadata().GetName() != "default" {
++		return extproc.NewReqError(envoy_type.StatusCode_ServiceUnavailable,
++			"egress unavailable: invalid policy for %q/%q", identity.Atespace, identity.ActorName)
++	}
++
++	allowed := false
++	for _, rule := range policy.GetRules() {
++		if rule == nil || rule.GetHostnames() != nil || (rule.GetAll() == nil && rule.GetCidrs() == nil) ||
++			(rule.GetAll() != nil && rule.GetCidrs() != nil) {
++			return extproc.NewReqError(envoy_type.StatusCode_ServiceUnavailable,
++				"egress unavailable: unsupported policy rule for %q/%q", identity.Atespace, identity.ActorName)
++		}
++		if rule.GetAll() != nil {
++			allowed = true
++		}
++		if rule.GetCidrs() != nil {
++			for _, cidr := range rule.GetCidrs().GetCidrs() {
++				prefix, err := netip.ParsePrefix(cidr)
++				if err != nil || prefix.Masked() != prefix || prefix.Addr().Is4In6() {
++					return extproc.NewReqError(envoy_type.StatusCode_ServiceUnavailable,
++						"egress unavailable: invalid policy CIDR for %q/%q", identity.Atespace, identity.ActorName)
++				}
++				if prefix.Contains(addr) {
++					allowed = true
++				}
++			}
++		}
++	}
++	if !allowed {
++		return extproc.NewReqError(envoy_type.StatusCode_Forbidden,
++			"egress denied: destination %q is not allowed", destination)
++	}
++	return nil
+ }
+ 
+ // validateIdentity checks that the identity a verified actor certificate
+diff --git a/cmd/atenet/internal/router/egress/egress_test.go b/cmd/atenet/internal/router/egress/egress_test.go
+--- a/cmd/atenet/internal/router/egress/egress_test.go
++++ b/cmd/atenet/internal/router/egress/egress_test.go
+@@ -37,6 +37,7 @@
+ 	"google.golang.org/grpc"
+ 	"google.golang.org/grpc/codes"
+ 	"google.golang.org/grpc/status"
++	"google.golang.org/protobuf/types/known/emptypb"
+ 	"google.golang.org/protobuf/types/known/structpb"
+ 
+ 	"github.com/agent-substrate/substrate/cmd/atenet/internal/router/extproc"
+@@ -197,8 +198,23 @@
+ 
+ type egressMockClient struct {
+ 	ateapipb.ControlClient
+-	actor *ateapipb.Actor
+-	err   error
++	actor     *ateapipb.Actor
++	err       error
++	policy    *ateapipb.EgressPolicy
++	policyErr error
++}
++
++func (m *egressMockClient) GetActorEgressPolicy(context.Context, *ateapipb.GetActorEgressPolicyRequest, ...grpc.CallOption) (*ateapipb.EgressPolicy, error) {
++	if m.policyErr != nil {
++		return nil, m.policyErr
++	}
++	if m.policy != nil {
++		return m.policy, nil
++	}
++	return &ateapipb.EgressPolicy{
++		Metadata: &ateapipb.ResourceMetadata{Atespace: testEgressAtespace, Name: "default"},
++		Rules:    []*ateapipb.EgressRule{{All: &emptypb.Empty{}}},
++	}, nil
+ }
+ 
+ func (m *egressMockClient) GetActor(context.Context, *ateapipb.GetActorRequest, ...grpc.CallOption) (*ateapipb.Actor, error) {
+@@ -287,6 +303,59 @@
+ 	certificate := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leaf.Raw})
+ 	if _, err := h.HandleRequestHeaders(context.Background(), agentgatewayEgressMetadata(string(certificate))); err != nil {
+ 		t.Fatalf("HandleRequestHeaders() error = %v, want nil", err)
++	}
++}
++
++func TestHandleRequestHeadersEnforcesEgressPolicy(t *testing.T) {
++	ca := newTestCA(t, "actor-identity-ca")
++	leaf := ca.issueActorCert(t, actorCertOptions{})
++	metadata := func(destination string) *extproc.RequestMetadata {
++		md := egressMetadata(xfccHeader(leaf))
++		md.Host = destination
++		md.Headers[":authority"] = destination
++		return md
++	}
++	policy := func(rules ...*ateapipb.EgressRule) *ateapipb.EgressPolicy {
++		return &ateapipb.EgressPolicy{
++			Metadata: &ateapipb.ResourceMetadata{Atespace: testEgressAtespace, Name: "default"},
++			Rules:    rules,
++		}
++	}
++	cidr := func(prefixes ...string) *ateapipb.EgressRule {
++		return &ateapipb.EgressRule{Cidrs: &ateapipb.CIDRRule{Cidrs: prefixes}}
++	}
++	tests := []struct {
++		name        string
++		policy      *ateapipb.EgressPolicy
++		policyErr   error
++		destination string
++		want        envoy_type.StatusCode
++	}{
++		{"empty policy denies", policy(), nil, "93.184.216.34:80", envoy_type.StatusCode_Forbidden},
++		{"matching IPv4 CIDR allows", policy(cidr("93.184.216.0/24")), nil, "93.184.216.34:80", 0},
++		{"unmatched IPv4 CIDR denies", policy(cidr("192.0.2.0/24")), nil, "93.184.216.34:80", envoy_type.StatusCode_Forbidden},
++		{"matching IPv6 CIDR allows", policy(cidr("2001:db8::/32")), nil, "[2001:db8::1]:443", 0},
++		{"missing policy denies", nil, status.Error(codes.NotFound, "missing"), "93.184.216.34:80", envoy_type.StatusCode_Forbidden},
++		{"unavailable policy denies", nil, status.Error(codes.Unavailable, "down"), "93.184.216.34:80", envoy_type.StatusCode_ServiceUnavailable},
++		{"hostname policy unsupported", policy(&ateapipb.EgressRule{Hostnames: &ateapipb.HostnameRule{Patterns: []string{"example.com"}}}), nil, "93.184.216.34:80", envoy_type.StatusCode_ServiceUnavailable},
++		{"hostname rule after all still blocks", policy(&ateapipb.EgressRule{All: &emptypb.Empty{}}, &ateapipb.EgressRule{Hostnames: &ateapipb.HostnameRule{Patterns: []string{"example.com"}}}), nil, "93.184.216.34:80", envoy_type.StatusCode_ServiceUnavailable},
++		{"malformed CIDR blocks", policy(cidr("93.184.216.34/24")), nil, "93.184.216.34:80", envoy_type.StatusCode_ServiceUnavailable},
++		{"hostname destination blocks", policy(&ateapipb.EgressRule{All: &emptypb.Empty{}}), nil, "example.com:443", envoy_type.StatusCode_Forbidden},
++		{"zero port blocks", policy(&ateapipb.EgressRule{All: &emptypb.Empty{}}), nil, "93.184.216.34:0", envoy_type.StatusCode_Forbidden},
++	}
++	for _, tc := range tests {
++		t.Run(tc.name, func(t *testing.T) {
++			client := &egressMockClient{actor: runningActor(), policy: tc.policy, policyErr: tc.policyErr}
++			h := New(client, ca.roots())
++			_, err := h.HandleRequestHeaders(context.Background(), metadata(tc.destination))
++			if tc.want == 0 {
++				if err != nil {
++					t.Fatalf("HandleRequestHeaders() error = %v, want nil", err)
++				}
++			} else {
++				wantStatus(t, err, tc.want)
++			}
++		})
+ 	}
+ }
+ 

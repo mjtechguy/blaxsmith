@@ -74,7 +74,7 @@ try:
         checks.append({"check": name, "result": "blocked-before-actor"})
         print(f"PASS {name}: {reason}", flush=True)
 
-    apply("Gateway", "network", {"egress": {"allowlist": {"hosts": [{"host": "*", "port": 443}]}}})
+    apply("Gateway", "network", {"egress": {"allowlist": {"hosts": [{"host": "*"}]}}})
     runner_spec = {"image": image, "debug": True, "gateway": {"name": "network"},
                    "command": ["/bin/sh", "-c", "echo blaxsmith-launch-ok > /workspace/launch-result"]}
     apply("Task", "runner", runner_spec)
@@ -122,8 +122,8 @@ echo 'PASS incomplete {kind}'
     checks.append({"check": "resume-file-persistence", "result": "passed"})
     print("PASS suspend/resume persistence", flush=True)
 
-    # A stored policy is not proof of enforcement. Test the same controlled
-    # destination before and after replacing allow-all with an empty policy.
+    # Probe the same reachable endpoint through four policy revisions. Each
+    # wget opens a new CONNECT; existing tunnels are outside this check.
     service_ip = run("kubectl", "-n", "blaxsmith-build", "get", "svc", "registry",
                      "-o", "jsonpath={.spec.clusterIP}").stdout.strip()
     probe = f"wget -T 5 -qO /dev/null {shlex.quote('http://' + service_ip + ':5001/v2/')}"
@@ -131,17 +131,42 @@ echo 'PASS incomplete {kind}'
     apply("Gateway", "network", {"egress": {"allowlist": {"hosts": []}}})
     ax("resume", "task", "runner")
     wait_for("runner", "Running", "PoliciesApplied", seconds=60)
-    result = ax("ssh", "runner", "--", "/bin/sh", "-c", probe, check=False)
-    report["empty_egress_policy"] = {
-        "baseline_reachable": True, "destination": "dev-registry:/v2/",
-        "still_reachable": result.returncode == 0,
-        "conclusion": "UNENFORCED" if result.returncode == 0 else "blocked-or-unavailable; more proof required",
+    empty_denied = ax("ssh", "runner", "--", "/bin/sh", "-c", probe, check=False).returncode != 0
+    apply("Gateway", "network", {"egress": {"allowlist": {"hosts": [{"host": service_ip + "/32"}]}}})
+    ax("resume", "task", "runner")
+    wait_for("runner", "Running", "PoliciesApplied", seconds=60)
+    cidr_allowed = ax("ssh", "runner", "--", "/bin/sh", "-c", probe, check=False).returncode == 0
+    apply("Gateway", "network", {"egress": {"allowlist": {"hosts": [{"host": "192.0.2.0/24"}]}}})
+    ax("resume", "task", "runner")
+    wait_for("runner", "Running", "PoliciesApplied", seconds=60)
+    cidr_denied = ax("ssh", "runner", "--", "/bin/sh", "-c", probe, check=False).returncode != 0
+    report["egress_policy"] = {
+        "destination": service_ip + ":5001/v2/", "allow_all_reachable": True,
+        "empty_denied": empty_denied, "matching_cidr_allowed": cidr_allowed,
+        "nonmatching_cidr_denied": cidr_denied,
     }
-    print("Egress enforcement: " + report["empty_egress_policy"]["conclusion"], flush=True)
+    if not (empty_denied and cidr_allowed and cidr_denied):
+        raise RuntimeError("egress policy did not follow the expected allow/deny revisions")
+    checks.append({"check": "egress-policy-revisions", "result": "passed"})
+    print("PASS egress policy revisions", flush=True)
+
+    ax("suspend", "task", "runner")
+    wait_for("runner", "Suspended")
+    apply("Task", "no-gateway", {"image": image, "debug": True,
+                                  "command": ["/bin/sh", "-c", "echo ready > /workspace/no-gateway-ready"]})
+    wait_for("no-gateway", "Running", "SetupComplete", seconds=150)
+    ax("ssh", "no-gateway", "--", "/bin/sh", "-c", "test -f /workspace/no-gateway-ready")
+    default_denied = ax("ssh", "no-gateway", "--", "/bin/sh", "-c", probe, check=False).returncode != 0
+    report["egress_policy"]["no_gateway_denied"] = default_denied
+    if not default_denied:
+        raise RuntimeError("task without a Gateway reached the registry")
+    checks.append({"check": "no-gateway-deny-default", "result": "passed"})
+    print("PASS no-gateway default deny", flush=True)
 finally:
-    result = ax("suspend", "task", "runner", check=False)
-    if result.returncode == 0:
-        wait_for("runner", "Suspended")
-        report["final_task_phase"] = "Suspended"
+    for name in ("no-gateway", "runner"):
+        result = ax("suspend", "task", name, check=False)
+        if result.returncode == 0:
+            wait_for(name, "Suspended")
+            report["final_" + name + "_phase"] = "Suspended"
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
 print("Evidence: " + str(output / "report.json"), flush=True)
