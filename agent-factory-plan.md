@@ -1,6 +1,6 @@
 # Blaxsmith
 
-**Status:** revised design draft; implementation has not started  
+**Status:** implementation started; Phase 0 validation and the Git-backed recipe compiler are in progress
 **Updated:** 2026-09-22  
 **Audience:** product, engineering, and platform teams  
 **Goal:** a self-hosted enterprise engineering workspace where humans direct composable agent teams and review completed work, from one person on one Kubernetes node to thousands of developers across multiple clusters.
@@ -245,6 +245,8 @@ Users may choose the same model for every role, several settings within one fami
 OpenCode is a harness with provider/model choices. Running an xAI model through OpenCode and running a native Grok tool are distinct configurations. Declare and validate each supported capability rather than treating a provider name as a tool adapter.
 
 ### Versioned engineering recipes
+
+**Git-backed authoring:** recipes, profiles, prompts, skills, repository instructions, specifications, and transcripts may be maintained in Git. Bind reusable recipes to project inputs at launch and freeze every source at an exact commit with per-file content hashes. Preserve instruction paths and directory scope. Git changes create new candidate versions; they cannot alter active runs or grant access. PostgreSQL/platform policy remains authoritative for approved versions, live state, RBAC, connections/grants/bindings/leases, verification authority, and final human review. Start with one repository and explicit versioned JSON; introduce independent managed-recipe repositories when the importer can preserve separate source revisions. No Git hook, plugin installer, or candidate-supplied validator becomes trusted execution policy merely by being committed. See [the implemented alpha contract](docs/git-recipes.md).
 
 A recipe version records named engineering stages and their dependencies; role/profile references; required skills, tools, and connection capability slots; checks and output expectations; and finite timeout, correction, retry, and usage limits. Support research, specification, implementation, section review, integration, architect review, and specialist testing/UI-review/documentation stages. Stage dependencies determine order and allowed parallelism; correction transitions remain bounded, explicit parts of the engineering workflow. This is not an arbitrary business-process language.
 
@@ -1079,6 +1081,8 @@ The critical path is secure AX bootstrap and access contracts → one complete i
 Ownership below names engineering responsibilities to assign, not additional platform services or mandatory staffing levels.
 
 ### Phase 0 — Prove contracts and settle the foundation
+
+**Implementation evidence (2026-09-22):** the first CLI/package validates committed recipe graphs, explicit profiles and finite limits; freezes prompts, declared skills/instructions and scoped `AGENTS.md`; preserves Guild spec/transcript bytes; and invokes the unchanged pinned Forge validator. Real Git integration checks and provenance are in [the Phase 0 baseline](docs/phase-0-baseline.md). The user provided a dedicated Linux/AMD64 SSH node for k3s/AX compatibility work. These are partial deliverables for P0-01/02/08, not completion of their broader acceptance criteria. Runtime, credential, provider, interactive UI, and representative-ticket evidence remain required.
 
 **Outcome:** an implementable design grounded in the actual AX and harness behavior, with credential delivery demonstrated before sensitive workloads are admitted. **Owners:** platform/integration, identity/security, and workflow engineering.
 
