@@ -1,0 +1,13 @@
+# Synthetic runtime probe only: no project checkout, credentials, or model call.
+apiVersion: ax.io/v1alpha1
+kind: Task
+metadata:
+  name: blaxsmith-smoke
+  atespace: blaxsmith-smoke
+spec:
+  image: __RUNNER_IMAGE__
+  debug: true
+  command:
+    - /bin/sh
+    - -c
+    - 'test -f /workspace/first-boot || echo first-boot > /workspace/first-boot; echo blaxsmith-ax-smoke-ok > /workspace/result.txt'

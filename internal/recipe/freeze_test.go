@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/mjtechguy/blaxsmith/internal/limit"
 )
 
 const example = "examples/guild/"
@@ -164,7 +166,7 @@ func TestRejectAmbiguousJSON(t *testing.T) {
 }
 
 func TestBoundedGitOutput(t *testing.T) {
-	var output boundedBuffer
+	output := limit.Buffer{Max: maxBundleBytes}
 	_, err := io.Copy(&output, strings.NewReader(strings.Repeat("x", maxBundleBytes+1)))
 	if err == nil || len(output.Bytes()) > maxBundleBytes {
 		t.Fatal("subprocess output limit was bypassed")

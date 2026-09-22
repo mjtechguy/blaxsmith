@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/mjtechguy/blaxsmith/internal/limit"
 )
 
 const maxArtifactBytes = 1 << 20
@@ -85,22 +87,10 @@ func (g gitSource) run(ctx context.Context, args ...string) ([]byte, error) {
 	}
 	// No lazy network fetches, terminal prompts, replacement objects, or filters.
 	cmd.Env = append(cmd.Env, "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1")
-	var stdout, stderr boundedBuffer
+	stdout, stderr := limit.Buffer{Max: maxBundleBytes}, limit.Buffer{Max: maxBundleBytes}
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("git %s: %w: %s", args[0], err, strings.TrimSpace(stderr.String()))
 	}
 	return stdout.Bytes(), nil
-}
-
-type boundedBuffer struct{ buf bytes.Buffer }
-
-func (b *boundedBuffer) String() string { return b.buf.String() }
-func (b *boundedBuffer) Bytes() []byte  { return b.buf.Bytes() }
-
-func (b *boundedBuffer) Write(p []byte) (int, error) {
-	if len(p) > maxBundleBytes-b.buf.Len() {
-		return 0, fmt.Errorf("Git output exceeds %d bytes", maxBundleBytes)
-	}
-	return b.buf.Write(p)
 }

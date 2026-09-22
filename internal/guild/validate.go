@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/limit"
 )
 
 const Revision = "dda615434dfb4624e1ab6328851afc91ef58e5e1"
@@ -41,8 +43,10 @@ func Validate(ctx context.Context, spec, transcript []byte) (Result, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", "-I", "validate-spec.py", "spec.md", "transcript.md")
 	cmd.Dir = dir
-	output, err := cmd.CombinedOutput()
-	result.Report = strings.TrimSpace(string(output))
+	output := limit.Buffer{Max: 1 << 20}
+	cmd.Stdout, cmd.Stderr = &output, &output
+	err = cmd.Run()
+	result.Report = strings.TrimSpace(output.String())
 	if err != nil {
 		return result, fmt.Errorf("Guild Forge gate failed: %w\n%s", err, result.Report)
 	}

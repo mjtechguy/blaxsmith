@@ -9,7 +9,7 @@ matrix or a claim that Phase 0 is complete.
 | --- | --- | --- |
 | Guild | `dda615434dfb4624e1ab6328851afc91ef58e5e1` | Forge validator copied unchanged with MIT notice; original references remain outside this repository |
 | AX | `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601` | Execution/runner contract inspection; deployment target selected |
-| Agent Substrate | `672533541dbf` (revision required by AX's Go module) | Certificate, worker, and development installation prerequisites inspected |
+| Agent Substrate | `672533541dbfcd29084e4de2475267088bda3651` (revision required by AX's Go module) | Certificate APIs, gVisor worker, and snapshot persistence exercised |
 | Astronomer | `5961992098c8d8c72a5159e966359ad61838579d` | Frontend source baseline; no frontend implemented yet |
 | Coder | `c2f2c1708ed21119e5ccb639f4dfc20c9fb3b4d7` | Enterprise workspace reference; no code imported |
 
@@ -26,6 +26,14 @@ existing cluster, and no `/dev/kvm`. Use gVisor for the initial runtime proof;
 microVM compatibility is unproven. Bootstrap uses pinned k3s `v1.36.4+k3s1`,
 explicit certificate feature gates, a root-only kubeconfig, and SSH access.
 Public ingress and ServiceLB are disabled. No model credentials are installed.
+
+The remote k3s/Substrate/AX stack is now running. A synthetic AX command ran in
+gVisor, guest access returned its output, and a separately written workspace
+marker survived suspend/resume. The one-worker task was left suspended. The
+[dev runbook](../deploy/dev/README.md) records the overlay, image build, access
+rules, test procedure, and limitations; [image evidence](runtime-images.json)
+records the deployed versions. This advances the AX runtime spike, not the
+secure bootstrap/lease or tool-adapter acceptance gates.
 
 ## Guild adoption map
 
@@ -67,3 +75,21 @@ tree. The bridge needs explicit preconditions and durable result reporting.
 `AX_TASK_YAML` and metadata can expose raw task environment fields, so credentials
 must not be placed there. These are inspected behaviors, not a completed security
 test or a validated worker contract.
+
+Additional inspected blockers: AX currently falls back to the default template
+when creating a task-specific template fails, and continues after an egress
+policy application error. The connector must verify the exact installed template
+and effective policy before releasing a lease. Substrate's pinned authentication
+guide explicitly says authorization/RBAC enforcement is not implemented; defining
+an authorization model in source does not prove tenant isolation. Keep this dev
+cluster restricted to synthetic work until the platform and runtime boundary
+tests pass. The AX upstream example runner image also returned HTTP 403 to an
+anonymous pull; the dev smoke runner is built from the pinned AX source instead.
+
+Observed runtime retry gap: initial submission failed with `ResourceExhausted`
+while Substrate created the golden snapshot. AX did not automatically retry once
+the worker became free. An explicit resume succeeded and the persistence checks
+then passed. Distinguish transient capacity/template preparation from genuine
+task failure; add bounded, visible retries to the connector rather than a model
+correction loop. Public IPv4 access to the control-plane/runtime ports was blocked
+in probes; IPv6 reachability testing was unavailable from the local network.

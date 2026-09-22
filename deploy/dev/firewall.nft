@@ -1,0 +1,6 @@
+# Dedicated single-node dev host, public NIC eth0. UFW protects host INPUT.
+# This earlier FORWARD hook also covers Kubernetes hostPort/NodePort DNAT.
+add table inet blaxsmith_dev
+flush table inet blaxsmith_dev
+add chain inet blaxsmith_dev forward { type filter hook forward priority -10; policy accept; }
+add rule inet blaxsmith_dev forward iifname "eth0" ct state new counter drop

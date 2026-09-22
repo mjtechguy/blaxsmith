@@ -18,6 +18,11 @@ The [Git recipe contract](docs/git-recipes.md) explains composition, frozen inpu
 `AGENTS.md`/skill handling, and bundle export. See the [Phase 0 evidence](docs/phase-0-baseline.md)
 for source pins, Guild reuse, runtime findings, and remaining validation.
 
+A dedicated remote k3s/Substrate/AX development node has passed a synthetic
+command and suspend/resume file-persistence test. Its [runbook](deploy/dev/README.md)
+records the tested setup; this is not yet the product installation or a secure
+multi-tenant worker environment.
+
 ## Workspace layout
 
 ```text
@@ -34,7 +39,7 @@ The private repository is [mjtechguy/blaxsmith](https://github.com/mjtechguy/bla
 - **Local development:** React/Vite and Go run locally, Compose supplies supporting services, and agent work runs on a real AX/Substrate execution cluster.
 - **Cluster enrollment:** an authorized administrator registers a pool, installs the connector and validated runtime prerequisites, and completes scoped enrollment before it becomes eligible for work.
 
-There is no custom Blaxsmith operator or Compose-based agent runtime in the initial scope. Helm charts, Compose files, and runnable application commands will be added during implementation; they do not exist yet.
+There is no custom Blaxsmith operator or Compose-based agent runtime in the initial scope. Product Helm charts, Compose files, and web/API commands will be added during implementation; they do not exist yet. The recipe CLI and development runtime inputs described above are runnable now.
 
 ## Beginning implementation
 

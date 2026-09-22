@@ -1,0 +1,5 @@
+# Single-node development only; this registry is protected by the host firewall.
+mirrors:
+  "127.0.0.1:5001":
+    endpoint:
+      - "http://127.0.0.1:5001"

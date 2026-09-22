@@ -1,0 +1,136 @@
+{
+  "observed_at": "2026-09-22T18:09:24.493563+00:00",
+  "purpose": "Single-node synthetic AX compatibility smoke; not a production support matrix",
+  "k3s": "v1.36.4+k3s1",
+  "ax_commit": "d8ed0fe38bceb7842d3c47817d53d16ccdfcb601",
+  "substrate_commit": "672533541dbfcd29084e4de2475267088bda3651",
+  "substrate_overlay": "kind registry replacement changed to registry.blaxsmith-build.svc:5001; version label 67253354-dirty",
+  "images": [
+    {
+      "namespace": "ate-system",
+      "container": "ate-api-server",
+      "requested_image": "sha256:216f9b8ccec559fe38f1ce41d1c9092ac56ea355313877608d64eb46478546de",
+      "observed_image_id": "127.0.0.1:5001/ateapi-752889f8b0bcdbee32172ac9fe056025@sha256:e8dd09956e0416c4460080d45692dc5a45bf4e8de94c0f3d67896500983147ec"
+    },
+    {
+      "namespace": "ate-system",
+      "container": "ate-controller",
+      "requested_image": "sha256:b47b5d463eb93bf484f3b8d4407905acb02f20770ddc8f61e10f681df0a84097",
+      "observed_image_id": "127.0.0.1:5001/atecontroller-86b02a85c6bff82898e0930a8b0286d1@sha256:e0b514da453e0af7a38641f05509b3dabe87d0413cd7638d75d570bf6c77f9ff"
+    },
+    {
+      "namespace": "ate-system",
+      "container": "atelet",
+      "requested_image": "sha256:2e71123ba26ba27213d07357936bad0b9a26141ba4e166ab51f288ceb5806317",
+      "observed_image_id": "127.0.0.1:5001/atelet-89dbecdd4e8d5cd4d125a2de341f399c@sha256:f75b51c6cc3d6dcfde3bceec03fe205450f2d2ee8dff9b6eb226c75a07af0652"
+    },
+    {
+      "namespace": "ate-system",
+      "container": "atenet-router",
+      "requested_image": "sha256:b6d605fb01b64b8d6c9aab32084b30f42fb24b21e338116c4978fd63e79c703c",
+      "observed_image_id": "127.0.0.1:5001/atenet-2559047aaba794c6723c99da32f86409@sha256:431a4780dfe99eafbed4d328701f2059c12472f0a9b0b625fa42e17988b87d59"
+    },
+    {
+      "namespace": "ate-system",
+      "container": "create-bucket",
+      "requested_image": "sha256:0a3483bb3332bbe9dcb42c34c3abfd10f07bf9735023016ba613aea640b7cf56",
+      "observed_image_id": "docker.io/amazon/aws-cli@sha256:643507c10ada7964ca6157b3d799f030b90577643da9955d319a77399ed80d73"
+    },
+    {
+      "namespace": "ate-system",
+      "container": "envoy",
+      "requested_image": "sha256:ef41fe510c94b2a96c03e5f19a0bdce3ec92819c430401229e94faf768af792f",
+      "observed_image_id": "docker.io/envoyproxy/envoy@sha256:57e14a549d7bd43c8d3f6d03e8cfa653e037d4b38e133acd9b54f38c524401b4"
+    },
+    {
+      "namespace": "ate-system",
+      "container": "ext-proc",
+      "requested_image": "sha256:b6d605fb01b64b8d6c9aab32084b30f42fb24b21e338116c4978fd63e79c703c",
+      "observed_image_id": "127.0.0.1:5001/atenet-2559047aaba794c6723c99da32f86409@sha256:431a4780dfe99eafbed4d328701f2059c12472f0a9b0b625fa42e17988b87d59"
+    },
+    {
+      "namespace": "ate-system",
+      "container": "postgres",
+      "requested_image": "sha256:bd1890816ae0b8ad4644f05728570d4be774e1f1490d7232f5084b52ea335183",
+      "observed_image_id": "docker.io/library/postgres@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15"
+    },
+    {
+      "namespace": "ate-system",
+      "container": "rustfs",
+      "requested_image": "sha256:c5102f4ed5f9677c04cdbead7b848c24f0dd6ddc99473077f7387e872fb6dbe1",
+      "observed_image_id": "docker.io/rustfs/rustfs@sha256:378642b05b7dcb4849fb77ebe6aca4ced1c3f66e7e504247df95a5c9018d3358"
+    },
+    {
+      "namespace": "ax-system",
+      "container": "ateom",
+      "requested_image": "sha256:386d51cdd56a7c57fc125394ee283512d7325e40d763055e79ba771d99f2b252",
+      "observed_image_id": "127.0.0.1:5001/ateom-gvisor-715889664656de67e44382a8d6ab981d@sha256:cb408c69433906410b9263f23bf06eaddbe26e54ac34654ef5f07c1efa251278"
+    },
+    {
+      "namespace": "ax-system",
+      "container": "ax-server",
+      "requested_image": "sha256:132376d39b95074d6ffe650ecdf4ab91e1ebe0e43a56c9dd4aeb1a393e7a67d7",
+      "observed_image_id": "127.0.0.1:5001/ax-server-340c3583cc4a989b584acf55b1619e8e@sha256:57e4f6d89dad05e7feefbd8f3bbf1045d449454e463021572735eed06f578e07"
+    },
+    {
+      "namespace": "ax-system",
+      "container": "controller",
+      "requested_image": "sha256:776213b30e89d4e7b1e887a34e38126f16f97ef41ac571b9155029e7cd986b78",
+      "observed_image_id": "127.0.0.1:5001/ax-controller-7ebf6094b73be08cb227c879d4802a93@sha256:1a0c6bfb1715d42fc2d818d14b4c0dae548fcacfbb4e8cd7cbb47422e5fc00ed"
+    },
+    {
+      "namespace": "ax-system",
+      "container": "redis",
+      "requested_image": "docker.io/library/redis:7-alpine",
+      "observed_image_id": "docker.io/library/redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499"
+    },
+    {
+      "namespace": "blaxsmith-build",
+      "container": "registry",
+      "requested_image": "sha256:18d4e31e052829d782e13941820382387c2949e622751b0dc6ccd97cccfa0792",
+      "observed_image_id": "docker.io/library/registry@sha256:325b4b29b041e82803abeb703e201655e4e23ab83264ec1a7c9ddb0a5b14a6e0"
+    },
+    {
+      "namespace": "kube-system",
+      "container": "coredns",
+      "requested_image": "docker.io/rancher/mirrored-coredns-coredns:1.14.6",
+      "observed_image_id": "docker.io/rancher/mirrored-coredns-coredns@sha256:900f9c109f7a33545d3c811516e8376df9019147b750f5ce3e254468769176ea"
+    },
+    {
+      "namespace": "kube-system",
+      "container": "local-path-provisioner",
+      "requested_image": "docker.io/rancher/local-path-provisioner:v0.0.37",
+      "observed_image_id": "docker.io/rancher/local-path-provisioner@sha256:e757967a5ec338f6a9b371c5a9688bedaa8c3578ea3dd4db329ea0084be0a86f"
+    },
+    {
+      "namespace": "kube-system",
+      "container": "metrics-server",
+      "requested_image": "docker.io/rancher/mirrored-metrics-server:v0.9.0",
+      "observed_image_id": "docker.io/rancher/mirrored-metrics-server@sha256:d9862115e7c7881280d3d75ca26bda8ffc0fc213315979575bf23ce9826205c0"
+    },
+    {
+      "namespace": "otel-system",
+      "container": "jaeger",
+      "requested_image": "sha256:a3d0fd71360a4a021b556a3f73b6da8d48edbb4519edf61c67ab8d9d8fa22d05",
+      "observed_image_id": "docker.io/jaegertracing/all-in-one@sha256:f6b5d09073f14f76873d300f565a6691d815e81bea8e07e1dc3ff67e0596dd4e"
+    },
+    {
+      "namespace": "otel-system",
+      "container": "otel-collector",
+      "requested_image": "sha256:498c59b440c4ba5ea061c73a68ad14cf6d192acad52334a85a5126774f7ee759",
+      "observed_image_id": "docker.io/otel/opentelemetry-collector-contrib@sha256:f2f01157055a9b2aab9df7118e1f1c9abf345e99b23bc7a2bc791db374a7d0f6"
+    },
+    {
+      "namespace": "otel-system",
+      "container": "prometheus",
+      "requested_image": "sha256:59047bc40d8bc31ad170ac725412de7f123f7658a309956f201f845ab11941ea",
+      "observed_image_id": "docker.io/prom/prometheus@sha256:ddc2493835a1509976d5e4e0c94199c4f843ce1f42dd6bcfc8231ba734a93ff7"
+    },
+    {
+      "namespace": "podcertificate-controller-system",
+      "container": "controller",
+      "requested_image": "sha256:4e92c0cb41f8893f7a9137d51fb73c36809d98a8a6589530fde4e4a22b4cad3c",
+      "observed_image_id": "127.0.0.1:5001/podcertcontroller-bf341f0f8a58c5a065fbdc9410c76470@sha256:252f39374758fa806b24aa4f13bc9dfe566f9375ab4d3805b438cf950fc00f0b"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+[Unit]
+Description=Protect Blaxsmith development pod ports from public ingress
+Before=k3s.service
+After=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/nft -f /etc/blaxsmith-dev-firewall.nft
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
