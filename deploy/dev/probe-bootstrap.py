@@ -26,6 +26,7 @@ space = "blaxsmith-gate-" + uuid.uuid4().hex[:10]
 task = "gated-runner"
 signer = Ed25519PrivateKey.from_private_bytes(pathlib.Path(os.environ["BLAXSMITH_DEV_SIGNING_KEY_FILE"]).read_bytes())
 report = {"atespace": space, "image": image, "checks": []}
+ledger_mode = os.environ.get("BLAXSMITH_DEV_LEDGER") == "1"
 
 
 def kubectl(*args):
@@ -43,6 +44,11 @@ if len(matching) != 1:
 router_tls = ssl.create_default_context(cadata=matching[0])
 connector_token = kubectl("-n", "ate-system", "create", "token", "blaxsmith-connector",
                           "--audience=blaxsmith-bootstrap", "--duration=10m").strip()
+if ledger_mode:
+    (output / "router-ca.pem").write_text(matching[0])
+    (output / "actor-ca.pem").write_text(kubectl("-n", "ate-system", "exec", "deployment/atenet-egress",
+        "-c", "ext-proc", "--", "cat", "/run/actor-id-ca-certs/ca.crt"))
+    report["ledger_releases"] = []
 
 
 class RouterConnection(http.client.HTTPSConnection):
@@ -157,6 +163,23 @@ def signed_release(challenge):
     }).encode()
 
 
+def release(challenge, previous_generation):
+    if not ledger_mode:
+        return request("/blaxsmith/bootstrap/release", signed_release(challenge))[0]
+    args = ["go", "run", "./deploy/dev/ledger-release",
+        "-space", space, "-task", task, "-image", image, "-pool", "blaxsmith-smoke",
+        "-router-ip", router_ip, "-router-ca", str(output / "router-ca.pem"),
+        "-actor-ca", str(output / "actor-ca.pem"),
+        "-signer", os.environ["BLAXSMITH_DEV_SIGNING_KEY_FILE"],
+        "-previous-generation", str(previous_generation)]
+    result = subprocess.run(args, input=connector_token, text=True, capture_output=True, timeout=90)
+    if result.returncode:
+        raise RuntimeError(f"ledger connector: {result.stderr.strip()}")
+    record = json.loads(result.stdout)
+    report["ledger_releases"].append(record)
+    return 204
+
+
 manifest = {
     "apiVersion": "ax.io/v1alpha1", "kind": "Task",
     "metadata": {"name": task, "atespace": space},
@@ -203,7 +226,7 @@ try:
         raise RuntimeError("workspace reported ready before release")
     report["checks"].append("workspace blocked before release")
 
-    status, _ = request("/blaxsmith/bootstrap/release", signed_release(first))
+    status = release(first, 0)
     if status != 204:
         raise RuntimeError(f"initial release returned {status}")
     deadline = time.monotonic() + 60
@@ -228,7 +251,7 @@ try:
     status, _ = request("/blaxsmith/bootstrap/release", signed_release(first))
     if status != 403:
         raise RuntimeError(f"old release on resume returned {status}")
-    status, _ = request("/blaxsmith/bootstrap/release", signed_release(second))
+    status = release(second, 1)
     if status != 204:
         raise RuntimeError(f"fresh release on resume returned {status}")
     report["checks"].append("data-snapshot resume requires fresh release; replay denied")
@@ -240,5 +263,14 @@ finally:
         report["final_phase"] = "Suspended"
     except Exception as error:
         report["cleanup_error"] = str(error)
+    if ledger_mode and report["ledger_releases"]:
+        last = report["ledger_releases"][-1]
+        result = subprocess.run(["go", "run", "./deploy/dev/ledger-release", "-finish",
+            "-space", space, "-task", task, "-previous-generation", str(last["owner_generation"])],
+            text=True, capture_output=True, timeout=30)
+        if result.returncode:
+            report["owner_cleanup_error"] = result.stderr.strip()
+        else:
+            report["owner_cleanup"] = json.loads(result.stdout)
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
 print(output / "report.json")

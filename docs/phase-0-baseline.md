@@ -119,7 +119,14 @@ digest-pinned runner, and rejects a Task-supplied signer. The
 [live probe](bootstrap-platform-key-probe.json) blocked a forged signer and
 unapproved image before actor launch, then passed release and replay checks
 with a root-owned synthetic signer outside the repo. No product connector or
-private Git access is involved yet.
+private Git access is involved yet. The [synthetic ledger connector
+probe](bootstrap-ledger-release-probe.json) then used the PostgreSQL owner and
+challenge ledger, authenticated router, current AX/Substrate runtime check,
+and controller-owned signer to open the same actor before and after a data
+snapshot resume. It recorded release intent/completion twice, rejected replay,
+and deactivated the owner after suspension. Its authorization check is still
+synthetic; effective egress, product grants, encrypted credential delivery,
+private checkout, full-snapshot behavior, and recovery remain open.
 
 ## Guild adoption map
 

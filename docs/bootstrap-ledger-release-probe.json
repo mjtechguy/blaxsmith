@@ -1,0 +1,37 @@
+{
+  "atespace": "blaxsmith-gate-8696a0c7da",
+  "image": "127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:40f40e9ad34c3d89c5c4c084dfe1233cf639535e0c8a666a86eb4a292d2c12e4",
+  "checks": [
+    "task-signer-override blocked before actor launch",
+    "unapproved-runner blocked before actor launch",
+    "stale actor UID denied before challenge",
+    "workspace blocked before release",
+    "signed release starts workspace",
+    "data-snapshot resume requires fresh release; replay denied"
+  ],
+  "ledger_releases": [
+    {
+      "actor_uid": "0508572d-178b-4b98-9e41-adba326ac1d0",
+      "attempt_id": "blaxsmith-gate-8696a0c7da/gated-runner",
+      "cluster_id": "dev-cluster",
+      "opened": true,
+      "owner_generation": 1,
+      "template_uid": "294fad1f-e8c4-4f6d-908b-c697b32ed402",
+      "worker_pool": "blaxsmith-smoke"
+    },
+    {
+      "actor_uid": "0508572d-178b-4b98-9e41-adba326ac1d0",
+      "attempt_id": "blaxsmith-gate-8696a0c7da/gated-runner",
+      "cluster_id": "dev-cluster",
+      "opened": true,
+      "owner_generation": 2,
+      "template_uid": "294fad1f-e8c4-4f6d-908b-c697b32ed402",
+      "worker_pool": "blaxsmith-smoke"
+    }
+  ],
+  "final_phase": "Suspended",
+  "owner_cleanup": {
+    "deactivated": true,
+    "fenced_generation": 3
+  }
+}

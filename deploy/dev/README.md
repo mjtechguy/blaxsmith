@@ -352,13 +352,32 @@ service account cannot. The dev probe uses operator-issued TokenRequest tokens;
 a product connector must use a projected audience-scoped token. No token is
 written to the report or repository.
 
-The [local PostgreSQL ledger](../../docs/bootstrap-ledger.md) now consumes an
-owner/actor-bound pending nonce once, but is not connected to this dev
-deployment. Its `Assign`/`Deactivate` methods compare owner generations, and
-the live ingress now rejects a stale actor UID on the direct bootstrap route.
-The product connector still must join these checks, recheck policy, and deliver
-encrypted access before sensitive work is permitted. The
-synthetic Task's release signer is not a platform trust root.
+## Probe the PostgreSQL-backed synthetic connector
+
+On the dedicated node, PostgreSQL 18 listens only on its Unix socket. The
+`blaxsmith_dev` database and limited peer-authenticated `root` role hold the
+three `db/migrations` files. This database is synthetic evidence, not product
+storage. Run with a new output directory each time:
+
+```sh
+cd /opt/blaxsmith-dev/blaxsmith
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+export BLAXSMITH_DEV_SIGNING_KEY_FILE=/opt/blaxsmith-dev/platform-bootstrap-signing.key
+export BLAXSMITH_DEV_LEDGER=1
+python3 deploy/dev/probe-bootstrap.py \
+  "$(cat /opt/blaxsmith-dev/ax-platform-key-build-1790118073/ax-task-runner.image)" \
+  10.43.36.216 "/opt/blaxsmith-dev/ledger-release-probe-$(date +%s)"
+```
+
+The probe creates a fresh AX task, obtains a short-lived connector token in
+memory, reads the actor and template from Substrate, and calls the Go connector.
+It issues and redeems two database challenges, records release intent before
+each send, rechecks the live actor, and deactivates the owner after suspension.
+The [passing report](../../docs/bootstrap-ledger-release-probe.json) has no
+token or signing key. The second release follows data-snapshot resume; the old
+release is rejected. A newer offer also supersedes an unreleased redemption in
+the local database test. The dev authorizer checks only image/pool/gVisor; no
+grant, effective egress check, credential, or private Git access is involved.
 
 ## Original baseline task
 

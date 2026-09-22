@@ -79,9 +79,10 @@ image while gating is enabled. The runner rejects a signer in Task YAML and
 reads only its injected process environment. The [live probe](../../docs/bootstrap-platform-key-probe.json)
 blocked a forged signer and another image before actor launch, then passed
 release and replay checks using a root-owned test signer outside the repo.
-This gate is not authorization by itself: the product connector must verify
-the activation-bound actor proof, current execution owner, and policy before
-signing. No credential is accepted by this endpoint. Private Git
+The [synthetic ledger-backed connector](../../docs/bootstrap-ledger.md) now
+verifies the activation-bound actor proof and current owner/runtime before
+signing. Its authorizer still has no product grant or measured egress decision.
+No credential is accepted by this endpoint. Private Git
 checkout, encrypted payload delivery, full-snapshot behavior, and revocation
 remain open; do not use this slice for sensitive work.
 

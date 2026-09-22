@@ -32,8 +32,9 @@ actor UID and guest challenge against the Substrate cluster CA. The
 [router probe](docs/bootstrap-router-auth-probe.json) also verifies HTTPS and
 an audience-scoped connector identity before bootstrap. A
 [PostgreSQL challenge ledger](docs/bootstrap-ledger.md) now verifies and
-consumes an attempt/owner-bound proof once in local database tests. It is not
-yet wired to execution or credential release; final live authorization,
+consumes an attempt/owner-bound proof once. A [live synthetic connector
+probe](docs/bootstrap-ledger-release-probe.json) exercised release and owner
+deactivation through PostgreSQL and the current actor. Product policy,
 credential delivery, and private Git checkout remain prerequisites for
 sensitive work.
 The [actor-UID fence](docs/bootstrap-actor-fence-proof.json) now rejects a

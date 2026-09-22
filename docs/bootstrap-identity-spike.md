@@ -98,13 +98,12 @@ transport are not implemented.
 
 The [PostgreSQL challenge ledger](bootstrap-ledger.md) now binds a pending
 nonce to cluster, attempt, owner generation, and actor UID; it verifies proof
-and consumes the nonce transactionally. Local database tests cover another
-attempt/cluster, expiry/replay, and owner/actor replacement. The scheduler and
-product connector are not yet wired to that ledger. Next, recheck the live
-actor UID, owner, template, image, pool, and effective policy immediately
-before signing release; fence replacement through payload delivery. Probe
-data/full-snapshot resume. Finally, deliver an encrypted single-use private
-Git setup payload before workspace checkout,
+and consumes the nonce transactionally. A [synthetic connector
+probe](bootstrap-ledger-release-probe.json) rechecked the live actor UID,
+template, image, pool, and signer before release, fenced owner replacement
+through send, and passed data-snapshot resume. Product policy and effective
+egress are not yet checked. Next, probe full-snapshot resume and deliver an
+encrypted single-use private Git setup payload before workspace checkout,
 show failure blocks the command, and trace snapshots/logs for raw access. No
 real accounts or private repositories are admitted until those checks pass.
 
@@ -112,12 +111,13 @@ The pinned Substrate [actor-UID overlay](../integrations/substrate/README.md)
 now checks the expected UID after router resume and at the receiving `atunnel`.
 The [live proof](bootstrap-actor-fence-proof.json) and
 [gate run](bootstrap-actor-fence-gate.json) reject stale-UID requests. This
-closes the direct bootstrap route's name-to-UID gap, but the product connector
-still must supply the ledger's UID and make the final authorization decision.
+closes the direct bootstrap route's name-to-UID gap. The synthetic connector
+now supplies the ledger's UID; product authorization remains open.
 
 The [AX platform-key overlay](../integrations/ax/README.md) now injects a
 controller-configured public key into a pinned runner image. Task-provided
 signers and other runner images are blocked before actor launch. The
 [live probe](bootstrap-platform-key-probe.json) used a root-owned synthetic
 private key outside the repo and passed release/replay checks without a key in
-Task YAML. Platform signing still needs ledger and policy authorization.
+Task YAML. The synthetic signer now uses the ledger for release; product policy
+remains open.

@@ -60,12 +60,18 @@ func TestLedgerPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	schemaSQL, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", "0001_bootstrap.sql"))
+	migrations, err := filepath.Glob(filepath.Join("..", "..", "db", "migrations", "*.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, string(schemaSQL)); err != nil {
-		t.Fatal(err)
+	for _, migration := range migrations {
+		schemaSQL, err := os.ReadFile(migration)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, string(schemaSQL)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	ledger := NewLedger(pool)
 	actor := Actor{Atespace: "team-a", Name: "task-a", UID: "uid-a"}
@@ -115,10 +121,48 @@ func TestLedgerPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer otherPool.Close()
-	if _, err := NewLedger(otherPool).Redeem(ctx, owner, second.ID, second.Nonce, secondProof, secondRoots); err != nil {
+	redeemed, err := NewLedger(otherPool).Redeem(ctx, owner, second.ID, second.Nonce, secondProof, secondRoots)
+	if err != nil {
 		t.Fatalf("durable redeem from another connection: %v", err)
 	}
+	sent := 0
+	if _, err := ledger.Release(ctx, redeemed, func(context.Context) error { sent++; return nil }); err != nil {
+		t.Fatalf("release under owner fence: %v", err)
+	}
+	if _, err := ledger.Release(ctx, redeemed, func(context.Context) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
+		t.Fatalf("replayed release: %v, sends=%d", err, sent)
+	}
 	denied(owner, second, secondProof, secondRoots) // replay
+
+	unknown := issue(owner)
+	unknownProof, unknownRoots := signedProof(t, unknown)
+	unknownRedeemed, err := ledger.Redeem(ctx, owner, unknown.ID, unknown.Nonce, unknownProof, unknownRoots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transportErr := errors.New("unknown delivery outcome")
+	if _, err := ledger.Release(ctx, unknownRedeemed, func(context.Context) error { return transportErr }); !errors.Is(err, transportErr) {
+		t.Fatalf("release outcome: %v", err)
+	}
+	if _, err := ledger.Release(ctx, unknownRedeemed, func(context.Context) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
+		t.Fatalf("unknown release retried: %v, sends=%d", err, sent)
+	}
+	var attempted, completed bool
+	if err := pool.QueryRow(ctx, `SELECT release_attempted_at IS NOT NULL, released_at IS NOT NULL
+		FROM bootstrap_challenges WHERE id=$1`, unknown.ID).Scan(&attempted, &completed); err != nil || !attempted || completed {
+		t.Fatalf("unknown release state: attempted=%t completed=%t err=%v", attempted, completed, err)
+	}
+
+	superseded := issue(owner)
+	supersededProof, supersededRoots := signedProof(t, superseded)
+	supersededRedeemed, err := ledger.Redeem(ctx, owner, superseded.ID, superseded.Nonce, supersededProof, supersededRoots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = issue(owner)
+	if _, err := ledger.Release(ctx, supersededRedeemed, func(context.Context) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
+		t.Fatalf("superseded proof released: %v, sends=%d", err, sent)
+	}
 
 	concurrent := issue(owner)
 	concurrentProof, concurrentRoots := signedProof(t, concurrent)
@@ -155,10 +199,17 @@ func TestLedgerPostgres(t *testing.T) {
 	denied(owner, expired, expiredProof, expiredRoots)
 	stale := issue(owner)
 	staleProof, staleRoots := signedProof(t, stale)
+	staleRedeemed, err := ledger.Redeem(ctx, owner, stale.ID, stale.Nonce, staleProof, staleRoots)
+	if err != nil {
+		t.Fatal(err)
+	}
 	newOwner, err := ledger.Assign(ctx, owner.ClusterID, owner.AttemptID, owner.OwnerGeneration,
 		Actor{Atespace: actor.Atespace, Name: actor.Name, UID: "uid-b"})
 	if err != nil || newOwner.OwnerGeneration != 2 {
 		t.Fatalf("replacement owner: %+v, %v", newOwner, err)
+	}
+	if _, err := ledger.Release(ctx, staleRedeemed, func(context.Context) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
+		t.Fatalf("stale owner released: %v, sends=%d", err, sent)
 	}
 	denied(owner, stale, staleProof, staleRoots)
 	if _, err := ledger.Issue(ctx, owner); !errors.Is(err, ErrDenied) {

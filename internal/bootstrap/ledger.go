@@ -46,6 +46,7 @@ type Proof struct {
 }
 
 type Redeemed struct {
+	ID            string
 	Scope         Scope
 	ActorAtespace string
 	ActorName     string
@@ -136,6 +137,11 @@ func (l *Ledger) Issue(ctx context.Context, scope Scope) (Offer, error) {
 	}
 	offer.ID = base64.RawURLEncoding.EncodeToString(id[:])
 	nonceHash := sha256.Sum256(offer.Nonce[:])
+	if _, err := tx.Exec(ctx, `UPDATE bootstrap_challenges SET superseded_at=clock_timestamp()
+		WHERE cluster_id=$1 AND attempt_id=$2 AND superseded_at IS NULL AND released_at IS NULL`,
+		scope.ClusterID, scope.AttemptID); err != nil {
+		return Offer{}, fmt.Errorf("supersede prior bootstrap challenge: %w", err)
+	}
 	if _, err := tx.Exec(ctx, `UPDATE bootstrap_challenges SET cancelled_at=clock_timestamp()
 		WHERE cluster_id=$1 AND attempt_id=$2 AND cancelled_at IS NULL AND consumed_at IS NULL`,
 		scope.ClusterID, scope.AttemptID); err != nil {
@@ -222,7 +228,106 @@ func (l *Ledger) Redeem(ctx context.Context, scope Scope, id string, nonce [32]b
 	}
 	redeemed.Scope, redeemed.ActorAtespace, redeemed.ActorName, redeemed.ActorUID, redeemed.Challenge =
 		scope, ownerAtespace, ownerName, ownerUID, challenge
+	redeemed.ID = id
 	return redeemed, nil
+}
+
+// Release records an irrevocable attempt before calling checkAndSend. The
+// callback must recheck live runtime and policy, then send the release while
+// this method holds the owner row lock. Any error leaves the attempt unknown;
+// callers must issue a new challenge rather than retry this redemption.
+func (l *Ledger) Release(ctx context.Context, redeemed Redeemed, checkAndSend func(context.Context) error) (time.Time, error) {
+	if !validScope(redeemed.Scope) || redeemed.ID == "" || redeemed.ActorAtespace == "" ||
+		redeemed.ActorName == "" || redeemed.ActorUID == "" || checkAndSend == nil {
+		return time.Time{}, ErrDenied
+	}
+	owner := func(tx pgx.Tx) error {
+		var uid string
+		err := tx.QueryRow(ctx, `SELECT actor_uid FROM bootstrap_owners WHERE cluster_id=$1
+			AND attempt_id=$2 AND owner_generation=$3 AND actor_atespace=$4
+			AND actor_name=$5 AND active FOR UPDATE`, redeemed.Scope.ClusterID,
+			redeemed.Scope.AttemptID, redeemed.Scope.OwnerGeneration,
+			redeemed.ActorAtespace, redeemed.ActorName).Scan(&uid)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && uid != redeemed.ActorUID) {
+			return ErrDenied
+		}
+		return err
+	}
+	tx, err := l.db.Begin(ctx)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("begin bootstrap release intent: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if err := owner(tx); err != nil {
+		return time.Time{}, err
+	}
+	var attempted time.Time
+	err = tx.QueryRow(ctx, `UPDATE bootstrap_challenges SET release_attempted_at=clock_timestamp()
+		WHERE id=$1 AND cluster_id=$2 AND attempt_id=$3 AND owner_generation=$4
+		AND actor_atespace=$5 AND actor_name=$6 AND actor_uid=$7
+		AND consumed_at=$8 AND release_attempted_at IS NULL AND cancelled_at IS NULL AND superseded_at IS NULL
+		AND expires_at>clock_timestamp() AND $9::timestamptz>clock_timestamp()
+		RETURNING release_attempted_at`, redeemed.ID, redeemed.Scope.ClusterID,
+		redeemed.Scope.AttemptID, redeemed.Scope.OwnerGeneration,
+		redeemed.ActorAtespace, redeemed.ActorName, redeemed.ActorUID,
+		redeemed.ConsumedAt, time.Unix(redeemed.Challenge.ExpiresAt, 0)).Scan(&attempted)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, ErrDenied
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("record bootstrap release intent: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return time.Time{}, fmt.Errorf("commit bootstrap release intent: %w", err)
+	}
+
+	sendTx, err := l.db.Begin(ctx)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("begin bootstrap release: %w", err)
+	}
+	defer sendTx.Rollback(ctx)
+	if err := owner(sendTx); err != nil {
+		return time.Time{}, err
+	}
+	var expiresAt, dbNow time.Time
+	err = sendTx.QueryRow(ctx, `SELECT expires_at, clock_timestamp() FROM bootstrap_challenges WHERE id=$1
+		AND cluster_id=$2 AND attempt_id=$3 AND owner_generation=$4
+		AND release_attempted_at=$5 AND released_at IS NULL AND superseded_at IS NULL FOR UPDATE`, redeemed.ID,
+		redeemed.Scope.ClusterID, redeemed.Scope.AttemptID, redeemed.Scope.OwnerGeneration, attempted).Scan(&expiresAt, &dbNow)
+	guestExpiry := time.Unix(redeemed.Challenge.ExpiresAt, 0)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && (!expiresAt.After(dbNow) || !guestExpiry.After(dbNow))) {
+		return time.Time{}, ErrDenied
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("read bootstrap release intent: %w", err)
+	}
+	deadline := expiresAt
+	if guestExpiry.Before(deadline) {
+		deadline = guestExpiry
+	}
+	sendCtx, cancel := context.WithTimeout(ctx, deadline.Sub(dbNow))
+	defer cancel()
+	if err := checkAndSend(sendCtx); err != nil {
+		return time.Time{}, err
+	}
+	if err := sendCtx.Err(); err != nil {
+		return time.Time{}, err
+	}
+	var released time.Time
+	err = sendTx.QueryRow(ctx, `UPDATE bootstrap_challenges SET released_at=clock_timestamp()
+		WHERE id=$1 AND release_attempted_at=$2 AND released_at IS NULL
+		AND expires_at>clock_timestamp() AND $3::timestamptz>clock_timestamp()
+		RETURNING released_at`, redeemed.ID, attempted, guestExpiry).Scan(&released)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, ErrDenied
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("record bootstrap release: %w", err)
+	}
+	if err := sendTx.Commit(ctx); err != nil {
+		return time.Time{}, fmt.Errorf("commit bootstrap release: %w", err)
+	}
+	return released, nil
 }
 
 func validScope(scope Scope) bool {
