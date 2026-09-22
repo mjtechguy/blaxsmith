@@ -72,8 +72,15 @@ preflight, not substitutes for this identity exchange.
 
 ## Next proof
 
-Implement the smallest atunnel-to-guest attestation surface and runner gate in
-version-pinned overlays, then exercise it only with synthetic access. The test
+The [AX runner gate](../integrations/ax/README.md) and [synthetic gVisor
+probe](bootstrap-gate-probe.json) now demonstrate pre-workspace blocking,
+one-time signed release, a fresh challenge on data-snapshot resume, and replay
+rejection. They also revealed that Substrate must use transport `/healthz` to
+activate a gated actor while AX keeps workspace `/readyz` closed. One-worker
+golden-snapshot warmup and cold startup need explicit sequencing.
+
+Next, implement the smallest atunnel-to-guest attestation surface and
+credential-free connector verifier in version-pinned overlays. The test
 must reject a forged actor name/UID, wrong cluster or audience, another attempt,
 replayed/expired challenge, stale execution owner, cloned golden-snapshot key,
 and actor replacement between challenge and delivery. It must prove private

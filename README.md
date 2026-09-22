@@ -24,9 +24,11 @@ records the tested setup; this is not yet the product installation or a secure
 multi-tenant worker environment.
 
 The [AX compatibility patch](integrations/ax/README.md) now blocks observed
-startup failures and passes local and live gVisor checks. The live test also found
-that an empty AX egress policy did not restrict traffic; effective network
-enforcement and authenticated bootstrap remain prerequisites for credentials.
+startup failures, enforces the tested new-connection egress path, and adds a
+synthetic pre-workspace release gate. The [live bootstrap probe](docs/bootstrap-gate-probe.json)
+passed release and replay checks across suspend/resume. Actor attestation,
+credential delivery, and private Git checkout remain prerequisites for
+sensitive work.
 
 Recipes now accept Claude Code, Codex, and OpenCode profiles. The updated plan
 includes a recent tool-version catalog with latest stable selected for new

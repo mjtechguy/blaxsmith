@@ -1,0 +1,400 @@
+diff --git a/internal/metadata/server.go b/internal/metadata/server.go
+index fb4feba..d41c6c5 100644
+--- a/internal/metadata/server.go
++++ b/internal/metadata/server.go
+@@ -47,6 +47,7 @@ type Server struct {
+ type ServerOptions struct {
+ 	WorkspacePath string
+ 	LogDir        string
++	Bootstrap     http.Handler
+ }
+ 
+ // NewServer creates a new metadata and guest server serving the task and its
+@@ -98,6 +99,9 @@ func NewServer(port int, task *v1alpha1.Task, workspaces []*v1alpha1.Workspace,
+ 	// /metadata/v1alpha1/ax/workspaces  every bound Workspace, as a YAML stream
+ 	mux.HandleFunc("/metadata/v1alpha1/ax/task", s.handleTask)
+ 	mux.HandleFunc("/metadata/v1alpha1/ax/workspaces", s.handleWorkspaces)
++	if opt.Bootstrap != nil {
++		mux.Handle("/blaxsmith/bootstrap/", opt.Bootstrap)
++	}
+ 
+ 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+ 		if s.grpcServer != nil && r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
+diff --git a/internal/substrate/client.go b/internal/substrate/client.go
+index 03dea78..6d96b26 100644
+--- a/internal/substrate/client.go
++++ b/internal/substrate/client.go
+@@ -235,6 +235,12 @@ func BuildActorTemplate(atespace, name, image string, envMap map[string]string,
+ 			Value: v,
+ 		})
+ 	}
++	readyPath := "/readyz"
++	if _, gated := envMap["BLAXSMITH_BOOTSTRAP_PUBLIC_KEY"]; gated {
++		// Substrate must route the bootstrap challenge before AX workspace setup.
++		// AX continues to report workspace readiness separately on /readyz.
++		readyPath = "/healthz"
++	}
+ 
+ 	return &ateapipb.ActorTemplate{
+ 		Metadata: &ateapipb.ResourceMetadata{
+@@ -248,7 +254,7 @@ func BuildActorTemplate(atespace, name, image string, envMap map[string]string,
+ 			Env:     envList,
+ 			Readyz: &ateapipb.ContainerReadyz{
+ 				HttpGet: &ateapipb.HTTPGetAction{
+-					Path: "/readyz",
++					Path: readyPath,
+ 					Port: 80,
+ 				},
+ 			},
+diff --git a/internal/substrate/client_test.go b/internal/substrate/client_test.go
+index 1fc6fc2..189abb5 100644
+--- a/internal/substrate/client_test.go
++++ b/internal/substrate/client_test.go
+@@ -25,6 +25,24 @@ import (
+ 	"google.golang.org/grpc/status"
+ )
+ 
++func TestBlaxsmithGatedTemplateUsesTransportReadiness(t *testing.T) {
++	for _, tc := range []struct {
++		name string
++		env  map[string]string
++		path string
++	}{
++		{"ordinary", nil, "/readyz"},
++		{"gated", map[string]string{"BLAXSMITH_BOOTSTRAP_PUBLIC_KEY": "synthetic"}, "/healthz"},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			tmpl := BuildActorTemplate("space", "task", "image@sha256:test", tc.env, nil, "gs://bucket")
++			if got := tmpl.Containers[0].Readyz.HttpGet.Path; got != tc.path {
++				t.Fatalf("Substrate readiness path = %q, want %q", got, tc.path)
++			}
++		})
++	}
++}
++
+ type policyClient struct {
+ 	ateapipb.ControlClient
+ 	create *ateapipb.EgressPolicy
+diff --git a/runner/bootstrap.go b/runner/bootstrap.go
+new file mode 100644
+index 0000000..67ff51e
+--- /dev/null
++++ b/runner/bootstrap.go
+@@ -0,0 +1,141 @@
++package runner
++
++import (
++	"crypto/ed25519"
++	"crypto/rand"
++	"encoding/base64"
++	"encoding/json"
++	"fmt"
++	"io"
++	"net/http"
++	"strconv"
++	"sync"
++	"time"
++
++	"github.com/google/ax/pkg/apis/v1alpha1"
++)
++
++const bootstrapKeyEnv = "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY"
++const challengeTTL = 2 * time.Minute
++
++// bootstrapGate only releases startup. It never accepts or stores credentials.
++// The signer must independently verify the live actor before signing a release.
++type bootstrapGate struct {
++	key      ed25519.PublicKey
++	atespace string
++	task     string
++	mu       sync.Mutex
++	nonce    string
++	expires  time.Time
++	released chan struct{}
++	done     bool
++}
++
++func newBootstrapGate(task *v1alpha1.Task) (*bootstrapGate, error) {
++	var encoded string
++	var present bool
++	for _, env := range task.GetSpec().GetEnv() {
++		if env.GetName() == bootstrapKeyEnv {
++			if present {
++				return nil, fmt.Errorf("duplicate %s", bootstrapKeyEnv)
++			}
++			present = true
++			encoded = env.GetValue()
++		}
++	}
++	if !present {
++		return nil, nil
++	}
++	key, err := base64.StdEncoding.DecodeString(encoded)
++	if err != nil || len(key) != ed25519.PublicKeySize {
++		return nil, fmt.Errorf("invalid %s", bootstrapKeyEnv)
++	}
++	meta := task.GetMetadata()
++	if meta.GetAtespace() == "" || meta.GetName() == "" {
++		return nil, fmt.Errorf("bootstrap task reference is required")
++	}
++	return &bootstrapGate{key: key, atespace: meta.GetAtespace(), task: meta.GetName(), released: make(chan struct{})}, nil
++}
++
++func (g *bootstrapGate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
++	switch r.URL.Path {
++	case "/blaxsmith/bootstrap/challenge":
++		if r.Method != http.MethodGet {
++			http.Error(w, "GET required", http.StatusMethodNotAllowed)
++			return
++		}
++		g.challenge(w)
++	case "/blaxsmith/bootstrap/release":
++		if r.Method != http.MethodPost {
++			http.Error(w, "POST required", http.StatusMethodNotAllowed)
++			return
++		}
++		g.release(w, r)
++	default:
++		http.NotFound(w, r)
++	}
++}
++
++func (g *bootstrapGate) challenge(w http.ResponseWriter) {
++	g.mu.Lock()
++	if g.done {
++		g.mu.Unlock()
++		http.Error(w, "already released", http.StatusGone)
++		return
++	}
++	if g.nonce == "" || !time.Now().Before(g.expires) {
++		var random [32]byte
++		if _, err := rand.Read(random[:]); err != nil {
++			g.mu.Unlock()
++			http.Error(w, "challenge unavailable", http.StatusServiceUnavailable)
++			return
++		}
++		g.nonce = base64.RawURLEncoding.EncodeToString(random[:])
++		g.expires = time.Now().Add(challengeTTL)
++	}
++	response := struct {
++		Nonce     string `json:"nonce"`
++		ExpiresAt int64  `json:"expires_at"`
++		Atespace  string `json:"atespace"`
++		Task      string `json:"task"`
++	}{g.nonce, g.expires.Unix(), g.atespace, g.task}
++	g.mu.Unlock()
++	w.Header().Set("Content-Type", "application/json")
++	_ = json.NewEncoder(w).Encode(response)
++}
++
++func (g *bootstrapGate) release(w http.ResponseWriter, r *http.Request) {
++	var request struct {
++		Nonce     string `json:"nonce"`
++		ExpiresAt int64  `json:"expires_at"`
++		Signature string `json:"signature"`
++	}
++	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2048))
++	decoder.DisallowUnknownFields()
++	if err := decoder.Decode(&request); err != nil {
++		http.Error(w, "invalid release", http.StatusBadRequest)
++		return
++	}
++	if err := decoder.Decode(new(any)); err != io.EOF {
++		http.Error(w, "invalid release", http.StatusBadRequest)
++		return
++	}
++	signature, err := base64.StdEncoding.DecodeString(request.Signature)
++	if err != nil {
++		http.Error(w, "invalid release", http.StatusForbidden)
++		return
++	}
++	g.mu.Lock()
++	message := []byte("blaxsmith/bootstrap/release/v1\n" + request.Nonce + "\n" + strconv.FormatInt(request.ExpiresAt, 10) + "\n" + g.atespace + "\n" + g.task + "\n")
++	if g.done || g.nonce == "" || request.Nonce != g.nonce || request.ExpiresAt != g.expires.Unix() || !time.Now().Before(g.expires) || !ed25519.Verify(g.key, message, signature) {
++		g.mu.Unlock()
++		http.Error(w, "release denied", http.StatusForbidden)
++		return
++	}
++	g.done = true
++	close(g.released)
++	g.mu.Unlock()
++	w.WriteHeader(http.StatusNoContent)
++}
++
++var _ http.Handler = (*bootstrapGate)(nil)
+diff --git a/runner/bootstrap_test.go b/runner/bootstrap_test.go
+new file mode 100644
+index 0000000..599dd66
+--- /dev/null
++++ b/runner/bootstrap_test.go
+@@ -0,0 +1,138 @@
++package runner_test
++
++import (
++	"bytes"
++	"context"
++	"crypto/ed25519"
++	"crypto/rand"
++	"encoding/base64"
++	"encoding/json"
++	"fmt"
++	"net/http"
++	"os"
++	"path/filepath"
++	"testing"
++	"time"
++
++	"github.com/google/ax/internal/workspace"
++	"github.com/google/ax/pkg/apis/v1alpha1"
++	"github.com/google/ax/runner"
++)
++
++func TestBlaxsmithBootstrapRejectsInvalidKey(t *testing.T) {
++	for _, value := range []string{"", "not-a-public-key"} {
++		h := newHarness(t)
++		h.task.Spec.Env = []*v1alpha1.EnvVar{{Name: "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY", Value: value}}
++		if err := runner.Run(context.Background(), h.cfg); err == nil {
++			t.Fatalf("key %q did not fail closed", value)
++		}
++		if _, err := os.Stat(h.wsPath); !os.IsNotExist(err) {
++			t.Fatalf("workspace created with invalid key: %v", err)
++		}
++	}
++}
++
++func TestBlaxsmithBootstrapGatesWorkspaceAndCommand(t *testing.T) {
++	public, private, err := ed25519.GenerateKey(rand.Reader)
++	if err != nil {
++		t.Fatal(err)
++	}
++	newGated := func() *harness {
++		h := newHarness(t)
++		h.task.Spec.Env = []*v1alpha1.EnvVar{{Name: "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY", Value: base64.StdEncoding.EncodeToString(public)}}
++		return h
++	}
++	h := newGated()
++	started := filepath.Join(t.TempDir(), "started")
++	h.task.Spec.Command = []string{"touch", started}
++	h.start(t)
++	waitHealthy(t, h.cfg.Port)
++	first := readChallenge(t, h.cfg.Port)
++	if _, err := os.Stat(filepath.Join(workspace.AXDir, workspace.MarkerName(h.wsPath))); !os.IsNotExist(err) {
++		t.Fatalf("workspace set up before release: %v", err)
++	}
++	if _, err := os.Stat(started); !os.IsNotExist(err) {
++		t.Fatalf("command ran before release: %v", err)
++	}
++	if status := sendRelease(t, h.cfg.Port, signedRelease(first, private, "wrong-task")); status != http.StatusForbidden {
++		t.Fatalf("wrong-task signature status = %d", status)
++	}
++	if status := sendRelease(t, h.cfg.Port, signedRelease(first, private, first.Task)); status != http.StatusNoContent {
++		t.Fatalf("valid release status = %d", status)
++	}
++	if exit := h.waitExit(t); exit.Err != nil {
++		t.Fatalf("command failed after release: %+v", exit)
++	}
++	if _, err := os.Stat(started); err != nil {
++		t.Fatalf("command missing after release: %v", err)
++	}
++	if status := sendRelease(t, h.cfg.Port, signedRelease(first, private, first.Task)); status != http.StatusForbidden {
++		t.Fatalf("replayed release status = %d", status)
++	}
++
++	// A runner restored from the same pre-bootstrap template must get a new
++	// nonce; the old signed release cannot unlock it.
++	clone := newGated()
++	cloneStarted := filepath.Join(t.TempDir(), "clone-started")
++	clone.task.Spec.Command = []string{"touch", cloneStarted}
++	clone.start(t)
++	waitHealthy(t, clone.cfg.Port)
++	second := readChallenge(t, clone.cfg.Port)
++	if second.Nonce == first.Nonce {
++		t.Fatal("two runner instances reused the challenge")
++	}
++	if status := sendRelease(t, clone.cfg.Port, signedRelease(first, private, first.Task)); status != http.StatusForbidden {
++		t.Fatalf("cross-runner replay status = %d", status)
++	}
++	clone.cancel()
++	clone.waitFinished(t, 5*time.Second)
++	if _, err := os.Stat(cloneStarted); !os.IsNotExist(err) {
++		t.Fatalf("clone command ran without release: %v", err)
++	}
++}
++
++type bootstrapChallenge struct {
++	Nonce     string `json:"nonce"`
++	ExpiresAt int64  `json:"expires_at"`
++	Atespace  string `json:"atespace"`
++	Task      string `json:"task"`
++}
++
++func readChallenge(t *testing.T, port int) bootstrapChallenge {
++	t.Helper()
++	response, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/blaxsmith/bootstrap/challenge", port))
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer response.Body.Close()
++	if response.StatusCode != http.StatusOK {
++		t.Fatalf("challenge status = %d", response.StatusCode)
++	}
++	var challenge bootstrapChallenge
++	if err := json.NewDecoder(response.Body).Decode(&challenge); err != nil {
++		t.Fatal(err)
++	}
++	if challenge.Nonce == "" || challenge.ExpiresAt == 0 {
++		t.Fatalf("invalid challenge: %+v", challenge)
++	}
++	return challenge
++}
++
++func signedRelease(c bootstrapChallenge, key ed25519.PrivateKey, task string) []byte {
++	message := []byte(fmt.Sprintf("blaxsmith/bootstrap/release/v1\n%s\n%d\n%s\n%s\n", c.Nonce, c.ExpiresAt, c.Atespace, task))
++	body, _ := json.Marshal(map[string]any{
++		"nonce": c.Nonce, "expires_at": c.ExpiresAt,
++		"signature": base64.StdEncoding.EncodeToString(ed25519.Sign(key, message)),
++	})
++	return body
++}
++
++func sendRelease(t *testing.T, port int, body []byte) int {
++	t.Helper()
++	response, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/blaxsmith/bootstrap/release", port), "application/json", bytes.NewReader(body))
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer response.Body.Close()
++	return response.StatusCode
++}
+diff --git a/runner/runner.go b/runner/runner.go
+index 5562267..aebc879 100644
+--- a/runner/runner.go
++++ b/runner/runner.go
+@@ -150,8 +150,12 @@ func Run(ctx context.Context, cfg Config) error {
+ 	for _, e := range cfg.Task.GetSpec().GetEnv() {
+ 		_ = os.Setenv(e.GetName(), e.GetValue())
+ 	}
++	gate, err := newBootstrapGate(cfg.Task)
++	if err != nil {
++		return fmt.Errorf("configuring bootstrap gate: %w", err)
++	}
+ 
+-	metaServer := metadata.NewServer(port, cfg.Task, workspaces, metadata.ServerOptions{WorkspacePath: wsPath})
++	metaServer := metadata.NewServer(port, cfg.Task, workspaces, metadata.ServerOptions{WorkspacePath: wsPath, Bootstrap: gate})
+ 	if err := metaServer.Start(); err != nil {
+ 		return fmt.Errorf("starting metadata server: %w", err)
+ 	}
+@@ -159,6 +163,13 @@ func Run(ctx context.Context, cfg Config) error {
+ 		slog.Info("shutting down metadata server")
+ 		_ = metaServer.Stop(context.Background())
+ 	}()
++	if gate != nil {
++		select {
++		case <-gate.released:
++		case <-ctx.Done():
++			return nil
++		}
++	}
+ 
+ 	for _, m := range mounts {
+ 		if _, err := workspace.SetupWorkspace(ctx, m.ws, m.path, m.ref.GetGoal()); err != nil {

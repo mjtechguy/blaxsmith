@@ -221,6 +221,33 @@ This proves policy enforcement on those **new connections** in the tested path;
 existing tunnels, alternate egress paths, tenant isolation, bootstrap, and
 credential revocation remain unproved. Only synthetic tasks run here.
 
+## Probe the synthetic bootstrap gate
+
+Build and publish the three AX overlays, then update the AX controller image
+and command as in the launch-patch section. The resulting controller must
+construct gated ActorTemplates with Substrate `/healthz` transport readiness;
+the runner still reports workspace readiness on `/readyz`. The tested Linux
+build is [recorded here](../../integrations/ax/provenance-bootstrap.json).
+The dev node has Python's `cryptography` package for the ephemeral Ed25519 test
+signer. Run with the router's in-cluster HTTP service address:
+
+```sh
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+python3 deploy/dev/probe-bootstrap.py \
+  "$(cat /opt/blaxsmith-dev/ax-bootstrap-ready-build/ax-task-runner.image)" \
+  http://10.43.36.216 /opt/blaxsmith-dev/bootstrap-probe-evidence-4
+```
+
+Use a new evidence directory per invocation. The [passing report](../../docs/bootstrap-gate-probe.json)
+records closed workspace readiness before release, successful signed release,
+and a fresh challenge/replay denial after data-snapshot resume. The one-worker
+pool may cold-start the task before the golden snapshot is ready; the probe
+releases and suspends the cold actor, then waits for the golden snapshot before
+resuming. An earlier run with Substrate pointed at `/readyz` deadlocked actor
+activation. This is only a synthetic startup/replay proof. The signer is chosen
+by the Task, the ingress client is unauthenticated, and no actor-UID attestation
+or credential delivery occurs.
+
 ## Original baseline task
 
 Replace `__WORKER_IMAGE__` and `__SUBSTRATE_VERSION__` in `workerpool.yaml` with

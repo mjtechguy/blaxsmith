@@ -75,6 +75,16 @@ and AX guest access are not authenticated bootstrap proofs. P0-04 now targets
 an activation-bound attestation and pre-workspace gate, with synthetic replay,
 snapshot-clone, and actor-replacement checks before any credential delivery.
 
+The [synthetic bootstrap-gate probe](bootstrap-gate-probe.json) and
+[Linux build provenance](../integrations/ax/provenance-bootstrap.json) now show a
+signed pre-workspace release and fresh challenge after data-snapshot resume.
+The first live run exposed that Substrate's `/readyz` probe deadlocks before
+bootstrap; the patch gives gated templates a separate `/healthz` transport
+probe while AX retains `/readyz` for workspace readiness. Golden-template
+warmup can also contend with the task on a one-worker pool. Actor UID proof,
+connector/client authentication, credential delivery, private Git, and
+full-snapshot/revocation behavior remain open. P0-04 is not complete.
+
 ## Guild adoption map
 
 | Guild capability | Platform destination | Evidence / next work |
