@@ -1,0 +1,1334 @@
+# Team Agent Factory
+
+**Status:** revised design draft; implementation has not started  
+**Updated:** 2026-09-22  
+**Audience:** product, engineering, and platform teams  
+**Goal:** a self-hosted enterprise engineering workspace where humans direct composable agent teams and review completed work, from one person on one Kubernetes node to thousands of developers across multiple clusters.
+
+This revision incorporates the agreed product direction. It replaces the earlier fat-box-first, Pair/Farm, four-week delivery plan. A small deployment is a supported configuration of the product; enterprise identity, isolation, and audit belong in its foundation.
+
+Product decisions below include the agreed access contract, first-release commitments, workflow/identity interview, Astronomer frontend adoption, and recipe/interaction interview. Local authentication with optional OIDC supersedes the earlier OIDC-first assumption. Astronomer's application chrome, global CSS, reusable components, login styling, and TanStack stack are the chosen frontend baseline. Composable recipes, evidence-first Q&A, controlled recipe comparisons, and authorized native-tool access are v1 requirements. Engineering details still requiring validation are collected in section 14. Checklists are future work, not claims of implemented or tested capabilities. Example identifiers and execution limits are illustrative; the capacity, retention, and recovery targets in section 11 are explicit commitments to validate.
+
+Reading order: sections 1–6 define the product and Guild workflow; sections 7–10 define platform structure, execution, and access; sections 11–14 cover deployment, implementation milestones, verification, and open decisions.
+
+## 1. Product decisions
+
+| Area | Decision |
+|---|---|
+| Human involvement | Humans define intent, answer necessary questions, steer work, and perform the final review. Routine engineering reviews and corrections run autonomously. |
+| Primary interface | A clean web workspace contains planning, agent interaction, progress, decisions, changes, verification, and final review. Reuse the application chrome, layout, global styles, component system, and login-page style from `reference/astronomer`. |
+| Frontend system | Adopt Astronomer's React/Vite and TanStack Router, Query, Table, Form, Virtual, and Pacer integration. Tables and forms use its shared implementations; adapt domain content and typed API transport to this platform. This supersedes the earlier React Router/react-hook-form defaults. |
+| Interaction conventions | Use consistent “+” creation actions and composed pages/sections instead of bare forms. Creation and configuration have dedicated routes. No drawers or browser pop-ups; in-app modals handle confirmations and short decisions, not configuration. These choices override conflicting reference interactions. |
+| Workspace meaning | A durable project workspace survives individual agents, sessions, and execution environments. |
+| Engineering workflow | Architect plans; implementers build; senior reviewers validate sections; architect reviews the integrated result; human approves or requests changes. |
+| Composition | Versioned engineering recipes compose stages, dependencies, role profiles, skills/tools, checks, and finite correction budgets. Users explicitly select tools/models/effort and credential sources within organizational policy. |
+| Automation | Authorized UI/API launches execute unattended through engineering review and corrections to final human review. Built-in issue/webhook/schedule triggers, automatic recipe/model selection, and winner promotion are deferred. No silent model, tool, credential, or billing fallback. |
+| Guild | Preserve and improve Guild's specification, delegation, and evidence discipline. Remove assumptions that prevent mixed tools and concurrent isolated runs. |
+| Runtime | Build on AX over Kubernetes as the required execution foundation. Keep product state and contracts separate from AX's evolving API through a focused integration boundary. |
+| Upstream changes | Track AX releases and relevant commits continuously during development. Deploy only pinned, tested combinations of AX, its runtime dependencies, and our integration. |
+| Scale | Support one node and multiple clusters using the same domain model and APIs. Establish capacity through measurement before claiming thousands of active developers. |
+| Enterprise | Identity, RBAC, credential boundaries, quotas, audit, and recovery are core requirements. |
+| External access | Model Connection → Grant → Binding → Access lease. Support administrator-provided and user-provided connections through the same policy and lifecycle. |
+| Credentials | The platform controls credential storage, delegation, refresh, and revocation. Workers receive only the access required by their assignment, with raw credential delivery treated as an explicit adapter capability. |
+| Technology baseline | Follow the supplied Technology Selection Guide for a modular Go control plane and TypeScript web UI; resolve documented conflicts and validate exact dependency versions before implementation. |
+| Developer editing | An embedded VS Code-style interface is a future option. The initial product focuses on agents, code inspection, feedback, previews, and review. |
+| Deployment | Self-hosted enterprise deployments are the initial target. A shared vendor-hosted service is a separate product decision. |
+
+### Agreed access and release decisions
+
+These choices are settled product requirements. Implementation tasks must demonstrate them rather than reopen them as unspecified scope.
+
+| Area | Decision | Reason |
+|---|---|---|
+| Connection onboarding | Administrators approve providers, destinations, and permitted uses; users self-connect permitted accounts within that policy. No separate approval for every account. | Keep enterprise control without a routine onboarding queue. |
+| Grant duration | Standing project-scoped grants remain valid until expiry or revocation; each attempt receives temporary access leases. | Authorize recurring work once while retaining narrow execution access. |
+| Team control | Viewing/commenting does not confer control of another user's credential-backed run. Steering requires explicit owner-authorized delegation and provider-permitted use, or an own/company connection. | Collaboration must not silently pool personal accounts. |
+| Credential delivery | Prefer brokered operations or short-lived provider credentials. Allow validated native credentials where needed; organization/project policy can prohibit raw delivery. | Support real coding tools while making disclosure and lifecycle limits explicit. |
+| Connection failure | Stop affected access and pause dependent work, preserving results; independent authorized tasks continue. No silent account or billing substitution. | Limit the interruption without changing authority or payer. |
+| Development actions | Standing grants may authorize development mutations, including disposable test resources. Publication, production changes, and deployment require distinct authority. | Let teams work unattended inside a bounded development environment. |
+| Release connectivity | Connected v1 with controlled egress and configurable internal endpoints; full offline delivery later. | Focus first-release validation on the chosen operating environment. |
+| FIPS | Deferred beyond v1; preserve a narrow crypto boundary and make no FIPS claim. | A compliant profile needs separate validation, not just a build flag. |
+| Final approval action | Approval of the exact integrated revision triggers controlled publication of one GitHub pull request or GitLab merge request (PR/MR). Merge and deployment remain separate. | Make the final human decision produce a concrete reviewable delivery. |
+| Git providers | GitHub and GitLab in v1. | Support both workflows at launch rather than leaving one as a future adapter. |
+| Login modes | OIDC is optional. Support local-only, OIDC-only, or mixed organizations under policy, with identical RBAC, grants, and audit. Explicitly verify account linking; never link on email alone. Direct SAML remains later. | An installation must work without an external identity provider while retaining enterprise authorization. |
+| Initial deployment | k3s on Linux for the first single-node validation, with larger and multi-cluster profiles from the same release. | Prove a small installation without creating a separate product. |
+| Secret storage | Encrypted platform database with separately provisioned/recoverable keys and tested rotation. External secret-manager integration later. | Provide a complete custody path without an additional v1 infrastructure dependency. |
+| Initial tools | Claude Code and Codex production support at launch; OpenCode and native Grok later. | Prove composition and lifecycle with two tools before expanding support. |
+| Enterprise capacity | Validate 100 concurrent AX implementation and verification workers across clusters. | Establish a measurable first enterprise target; this is not a per-node or user-count claim. |
+| Git endpoints | GitHub.com, GitLab.com, GitHub Enterprise Server, and company-hosted GitLab, with explicit supported-version tests and private CA configuration. | Enterprise repositories must not depend on public-host assumptions. |
+| Retention | Defaults: diagnostic logs 30 days; completed-run conversations/artifacts 90 days; security audit one year. Configurable; active work is retained. | Balance investigation and review history against storage growth. |
+| Enterprise recovery | RPO ≤15 minutes of platform-data loss; RTO ≤4 hours to restoration. Validate separately from the non-HA single-node profile. | Set testable recovery goals with a clear deployment boundary. |
+
+### Agreed workflow, identity, and operations decisions
+
+| Area | Decision | Reason |
+|---|---|---|
+| Verification sequence | Required platform checks precede human approval. Approval opens the PR/MR; repository CI then gates merge, and code corrections require fresh approval. | Preserve approval-before-publication while accurately showing checks that require a PR/MR. |
+| Verification authority | Authorized humans configure required verification rules; freeze them per run. Agents may propose changes but cannot weaken the current gate. | An implementer must not redefine successful verification by editing its own checks. |
+| Existing failures | Run baseline checks before implementation. An authorized human may explicitly classify identified baseline failures as nonblocking before acceptance is frozen. New regressions and remaining required failures block. | Avoid repeatedly repairing unrelated pre-existing failures without silently accepting regressions. |
+| Native delegation | V1 uses platform-scheduled workers only. Disable native subagents; configurations that cannot enforce this are unsupported. | Keep selected profiles, permissions, accounting, and lifecycle visible to the platform. |
+| Uncertain mutations | Reconcile external outcomes before retrying. Use operation/resource identity, provider idempotency or read-back where supported, and human resolution when the result cannot be established. | A lost response does not prove that an external action failed. |
+| Restored authority | Restore into restricted recovery, invalidate old leases, and block execution/publication until current authority is proved or reauthorized. | A data-loss window can include revocations missing from the restored database. |
+| Context handoff | Use versioned, tool-independent handoffs within each run, alongside supported native resume. Shared persistent project memory is deferred. | Preserve requirements and decisions across context limits and tool changes without a new memory subsystem. |
+| Reference environment | Prove a web frontend/backend with isolated database, migrations, browser tests, previews, and cleanup. Worker-driven OCI image builds are later. | Validate a useful real application without expanding the first environment into a general build platform. |
+| Blocked work | Release idle compute, retain work, assign responsibility and reminders, and require authorized resume or abandonment. No automatic archive based solely on inactivity. | Preserve user work while preventing unanswered questions from consuming execution capacity. |
+| Local authentication | Local username/password with optional TOTP MFA that organization policy may require; maintained authentication components and shared secure sessions. | Support independent installations and enterprise MFA policy without mandatory federation. |
+| Local provisioning | Admin-managed accounts with single-use setup/reset links that work without SMTP; secure first-owner bootstrap and audited operator recovery. | Setup and recovery must work when neither an IdP nor email service exists. |
+| Application upgrades | Scheduled maintenance windows with drain/pause, backup, migration, restart, and tested recovery; no v1 promise of rolling application/database upgrades. | Preserve durable work with a smaller, testable upgrade contract. |
+
+### Agreed recipes, interaction, and experimentation decisions
+
+| Area | Decision | Reason |
+|---|---|---|
+| Recipe composition | Versioned engineering stages, dependencies, specialist roles, profiles, skills, checks, and bounded correction policies; required organization checks and final human approval remain mandatory. | Support different engineering approaches without a general-purpose workflow language or weakened acceptance. |
+| Interactive Q&A | Investigate authorized code, documentation, artifacts, and tools before asking focused multiple-choice/free-text questions with evidence and recommendations. Persist answers as traceable input and decisions. | Ask humans for intent and judgment rather than discoverable repository facts. |
+| Conversation structure | One architect-coordinated main conversation per change/run, with linked task and agent threads. | Keep the team coherent while allowing focused interaction and authorized steering. |
+| Live steering | Questions coexist with work; instructions apply at supported safe points with visible delivery, acknowledgement, and application. Explicit stop/pause remains available; unsupported live steering uses a controlled restart. | Human interaction must have a clear effect without competing controllers or hidden changes. |
+| Scope amendments | Record an authorized specification revision, pause/replan affected tasks, reuse valid unaffected results, and invalidate affected checks/approvals. | Accommodate iteration without rewriting frozen assignments or restarting unrelated work. |
+| Recipe experiments | V1 controlled comparisons run explicitly selected recipe variants against identical frozen tasks, revisions, and evaluation criteria in isolated runs with finite budgets. | Iteration and fine-tuning are essential to choosing effective compositions. |
+| Guild launch scope | Forge/Foundry end to end plus research, testing, UI-review, and documentation specialist capabilities as supported recipe stages; map remaining plugins explicitly to deferred work. | Preserve the useful engineering process without claiming unverified full plugin parity. |
+| Instruction/tool sources | Versioned shared skills/tool definitions plus scoped repository instructions, including `AGENTS.md`, and project skills. Snapshot effective inputs/provenance; active tools/hooks remain within policy and grants. | Combine reusable organizational practice with repository-specific knowledge and enforceable authority. |
+| Native-tool access | Authorized browser terminal on a dedicated page, with exclusive takeover of a native session where supported, visible automation pause/resume, audited access, and reconciled handback. | Support direct diagnosis and interaction without an embedded IDE or invisible competing control. |
+| Run initiation | Authorized UI/API launch in v1; built-in issue/webhook/schedule initiation remains later. | Establish unattended execution of intended work before adding automatic creation of new work. |
+| Experiment evaluation/delivery | Compare quality gates and evidence first, then findings, interventions, time, and usage. No automatic publication; a human selects a candidate for normal final review. | Efficiency cannot outweigh failed requirements, and selecting an experiment result does not approve delivery. |
+
+## 2. Scope and references
+
+### In scope
+
+- Multiple humans and agent teams working on the same repository without a shared dirty checkout.
+- Structured project definition and task decomposition grounded in the existing codebase.
+- Mixed tools and models within one workflow, with Claude Code and Codex production support in v1.
+- GitHub and GitLab repository access, checks, and PR/MR publication for hosted and supported self-hosted installations.
+- Per-role tuning within a model family and across families.
+- Versioned composable engineering recipes and isolated, same-input recipe comparisons with human-selected candidates.
+- Interactive steering and unattended execution using the same workflow and history.
+- Evidence-first interactive interviews, one architect-led main conversation with task/agent threads, safe-point instructions, and selective scope amendments.
+- Managed and repository-provided skills/instructions/tools, plus authorized native-session access where supported by the selected adapter.
+- Targeted correction loops with explicit acceptance rules, recorded decisions, and bounded execution.
+- Integrated verification and a final human review package tied to a specific code revision.
+- Enterprise administration and AX-backed Kubernetes deployment from a single node to multiple execution clusters.
+- Local accounts and optional OIDC, including local-only operation without an IdP or SMTP, with the same authorization model in every mode.
+- Astronomer-based responsive application chrome, light/dark themes, shared components, TanStack tables/forms, and consistent authentication/account screens from the first usable workspace.
+
+### Deferred
+
+- Production support for OpenCode and native Grok; early compatibility probes remain in Phase 0.
+- Full offline deployment, a validated FIPS profile, direct SAML integration, and external secret-manager integration. These are post-v1 work, not first-release acceptance gates.
+- Automatic recipe search, model/tool routing, winner promotion, or autonomous changes to a user's chosen team. Controlled recipe experiments are in v1.
+- Built-in issue/webhook/schedule initiation of new runs; repository check/status webhooks for existing deliveries remain required.
+- Full parity with every Guild plugin beyond the selected core and specialist capabilities; maintain the explicit capability mapping.
+- An embedded IDE, general remote desktop, or a plugin marketplace.
+- Cross-repository changes in one delivery; an organization can initially have many projects, each connected to one repository.
+- Globally active-active control planes and independent cluster-to-cluster workflow ownership.
+- A custom sandbox implementation or general workflow language for arbitrary business processes.
+- Shared persistent project memory, native tool subagent orchestration, worker-driven OCI image builds, and rolling application/database upgrades. Building the platform's own release images remains required.
+
+### Reference repositories
+
+The clones under `reference/` provide source and documentation for design and migration. Deployments use explicit version/image pins rather than whatever a reference checkout happens to contain:
+
+- [AX](reference/ax/README.md), inspected at `v0.3.0`, commit `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`: required execution foundation. This is the initial inspected baseline, not a claim of production compatibility or the latest upstream revision. Its README explicitly warns of breaking changes before stability.
+- [Guild](reference/guild/README.md), reviewed at `dda615434dfb4624e1ab6328851afc91ef58e5e1`: Forge specifications and Foundry execution/review mechanics.
+- [Coder](reference/coder/README.md), reviewed at `c2f2c1708ed21119e5ccb639f4dfc20c9fb3b4d7`: workspace operations, remote access, identity, administration, and enterprise deployment patterns. Its README already describes AI agents and centralized model governance; the comparison must account for those capabilities.
+- [Astronomer frontend](reference/astronomer/frontend/package.json), inspected at `5961992098c8d8c72a5159e966359ad61838579d`: required frontend source baseline for application chrome, TanStack integrations, CSS tokens, reusable components, tables, and authentication styling. Section 7 defines what to reuse and how to adapt it. Pin this independently of AX; the clone is a design/source reference, not a runtime dependency.
+
+The product advantage we are pursuing is a composed engineering process that produces traceable, verified work humans can efficiently review. Evaluate reuse of existing infrastructure against these requirements before rebuilding it. Do not make Coder a mandatory dependency without that evaluation.
+
+Phase 0 also reviews licenses and distribution terms for selected reused components, tool binaries, SDKs, and packaged images. Include Astronomer's root [license](reference/astronomer/LICENSE), selected frontend code/assets, and dependency notices in that existing review. Record exact versions, notices/source obligations where applicable, and the permitted packaging or customer-install path before bundling them. Source availability and working authentication do not by themselves establish redistribution permission. This is part of the reuse/capability decision, not a new product service.
+
+### Engineering reference
+
+Use the [Technology Selection Guide](https://technology-selection-guide.aws.ablabs.io/) as the engineering baseline. The published [full text](https://technology-selection-guide.aws.ablabs.io/llms-full.txt) was consulted on 2026-09-22; the inspected content has SHA-256 `13ec22a5d0dfa4789b91e2e3101bed4d9e19982db444c8c66ad4173159e6ada0`. Record the adopted source revision or snapshot in Phase 0 so future guide edits do not silently change project rules.
+
+The guide's version tables are dated snapshots. Verify supported releases and AX requirements when pinning dependencies. Apply its architecture, tenant scoping, encrypted storage, typed API, observability, and test discipline; document applicable deviations in short architectural decision records (ADRs). Connected v1 instead of air-gap-first, and deferral of a validated FIPS profile, are explicit user-approved release-scope exceptions. The user-selected Astronomer frontend takes precedence over conflicting guide prescriptions for routing, forms, icons, and UI primitives; retain the platform's generated Connect API contract. Preserve the relevant configuration and crypto boundaries without claiming full guide conformance.
+
+## 3. Human experience
+
+The default workspace answers four questions: what are we building, what is happening, what needs my attention, and what evidence supports completion?
+
+| Surface | Required experience |
+|---|---|
+| Inbox | Final reviews, unresolved decisions, blocked work, mentions, and notifications, filtered by project and responsibility. |
+| Project | Objective, specification, task dependencies, owners, progress, repository, and delivery history. |
+| Team | Role assignments, actual tool/model/settings, current activity, resource use, and the reason an agent is waiting. |
+| Work | Conversations, file browsing, diffs, inline feedback, previews, checks, artifacts, and authorized intervention controls. |
+| Review | Combined changes, requirement coverage, verification evidence, architectural decisions, remaining limitations, and approval/change requests. |
+| Administration | Identity, groups, permissions, team templates, allowed tools/models, credentials, clusters, quotas, audit, and retention. |
+
+These are navigation areas, not a requirement for six separate applications. Keep routine work in one coherent project workspace with useful drill-down.
+
+Use Astronomer's persistent sidebar/topbar, breadcrumbs, content spacing, semantic theme tokens, and shared page components across all of these surfaces. Replace its cluster-management navigation and product copy with organization/project context and engineering workflows. The visual system is a release requirement, not a later redesign; section 7 defines the adoption contract and section 12 assigns its implementation tasks.
+
+Creation starts from a consistent “+” action in the relevant page header/toolbar or empty state, then opens a dedicated create page. Configuration and editing use navigable pages with context, grouped sections, help, and clear save/cancel behavior. Collections and overviews must not present an unexplained bare form as their default experience. Use in-app confirmation dialogs for destructive actions, abandonment, or other short decisions; never configuration drawers, modal settings forms, or native browser alert/confirm/prompt boxes.
+
+- Human feedback attaches to a task, finding, file, or delivery and becomes tracked input. It must survive session and browser reconnects.
+- A change request routes to the appropriate task or architect, then passes through the affected checks and final human review again.
+- Show meaningful summaries first, with detailed tool activity and logs available subject to access controls. Do not rely on hidden model reasoning as a product artifact.
+- Preserve conversations and structured decisions separately from diagnostic logs. Record who supplied each instruction and which attempt received it.
+- Show proposed versus applied steering. Coordinate competing instructions; interactive control of one session has one active controller at a time.
+- Provide accessible keyboard navigation, readable diffs, clear status, and pagination/virtualization for large projects from the initial UI.
+- V1 provides authorized native-tool access on a dedicated browser-terminal page where the adapter supports it, with exclusive takeover and reconciled handback. Its use is optional; normal planning, feedback, and review must work without a terminal.
+- Distinguish platform verification, approval for publication, published PR/MR, repository checks pending/failed, and merge readiness. Approval is not a claim that later repository CI has passed.
+
+### Evidence-first Q&A and conversations
+
+Each change/run has one main conversation coordinated by the selected architect profile. Linked task and agent threads support focused questions, findings, and authorized instructions; important decisions and blockers are referenced back into the main conversation rather than remaining private context in one agent. During initial definition, the conversation belongs to the change; starting a run links the accepted requirements and relevant discussion without duplicating or rewriting the history.
+
+Investigate before interviewing. Planning/research agents scan the authorized repository revision, relevant scoped instructions, existing artifacts, documentation, and permitted tool/MCP sources. Investigation uses platform-scheduled AX planning/research attempts with explicit profiles, bounded draft inputs, and normal access controls; the conversation does not execute untracked tools in the web process. External research uses only permitted destinations and existing access. Record source references and versions or captured evidence, along with any access or evidence limitation. Distinguish observed facts, agent interpretation, unresolved assumptions, and human decisions; a generated recommendation is not evidence by itself.
+
+Ask small, focused batches of multiple-choice or free-text questions with a recommendation, meaningful tradeoffs, and evidence links. Do not repeatedly ask for facts the agent can discover or decisions already settled in the current context. Options remain editable through free text; a preselected recommendation is not a submitted answer. An unanswered required question remains pending, while unrelated authorized investigation/work may continue. Optional assumptions must be labeled and traceable rather than recorded as human approval.
+
+Persist question identity, scope, source references, options/recommendation, blocking status, responder, answer, and resulting decision/requirement references. Answering and applying a decision are separate events when execution is already active. Reconnect restores pending questions and prior answers; duplicate submissions cannot apply the same decision twice. Changed answers create attributable revisions and use the scope-amendment process when they affect frozen requirements. RBAC and connection delegation apply to investigation, thread visibility, and resulting actions.
+
+### Live steering and useful activity
+
+Separate a question, proposed feedback, an instruction, and explicit pause/stop. A question can be answered alongside execution; it changes the assignment only if an authorized instruction or scope amendment follows. Collaborator comments remain proposals until a permitted controller applies them. Show each instruction as queued, delivered, acknowledged, applied, rejected, or superseded, with its target attempt/context and explanation; delivery or model acknowledgement alone is not proof of application.
+
+An adapter reports its supported safe points and steering behavior. The controller applies instructions there and preserves their relationship to the frozen assignment. If live steering is unavailable or unsafe, checkpoint/collect work, reconcile outstanding operations, and restart from an updated input bundle in a new attempt. Pause/stop uses the explicit lifecycle path and visibly distinguishes requested from confirmed termination. Competing instructions are ordered or superseded explicitly, never silently raced across sessions. Scope changes use section 5 rather than becoming untracked prompt edits.
+
+Every task exposes its stage, current operation, last meaningful progress, waiting reason, responsible actor, next expected action, and supporting evidence. Normalize adapter activity into durable product events with reconnect cursors and timestamps; keep raw output available only under applicable permissions/redaction. Worker heartbeat, model activity, changed artifacts, completed checks, and accepted results are different observations. A live process does not prove progress, and an agent's completion claim does not prove acceptance. Main-thread summaries link to these records and disclose stale/unknown information.
+
+### Actionable blockers and retained work
+
+Persist each question/blocker with its cause, affected tasks, responsible person, required authority, and permitted responses. Route missing intent to the requester or authorized delegate, reconnection to the connection owner, and policy or infrastructure repair to the appropriate administrator. Group a common failure such as one expired connection into one actionable item with affected-task drill-down. Do not expose another project's details while grouping.
+
+Translate tool permission requests through existing grants; permitted routine work does not ask again. Missing intent or authority becomes a visible blocker rather than an invisible CLI prompt. Record the response and the attempt that receives it; permission checks still apply when acting on a response. Provide in-workspace reminders and auditable reassignment, without requiring an external notification service in v1.
+
+When execution is blocked waiting on required human input, safely checkpoint or collect supported work, stop idle execution, and release reservations after termination/reconciliation. A nonblocking conversation must not stop useful authorized work. Retain the run, source changes, handoff, and required evidence. If native resume is unsupported, restart from the preserved handoff in a new attempt. An authorized human chooses resume or abandonment; inactivity alone never archives or deletes the work. Resume rechecks access and current inputs. Abandonment performs bounded cleanup and starts the applicable completed-run retention period.
+
+### Connection and access experience
+
+- **My connections:** users self-connect supported coding plans, API accounts, Git accounts, and tools within administrator-approved provider/destination/use policy; inspect granted uses; reconnect, revoke, or remove them. Routine permitted connections do not wait for per-account admin approval.
+- **Organization connections:** administrators configure shared provider accounts, Git installations, registries, cloud roles, OAuth client registrations, approved endpoints, and grants. Secret management is separately permissioned from connection use.
+- **Project access:** show allowed connections, required capabilities, effective bindings, budget owner, and whether personal connections are permitted or company connections are required. Show standing project grants, grantees, allowed actions, expiry, and explicit control delegation; ordinary attempts do not prompt again while the grant remains valid.
+- Before launch, show the resolved account and billing source for each model role, plus Git, packages, tools, and test-environment access. Configuration errors must name the missing capability without exposing secrets.
+- Show connection states such as setup required, available, consent/refresh required, disabled, and revoked. Show rate limits and provider outages as health conditions rather than silently changing the selected connection.
+- Show which tasks are paused by an access failure and which remain active. Retain their work and provide reconnection/resume controls that recheck current authority.
+- Reconnection and rotation retain connection identity and audit history. Changing the external account, provider, resource scope, or payer is an explicit reassignment with fresh authorization.
+- A browser disconnect does not revoke an authorized unattended run. Account or grant revocation does affect running work according to the lifecycle in section 10.
+- A collaborator may view/comment when project permissions allow it; comments become proposed feedback until an authorized controller applies them. Steering, rerunning, and terminal access require explicit delegation for the connections they could exercise. Offer an authorized own/company connection when delegation is unavailable; never switch it silently.
+
+## 4. Composable teams
+
+A role describes engineering responsibility. A worker profile describes how that responsibility executes. An access role describes authority. Keep all three distinct.
+
+An example team using the user's preferred labels:
+
+| Responsibility | Tool | Model/settings | Credential source |
+|---|---|---|---|
+| Architect: project definition and decomposition | Claude Code | Fable | User's Claude coding plan |
+| Implementer: assigned task | Codex | Luna, xhigh | User's Codex coding plan |
+| Senior reviewer: section validation | Claude Code | Opus | Authorized Claude credential |
+| Architect: integrated final pass | Claude Code | Fable | User's Claude coding plan |
+| Final approval | Human | Project reviewer | Application identity |
+
+These model names express desired assignments, not a claim that every installed tool or account accepts them. Each adapter must resolve and validate the exact supported model identifier and settings before execution. Reject unsupported combinations visibly.
+
+A versioned worker profile contains:
+
+- Tool/harness and pinned adapter/image version.
+- Provider, model identifier, and supported effort/settings.
+- Required connection capabilities, permitted authentication modes, and expected billing category. Shared templates use named connection slots; personal credentials are bound at launch rather than embedded in reusable templates.
+- Skills, MCP/tool access, permission policy, and execution resource class.
+- Timeout, retry, usage, and concurrency limits.
+
+A team template maps responsibilities to profiles; a recipe composes the engineering stages that use those responsibilities. Organization policy constrains project defaults and explicit task overrides. Display the effective configuration before launch and preserve it on every attempt. Editing a template or recipe creates a version for future explicit selection; it does not rewrite history or silently retune workers in an active run.
+
+Profile selection and connection binding are separate. One implementer may use a personal coding plan, organization-owned Git access, a project registry, and a temporary database. Resolve each capability independently and never infer all downstream access from the model account.
+
+Users may choose the same model for every role, several settings within one family, or different families and tools. The architect role is configurable too; the product must not depend on a permanently hardwired Claude lead.
+
+OpenCode is a harness with provider/model choices. Running an xAI model through OpenCode and running a native Grok tool are distinct configurations. Declare and validate each supported capability rather than treating a provider name as a tool adapter.
+
+### Versioned engineering recipes
+
+A recipe version records named engineering stages and their dependencies; role/profile references; required skills, tools, and connection capability slots; checks and output expectations; and finite timeout, correction, retry, and usage limits. Support research, specification, implementation, section review, integration, architect review, and specialist testing/UI-review/documentation stages. Stage dependencies determine order and allowed parallelism; correction transitions remain bounded, explicit parts of the engineering workflow. This is not an arbitrary business-process language.
+
+Recipe composition cannot remove required organization/project checks, locked requirements, access boundaries, or final human review. The architect may propose decomposition or additional specialist work within the accepted scope, but the controller validates the selected profiles, recipe constraints, grants, and budgets before dispatch. Missing capability or authority produces an actionable block, never an untracked native subagent. Agents cannot silently change the recipe, account, model, or evaluator to make a failing run pass.
+
+Use “+” actions to create or clone recipes on dedicated configuration pages. Show stage/dependency structure, effective profiles/settings, required capabilities, and policy constraints before launch. Reuse existing page/form/table components and typed domain contracts; no separate visual workflow-engine product or plugin marketplace is required. Recipe versions, profile versions, resolved instruction bundles, and source revisions are frozen into the run/attempt provenance. Reusing a recipe binds current permitted connections at launch, rather than copying another user's credentials.
+
+### Controlled recipe experiments in v1
+
+An experiment groups isolated runs of explicitly chosen recipe versions against the same frozen input set: specification/tasks, repository starting revision, verification policy and evaluation criteria, and environment definition. Differences in role/model/effort/skills/stages must be explicit recipe variations. Record each variant's effective inputs, actual supported models/tools, assigned accounts, budgets, and execution provenance. Do not represent runs with changed evaluation criteria or unrecorded inputs as an equivalent comparison.
+
+Each variant gets its own checkout, attempts, artifacts, and disposable services. Apply ordinary grants, connection concurrency limits, quotas, operation reconciliation, and retention. Bound both experiment-wide and per-variant spending/resources; cancellation and budget exhaustion preserve incomplete results with their actual status. Variants cannot consume one another's candidate changes or findings as hidden input. Shared authorized immutable baseline artifacts may be reused explicitly. No experiment bypasses access policy or receives publication authority as part of an implementer assignment.
+
+The comparison page uses shared tables and linked evidence to show requirement/check outcomes, unresolved findings, corrections/regressions, human interventions, elapsed time, and observed/estimated usage. Mark missing measurements, failed setup, incomplete execution, and differing human interventions; do not hide them in a single score or label an estimated charge as actual. Quality gates come first: a cheaper or faster failing variant cannot become an accepted delivery. Record run conditions and avoid treating one sample as proof of universal model superiority.
+
+Humans inspect the evidence and select a candidate for the normal final-review workflow. Selection retains experiment/variant provenance and is not approval or publication. Revalidate its revision, required checks, current target-branch relationship, and authority; changed code/context invalidates affected evidence. Final human approval still authorizes publication of the exact reviewed result under section 5. Other variants remain experimental artifacts and never publish automatically. Recipe search, automatic winner promotion, and automatic model routing remain deferred; a human explicitly chooses any recipe version adopted for future runs.
+
+## 5. Workflow and final human authority
+
+### Normal flow
+
+```text
+Draft → Planning → Implementing → Section review → Integration
+                     ↑                 │                │
+                     └── corrections ──┘                ▼
+                                                  Architect review
+                                                        │
+                       targeted corrections ←───────────┤
+                                                        ▼
+                                                Ready for human review
+                                                        │
+                              Changes requested ────────┤
+                                      │                 ▼
+                            affected tasks           Approved
+                                                        │
+                                            Authorized PR/MR publication
+```
+
+This is the default engineering recipe. Independent tasks can occupy different stages concurrently, and selected specialist stages follow the recipe's dependencies. The workflow engine derives the overall summary from persisted tasks and decisions. V1 starts new work through authorized UI/API requests with explicit recipe and access selection; built-in issue/webhook/schedule initiation is deferred. Repository events continue to update existing PR/MR checks and delivery state.
+
+- Planning includes specification validation and freezes the requirements for the run. There is no mandatory `PlanApproved` human gate.
+- Humans can participate in definition and steer execution. Missing essential intent or permission can block affected work; that is an exception, not an approval ceremony at every phase.
+- Section reviewers return structured findings with requirement references, observed evidence, severity, affected revision, and a concrete acceptance condition for the correction.
+- The architect can resolve engineering judgment calls with recorded rationale. The architect cannot waive a locked requirement, failing required check, or security policy.
+- Changes to locked scope require an authorized human decision and a new specification version. Preserve previous evidence and invalidate what no longer applies.
+- Final architect acceptance makes work ready for human review. It does not grant human approval.
+
+### Authorized scope amendments
+
+Changing frozen requirements creates an attributable amendment containing the human decision, prior/new specification references, affected task/dependency analysis, and invalidated evidence/approval references. Preserve the original run history and every old assignment. The run points to its current accepted specification revision, while each attempt remains pinned to the revision and input hashes it actually received.
+
+Before amended work proceeds, pause affected dispatch, checkpoint or stop/reconcile affected attempts, and fence their stale results from acceptance under the new scope. The architect proposes a revised task graph; the controller validates it against the new specification, recipe, access, and budgets. Create replacement attempts with revised inputs rather than editing an active assignment. An amendment cannot weaken required verification or expand authority without the corresponding authorized policy/access change.
+
+Unaffected authorized work may continue. Reuse an earlier result only when its requirements, source/dependency assumptions, and evidence remain valid; record that reuse explicitly. Invalidate affected checks and any approval no longer matching the delivery, then repeat required integrated verification and final human review. Unknown impact blocks the relevant integration decision instead of silently declaring existing evidence valid. Browser reconnect, duplicate amendment submission, and controller restart must preserve the same current revision and prevent competing scope versions from dispatching.
+
+### Verification authority and baseline exceptions
+
+Before implementation, execute the configured baseline checks on the starting revision. An authorized human controls the required verification policy, including check identities, trusted definitions, and permitted baseline exceptions; freeze its version with the run. A clean baseline and valid existing policy require no extra human approval stage. A failing baseline blocks affected work unless an authorized human explicitly approves a specific exception before acceptance is frozen, or the failure is fixed.
+
+An exception records the check/failure identity, starting revision and evidence, rationale, authorizing human, and applicability. Show the failure as an exception, not as a passing check. It cannot override a mandatory organization/security rule or a locked requirement, excuse a new regression, or automatically carry into another run. A new or changed failure needs a fresh decision. Agents may propose policy changes; an authorized revision creates a new policy/specification version and invalidates affected evidence and approval.
+
+Keep trusted check policy and evidence collection outside the candidate's writable checkout. Application tests may be added or edited as normal code, but changing a command, test selector, assertion, or CI configuration cannot silently remove the required verification obligation. Independent review must inspect those changes; missing/skipped checks and altered failure signatures are not passes. Pin the check definition and evaluated commit in results. Use bounded retries for diagnosed flakiness and retain every outcome; do not retry indefinitely until green or automatically create an exception.
+
+### Approval contract
+
+The final human review package contains the requested outcome, integrated diff, previews where applicable, requirement coverage, frozen verification-policy version, baseline evidence and explicit exceptions, required platform check results, decisions, unresolved nonblocking items, and usage summary.
+
+Approval records the human identity, specification version, integrated commit SHA, evidence manifest, decision, and timestamp. New code or material changes to requirements or evidence invalidate approval. If the target branch moves and integration changes, verify the new result and obtain approval for it.
+
+Approval, PR/MR publication, merging, and deploying are separate permissions and actions. In v1, final human approval automatically queues a controlled platform action to open one GitHub PR or GitLab MR for the exact approved integrated revision. Evaluate publication authority and repository policy again when performing that action; approval does not grant missing access. If access is unavailable, retain the approval and show publication as blocked rather than choosing another account. Retry idempotently so an uncertain provider response cannot create duplicate requests. If the approved content changes, invalidate approval and obtain a new human decision before updating the PR/MR. Merge and deployment remain separately authorized under project policy and repository protections. Implementing agents cannot approve their own delivery or acquire final publication credentials.
+
+Use two explicit verification stages. Required platform checks run before human approval. Repository checks triggered by PR/MR publication are separate merge gates and cannot be represented as completed pre-publication evidence. Persist their provider, check identity, evaluated revision, and status; reconcile authenticated repository events with provider state. Passing post-publication checks on unchanged code can update merge readiness without another approval. Failed checks block merge and route attributable findings into correction work. Corrections repeat affected platform verification and final human review before the platform updates the PR/MR. Merge/deployment authorization and repository protections still apply. Missing, stale, or unknown repository results never imply merge readiness.
+
+## 6. Improve Guild without discarding its strengths
+
+### Preserve
+
+[Forge](reference/guild/plugins/forge/README.md) already provides an interview, codebase research, typed invariants/transitions/contracts, stable requirement IDs, and `Locked`, `Flexible`, and `Informational` classifications. Preserve this richer contract instead of replacing it with a checkbox plan.
+
+[Foundry](reference/guild/plugins/foundry/README.md) already provides frozen prompt files and hashes, ownership and dependency declarations, evidence tied to commits, defect/concern ledgers, correction coordination, escalation rules, and generated reports. Reuse these mechanics where they fit the distributed workflow.
+
+### Migration boundaries
+
+V1 preserves Forge/Foundry end to end and selected research, testing, UI-review, and documentation capabilities. Maintain a capability mapping that identifies reusable Guild prompts/validators, product recipe stages, adapter requirements, acceptance evidence, and explicitly deferred plugins. A capability may reuse methodology from several plugins; copying a slash command is not proof of cross-harness support. Other Guild plugins remain deferred unless their capability is deliberately added to this launch mapping. The mapping complements the concrete migration boundaries below.
+
+| Current reference behavior | Required change |
+|---|---|
+| Claude `Agent`/`TeamCreate` dispatch in [foundry_spawn.py](reference/guild/plugins/foundry/mcp-server/src/foundry_mcp/tools/foundry_spawn.py) | Emit a portable assignment and frozen input bundle; execute through the selected adapter. |
+| Selective model overrides and fixed role baselines in [teams.py](reference/guild/plugins/foundry/mcp-server/src/foundry_mcp/tools/orchestration/teams.py) | Resolve an explicit profile for every engineering role, including architect and reviewers. |
+| Teammates share a working tree and index in [teammate.md](reference/guild/plugins/foundry/agents/teammate.md) | Give independently scheduled attempts isolated writable checkouts; import accepted commits before dependent work. |
+| Process-level active run and global tmux discovery in [foundry_state.py](reference/guild/plugins/foundry/mcp-server/src/foundry_mcp/tools/foundry_state.py) | Scope all runtime operations by organization/project/run/attempt. A run must never discover, halt, or clean up another run's workers. |
+| Home-directory team discovery in `teams.py` | Use isolated credential/config homes and attempt-scoped process/session ownership. |
+| File transactions and local locks in [artifacts.py](reference/guild/plugins/foundry/mcp-server/src/foundry_mcp/tools/artifacts.py) | Retain local artifact generation, but move shared workflow transitions and ownership to transactional product storage. |
+| `forge-specs/` and `foundry-archive/` excluded by Guild's [.gitignore](reference/guild/.gitignore) | Transfer required specs, prompts, and context explicitly in immutable bundles; cloning the repository alone is insufficient. |
+| Harness-specific hooks and transcript parsing | Preserve necessary checks through adapter capabilities or deterministic controller checks, with explicit unsupported states. |
+
+Initially, a legacy Guild run can execute inside one isolated environment to establish behavior and a baseline. This compatibility step does not satisfy mixed-tool, separately isolated worker acceptance.
+
+### Stop loops and excessive pedantry
+
+The reference already distinguishes `LIVE`, `LATENT`, and `HARDENING` findings and has escalation exits. It also documents costly correction loops and an unbounded default for `max_cycles`. Build on those mechanisms and measure the remaining failure modes.
+
+1. Freeze acceptance criteria and the review rubric per run. Style preferences and speculative improvements become nonblocking backlog unless they violate an explicit requirement or applicable policy.
+2. Deduplicate findings by requirement, root cause, affected behavior, and evidence. Rewording a resolved objection does not create new work.
+3. Give the architect authority to settle discretionary disagreements. Reopen a settled decision only for new evidence, relevant changes, or changed requirements.
+4. Dispatch corrections to all affected owners using dependency information. Recheck the changed behavior and affected integrations; retain a required final check on the integrated revision.
+5. Require finite correction, elapsed-time, and resource budgets before dispatch. Detect repeated failures and cycles with no substantive change. Initial thresholds are tunable policy validated during dogfood.
+6. On budget exhaustion or unresolved disagreement, persist a blocked/halted result, attempted remedies, and remaining findings. Limits never convert incomplete work to accepted work.
+7. Separate infrastructure retries, failed implementations, reviewer disagreements, and controller/gate failures. Each needs a different remedy.
+8. Review prompting that encourages failure hunting or mandatory deliberation for every trivial edit. Scale the process to risk while preserving requirement and evidence checks.
+
+Use the same representative tickets and starting revisions to evaluate improvements: change orchestration/prompt policy with the model fixed, then compare models under the same policy. Track accepted outcomes, repeated findings, regressions, cycles after required checks pass, elapsed time, and usage. Do not attribute every loop to the model without evidence.
+
+## 7. Product architecture and state
+
+```text
+Human browser
+      │
+Web/API + authorization + Guild workflow controller
+      ├── PostgreSQL: product state, permissions, ownership, decisions, audit
+      ├── Artifact storage: frozen inputs, evidence, logs, exported reports
+      ├── Connections/access: policy, credential custody, refresh, temporary leases
+      ├── Git integration: source revisions, accepted commits, PRs/MRs
+      │
+      ├── Authenticated connector → execution cluster A → AX → agent/check sandboxes
+      └── Authenticated connector → execution cluster B → AX → agent/check sandboxes
+```
+
+Begin with a modular control-plane application and independently deployable execution connectors. Every supported production execution pool uses AX. Keep AX API calls, manifest translation, and lifecycle interpretation in the connector/integration boundary; the UI and workflow engine use product objects. Use database transactions and a durable database-backed work queue/outbox for the initial controller. Split services or add messaging infrastructure when measured load or deployment boundaries require it.
+
+### Domain objects
+
+| Object | Meaning |
+|---|---|
+| Organization / Team / Project | Administrative, membership, and repository access scopes. |
+| Human principal / Login identity | Stable application identity with local credentials and/or explicitly linked OIDC identities; organization membership and RBAC are independent of login method. |
+| Workspace | Durable project context, conversations, artifacts, and active/completed changes. |
+| Change / Specification version | Requested delivery and its versioned requirements, constraints, and acceptance criteria. |
+| Team template / Worker profile / Recipe version | Versioned responsibility-to-profile mappings, explicit worker configuration, and composed engineering stages/dependencies/checks/budgets. |
+| Run | One workflow execution with an initial frozen specification, recipe, and starting revision; authorized scope amendments append history while every attempt retains its exact input version. |
+| Experiment / Variant | A controlled comparison and its isolated explicitly selected recipe runs against a shared frozen input/evaluation baseline. |
+| Conversation / Question / Answer | Main and linked task/agent threads, evidence-linked interview questions, attributable responses, and resulting decision references. |
+| Instruction / Scope amendment | Authorized intervention with delivery/application status; an explicit specification/task revision with affected-work and evidence invalidation records. |
+| Activity event / Native-session control | Normalized observed progress and evidence; exclusive human/automation session ownership with auditable takeover and reconciliation. |
+| Task | Logical engineering work, requirements, dependencies, ownership, and acceptance rules. |
+| Attempt | One concrete execution of a task with resolved profile, input hashes, environment, and result. |
+| Finding / Decision / Evidence | Review claims, adjudication, and verifiable supporting artifacts tied to revisions. |
+| Verification policy / Handoff | Frozen required checks and authorized exceptions; versioned run-scoped engineering context stored with existing immutable artifacts. |
+| Blocker / External operation | An actionable question/failure with ownership and affected tasks; a tracked supported mutation with request/resource identity and known or uncertain outcome. |
+| Approval | Human decision on a particular integrated revision and evidence set. |
+| Connection / Secret version | An external account/service and its authentication material under platform database custody, with separate ownership and lifecycle. |
+| Grant / Binding / Access lease | Permission to use a connection, its resolved assignment to a capability, and temporary execution access. |
+| Policy / Quota | Administrative limits on actions, resources, data destinations, concurrency, and usage. |
+| Cluster / Execution pool / Execution lease | Placement, resource/trust constraints, and current attempt ownership. Execution ownership and credential access are separate leases. |
+
+PostgreSQL is authoritative for workflow, identities, permissions, scheduling, and decisions. Git is authoritative for source revisions. Content-addressed artifacts preserve exact specification, prompt, and evidence bytes; the database references their hashes. Repository copies of specs are versioned exports/imports, not a second independently editable live authority.
+
+Agents work from an explicit input bundle and publish typed results. They do not directly mutate shared controller state or receive control-plane database credentials. Product events and the audit trail are durable; a browser connection is never the only copy.
+
+### Reliable orchestration
+
+- The controller owns dependency scheduling, dispatch, ownership, deterministic validation, result collection, and state transitions. Models perform analysis, implementation, and engineering judgment.
+- Persist dispatch intent before launching work. Use idempotency keys, leases, and fencing tokens to reject stale owners and duplicate results.
+- Reconcile ambiguous launches with the execution cluster. A timeout is not proof that no worker started; never immediately relaunch elsewhere on that assumption.
+- Mark disconnected work as status unknown/reconciling. Prevent unfenced replacements from publishing competing output.
+- Record cancellation intent, stop the workload, and confirm termination. Reject publication by stale or cancelled attempts even if their process finishes late.
+- Keep retry history. Resuming a supported session preserves its attempt; restarting with changed inputs, model, or account/grant selection creates a new attempt. Same-account credential refresh/rotation keeps the binding and records the new credential version.
+- Transactionally commit a transition and its durable event. Stream events with cursors so clients can reconnect without losing state; redact secrets before persistence and streaming.
+
+### Implementation baseline and rationale
+
+Use the guide's control-plane stack and Astronomer's frontend stack, keeping the deployment small enough to operate on one node. Phase 0 pins compatible versions and records source provenance and justified adaptations. Astronomer frontend adoption is settled; exact integration compatibility still requires proof.
+
+| Area | Default | Reason and implementation constraint |
+|---|---|---|
+| Backend | Go; domain packages under `internal/`; thin `cmd/` entrypoints | Fits the guide and AX's Go integration. Construct dependencies in one composition root per binary; no mutable package-level runtime state. |
+| Domain organization | Handler → service → store, with helpers beside their owning domain | Keep authorization, business behavior, and persistence reviewable. Add only files/layers the domain actually needs; avoid generic factories and shared `utils` packages. |
+| API | Connect-RPC on chi; shared protobuf definitions and generated Go/TypeScript clients | Typed product contracts and enums across the web boundary. Keep AX protobufs behind the execution integration. Use ordinary HTTP endpoints for OAuth callbacks, health, webhooks, and metrics. |
+| Data | PostgreSQL, pgx, sqlc queries, goose migrations | Tenant-scoped queries, explicit schema constraints, and transactional ownership. Embed migrations, serialize them with an advisory lock, and fail startup before serving traffic if migration fails. |
+| Work queue/events | Transactional job/outbox tables initially | Durable work and event history without adding another infrastructure service. `LISTEN/NOTIFY` may wake consumers; consumers reconcile from durable rows. |
+| Frontend | React/TypeScript, Vite, TanStack Router and Query, generated Connect client | Adopt Astronomer's file routes, providers, authenticated shell, query conventions, and error boundaries; translate domain requests through the platform's typed API. Production serves compiled assets, not the Vite development server. |
+| Collections and live UI | TanStack Table, Virtual, and Pacer through Astronomer's shared table/live helpers | One collection-table implementation with explicit server search/sort/paging, bounded rendering, and paced refresh. Virtualization limits DOM work; server pagination limits transferred data. |
+| UI primitives/forms | Astronomer shared components, Tailwind 4 CSS tokens, TanStack Form field kit, Lucide icons, Sonner notifications, local Inter/JetBrains Mono fonts | Preserve the reference's actual chrome and styling. Reuse its component/validation conventions; server validation remains authoritative. Do not introduce parallel router, form, or component stacks. |
+| Encrypted storage | Platform PostgreSQL custody through a narrow encryption module following the guide's age-based baseline and versioned ciphertext records | Separately provision/recover keys outside the database and test rotation/restore. External secret-manager integration is post-v1; cryptography stays out of handlers. |
+| Observability | Structured zerolog logs, OpenTelemetry traces/metrics, Prometheus endpoint, configurable collectors | Correlate human requests, runs, attempts, connectors, and AX tasks. Never log token values, credential files, or authorization headers. |
+| Build/dev | Root Makefile; Air for Go development, Vite for UI, pinned runtimes and lockfiles, multi-stage images | Reproducible local and CI commands. Read the Go version from `go.mod`; validate Node against the adopted Astronomer/Vite toolchain. Preserve generated TanStack routes, local assets, and production deep-link serving. |
+| Tests | Focused Go tests; real PostgreSQL integration tests with testcontainers/pgtestdb; Vitest/Testing Library and Playwright journeys, visual checks, and accessibility checks | Verify authorization, transactions, lifecycle, and user outcomes against real boundaries. Adapt Astronomer's meaningful component/table/theme tests; validate the built frontend. Keep integration tests explicitly invokable; emit machine-readable results. |
+
+Suggested domain ownership, without requiring separate microservices:
+
+- **Identity and projects:** local and linked OIDC identities, MFA, account setup/recovery, teams, membership, shared application sessions, project access, and policy evaluation.
+- **Connections and access:** external accounts, encrypted credential custody, grants/bindings, token refresh, access leases, and provider-specific credential operations.
+- **Workflow:** specifications, recipes/team profiles, experiment/variant runs, tasks, dependency scheduling, attempt ownership, handoffs, evidence-linked questions/answers, actionable blockers, correction budgets, instructions, and scope amendments.
+- **Review:** findings, evidence manifests, architect decisions, final human approvals, and approved publication requests.
+- **Execution:** cluster connectors, AX integration, runner/harness adapters, artifact transfer, and runtime reconciliation.
+- **Repository integration:** Git connection operations, input preparation, accepted commits, integration branches, repository events, and controlled publication.
+
+Audit and event recording are shared narrow capabilities called by these domains. The credential component may initially run within the trusted control-plane process; a Go package boundary alone is not process isolation. Separate deployment is justified when customer trust requirements or operational ownership require it.
+
+### Recipe and interaction interface additions
+
+Extend the existing typed API, PostgreSQL records, and durable event stream; these capabilities do not require separate services. Expose versioned recipe creation/cloning/selection, UI/API run launch, experiment/variant launch/comparison/candidate selection, main/task conversation queries, question submission/answering, instruction status, authorized scope amendments, normalized activity, and native-session takeover/handback. Use existing resource authorization, idempotent mutation handling, reconnect cursors, and revision checks. A stale answer, instruction, or amendment must not silently apply to a replacement attempt or superseded question/specification.
+
+Assignments reference the recipe/profile versions, applicable specification revision, resolved instruction-bundle hash, and experiment/variant when present. Result/evidence records retain those references. Questions link evidence to answers and resulting decisions; instructions distinguish delivery/acknowledgement from application; amendments identify replaced inputs and invalidated evidence. Native-session control identifies the authorized human and target attempt, separate from execution ownership and credential leases. The UI renders these typed records rather than deriving authority or completion from terminal output or conversational prose.
+
+### Technology-guide decisions to make explicit
+
+- Astronomer's frontend is the explicit project choice: TanStack Router/Query/Table/Form/Virtual/Pacer, its shared primitives, Lucide, and its global CSS. Replace the earlier React Router and react-hook-form defaults; do not retain a second Radix/shadcn-based component system beside the adopted source components. Preserve typed Connect transport instead of copying Astronomer's product-specific API client/endpoints.
+- Security guidance governs browser tokens: use secure HttpOnly cookies and server-managed refresh; do not adopt the TypeScript chapter's temporary localStorage allowance. Add CSRF/origin protection for cookie-authenticated mutations and validate OAuth callback state/PKCE as appropriate.
+- A route-to-role interceptor is the first authorization check. Resource-specific access to a project, connection, artifact, or attempt must also go through the shared authorization service; role and `org_id` checks alone do not establish access to every object in an organization.
+- Tenant-owned tables carry an organization key. Queries and foreign keys prevent cross-tenant association; where identifiers are separately supplied, validate the owning organization in the same operation. Unique/idempotency constraints include the relevant tenant scope.
+- Document schemas for JSONB and use typed columns for routinely queried fixed fields. Soft deletion preserves business history; deleting an encrypted credential does not merely leave usable secret material in a soft-deleted row. Credential destruction, backup expiry, and audit retention have separate policies.
+- Pin the adopted guide and dependencies, then update deliberately. Its general quarterly dependency review does not defer urgent security updates or AX compatibility fixes. Avoid speculative pre-production compatibility shims; preserve real customer data and supported deployments.
+- Connected v1 is the agreed exception to the guide's air-gap-first requirement. Use configurable endpoints, public trust bundles, and controlled egress now; full disconnected packaging and acceptance come later.
+- Defer FIPS beyond v1 and make no compliance claim. A future profile requires separate validation of its actual cryptographic configuration; a build tag alone does not establish compliance of the age-based default or its dependencies.
+- Existing Guild Python components may remain behind the migration boundary while useful. Do not rewrite working validators in Go solely for language uniformity; pin, test, and package the Python runtime if retained.
+
+### Astronomer frontend adoption contract
+
+The frontend must look and behave like the inspected Astronomer application, with this platform's content and permissions. Reuse source components and composition patterns, not just a similar color palette. Keep one product frontend with shared `components/ui`, `components/layout`, form helpers, domain hooks, routes, and global styles. No separate design-system service/package or cross-repository runtime import is required. Adapt selected source into the product, record provenance and necessary notices, and remove Astronomer-specific dependencies from that adopted code.
+
+#### Source map and version baseline
+
+| Concern | Source to reuse or adapt | Required result |
+|---|---|---|
+| Entry and build | [main.tsx](reference/astronomer/frontend/src/main.tsx), [Vite configuration](reference/astronomer/frontend/vite.config.ts), `frontend/index.html` | Local fonts, one global stylesheet, root error handling, generated file routes, code splitting, and compiled-asset serving. |
+| Routing and providers | [router.tsx](reference/astronomer/frontend/src/router.tsx), `routes/__root.tsx`, [providers.tsx](reference/astronomer/frontend/src/components/providers.tsx) | One router, stable QueryClient, user preferences/theme providers, global notification host, and development-only query tools. |
+| Chrome and layout | [dashboard route](reference/astronomer/frontend/src/routes/dashboard/route.tsx), `components/layout/{sidebar,sidebar-navigation-view,topbar}.tsx`, `components/layout/sidebar-navigation.ts`, `lib/dashboard-content-layout.ts` | Persistent responsive shell, permission-aware navigation, breadcrumbs, contextual switcher, and centralized content-width rules. |
+| Theme and typography | [globals.css](reference/astronomer/frontend/src/styles/globals.css), `lib/theme.tsx`, `public/theme-bootstrap.js` | Shared light/dark semantic tokens, locally served fonts, density/spacing, motion/accessibility rules, and theme application before first paint. |
+| Page and interaction components | [page.tsx](reference/astronomer/frontend/src/components/ui/page.tsx), `components/ui/{action-button,card,metric-card,status-badge,tabs,query-states,modal-shell,confirm-dialog}.tsx` | Shared page headers/sections, buttons, cards, status, tabs, loading/error states, and accessible confirmation dialogs. Reference drawer/configuration-modal patterns are excluded. |
+| Collection tables | [data-table.tsx](reference/astronomer/frontend/src/components/ui/data-table.tsx), `components/ui/data-table-features.ts`, `components/ui/use-data-table-controller.ts`, `components/ui/use-data-table-state.ts`, toolbar/pagination/semantic/virtualized helpers in the same directory | One TanStack Table implementation, with its complete interaction and rendering helpers rather than a partial visual copy. |
+| Forms | [lib/form.ts](reference/astronomer/frontend/src/lib/form.ts), `components/form/fields.tsx`, `components/form/error-summary.tsx`, `components/form/secrets.ts`, `components/ui/form-shell.tsx` | TanStack Form contexts and shared fields, accessible validation, submit state, and secret-safe editing. |
+| Data and live updates | `lib/query-keys.ts`, `lib/query-retry.ts`, `lib/hooks/`, [paced-invalidate.ts](reference/astronomer/frontend/src/lib/live/paced-invalidate.ts) | Scoped query keys/hooks, cancellation, bounded retries, and paced invalidation over durable product events. |
+| Authentication styling | [login route](reference/astronomer/frontend/src/routes/auth/login/index.tsx) and sibling auth routes | The same split-panel visual language, adapted to username/password, TOTP, configured OIDC, and no-SMTP setup/recovery. |
+| Regression evidence | [visual regression suite](reference/astronomer/frontend/tests/e2e/visual-regression.spec.ts), table suites, component tests, `frontend/playwright.config.ts` | Product-specific fixtures, screenshot baselines, keyboard/accessibility checks, and production-build browser journeys. |
+
+Paths without the `reference/astronomer/` prefix in this table are relative to its `frontend/src/`, except `frontend/` paths relative to the repository and `public/` paths relative to `frontend/`. These are inspected source locations; the adoption inventory must identify destination files, changes, retained tests, and source commit for each reused group.
+
+The inspected lockfile resolves React `19.3.0`, Vite `8.3.0`, TypeScript `6.0.3`, Tailwind `4.3.3`, TanStack Router `1.170.35` / router plugin `1.168.37`, Query `5.102.8`, Table `9.2.4`, Form `1.33.5`, Virtual `3.14.11`, and Pacer `0.23.0`; its manifest requires Node `>=24.21.0 <25`. These are compatibility inputs from that checkout, not claims that a new installation has been validated or that they are current upstream releases. Start from the reference's matching manifest/lockfile subset, prove the selected toolchain, and pin the result. In particular, the source table uses the v9 feature API: do not substitute an older Table API while assuming its helpers remain compatible.
+
+#### TanStack responsibilities and data flow
+
+- **Router:** file-based routes and generated `routeTree.gen.ts`; register the router Vite plugin before React and enable route code splitting. Preserve scroll restoration, root/route error boundaries, branded not-found states, and authenticated nested layouts. Validate session authority on the server before protected children load data or attach streams; a browser session hint is not authorization. Direct URLs, refresh, back/forward, and authorized return-after-login must work in the production asset server.
+- **Query:** one stable QueryClient and typed domain hooks over the generated Connect client. Include organization/project/resource identity in query keys; pass cancellation through the transport, cancel obsolete requests, and clear protected caches/subscriptions on logout or scope loss. Begin with Astronomer's 30-second stale time, five-minute garbage collection, focus refetch, and bounded query retries, adapting error classification to Connect codes. Do not retry ordinary authorization/validation failures; mutations do not retry automatically. Server operation identity and reconciliation govern uncertain mutations.
+- **Table and Virtual:** use the canonical table/controller/feature composition described below. Virtual handles large rendered collections; it does not justify downloading an enterprise dataset. Use server pagination/filtering/sorting where data size or authorization requires it. Reuse its virtual-row keyboard/focus behavior and verify compatibility with the pinned Virtual version.
+- **Form:** adopt `createFormHook`, `useAppForm`, shared field contexts, `withForm`, and form error summaries. Reuse Text, Number, Password, Secret, Textarea, Select, Switch, Checkbox, and SubmitButton fields. Map typed field/server errors once in shared helpers. Browser checks improve feedback; API validation, RBAC, and secret custody remain authoritative.
+- **Pacer:** reuse the table's 200 ms search debounce and the live helper's 400 ms per-query-key throttle with leading/trailing updates as initial defaults. Cancel pending work on disposal/scope change. Coalesce repeated refreshes without dropping durable events or delaying urgent access-loss handling. Use the existing transport/event cursor contract; do not open a connection per row or agent card.
+- **State boundaries:** route search parameters hold shareable filters, sorting, tabs, and pagination when appropriate; Query holds server state; Form holds edits; local React state/context holds transient interaction. Do not duplicate the same data in another global store. Version/namescope persisted display preferences, and exclude tokens, credentials, conversations, and protected records from browser persistence.
+
+#### Application chrome and page layout
+
+Preserve the reference's geometry: a 240 px expanded / 64 px collapsed desktop sidebar, 56 px brand and topbar rows, bordered surfaces, compact navigation, and the muted light/dark palette. At the reference `lg` breakpoint use the desktop sidebar; below it expose a compact menu that expands navigation in the page beneath the header, with Escape handling, focus return, and close-on-navigation. This deliberately replaces the source's off-canvas drawer to honor the no-drawer rule. Retain visible active navigation, grouped sections, searchable context selection, documentation/version footer, and accessible labels for collapsed icons.
+
+The topbar carries breadcrumbs, authorized search, the command-palette entry point, theme control, actionable notifications, and the account menu. Replace cluster context with organization/project context. Source navigation for Charlie, Flux, Kubernetes resources, extension windows, or cluster operations is not product navigation; expose this platform's inbox, projects, runs, team configuration, connections, and administration according to permissions. Search/commands initially cover existing authorized navigation and project/run metadata; adopting the chrome does not create a separate universal-search project. The sidebar and topbar remain mounted across child pages, including page errors and not-found states.
+
+Reuse the shell's viewport flex layout, `min-h-0` scroll boundaries, offline/status banner, skip-to-main link, and focus-on-navigation behavior. Standard content uses `px-4 py-6 sm:px-6 xl:px-8`, centered up to 1800 px. A central route/layout helper permits full-width tables, diffs, and logs without scattering page-specific width overrides. PageShell uses 24 px section spacing; PageHeader uses the reference 24 px semibold title, 14 px description, and responsive actions. PageSection, tabs, and cards supply the interior hierarchy. Preserve phone/tablet layouts with independently scrollable dense content rather than shrinking text or hiding required controls.
+
+#### Global CSS, theme, and shared components
+
+Adopt the Tailwind 4 CSS-first setup and `globals.css` as the single styling foundation: `@theme inline`, class-based dark mode, semantic background/foreground/card/popover/primary/secondary/muted/accent/destructive/border/input/ring tokens, sidebar tokens, and operational status colors. Retain Inter Variable for interface text, JetBrains Mono Variable for code/numbers, the 0.5 rem base radius, reference borders/shadows, focus rings, selected-row indicators, scrollbar treatment, and reduced-motion behavior. Serve font files locally; preserve external same-origin theme bootstrap before application paint and verify CSP/font loading without inline-script exceptions. Use semantic tokens instead of per-page hex colors or parallel global stylesheets.
+
+Preserve the reference overlay ordering: sticky 10, header 30, chrome 40, overlay 50, popover 60, toast 70. Reuse ModalShell/ConfirmDialog for permitted confirmation interactions, focus containment, dismissal, scroll locking, and focus return; verify their behavior instead of assuming source reuse proves accessibility. Do not adopt DrawerShell or configuration dialogs. Lucide provides the common icon language. Reuse Sonner's theme-aware bottom-right notifications, close control, and ordinary four-second lifetime; blockers, approvals, and security failures also persist in their owning page/inbox, not only in an expiring toast.
+
+Support dark, light, and system preferences with the reference dark default. Use a product-specific pre-login storage key and stable authenticated-user preferences; never reuse Astronomer's key or another user's saved settings. After login the server-owned preference is authoritative, and logout/account changes cannot expose another user's preferences or protected cached data. Adapt brand name, mark, product copy, documentation links, and version display while retaining the visual treatment; do not import Astronomer-specific assets or domain dependencies indiscriminately.
+
+The shared component inventory includes PageShell/Header/Section; Card/MetricCard; ActionButton with variants, loading labels, and disabled reasons; Badge/StatusBadge; Input/Textarea/Select/Checkbox/Switch; Tabs; EmptyState/StatePanel/query states; FormShell; ModalShell/ConfirmDialog/ActionMenu; CodeBlock/table typography; WizardStepper; and the operation/event/mutation timelines where they fit run history. Reuse the existing component for each job before adding a new one. Extend it only for a demonstrated product need, keeping domain permissions and API calls in the feature layer. Secret fields distinguish unchanged, replace, and explicitly clear where allowed; never prefill a reusable credential or return its original value to the browser. Destructive actions use explicit intent, server authorization, and durable outcome reporting.
+
+#### Creation, configuration, and confirmation conventions
+
+These interaction rules are explicit product requirements and take precedence over conflicting Astronomer examples:
+
+- **Create with “+”:** page headers/toolbars use a consistent Plus icon with a specific label such as “New project,” “New run,” “Add connection,” or “Add member.” Empty states repeat the same action and route. Compact icon-only variants require an accessible name and visible tooltip; permissions and disabled reasons remain clear. Do not scatter unlabeled plus signs or unrelated creation patterns across pages.
+- **No bare forms:** create/edit pages use PageShell/Header, explanatory context, breadcrumbs/back navigation, and coherent Card/PageSection groups with labels, help, validation, and a clear action area. Collections open on useful lists/overviews or an intentional empty state. A form implementation may use FormShell underneath, but the user sees a designed task page rather than a naked stack of fields. Authentication retains its composed branded frame.
+- **Configuration belongs on a page:** new/edit project, team, role assignment, connection, grant, account, provider, cluster, quota, and policy screens have stable routes inside the shell, shareable subject to authorization. Use tabs or sequential page steps only when the existing task warrants them. Detail links navigate to full detail pages; no side drawers, slide-over inspectors, or settings dialogs. Ordinary dropdowns, filters, menus, tooltips, and the navigation command palette remain lightweight controls, not hidden configuration forms.
+- **Save/cancel behavior is consistent:** show required fields and actionable inline errors, retain entered values on validation/network failure, prevent duplicate submissions, and show pending/success outcomes. Cancel/back returns to the relevant parent context with safe list filters restored. Confirm abandoning unsaved changes for app-controlled navigation with the shared dialog; do not install native `beforeunload` confirmation dialogs. Document that browser close/reload may discard unsaved edits; do not persist secrets to avoid that limitation.
+- **Modals confirm or resolve a short decision:** use the shared confirmation dialog for revoke/delete, abandon/cancel work, discard edits, or approving a clearly summarized action. The dialog names the target and consequences, offers specific confirm/cancel labels, puts initial focus appropriately, and restores focus on close. A narrowly required acknowledgement is acceptable; multi-field creation/editing, settings, credential entry, and onboarding are routed pages. Final delivery evidence is reviewed on its page; a modal may confirm the exact reviewed action, not replace the review workspace.
+- **No browser pop-ups:** do not use `window.alert`, `window.confirm`, `window.prompt`, or spawned popup windows as product flows. Errors use inline/shared states; confirmations use in-app modals. Login/provider consent uses same-tab redirect and safe return handling instead of a popup window. A user's deliberate choice to open an ordinary link in another tab is unaffected.
+- **Small screens follow the same rules:** configuration stays on a responsive page, confirmations fit the viewport with accessible scrolling/focus, and mobile navigation expands in the page rather than a side drawer. Never convert configuration into a drawer on mobile or stack nested confirmation modals.
+
+#### Canonical table contract
+
+All collection pages use the adopted DataTable and shared column/cell helpers. The smaller OperatorTable primitives remain suitable for compact detail matrices; they must not grow into a second collection grid. Preserve the reference's 14 px body text, 12 px semibold headers, 13 px secondary/code text, tabular right-aligned numbers, semantic status badges, entity-link focus treatment, sticky headers, and restrained hover/selection styling.
+
+| Capability | Required behavior and boundary |
+|---|---|
+| Data ownership | Stable row IDs from domain identity; typed columns/cells, explicit loading/error/empty states, and current-scope data only. No array-index keys for selection or mutation targets. |
+| Small collections | Reference default of 20 rows per page, search, sort, clearable filters, and semantic HTML table rendering. Bounded client-side collections may search/sort locally. |
+| Enterprise collections | Controlled server search/filter/sort/page state and total row count; reset page on changed criteria, cancel obsolete queries, and reconcile out-of-range pages after mutations. Explain whether selection covers this page; never imply all matching records are selected implicitly. |
+| Search and facets | Keep the debounced search and active-filter controls. Large lists require whole-dataset server search/sort and backend facet options/counts or a clearly unavailable facet. Never label page-local filtering as a complete search. Persist safe shareable criteria in validated route state. |
+| Virtual rendering | Source auto-virtualization begins at 250 loaded rows for eligible client collections. Client virtual mode uses the filtered/sorted rows without a pagination footer; server-paged mode keeps server pagination even if virtual rendering is requested. Test focus, row identity, heights, sticky headers, and accessible grid semantics across both paths. |
+| Display preferences | Reuse column visibility, compact/comfortable density, and opt-in resizing; structural/action columns cannot be hidden accidentally. Namescope persistence by product/user/organization/project/table as relevant; persist display settings only. Clear stale selection when scope or dataset changes. |
+| Selection and actions | Per-row eligibility and authorized bulk actions, explicit selected count, keyboard interaction, pending/disabled feedback, and confirmation where required. The server rechecks every target and reports partial failure without claiming total success. |
+| Recovery and feedback | Distinct initial/loading, refreshing, empty dataset, no matches, forbidden, offline, and API-error states with permitted retry/clear actions. Keep usable current data during refresh when authority remains valid; remove it immediately on access loss. |
+
+Validate these behaviors using source unit/browser table suites and product-backed server pagination. Preserve the complete controller/feature/helper set needed by the chosen Table version; avoid replacing it with a new page-local grid or copying only the rendered markup.
+
+#### Login and account-screen contract
+
+Reuse Astronomer's `min-h-screen` desktop split: a half-width dark zinc/blue-violet branded panel with a subtle grid, soft background glows, large headline, short product benefits, and footer; the other half centers the form on the semantic application background. The branded panel disappears below `lg`; the mobile form keeps the brand above it. Preserve the reference's 384 px maximum form width, spacing, typography, rounded controls, password visibility affordance, loading button, configured-provider buttons, divider, inline errors, and TOTP challenge/back interaction. Adapt copy to agent teams and final human review. Both login and recovery screens use the same theme/tokens/components as the workspace.
+
+Style reuse must preserve the platform's settled identity contract. Replace the source's email-oriented credential assumption with local username/password and the product's typed endpoints. Render only policy-enabled local/OIDC methods; an unavailable public auth-configuration response is a recoverable configuration error, never permission to reveal a local fallback in OIDC-only mode. Keep verified identity linking, sanitized same-origin return destinations, secure sessions, rate limiting, policy-required TOTP, and secret-safe errors. No account enumeration, reusable secret in a URL/log, or authentication token in localStorage.
+
+Apply this frame to first-owner setup, admin-issued account setup, password reset/change, TOTP enrollment/challenge/recovery, expired/consumed links, lockout, and access denied. No-SMTP paths must explain the actual admin-provided setup/reset link and supported recovery action; do not copy an email-sent flow when no email delivery exists. Keep the distinction between login, provider-connection consent, project permission, and final delivery approval visible. Source login endpoints/status-code conventions are implementation details to adapt, not a second authentication backend.
+
+#### Product-surface adoption and acceptance
+
+| Product surface | Shared composition | Required adaptation |
+|---|---|---|
+| Inbox and project lists | PageHeader, DataTable, filters/status badges, empty/query states | Owner/project/status filtering, grouped blockers, final-review items, and explicit next actions. |
+| Project and team configuration | Contained PageShell, cards, tabs, TanStack Form, shared selectors | Objective/specification, explicit role/tool/model/effort/account selection, policy limitations, and validation before launch. |
+| Recipes and experiments | “+” creation/clone actions, routed grouped configuration pages, shared comparison tables, linked evidence | Versioned stage composition, immutable variants, explicit budgets, quality-first comparisons, and candidate selection distinct from final approval. |
+| Runs and task detail | Full-width task tables, status/timeline components, tabs, routed detail pages | Durable live progress, dependencies, attempted versus actual state, scoped conversation/steering, and reconnect feedback. |
+| Conversations and native access | Main/task thread pages, inline question cards with choices/free text, attributed activity, dedicated full-width terminal page | Evidence-first interviews, visible instruction application, owned blockers, authorized exclusive takeover, and reconciled handback. Q&A stays in the conversation; terminal/configuration does not move into a modal or drawer. |
+| Work and final review | Full-width diff/log/evidence surfaces inside the same chrome; contained summaries and shared actions | Revision-bound findings/checks, baseline exceptions, human approval/corrections, publication, and later repository CI as distinct states. |
+| Connections and project access | DataTable, routed detail/configuration pages, grouped secret-safe forms, badges, confirmations | Connection → Grant → Binding → Lease drill-down, “+” onboarding, owner/provider/payer/delivery visibility, reconnection, expiry, and revocation. |
+| Administration | Server-backed DataTable, routed configuration pages with grouped forms, tabs, timelines, confirmation dialogs | Users/groups/RBAC, login policy, clusters, quotas, audit, retention, maintenance, and restricted recovery with authorized actions. |
+| Authentication/account lifecycle | Shared split-panel auth frame and TanStack forms | Local/OIDC/mixed policies, MFA, no-SMTP setup/recovery, loading/error/expired-link states, and safe return navigation. |
+
+Phase 0 records reference light/dark screenshots and component mappings; Phase 1 establishes product baselines as these surfaces become real. Use deterministic fixtures, disabled screenshot animations, and the built Vite application. Cover desktop, tablet, mobile, expanded/collapsed navigation, light/dark/system theme, long labels, large/empty/failed data, permissions, forms, overlays, and login. Product text and data will differ; review shell geometry, tokens, density, interaction, and component adoption explicitly rather than requiring unrelated pages to be pixel-identical. Automated accessibility checks supplement manual keyboard/focus/zoom/contrast checks. New pages use the adopted system from their first implementation; visual consistency is not deferred to Phase 3 polish.
+
+Retain a small provenance/adaptation record and the relevant source tests. Review Astronomer changes deliberately at dependency/security maintenance and when updating adopted components; pin a candidate, inspect breaking changes, port only applicable improvements, and rerun affected component/table/auth/visual checks. No automatic merge or deploy follows a reference update. AX's required compatibility monitoring continues independently. Measure query/event request rate, DOM/memory growth, response times, and interaction responsiveness under the enterprise workload; set explicit UI thresholds in Phase 0 and prove them in Phase 3 rather than assuming virtualization proves scale.
+
+### Configuration ownership
+
+Separate installation configuration from tenant data and attempt inputs:
+
+1. **Installation:** public URL, database/artifact endpoints, encryption-key references, signing/identity trust, approved cluster registrations, and operational collectors. Parse once at the composition root; secrets never become frontend build variables.
+2. **Organization:** permitted login modes, MFA policy, optional identity-provider mappings, membership/roles, provider/OAuth client registrations, approved destinations, connection policy, grants, quotas, and retention.
+3. **Project:** repository, verification commands, team defaults, environment profiles, allowed connections, and delivery policy.
+4. **User:** personal connections and preferred profiles within organization/project policy.
+5. **Attempt:** resolved assignment, immutable input references, effective policy versions, and temporary access bindings.
+
+Default selection and authorization are different operations. Project/user/task preferences may select among permitted values; they cannot override an organization denial. Validate external endpoints, TLS trust, issuer/audience, and redirect registrations before making privileged requests. Persist effective configuration and its origin for review without storing raw credentials in the assignment.
+
+### Platform-to-worker boundary
+
+```text
+Human or administrator configures connection and grant
+                        │
+Platform authorizes task and resolves capability bindings
+                        │
+Connector creates the AX task with non-secret configuration
+                        │
+Runner establishes authenticated attempt identity
+                        │
+Access service issues scoped access or performs an allowed operation
+                        │
+Agent works → results/evidence → platform validation and durable state
+                        │
+Completion/cancellation/revocation → access expiry and cleanup
+```
+
+The platform retains authoritative specification versions, task state, permissions, access decisions, budgets, and approval history. The connector translates an authorized assignment into AX operations and reconciles actual runtime state. The runner supervises the harness, materializes selected inputs/configuration, and reports results. The agent cannot authorize its own expanded scope or mint grants for child workers.
+
+An authenticated event from a worker is attributable to that worker; it is not automatically true. Validate artifact hashes, repository revisions, required checks, and state-transition preconditions before acceptance. Reserve final verification resources so exhausted implementer capacity does not prevent result collection or bounded cleanup.
+
+## 8. Execution and adapter contracts
+
+The product submits attempts, not raw AX manifests or prose instructions for a lead to repeatedly reinterpret.
+
+Illustrative contract; final API names and schema are implementation decisions:
+
+```yaml
+attempt_id: attempt-auth-142a-2
+organization_id: acme
+project_id: app
+run_id: run-auth-142
+task_id: auth-142a
+spec_version: spec-auth-142-v3
+recipe_version_ref: recipe-standard-v2
+input_bundle_ref: artifact:sha256:<digest>
+instruction_bundle_ref: artifact:sha256:<instruction-digest>
+handoff_ref: artifact:sha256:<handoff-digest>
+repository_ref: repo-app
+base_sha: <full-git-commit>
+output_branch: agent/auth-142a/attempt-2
+assignment:
+  responsibility: implementer
+  profile_ref: codex-luna-xhigh-v1
+  initiating_user_ref: user-mj
+access_bindings:
+  model:
+    connection_ref: connection-mj-codex
+    grant_ref: grant-mj-codex-project-app
+    billing_owner_ref: user-mj
+  repository_read:
+    connection_ref: connection-company-github
+    grant_ref: grant-app-repository-read
+  package_read:
+    connection_ref: connection-project-registry
+    grant_ref: grant-app-package-read
+scope:
+  writable_paths: [src/auth/**, tests/auth/**]
+  dependency_commits: []
+execution:
+  pool_ref: europe-standard
+  compatibility_ref: validated-ax-stack-v1
+  resource_class: standard
+  policy_ref: project-agent-policy-v1
+  timeout_seconds: 3600
+  retry_limit: 2
+verification:
+  policy_ref: verification-auth-v1
+  baseline_evidence_ref: artifact:sha256:<baseline-digest>
+  required_checks: [auth-tests]
+outputs:
+  artifact_scope_ref: artifacts-attempt-auth-142a-2
+  result_schema_version: v1
+```
+
+The controller resolves references into an immutable assignment before dispatch, checks the caller's rights and current policy, and records the actual harness/model/auth status returned by the adapter. No access token, refresh token, password, private key, or reusable secret belongs in this specification. Access leases are issued separately after authenticated bootstrap. Example limits are illustrative, not a universal policy.
+
+Freeze the selected account, grant, policy version, and billing owner for attribution. Do not freeze expiring token bytes: approved credentials can refresh or rotate within the same binding. Re-evaluate live policy on issuance/renewal, so an immutable historical assignment does not override a later revocation.
+
+### Complete worker input package
+
+| Input | Required content and boundary |
+|---|---|
+| Identity and provenance | Organization/project/run/task/attempt IDs, initiating human, workload identity reference, immutable assignment hash, selected adapter/image, and compatibility record. IDs provide context; they are not authentication secrets. |
+| Engineering assignment | Frozen specification and recipe/profile versions, relevant requirement IDs, role instructions, accepted question/answer decisions, acceptance criteria, correction findings, versioned handoff, and bounded autonomy. Include experiment/variant provenance when applicable. |
+| Source and dependencies | Exact base revision, accepted predecessor commits, input artifact hashes, isolated checkout layout, and allowed change scope. |
+| Tools | Selected harness/model/settings, resolved versioned skills and scoped repository instructions including `AGENTS.md`, approved hooks/MCP definitions, tool allowlists, source provenance/content hashes, and approved non-secret endpoint configuration. |
+| Environment | Resource class, network policy, dependency/toolchain versions, temporary test resources, public CA trust material where required, and explicit non-secret variables. |
+| Access | Capability bindings and a way to obtain their authorized temporary access. Keep raw credentials outside prompts, task manifests, ordinary artifacts, and repository configuration. |
+| Verification/output | Frozen trusted policy/check definitions, baseline evidence and authorized exceptions, result schema, output paths, artifact scope, upload limits, and required evidence tied to source revisions. |
+| Lifecycle | Heartbeat/report endpoints, cancellation protocol, timeout/budget rules, checkpoint policy, and cleanup responsibilities. |
+
+Repository instructions and agent-produced tool requests are untrusted inputs to policy evaluation. They may request capabilities but cannot enable a new destination, override a denied tool, attach an arbitrary secret, or delegate broader authority to another agent.
+
+An adapter must support or explicitly declare unavailable:
+
+- Validated launch with frozen inputs and isolated configuration.
+- Model/settings and authentication capability checks.
+- Structured status, messages, tool/permission requests, and output artifacts.
+- Safe-point steering with attributable delivery/acknowledgement/application and session resume where supported; otherwise a visible controlled restart.
+- Authorized native-session attachment/takeover/handback where supported, exclusive control, terminal lifecycle, and capability limitations distinct from ordinary structured interaction.
+- Cancellation, exit/result capture, and usage reporting with its source and precision.
+- Credential delivery/refresh mode, whether raw secrets enter the sandbox, concurrency constraints, and whether credential state can be excluded from checkpoints.
+- Enforced disabling of native subagent delegation, attributable permission/question events, and supported context handoff/reconstruction.
+
+Use a tool's supported structured interface for platform state and control. Authorized browser-terminal/native-session access is a v1 human interaction capability where supported; it does not make screen scraping the primary state protocol. Pin and verify each tool version, including safe-point steering and native attachment behavior. Do not assume swapping a CLI binary preserves Guild's tool semantics or permits attaching to an existing headless session.
+
+### Native behavior and platform control
+
+V1 delegates engineering roles only through the platform scheduler. Adapters must disable native subagent/team creation and reject a tool/configuration that cannot enforce that setting. An agent may propose another task, but the controller resolves its profile, authorization, grants, and quotas before dispatch. Ordinary build/test subprocesses are allowed within the attempt's resource and capability limits; they are not independently authorized engineering agents. Test the native-delegation restriction against repository configuration and direct tool requests, rather than relying on role prompts alone.
+
+Pin approved skills, hooks, and tool/MCP configuration with the assignment. Repository content or tool defaults must not silently enable delegation, change models/accounts, install active hooks, or widen permissions. Adapters route routine permission requests through existing platform authorization and report genuinely missing intent/authority as actionable blockers. Do not auto-answer an unknown permission request with a broad approval or leave a headless process waiting without visible state.
+
+### Skills, tools, and repository instructions
+
+Resolve a versioned combination of managed shared skills/tool definitions, selected project skills, and instructions applicable to the repository revision and assignment paths, including root and nested `AGENTS.md` files. Record origin, version/hash, path applicability, and how each source reaches the chosen harness. Preserve authoritative requirements and instruction scope when adapting formats; do not assume every CLI discovers the same filenames, hooks, or skill locations. Unsupported instruction/tool behavior is a visible capability limitation.
+
+Snapshot the effective instruction bundle before dispatch and reference it in the assignment. Changes to a shared skill, repository instruction, or tool configuration cannot silently change a running worker's frozen inputs. A selected updated bundle belongs in a later explicit assignment or authorized amendment. Repository instructions are contextual engineering guidance, not authority to override platform policy, verification requirements, connection restrictions, or native-delegation controls. Conflicting requirements become an attributable blocker rather than an adapter silently discarding one side.
+
+Active hooks, executable skills, MCP servers, and external tools must be permitted by existing policy and capability grants before use. Resolve their access through Connection → Grant → Binding → Lease, separate from the model connection. Valid standing authority needs no new routine approval ceremony; missing authority follows the existing blocker process. Tools used for evidence gathering remain subject to the same controls. Reuse existing artifacts, profiles, and configuration storage; no marketplace or new instruction service is required.
+
+### Authorized native-session access
+
+Provide an authenticated browser terminal on a dedicated workspace route for supported agent environments. Attach to the selected native CLI/TUI session only through a validated adapter capability; display unavailability and its reason when safe attachment is unsupported. Do not silently start a second native agent with the same credentials/session and represent it as attachment. Structured chat, progress, and final review remain complete without terminal use.
+
+Terminal access requires explicit permission, current project/attempt access, and appropriate delegation for every connection the session can exercise. Apply raw-credential disclosure restrictions when the environment exposes credential material; connection-use permission alone does not imply shell/secret visibility. Recheck authority at attachment and on revocation, with no ambient controller/cluster credentials or native delegation bypass. Audit session access and control transitions; redact retained output and avoid treating unfiltered keystrokes or secret-bearing terminal transcripts as ordinary diagnostic logs.
+
+Takeover is an exclusive control transition: request takeover, pause automated control at a supported safe point, reconcile in-flight commands, then grant one authorized human control of the target session. The UI distinguishes requested, active, disconnected, and handback/reconciliation states. Fence stale control owners; a browser reconnect must not create a second controller, and loss of connection must not silently resume automation while native work may still be running. Use bounded disconnect/idle handling through the existing checkpoint/reconciliation lifecycle. Revocation terminates human access and invokes the relevant execution/access policy.
+
+On handback, capture the changed files/revision, relevant native context, and known/uncertain external operations; update the handoff and invalidate affected evidence. Resolve scope changes through the authorized amendment process. Recheck current policy/access and resume only after reconciling ownership and in-flight work; create a replacement attempt when native resume or context reconstruction is not reliable. Native human edits receive the same scope checks, required verification, and final human approval as agent edits. Terminal output and an agent's completion message do not directly advance the workflow to accepted.
+
+### Run-scoped context and handoff
+
+Use existing artifact storage and typed results for a versioned handoff consumed across roles, tools, corrections, restarts, and native-session handback. It contains the objective and specification/requirement/recipe references; current input/output revisions; accepted question/answer decisions and their evidence; applied instructions and amendments; findings and dispositions; completed checks; remaining work and blockers; and provenance linking it to the producing attempt. The first handoff derives from the frozen specification; later handoffs supplement it without silently changing authoritative requirements or policy.
+
+The controller validates scope, references, revisions, and result structure before another worker receives the handoff. Keep locked requirements, accepted decisions, and unresolved blockers in the mandatory context. Large logs and supporting artifacts remain retrievable by authorized reference instead of copying every transcript into every prompt. Adapters declare context limits and report compaction; summaries retain links to their source evidence and cannot replace authoritative records. If mandatory context cannot fit or referenced evidence is unavailable, make that limitation visible and narrow/split the assignment within policy rather than silently dropping constraints.
+
+Native session resume remains available for validated modes, but a fresh worker must reconstruct the run from the handoff without the previous tool's private transcript format. Context is scoped to this run and its authorized inputs. Durable project files and explicitly selected past artifacts may still be inputs; a shared automatically maintained cross-run memory service is deferred. Apply existing tenant, secret-exclusion, and retention rules to handoffs.
+
+### Reference development environment
+
+The first supported proof is a representative web frontend/backend with an isolated database, migrations, dependency installation, application tests, browser tests, and an authenticated preview. Use a small fixture matching the application's normal dependencies; prove it on the pinned AX/Linux/k3s stack in Phase 0 and deliver the complete journey in Phase 1.
+
+An environment profile declares pinned toolchain/dependency inputs, setup and test commands, service requirements, readiness/time limits, resource/network policy, permitted preview ports, and cleanup ownership. Infrastructure creates bounded services with scoped credentials; the agent does not receive host or cluster administration. Record setup failures separately from application failures. Verify migrations and browser connectivity, concurrent environment isolation, cancellation, and cleanup; do not let test fixtures depend on a developer's machine or shared production database.
+
+Worker-driven OCI image building is deferred. Platform CI still builds and signs the platform/runner release images. A project needing a Docker daemon, privileged build path, or unsupported service topology fails preflight with an explicit capability limitation until that environment is supported; the platform must not quietly grant broader privileges.
+
+### AX integration
+
+AX is the required foundation for execution environments. Product workflow, tenancy, approvals, credential grants, and engineering roles remain above it. The early spike determines how to integrate the pinned AX stack and close any gaps, rather than whether to use AX. Keep generated manifests and AX-specific types inside the integration boundary.
+
+- Map an attempt to an execution Task. Treat reusable Workspace definitions separately from the isolated writable materialization for each attempt.
+- Preserve the AX runner lifecycle expected by the pinned release, including its entrypoint and health/readiness contract. Validate custom image compatibility before rollout.
+- Distinguish sandbox readiness, harness completion, evidence collection, and task acceptance. Collect an explicit result and artifacts; readiness alone is never successful work.
+- Treat suspend/resume as potentially restarting processes. Persist application and harness session state and verify actual recovery behavior; a persistent volume alone does not preserve a live session.
+- Validate egress, resource enforcement, secret delivery, logs, cancellation, and cleanup on the intended Kubernetes distribution.
+- AX platform model configuration does not substitute for configuring the model inside each chosen harness.
+
+Run the AX spike early with one implementation attempt and one independent verification attempt. Local tests may exercise the runner contract without a cluster, but they do not constitute a second supported execution backend. Single-node dogfood and production acceptance both run on AX. Worktrees and tmux alone are not a security boundary.
+
+### Inspected AX baseline
+
+The cloned [runner contract](reference/ax/docs/runner.md), [API schema](reference/ax/pkg/apis/v1alpha1/ax.proto), and [architecture](reference/ax/DESIGN.md) establish concrete integration constraints at the inspected revision:
+
+- The controller starts `/usr/local/bin/ax-task-runner`; the runner receives `AX_TASK_YAML` and `AX_WORKSPACES_YAML`, prepares workspaces, and serves health/readiness endpoints.
+- The runner supervises the command as a child and stays alive after it exits. AX does not currently collect that command's exit status. Our result/evidence protocol must bridge that gap.
+- Suspend/resume preserves workspace files and creates a new process tree. Harness session recovery is our explicit responsibility.
+- The [runner package](reference/ax/runner/runner.go) offers an `OnCommandExit` hook. Prefer extending the existing runner/image or using this hook before considering a replacement runner; validate the minimal integration in Phase 0.
+- AX exposes a gRPC API and stores its resource state in Redis. Keep this execution state distinct from the product's PostgreSQL state and include both in recovery planning.
+- [go.mod](reference/ax/go.mod) pins Agent Substrate-related dependencies. The deployed Substrate service, guest environment, runner, and AX control plane must be tested together; matching a Go dependency alone does not prove deployment compatibility.
+- The [task environment path](reference/ax/internal/controller/reconciler.go) copies `spec.env` into runtime configuration and serializes the task into `AX_TASK_YAML`. The [Redis store](reference/ax/internal/store/redis/store.go) persists the task, and the [metadata service](reference/ax/internal/metadata/server.go) exposes task metadata. Raw secrets placed in task fields therefore spread beyond the harness process.
+- The controller's Gemini lookup can inherit a controller-wide key. Explicitly prevent unintended ambient credentials from reaching our tasks; a project's selected connection must remain authoritative.
+- Custom actor-template creation can fall back to a default template. Our integration must fail closed when the actual image/configuration differs from the authorized assignment, before credential issuance or agent work. Determine whether this requires a small pinned upstream patch.
+- Workspace setup happens before the command starts, but the inspected runner can still launch the command after setup failures while withholding readiness. Establish repository credentials before private Git materialization and prevent harness execution on incomplete or mismatched inputs. Reusing the runner does not waive our startup preconditions.
+
+These are version-specific observations. Refresh them when adopting upstream changes; neither the README nor an unchanged `v1alpha1` schema label proves behavioral compatibility.
+
+### Tracking and adopting AX changes
+
+The platform/integration owner maintains a small checked-in compatibility record from Phase 0. It records the product/connector revision, AX commit/tag and component image digests, runner image digest, Substrate/guest versions, deployment configuration, tested Kubernetes distribution/version, relevant storage versions, known gaps, and test evidence. Each execution pool reports its deployed combination, and each attempt retains that provenance.
+
+Use a current supported combination and a candidate upgrade while it is being validated. Support additional combinations only for a concrete deployment need. Unknown or incompatible pools are visible but cannot accept new work; do not infer compatibility from version numbering or silently change runtime behavior.
+
+1. **Detect:** during active development, schedule a daily check for upstream releases and new default-branch commits, plus a check before product releases. Fetch into an isolated candidate checkout and record the last reviewed commit. Reference refreshes never update deployment pins automatically.
+2. **Assess:** compare the deployed baseline with the candidate, including release notes, API/protobuf definitions, task/watch/status semantics, runner lifecycle, workspace setup, networking/credentials, storage behavior, deployment manifests, and Substrate dependency changes. Record affected product assumptions even if the change is not labeled breaking. Triage routine changes weekly and urgent security or compatibility fixes promptly.
+3. **Adapt:** prepare a focused upgrade change containing dependency pins, necessary integration/runner changes, migration instructions, revised documentation, and a tested rollback or recovery path. Keep temporary upstream workarounds small and record when they can be removed.
+4. **Validate:** run contract and end-to-end checks on a disposable AX cluster, then on staging. Include real mixed-tool execution where the change affects harness behavior. A build or schema check alone is insufficient.
+5. **Promote:** canary one execution pool before broader rollout. Drain new work and finish or safely checkpoint active attempts before upgrading that pool. Test old/new coexistence explicitly when a multi-cluster rollout needs it; do not assume resumed tasks or snapshots cross versions safely.
+
+The upgrade checks cover create/update/get/watch/reconnect/delete, workspace materialization and isolation, readiness versus command result, cancellation and process cleanup, suspend/resume, credentials and egress, artifact collection, and controller/connector restart with uncertain dispatch. Changes to defaults, status interpretation, and deletion behavior count as breaking even when the wire schema is unchanged.
+
+Include negative checks for secrets in manifests/Redis/metadata, controller credential inheritance, default-template fallback, and workspace failure followed by command launch. Repeat these checks whenever the affected AX or Substrate paths change.
+
+Before migration, back up the affected AX state, workspace data, and associated product records with a documented consistency/reconciliation procedure. Confirm whether downgrade is actually supported. If state migration prevents an image-only rollback, use the tested restore or forward-recovery procedure. Preserve attempt ownership and fencing throughout; never redispatch simply because an upgrade obscured status.
+
+AX monitoring, compatibility CI, and upgrade automation are planned deliverables below; this document update does not configure them. Keep the product schema independent enough that an upstream API change normally affects the integration and its compatibility tests, without rewriting projects, tasks, or human approval history.
+
+## 9. Git, ownership, and integration
+
+V1 supports GitHub.com and GitLab.com plus GitHub Enterprise Server and company-hosted GitLab. Validate provider-specific authentication, private repository preparation, repository events, required checks/statuses, branch protections, and PR/MR publication. Configure API/Git endpoints and private CA trust explicitly; do not hardcode public hosts or assume the two providers have identical permission and check models. Phase 0 records the supported self-hosted versions and an evidence matrix; release checks exercise both hosted and self-hosted variants.
+
+- Each independent attempt has its own writable checkout, index, configuration home, and output branch. Dependents receive accepted predecessor commits through explicit inputs.
+- Use Git and immutable artifacts to transfer work. Do not share a mutable checkout across workers or mount object storage as the working tree.
+- Coordinate conflicting work across active runs in the same repository and integration target, not just within one plan.
+- Define write claims as explicit files and directory prefixes initially. Check new files, renames, deletions, generated files, and shared configuration; expanding globs against existing files alone is insufficient.
+- Claims guide scheduling and integration. Prompt instructions are not enforcement: validate every proposed changeset against its scope before accepting it and enforce filesystem/network boundaries separately.
+- Serialize shared lockfiles/schema/config changes or assign a dedicated integration task. Claims do not eliminate semantic conflicts between disjoint files.
+- Integrate accepted task commits into a run-specific branch, resolve conflicts as tracked work, and rerun required checks on the combined revision.
+- Section evidence is tied to its input revision. Integration records what was reused and what was invalidated; a check on an earlier slice cannot stand in for final integrated verification.
+- Produce one coherent review package and one final PR/MR per change, published by the platform after final human approval. Respect CODEOWNERS, branch protections, required CI, and repository merge policy.
+
+Repository guidance such as `AGENTS.md`, existing skills, and project verification commands accompanies the input bundle. Keep harness-specific instructions thin and avoid contradictory copies of requirements.
+
+## 10. Enterprise identity, connections, and access
+
+### 10.1 Security and authority invariants
+
+| ID | Required behavior | Reason |
+|---|---|---|
+| ACCESS-01 | Distinguish human identity, agent workload identity, external account identity, and billing owner. | A user requesting work does not automatically delegate every account they can access. |
+| ACCESS-02 | Effective access is the intersection of current organization/project policy, actor permissions, connection grant, task need, and provider capability. | A profile, prompt, or repository file cannot expand authority. |
+| ACCESS-03 | The platform owns credential custody and lifecycle; the attempt receives only explicitly authorized access. | Pods/sandboxes are replaceable execution environments and execute repository-controlled code. |
+| ACCESS-04 | Never put reusable secrets in prompts, ordinary task configuration, Git URLs, build arguments, browser bundles, or ordinary logs/artifacts. | These surfaces are copied, inspected, indexed, and retained. |
+| ACCESS-05 | Re-evaluate policy for dispatch, access issuance/renewal, steering, sensitive operations, and resume. | A historical assignment cannot override revocation or changed project policy. |
+| ACCESS-06 | Raw credentials delivered to a sandbox are considered readable by code in that sandbox. | UI masking, environment variables, and file permissions do not provide use-without-disclosure against code running as the recipient. |
+| ACCESS-07 | Human approval and publication authority are held outside implementation workers. | Final human authority must be enforced by the platform and repository controls. |
+| ACCESS-08 | Token refresh, credential rotation, execution ownership, and replay protection have durable concurrency controls. | Many workers and clusters must not race on the same credential or accepted result. |
+
+A personal deployment creates one organization and one initial owner with straightforward defaults. It uses the same objects and checks as an enterprise installation.
+
+### 10.2 Connection → Grant → Binding → Access lease
+
+Replace the earlier wallet-only abstraction with these objects. A billing wallet can remain a UI label for a model connection, but cannot represent all of a worker's access.
+
+| Object | Minimum information | Lifecycle and authority |
+|---|---|---|
+| Provider registration | Provider/type, approved endpoints, OAuth client ID and secret reference where needed, issuer/audience, redirects, supported auth methods, trust configuration | Installation/organization administrator controls registration; it is separate from a user's consent or account connection. |
+| Connection | Organization, owner type/ID, provider registration, external account ID, authentication method, secret reference, billing owner where relevant, lifecycle state | May be user-owned or organization-owned with project grants. Persist stable account identity; rotating credential material does not create a different account. |
+| Secret version | Connection/reference, key ID, encryption algorithm, ciphertext, version, expiry, creation/rotation metadata | V1 uses encrypted platform database custody, read only through the credential component. Never returned by general connection-list APIs. External-store references are a later integration. |
+| Grant | Connection, grantee user/team/workload, allowed projects/resources/actions, explicit control delegation, authentication/delivery modes, optional expiration and applicable limits | Standing project-scoped authority created by an authorized owner/admin within policy; valid until expiry or revocation. A grant never exceeds the external account's capability or provider-permitted delegation. |
+| Binding | Capability name, connection/grant references, policy/config versions, resolved resource constraints and payer | Frozen on an attempt after resolution; use separate bindings for model, Git, packages, tools, cloud, and artifacts. |
+| Access lease | Attempt/workload identity, binding, issued capability, audience/resource scope, issue/expiry/revocation state, credential version, renewal owner | Temporary, auditable access; renewed only while attempt ownership and policy remain valid. Raw lease tokens are excluded from ordinary records. |
+
+Every tenant-owned object includes organization scope. A personal connection in one organization does not become available in another merely because the same person belongs to both. Sharing/reconnecting across organizations must be explicit and preserve each organization's grants and audit boundary.
+
+Record the connection owner, granting principal, initiating human, current acting workload, and billed account separately. Preserve these even when the same person fills several roles.
+
+A standing grant authorizes repeated eligible attempts without a per-attempt consent prompt. Each attempt still resolves its own binding and obtains temporary access after bootstrap; a grant is not a long-lived worker credential. Grant expiry, revocation, changed membership, or a narrower policy stops future issuance/renewal and dependent execution. Broader scope requires an explicit new or amended grant. Keep execution-lease ownership separate: holding an access lease cannot make a stale worker the current task owner.
+
+The interface boundary follows this lifecycle: the web/API creates and inspects connections/grants without returning secret material; the scheduler resolves bindings and persists their provenance; the AX connector supplies non-secret references and establishes authenticated runtime ownership; the access component issues/renews/revokes leases; adapters materialize only the approved mode and report authentication/lifecycle failures. Every layer uses the same authorization decision and connection identity rather than inventing its own account fallback.
+
+### 10.3 Admin-provided and user-provided access
+
+Administrators configure approved providers, destinations, authentication/delivery modes, and permitted uses, plus organization service accounts, Git installations, API accounts, package registries, and cloud roles. Users self-connect their supported coding plans, API accounts, Git accounts, and tools within that policy without separate per-account approval. A new provider, endpoint, or wider use outside policy requires an authorized policy change. Both onboarding paths produce Connections and Grants; a successful login alone does not grant project use.
+
+Project policy supports three useful configurations: company connections required, personal connections permitted alongside company connections, or a specified mixture by capability. Connection selection is explicit; default preferences select from an already authorized set. A user-supplied endpoint or key cannot bypass provider, model, egress, or residency restrictions.
+
+For example, one implementer may have a user-owned coding-plan binding, an organization-owned repository-read binding, a project package-read binding, and a temporary test-database binding. The model account does not confer Git or cloud access.
+
+Keep personal coding-plan accounts tied to their individual owner; do not turn one person's subscription into a team credential pool. Other user-owned credentials may be shared only through deliberate grants where the provider and project policy support that use. Administrative control of a project does not manufacture consent for another person's external account.
+
+For example, Bob may view and comment on Alice's run when project permissions allow it. Applying instructions, restarting work, or taking terminal control requires an explicit standing delegation authorized by Alice and permitted by the provider for every affected binding. Unapplied comments do not become an indirect control channel. If delegation is unavailable, an authorized actor must explicitly reassign affected work to Bob's or a company connection in a new attempt. No grant can override a provider restriction or pool a personal plan.
+
+Connection capabilities should distinguish use, grant/delegate, inspect non-secret metadata, rotate/reconnect, revoke, and administer. No default UI action reveals stored secret values. An administrator can disable a connection without being able to export its credential.
+
+A grant to run code with a raw credential has disclosure consequences under ACCESS-06. Projects requiring strong use-without-disclosure must use a supported broker/proxy route or reject that delivery mode. Operators with control of the host or credential service remain in the trusted computing base; application RBAC is not protection from a malicious infrastructure root administrator.
+
+### 10.4 What remains on the platform and what workers receive
+
+| Capability/configuration | Platform or trusted infrastructure retains | Worker receives when authorized |
+|---|---|---|
+| Platform login/session | Local password hashes, protected TOTP state, setup/reset/recovery tokens, optional IdP configuration/client secrets, session state, signing keys, group mappings | Workload identity with an attempt-specific audience; no human login credential, MFA seed, browser cookie, or session refresh token. |
+| External OAuth integration | Client registration, callback handling, consent/account association, refresh custody where supported | Resource-scoped access token or permission to invoke an authenticated operation. |
+| Model API | Encrypted provider key/reference, endpoint, allowed models/settings, payer, quotas | Scoped model-proxy access where supported, or the selected credential through an approved isolated delivery path. |
+| Personal coding tool | Account ownership, encrypted supported auth state, expiry/refresh owner, provider concurrency constraints | Only its selected account's isolated tool configuration; no other user's home directory or token cache. |
+| Git | App private key, installation/account mapping, repository grants, webhook secret, publication authority | Repository-read access by default; commits/patches are returned as output. Any direct branch write requires separate policy and provider-enforced or mediated restrictions. |
+| MCP / external tools | Approved server registry, upstream credentials, tool/resource/action grants | Allowlisted tool descriptions and scoped invocation access or explicitly approved per-server credentials. |
+| Container image pull | Registry pull secret or workload identity at the AX/Substrate infrastructure boundary | Normally nothing; the agent does not need the credential that fetched its own image. |
+| Dependency packages | Registry account and read/publish grants | Dependency-read credential/helper for the appropriate setup phase. Package publication is separately authorized. |
+| Cloud / infrastructure | Approved accounts, roles, trust configuration, environment policy | Short-lived federated credentials where supported; otherwise an explicit tightly scoped connection with documented limits. |
+| Application tests | Environment definition, secret references, test resource lifecycle | Temporary database/service credentials and a disposable environment. Production credentials are not inherited by default. |
+| Artifacts/results | Storage account credentials, prefix/object policy, retention, evidence authority | Access to exact assigned inputs and attempt-owned outputs; never broad bucket administration or another attempt's write scope. |
+| Telemetry | Collector credentials, routing, retention, access controls | Attempt-scoped reporting access; no global log reader or monitoring administrator credential. |
+| Networking/trust | Endpoint/egress policy, private routing, certificate authorities and private signing keys | Approved endpoints and required public trust bundles. Private CA keys and cluster-admin kubeconfigs remain outside the worker. |
+| Product operations | Product database credentials, encryption/master keys, signing keys, cluster connectors' administrative credentials | None. |
+
+Configuration is not necessarily public: repository names, endpoints, prompts, and account metadata still follow project access controls. Public certificate material can be distributed as trust configuration; private keys remain protected.
+
+### 10.5 Bootstrap, issuance, and credential delivery
+
+1. **Resolve:** authenticate the initiating actor, resolve requested capabilities against current policy/grants, validate tool compatibility and connection health, and reserve applicable quotas. Persist assignment and dispatch intent atomically.
+2. **Launch:** the connector creates an AX task containing non-secret input references and configuration. Record the actual actor/image/pool against the expected assignment and execution lease.
+3. **Authenticate the runtime:** establish a workload identity tied to this exact attempt, cluster, and current execution owner. Neither a supplied attempt ID, Kubernetes namespace name, source IP, nor a prompt assertion proves identity.
+4. **Authorize bootstrap access:** issue only the access needed for input retrieval and workspace preparation after validating required isolation/egress controls. Private repository credentials must be available before AX's Git setup; model credentials need not be exposed to dependency-install scripts when a later delivery phase is possible.
+5. **Prepare and start:** materialize inputs and isolated credential/configuration paths; verify revision/hash, effective tool/account, and required startup preconditions. Stop visibly on failure. Do not run the harness against a partial workspace just because its process can start.
+6. **Operate:** report attributable events, consume only bound capabilities, renew access through the designated owner, and re-evaluate policy for privileged actions. An access-expansion request becomes a recorded policy decision, not an agent-authored environment change.
+7. **Finish/recover:** collect outputs with current ownership/fencing, revoke or let short-lived access expire as specified, clean up credential material, and retain audit metadata. Resume performs bootstrap and authorization again.
+
+The bootstrap mechanism is a Phase 0 prerequisite. Prefer an existing verifiable AX/Substrate workload identity if available. If the pinned runtime lacks one, design and test the smallest authenticated connector-to-runner exchange, with tightly bounded one-time bootstrap authority and replay protection. Do not assume ordinary Kubernetes service-account tokens or Secret mounts are available inside every Substrate sandbox. Do not replace a missing identity mechanism with a shared cluster token.
+
+| Delivery mode | Use when | Security and lifecycle properties |
+|---|---|---|
+| Brokered operation or proxy | The protocol/tool supports mediated access | Upstream secrets stay in a trusted component. Validate destination, action, resources, model, and grant for each request; the proxy must not become an arbitrary URL fetcher. |
+| Short-lived provider credential | The provider can issue suitably scoped access | The sandbox can read the credential, but its provider-enforced scope and lifetime limit exposure. Renew through the designated issuer and record revocation limits. |
+| Isolated native credential state | A supported coding tool requires direct credentials or a tool-managed cache | Deliver only the selected account, prohibit unsupported sharing, and document refresh/concurrency/snapshot behavior. May be disallowed by stricter project policy. |
+
+This policy-controlled mix is the chosen delivery contract. Prefer brokered access or suitably scoped short-lived provider credentials when the selected tool supports them. Native delivery requires an explicitly validated adapter/authentication combination and permitted organization/project policy. If raw delivery is prohibited and no supported alternative exists, preflight blocks that assignment with a visible reason; it does not weaken policy or select another tool/account.
+
+Use existing provider libraries and supported tool interfaces. A universal proxy is not assumed to work with every coding-plan login. File mounts and process environment are materialization mechanisms, not authorization models. Where raw material is unavoidable, keep it outside persisted task specifications, use a validated ephemeral location or narrowly scoped process environment, and clean it up without printing it. Do not claim a static provider key becomes short-lived merely because our local lease expires.
+
+### 10.6 Local identity, optional OIDC, and native tool authentication
+
+Platform login and external account connection are separate flows. The first establishes a human application session; the second grants access to an external resource. Neither local login/MFA credentials nor OIDC/session tokens become general agent credentials. A local-only platform may still connect external model or Git accounts under the same connection policy.
+
+**Login modes and authorization.** OIDC is optional, including an installation with no IdP configured. Organization policy permits local-only, OIDC-only, or mixed login. All modes resolve to stable human principals and the same membership, role, resource, grant, audit, and offboarding checks. Persist login method and MFA state on the application session and enforce the target organization's requirements when accessing it; a local session valid for one organization cannot bypass another organization's OIDC-only policy.
+
+Local username/password authentication uses maintained password-hashing and authentication libraries. Offer TOTP MFA and let policy require enrollment before access; protect MFA seeds in encrypted custody, apply bounded verification attempts and replay protection, and audit enrollment/removal/recovery. Passwords use one-way password hashing, never recoverable encryption or plaintext storage. Apply rate limits and non-enumerating authentication/reset errors. Local and OIDC sessions share the existing secure-cookie, CSRF, expiry, and revocation controls; authentication method does not grant an access role.
+
+When OIDC is enabled, validate a reference IdP and document issuer/subject and claim/group mappings. Link local and OIDC identities only through explicit verification of the identities being linked or an audited, authorized recovery process; matching email alone is insufficient. Membership disablement applies across linked login methods so a locally valid password cannot undo directory offboarding for that organization. Direct SAML remains deferred; a compatible identity broker can expose OIDC. Enterprise directory provisioning/deprovisioning and group synchronization remain supported capabilities, but local-only installations do not depend on them.
+
+**Provisioning and recovery without email.** A trusted installation operator securely bootstraps the first owner using a bounded single-use setup mechanism; there is no shipped default password or public first-visitor admin claim. After bootstrap, authorized admins create/invite local accounts and produce single-use, expiring setup/reset links for secure delivery without SMTP. Users set their own passwords. Bind links to the intended principal, operation, and invitation scope, store token verifiers rather than reusable token values, and exclude links from logs/telemetry. V1 has no open self-registration; creating an account does not imply organization/project access beyond the explicitly assigned membership/role.
+
+Provide an audited installation-operator recovery command for owner lockout or broken login configuration. Its time-limited authority is confined to restoring identity administration and does not export external credentials, approve deliveries, or silently restore grants. Account/password/MFA recovery invalidates affected sessions and outstanding reset tokens, records the responsible actor, and preserves identity/audit history. Changes to login mode must verify a usable authorized owner path before taking effect. Test first-owner setup, subsequent invitations, password/MFA recovery, and OIDC-disabled operation without any SMTP or IdP connection.
+
+Use maintained OAuth/OIDC components. Keep provider client secrets and callbacks in the trusted platform. Bind callback state to the initiating session, intended organization/connection, provider, and redirect; validate issuer, audience, consented scopes, PKCE/nonce as applicable, and the returned account. Do not allow a callback parameter to select another user's connection or widen its grants.
+
+Follow the guide's short-lived application access sessions and secure HttpOnly cookies, with rotating refresh sessions, server-side revocation, and CSRF/origin controls. External providers have their own token lifetimes and refresh semantics; an application JWT policy cannot change them. Browser JavaScript should invoke refresh through the server without reading refresh tokens.
+
+For every native coding-tool authentication mode, record supported login/bootstrap method, actual account/billing status, refresh ownership, ability to use a proxy, ability to isolate its configuration home, and whether its session can be resumed without persisting credentials. Unsupported combinations block preflight with a concrete reason.
+
+Coordinate refresh per connection across controller replicas and worker clusters. Persist refresh ownership and credential-version updates transactionally; a stale refresh response must not overwrite a newer token. Do not copy the same rotating refresh credential into independent writers. If the CLI must own refresh, validate independently issued sessions where supported, otherwise serialize or limit use of that connection. A refresh timeout is an uncertain outcome and must not trigger uncontrolled repeated rotation.
+
+Recognize lost consent, expired sessions, refresh reuse, provider rate limits, and provider outages distinctly. Request reconnection when needed; never substitute a different account or switch from a plan to API billing silently. Adapters must report what they can actually verify, rather than labeling an unverified authentication assumption as confirmed.
+
+### 10.7 Integration-specific boundaries
+
+**Git.** Support both GitHub and GitLab with provider-specific authentication and permissions for hosted and supported self-hosted installations. Prefer installation/service-account integration when the provider supports it, plus user connections where needed. For GitHub, the platform holds the App private key and requests narrowly scoped installation tokens. Validate GitLab's supported account/token modes independently; do not model them as GitHub App tokens. App/user/repository permissions still need product authorization checks. Keep credentials out of clone URLs, `.git/config`, command-line arguments, shell history, and error output; use supported helpers or another validated credential channel. Initial workers can commit locally and return Git objects/patches to a trusted integration component. A repository write token alone does not restrict writes to our chosen branch. Final human approval triggers the platform's authorized PR/MR publication action; merging and deploying remain separate controlled actions.
+
+**MCP and tools.** Each server has its own binding; do not forward the model credential to tool servers. Separate read operations from mutations and bind permissions to tool/resource/action. Validate server identity and approved destinations; changed tool definitions or requested scopes cannot silently inherit a previous approval. Untrusted tool output cannot authorize new calls. Standing grants may authorize development mutations, such as creating and deleting disposable test resources, without repeated human prompts. Apply explicit environment/resource/action constraints and cleanup ownership. Publication, production changes, and deployment require separate authority; a development grant never implies them.
+
+**Uncertain external mutations.** Track supported mutating operations durably with operation identity, requesting attempt/binding, authorized request identity, provider request/resource references, observed outcome, and cleanup owner. Persist intent before dispatch; a retry or replacement attempt must reconcile an existing logical operation before submitting it again. Use provider idempotency where supported, otherwise authoritative read-back/resource lookup. A timeout or lost response means outcome unknown, not failure. If completion or safe retry cannot be established, pause dependent work for an authorized human resolution and preserve the evidence; do not blindly replay the mutation.
+
+Known successful resources remain owned until cleanup completes or responsibility is explicitly transferred. Recheck authorization for retries and cleanup; cancellation/revocation does not erase the operation record or prove the external resource disappeared. Direct/native integrations must declare their observable mutation/retry limitations; do not advertise safe automatic replay when the platform cannot establish outcome. Implement this for supported integrations using existing durable state, without a general transaction/saga engine or an exactly-once claim for arbitrary external tools.
+
+**Packages, builds, and cloud.** Distinguish infrastructure image-pull access, dependency-read access, artifact upload, and package publication. Dependency scripts run code and may read credentials available during setup; stage access only when needed. Prefer provider workload federation for cloud operations when available and keep test resources in a bounded project environment. Do not grant production infrastructure administration to general implementers.
+
+**Artifacts and previews.** Scope upload/download access to specific objects or attempt prefixes with size/time limits, validate ownership and hashes, and apply retention. Treat signed URLs as credentials: keep them short-lived and out of permanent reports. Serve untrusted application previews on an isolated origin with explicit viewer authorization; do not share platform session cookies or embed platform credentials in the preview app.
+
+**Provider access and data placement.** A model connection determines both who pays and where repository/prompt data is sent. Apply provider/region/retention policy to personal accounts as well as organization accounts. Endpoint configuration, TLS trust, and egress grants are checked independently of whether a key is valid.
+
+### 10.8 Rotation, revocation, persistence, and cleanup
+
+V1 stores encrypted secret material in the platform database using the adopted guide's reviewed encryption module and `(key_id, algorithm, ciphertext)` metadata. Keep master/key-encryption keys outside the database and ordinary backups. Maintain separately protected key recovery or escrow and verify restored records can actually be decrypted; separating keys must not make recovery impossible. Use securely provisioned keys and tested rotation/restore. External secret-manager integration is deferred until a concrete deployment needs it; retain the narrow custody boundary without implementing speculative backends or custom cryptography.
+
+Rotate encryption keys with versioned reads and transactional, resumable rewrites. Retain older keys only while current records or required retained backups still need them; coordinate retirement with recovery policy. Rotate provider credentials separately from storage encryption. Never treat an old backup as proof that restored grants remain authorized. Section 11 defines restricted recovery and reauthorization when recent revocations or policy changes cannot be reconstructed; a still-valid provider token does not prove the platform grant is current.
+
+| Event | Required behavior |
+|---|---|
+| Token nearing expiry | Renew only for a live authorized attempt under current policy; record the new credential version without changing the account/payer. |
+| Connection/grant revoked, grant expired, or member disabled | Deny new issuance/renewal and dependent dispatches; invalidate broker/session access, stop affected execution, and pause dependent tasks while preserving work. Independent tasks may continue only if their own actor/grants remain authorized. No automatic transfer of a personal connection to an administrator. |
+| Lost consent, expired auth, refresh failure, or provider outage | Stop the failing access path and pause tasks that depend on it after bounded recovery attempts. Preserve outputs/checkpoints where supported; show reconnection or retry requirements. Independent authorized tasks continue; no silent account or billing fallback. |
+| Human browser disconnects | Continue already authorized unattended work; browser presence is not the credential lifetime. |
+| Quota/rate limit reached | Queue or block with a visible reason and bounded retry time; do not switch account or billing source. |
+| Attempt cancelled or completed | Stop access issuance, revoke issued credentials where supported, prevent further accepted output, clean up ephemeral credentials/resources, and record completion of cleanup. |
+| Suspend | Checkpoint permitted work/session data; exclude secrets where supported, end unnecessary access, and retain only explicitly protected recovery state. |
+| Resume | Revalidate actor/grants/account/pool, obtain fresh access, and restore only supported non-secret session state. Do not reuse expired credentials from a snapshot. |
+| Cluster disconnected | Local leases expire under bounded policy; centrally fence publication and reconcile termination/status before replacement. Do not equate absence of heartbeats with proof of termination. |
+| Restore from backup | Enter restricted recovery, invalidate pre-restore sessions/bootstrap/access/execution authority, and block issuance, execution, and publication pending reconciliation or reauthorization. Preserve historical records without treating them as current permission. |
+| Secret deleted | Remove active use and stored material according to retention policy while retaining non-secret audit history; account for encrypted copies in backups and snapshots. |
+
+Revocation has limits. An upstream bearer token or copied static key may remain usable until provider revocation, rotation, or expiry. Broker checks can stop mediated calls promptly, but cannot erase credentials already copied into a sandbox. Surface the delivery mode and limitation in policy; do not claim instantaneous global revocation for an unsupported provider.
+
+Credential paths must be excluded from workspace snapshots, Git, cached build layers, support bundles, and ordinary artifacts. Keep resumable conversation/session content separate from credential caches. If a tool inseparably combines them, treat that session bundle as a protected secret and either implement tested encrypted custody/re-authorization or mark resume unavailable for that mode. Secret scanning/redaction is defense in depth, not a guarantee that arbitrary agent output cannot encode a secret.
+
+The scheduler propagates an access block through actual capability and task dependencies, rather than halting the whole project by default. A process that cannot safely pause must be stopped and its supported work state preserved. Reconnection resumes only after current policy, grant, account identity, and execution ownership are revalidated. Revocation does not erase completed evidence, and preserved work is not automatically accepted. Cleanup that requires external access uses its own bounded authorized capability; otherwise record an outstanding cleanup item rather than restoring revoked authority.
+
+### 10.9 RBAC, isolation, and audit
+
+Provide organization/team/project scopes and identical RBAC for local-only, OIDC-only, and mixed organizations. Local accounts use the same authorization service, connection grants, separation of duties, and audit as federated users. Offer optional OIDC, group mapping, and SCIM or equivalent enterprise directory integration; validate local offboarding and enabled-directory deprovisioning across all linked identities. Neither OIDC nor SMTP is an installation requirement. Direct SAML is post-v1; a compatible identity broker is the initial bridge for SAML organizations.
+
+At minimum distinguish viewing work; creating/steering/cancelling runs; consuming resources; controlling a terminal; editing profiles/policy; using/granting/managing connections; approving work; publishing/merging/deploying; and administering members, clusters, quotas, audit, or retention. Privileged operations consult shared policy rather than scattered handler-specific role checks.
+
+Enforce authorization on APIs, streams, artifact downloads, previews, callbacks, and session connections. Every object lookup includes its owning scope. Cache invalidation and active-session revocation must enforce membership/grant changes without waiting for a new browser login. An engineering role such as architect confers no platform administrator rights.
+
+Enterprise policy can require a final reviewer different from the requester. A personal installation can allow the same human to request and approve. Steering code or opening a terminal can exercise the attempt's credentials; check the actor's delegation authority and audit takeover rather than treating these as harmless view operations.
+
+Kubernetes namespaces are only part of isolation. Use least-privilege service accounts, restricted workloads, network/egress policy, scoped secrets, resource quotas, and the selected AX/Substrate sandbox controls. Validate the effective workload. No worker may create arbitrary privileged workloads, administer the cluster, enumerate other connections, or directly read the product database. Stronger trust or residency boundaries may require dedicated pools/nodes/clusters.
+
+Record append-only application audit events for login-mode changes, account provisioning/linking/recovery, MFA changes, membership/role changes, registration/connection changes, grants, bindings, issuance/renewal/revocation, access denials, steering/takeover, policy changes, approvals, and publication. Include actor, initiating human, organization/project/attempt, operation/resource, connection/account reference, policy decision/version, timestamp, and correlation ID. Do not record passwords, MFA seeds/codes, setup/reset tokens, access tokens, or raw credential responses. Limit sensitive account/resource metadata to authorized viewers.
+
+Keep security audit, user-visible activity, and debugging telemetry distinct while correlating them. Export audit under configured retention; protect immutable external copies when required. Workers cannot edit authoritative audit history. Include structured denial events and operational metrics for refresh failures, stale-lease rejections, unauthorized scope requests, and cleanup lag without turning metrics labels into a secret or high-cardinality data dump.
+
+### 10.10 Usage and billing enforcement
+
+Interactive versus unattended execution does not choose the bill. Every model invocation uses its selected binding, and every attempt records observed account/model and billing provenance where verifiable.
+
+Reserve and enforce concurrency/resource budgets transactionally so simultaneous launches cannot all spend the same available capacity. Apply user/project/organization limits and provider-account concurrency/rate constraints. Existing reservations count across clusters. Release reservations only through idempotent completion or reconciled expiry.
+
+Distinguish subscription windows, provider token/request limits, compute budgets, estimated model cost, and provider-confirmed monetary usage. Providers may report late, and an issued request may finish after cancellation. State the enforcement precision and bound in-flight exposure where possible. A budget field without an enforcing component is not a hard cap.
+
+Changing account, model, or billing owner is an explicit authorized new assignment/attempt. Credential refresh or same-account key rotation alone need not create a new attempt; preserve credential-version audit history instead.
+
+## 11. Deployment and capacity
+
+| Deployment | Shape |
+|---|---|
+| Personal / small team | Initially one Linux node running k3s, bundled product control plane, PostgreSQL, artifact storage, and the pinned AX/Substrate stack with its state storage. Local accounts work without OIDC or SMTP, with the same RBAC/policy model. No high-availability claim or inherited enterprise recovery guarantee. |
+| Enterprise | Replicated product control plane, highly available durable storage, independent AX execution pools, local and/or optional federated identity under policy, quotas, audit export, and tested recovery of product and execution state. |
+| Multiple clusters | Registered AX cluster connectors, explicit compatibility status per pool, and centrally coordinated placement by capacity, region, trust, project policy, and model/provider limits. |
+
+Use one logical control plane initially. Replicas coordinate through durable state and leases. Execution clusters do not become independent authorities over the same run. Keep cluster credentials local to a restricted connector where possible and use authenticated, scoped communication to the product control plane.
+
+A central metadata/artifact store also has a residency location; scheduling a worker in a region is not by itself full data residency. Enterprises needing isolated regional data can use separate deployments until a regional control-plane design is justified.
+
+Capacity planning measures active runs, agents per run, verification bursts, repository size, log/event volume, and preview/session traffic. User count alone is insufficient. Apply fair scheduling and queue backpressure per user/team/organization so one large run cannot consume the whole installation.
+
+The first enterprise acceptance target is **100 concurrent AX workers across multiple clusters**, counting implementation and independent verification workers together. This is a total execution-concurrency target, not 100 workers of each kind, a per-node target, or proof of thousands of active developers. Phase 0 defines a representative workload mix, repository sizes, load duration, and latency/error thresholds; Phase 3 measures them and publishes hardware, provider constraints, queue delay, UI/API/event performance, recovery behavior, and storage growth. Include verification bursts, fairness, and cluster draining at the declared load. Validate the single-node profile separately at its measured supported size.
+
+Before any thousands-of-developers claim, publish evidence for that larger workload. The 100-worker target does not settle CPU/memory sizing or authorize bypassing account concurrency and provider limits.
+
+### Deployment configuration and recovery
+
+- Package the initial Linux/k3s single-node installation and enterprise/multi-cluster deployment values from the same release artifacts. Pin and validate the actual Linux, k3s, AX/Substrate, and isolation-runtime combination; avoid a separate personal-mode schema or authentication implementation.
+- Support configurable internal endpoints and CA trust for identity, Git, registries, artifacts, models, and collectors. Register execution pools with declared trust/region/capability and compatibility status.
+- Keep credential authority centralized logically. A cluster connector receives only the ability to act for its registered pools; it does not receive a copy of all organization secrets. Cache only bounded access needed for current authorized attempts.
+- Account for database, artifacts, AX Redis/state, workspace snapshots, encryption/signing keys, and external credential revocation during backup/restore. For the supported enterprise profile, demonstrate **RPO ≤15 minutes** of platform-data loss and **RTO ≤4 hours** to restore service. Restore coordinated state and required retained artifacts, re-establish credential custody, and reconcile execution ownership without resurrecting revoked access or duplicating publication. Rehearse with active/revoked grants, interrupted attempts, and missing clusters; record recovery prerequisites and measured results. The non-HA single-node profile has a separately tested backup/restore procedure and does not inherit these enterprise guarantees.
+- Detect drift between expected and deployed images, runtime configuration, policy, and compatible versions. Mark affected pools unavailable for new work until reconciled; expose the reason in administration.
+- Define readiness, queue/dispatch lag, event lag, refresh availability, connector health, lease cleanup, and artifact durability SLOs. Keep the UI functional for history/review when execution clusters are unavailable.
+- Application leases, credential expiry, retry deadlines, and refresh coordination must tolerate bounded clock skew and use trusted server/runtime time. Monitor time synchronization; an arbitrary worker timestamp cannot extend authority.
+
+### Restricted recovery and current authority
+
+The fifteen-minute RPO may lose platform revocations that an external provider cannot reconstruct. V1 therefore restores into a restricted recovery mode; it does not require a separate security-journal service or assume that restored authorization is current. A verified installation operator establishes recovery access. Normal tenant access, dispatch, credential issuance, and publication remain blocked until the applicable authority is reconciled.
+
+Establish a new recovery generation and reject pre-restore browser sessions, bootstrap credentials, access leases, and execution ownership. Reconcile registered clusters and fence/terminate obsolete execution before replacement; provider-delivered tokens still have the revocation limitations in section 10. Restore keys and data, reconcile external publication/resource state, and preserve historical evidence without replaying external actions.
+
+Use independently verifiable current membership/policy/grant evidence where available. Wherever current authority cannot be proved, the appropriate authorized administrator/connection owner must explicitly reauthorize it; restored policy rows, old audit rows, or a valid upstream token alone are insufficient. Keep unverified users, grants, and projects blocked. Restricted recovery does not convert installation-root access into personal-provider consent. Record recovery decisions and expose the remaining blocked work.
+
+The enterprise RTO exercise includes the operator and reauthorization steps needed to restore the declared usable workflow. Report time to restricted-mode startup separately from time to authorized service restoration; do not claim the target was met merely because an API process started. Record required operator availability and unresolved account/provider dependencies. Single-node installations exercise the same authority rules without inheriting the enterprise RPO/RTO guarantee.
+
+### Application and database upgrades
+
+V1 supports scheduled maintenance windows for the product application and its database, separately from AX pool upgrades. Notify users in the workspace, stop new dispatch and state-changing user actions, drain active work or preserve supported checkpoints, reconcile in-flight external operations, and back up coordinated product/artifact/credential-key state. Stop all old application writers before applying a serialized schema migration; then start the supported new version, validate data and authorization, reconcile attempts, and reopen service.
+
+Persist work and blockers across the window. A failed migration keeps the application unavailable for normal mutations; follow the tested rollback/restore or forward-repair path. Do not assume an old binary can read a migrated schema. Restoring an older snapshot invokes restricted recovery, including lease invalidation and uncertain-operation reconciliation. Publish supported version paths, prerequisites, expected downtime, and measured recovery results. Rolling application/database coexistence is deferred; AX canary/drain compatibility testing remains required for execution-pool upgrades.
+
+### Retention defaults and cleanup
+
+| Data class | Default retention | Required behavior |
+|---|---|---|
+| Diagnostic logs | 30 days from collection | Separate from conversations/evidence and security audit; keep secret material out of logs. |
+| Completed-run conversations and artifacts | 90 days from terminal completion | Includes retained inputs, results, evidence, and associated resumable state; preserve material still referenced by active work. |
+| Security audit | One year from event time | Preserve non-secret authorization, lifecycle, approval, and publication events independently of diagnostic logs. |
+
+Administrators can configure retention within deployment/organization policy; project settings cannot weaken an enforced organization minimum. Active, paused, or blocked work and its required inputs/evidence are protected from completed-run cleanup until a deliberate terminal transition. Diagnostic logging remains bounded by its own policy. Restarting completed work protects still-existing inputs but cannot restore already expired evidence.
+
+Inactivity sends reminders to the responsible person and releases idle compute as described in section 3; it does not automatically archive a run. Only an authorized resume or abandonment changes that lifecycle. Retaining a blocker does not retain a running pod, usable credential, or unbounded external test resource: clean up or suspend those resources under their bounded policy, preserving the supported work state and any outstanding cleanup record.
+
+Run cleanup as an idempotent, audited operation across database references, artifacts, logs, and snapshots. Preserve minimal authorized history and hashes under their applicable policy, and show that an artifact expired rather than presenting a broken download or claiming its evidence remains available. Expired evidence cannot approve or republish a delivery that requires it. Credential deletion/expiry and backup rotation remain separate lifecycles; these defaults do not justify retaining usable revoked credentials or promise immediate erasure from backups. Document backup expiry and deletion behavior and verify it during restoration. These are product defaults, not a legal-compliance claim.
+
+### Connectivity, deferred offline delivery, and guide alignment
+
+The supplied guide requires air-gap-first operation; the agreed product decision is **connected v1, full offline delivery later**. Record this exception and the **post-v1 FIPS profile** explicitly in the adopted guide/architecture record. Neither is a v1 release gate, and v1 must not advertise disconnected or FIPS-validated operation.
+
+V1 uses controlled egress and configurable internal endpoints/CA trust. Bundle browser assets and avoid hidden runtime dependencies on public fonts, CDNs, telemetry, license calls, or automatic update checks. External authentication/inference and other selected services are explicit approved dependencies. Produce pinned signed release artifacts and an SBOM; do not require a fully disconnected installation test for v1.
+
+Later offline delivery adds signed deployment bundles, mirrored AX/Substrate and tool images, a configured local registry and S3-compatible artifact service, internal identity/Git/package/model endpoints, and an all-egress-denied installation/upgrade/workflow test. It requires a separately supported internal model/harness profile. A profile requiring external authentication or inference is unavailable while disconnected; explain that limitation without silently substituting a model. A future FIPS profile independently validates the crypto implementation, dependencies, and deployment configuration before any claim.
+
+AX upstream monitoring runs in a connected development/maintenance environment or through an explicitly configured mirror, not as an implicit production call home. Offline installations will import reviewed signed upgrades when that delivery profile is implemented. No speculative offline service or alternate cryptographic backend is needed in v1.
+
+## 12. Delivery milestones and implementation tasks
+
+Milestones are acceptance-based. Estimate dates after the initial compatibility and credential-bootstrap spikes. A two-week prototype can validate a workflow; it is not the complete enterprise platform. Task IDs below are planning identifiers, not already-created tickets.
+
+The critical path is secure AX bootstrap and access contracts → one complete interactive mixed-tool workflow → concurrent teams and controlled recipe experiments → enterprise operational proof. Phases 0–3 establish the initial supported release: Claude Code and Codex with platform-owned delegation, GitHub/GitLab hosted/self-hosted integration, local identity with optional OIDC, encrypted platform custody, connected deployment, the Astronomer-based web workspace, and the operational targets in section 11. Include composable recipes, evidence-first Q&A, safe steering/amendments, supported native access, frozen verification/baseline policy, portable handoffs, a real web-app environment, actionable blockers, safe external-operation recovery, and maintenance-window upgrades in their owning milestones. Controlled comparisons are delivered in Phase 2, not deferred to Phase 4. Tool probes, Guild baseline evaluation, and frontend adoption can proceed alongside platform work. Build the shared chrome/components before feature pages depend on them; this is not a late styling pass. Explicitly deferred capabilities remain post-v1 even if early probes finish sooner.
+
+Ownership below names engineering responsibilities to assign, not additional platform services or mandatory staffing levels.
+
+### Phase 0 — Prove contracts and settle the foundation
+
+**Outcome:** an implementable design grounded in the actual AX and harness behavior, with credential delivery demonstrated before sensitive workloads are admitted. **Owners:** platform/integration, identity/security, and workflow engineering.
+
+- [ ] **P0-01 — Pin inputs:** record AX/Guild/Coder/Astronomer revisions and the adopted technology-guide snapshot. Select compatible Go/Node/library versions, runtime images, and Linux/k3s versions for the initial node. Record Astronomer's manifest/lockfile and the tested React/Vite/Tailwind/TanStack version set, including Table's feature API. Record supported GitHub Enterprise Server/company GitLab versions alongside hosted variants, and the reference OIDC IdP. Create the AX compatibility record.
+- [ ] **P0-02 — Define contracts:** specify product/tenant objects, assignment/result and run-handoff schemas, Connection/Grant/Binding/Access-lease records, execution ownership, frozen verification policy/baseline exceptions, and two-stage PR/MR delivery. Include recipe/version and experiment/variant provenance, main/task conversations, evidence-linked questions/answers, instruction application states, scope amendments, normalized activity, instruction bundles, and exclusive native-session control. Define actionable blockers and supported external-operation identity/unknown-outcome handling. Encode standing grants, explicit control delegation, policy-controlled delivery, affected-task pausing, and separate development/publication/production authority across UI, scheduler, connector, and adapters.
+- [ ] **P0-03 — Decide architecture boundaries:** record ADRs for AX integration, database credential custody/key recovery, shared local/OIDC authorization, guide alignment, GitHub/GitLab, possible Coder reuse, and the settled Astronomer frontend choice. Record the TanStack/router/forms/primitives override and Connect transport adaptation. Review exact component/tool/image licensing and redistribution terms, including adopted Astronomer code/assets and notices, before packaging. Record connected v1, deferred FIPS, optional OIDC with local accounts, restricted disaster recovery, scheduled application maintenance, and deferred external secret-manager support as settled choices.
+- [ ] **P0-04 — Prove bootstrap:** authenticate a specific AX/Substrate worker, reject replay/another worker, obtain scoped access, and prepare a private repository before launching the harness. Verify that incomplete input setup and unexpected runtime configuration block execution and credential delivery.
+- [ ] **P0-05 — Prove credential boundaries:** use synthetic test secrets to trace every persistence/log/metadata/snapshot path. Verify no ambient controller key or default-template fallback can supply unintended authority. Decide the smallest required runner/integration change or upstream patch.
+- [ ] **P0-06 — Build the capability matrix:** validate Claude Code/Codex model/settings/authentication, brokered/native delivery, refresh ownership/concurrency, native-delegation disabling, permission/question events, context limits/handoffs, safe-point steering, cancellation, resume, results, and usage. Verify managed/project skills, scoped `AGENTS.md` translation, approved tools/MCP/hooks, and native CLI/TUI attachment/takeover/handback separately from headless launch. Probe OpenCode/native Grok separately. Reject configurations that cannot enforce platform-controlled delegation and record all unsupported combinations/provider limits.
+- [ ] **P0-07 — Exercise AX lifecycle and environment:** run an implementer and independent verifier; collect explicit results/artifacts and test cancellation, restart, private Git, and supported suspend/resume. Probe a frontend/backend with isolated database, migrations, browser tests, and preview connectivity on Linux/k3s. Verify readiness, resources, isolation/egress, and cleanup without privileged worker access; OCI image builds are excluded.
+- [ ] **P0-08 — Baseline Guild:** map Forge/Foundry and the selected research/testing/UI-review/documentation capabilities to recipe stages, reusable prompts/validators, adapter requirements, and acceptance tests; explicitly list remaining deferred plugins. Run representative tickets, preserve requirement/prompt/evidence artifacts, and measure repeated findings, corrections, final quality, elapsed time, and usage. Include pre-existing check failures, changed verification rules, unauthorized exception attempts, and context reconstruction in the migration fixtures. Select trusted-check/handoff behavior and freeze comparable evaluation fixtures for recipe experiments.
+- [ ] **P0-09 — Specify operating tests:** define workload/mix/duration, hardware, latency/error thresholds, repository sizes, and provider budgets for 100 concurrent workers across clusters. Plan separate single-node validation, enterprise RPO ≤15 minutes/RTO ≤4 hours exercises including lost revocations and necessary reauthorization, and configurable 30-day/90-day/one-year retention with active-work exclusions. Define bounded idle shutdown/reminder policy without automatic archive, maintenance test conditions, initial trust classes, and upstream tracking ownership. Numeric targets are settled; sizing and proof remain engineering work.
+- [ ] **P0-10 — Specify frontend adoption:** inventory the section 7 source groups, destination ownership, dependency subset, relevant tests, source screenshots, and intentional adaptations. Map product navigation/routes and contained/full-width pages; define “+” creation entry points, composed configuration pages, confirmation-only modals, and the no-drawer/no-browser-popup rule. Record light/dark desktop/tablet/mobile reference states and login/table examples. Specify product-specific visual/keyboard acceptance and UI performance thresholds with P0-09. Resolve source-specific API/auth dependencies and packaging obligations before porting; no separate design-system package is needed.
+
+- [ ] **P0-11 — Prove mixed-tool interaction:** after bootstrap/authentication evidence, exercise an explicitly selected Claude architect, Codex implementer, and independently configured reviewer through portable assignments and results on AX. Probe an evidence-backed question, safe-point instruction or controlled restart, and supported exclusive native takeover/handback. Distinguish source findings, heartbeat, progress, and validated results. Record unsupported modes and integration work without pretending this probe is the complete Phase 1 workspace.
+
+**Acceptance:** a versioned design and capability matrix, reproducible AX/credential/lifecycle and mixed-tool interaction evidence, explicit gaps with remedies, and an initial threat model covering untrusted repository code, agents, collaborators, cluster connectors, and external services. The Guild capability mapping and recipe/interaction/experiment contracts identify launch scope and exact adapter limitations. The frontend adoption inventory identifies exact source/version provenance, product route/component mappings, interaction rules, reference states, and test thresholds. No production credential is entrusted to an unproven bootstrap or custody path. AX remains the required runtime; gaps become implementation work.
+
+**Engineering gate:** prove concrete supported authentication/delivery modes for Claude Code and Codex and repository access for the first workflow. Unsupported modes stay visible as unavailable. Secure AX bootstrap, supported runtime versions, and tool lifecycle behavior require evidence; connected v1 and deferred FIPS are already settled.
+
+### Phase 1 — Safe platform foundation and one complete workflow
+
+**Outcome:** two humans can manage a real change through one web workspace on a single Linux/k3s node using AX. **Owners:** platform, identity/access, workflow, and web engineering. **Depends on:** Phase 0 contracts and secure bootstrap.
+
+- [ ] **P1-01 — Build the application foundation:** composition roots, domain packages, typed Connect API/client generation, PostgreSQL/schema/migrations, durable queue/outbox, artifact storage, and pinned AX connector/runner packaging. Implement tenant-safe uniqueness, object lookup, and idempotency from the start.
+- [ ] **P1-02 — Implement identity and authorization:** stable principals, local username/password and optional/policy-required TOTP, optional OIDC, and local-only/OIDC-only/mixed organization policy. Use maintained components, shared secure sessions, membership/roles, resource authorization, and audit. Enforce login-method/MFA policy per organization and verified account linking; separate viewing/commenting from delegated control. Validate both a no-IdP deployment and the reference OIDC IdP; do not build a federation server or direct SAML path.
+- [ ] **P1-03 — Implement connections:** approved provider/destination/use policy, user self-service and admin-owned connections, encrypted database custody with separately provisioned/recoverable keys, lifecycle/health, standing project grants, and separate use/manage/delegate permissions. Wire the validated model authentication modes and GitHub/GitLab repository authentication, including configurable self-hosted endpoints and private CA trust.
+- [ ] **P1-04 — Implement bindings and access leases:** explicit capability selection, current-policy checks, policy-controlled brokered/short-lived/native delivery, bootstrap identity, refresh/revocation ownership, quota reservation, and cleanup. Demonstrate personal model plus company Git bindings. Enforce grant expiry/delegation and pause only affected work without automatic account or billing changes.
+- [ ] **P1-05 — Deliver connection UI:** My connections, Organization connections, Project access, self-service onboarding within policy, standing grant/delegation controls, consent/reconnection, effective account/billing/delivery preview, and affected-task failures. Use the shared table and “+” actions leading to routed, grouped create/configuration pages; confirmation modals handle revocation and destructive decisions. No per-attempt prompt for valid routine grants. Prevent secret values from reaching list/detail responses or frontend telemetry.
+- [ ] **P1-06 — Deliver the engineering workspace:** project definition/specification, team, live progress, attributable conversations/steering, file/diff/check views, and final review inside the adopted chrome. Compose pages from P1-13 through P1-17; use “+” entry points and full routed creation/configuration/detail pages, with dense work surfaces using the central full-width layout. Persist blockers with owner, authority, affected tasks, grouped causes, permitted responses, and reminders. Show baseline exceptions, platform checks, approval/publication, and later repository CI separately. Browser reconnect resumes from durable history.
+- [ ] **P1-07 — Implement the first recipe-backed workflow:** architect → implementer → section review → integration/architect review → human approval, with tracked corrections and run handoffs. Use a Claude architect, Codex implementer, and independently configured reviewer for the first complete proof; mixed-tool execution does not wait for Phase 2 concurrency. Execute baseline checks, freeze human-configured verification rules/explicit exceptions, protect trusted checks from candidate edits, and independently collect evidence. Preserve Forge requirements/prompts and modest explicit concurrency; agents cannot waive required checks.
+- [ ] **P1-08 — Enforce two-stage delivery:** verify required platform checks, bind approval to the integrated revision/policy/evidence, and publish the authorized PR/MR idempotently. Track authenticated repository CI as a later merge gate with revision checks and reconciliation; missing/failed results never imply readiness. Route failures to corrections and require fresh approval before publishing changed code. Keep publication, merge, and deployment authority outside implementers.
+- [ ] **P1-09 — Establish operational checks:** redacted logs/traces/metrics, resource/timeout controls, restart/reconciliation, single-node backup/restore including recovered keys, rotation, and credential expiry. Implement restricted recovery with invalidated old authority, configurable retention/cleanup protecting active work, and visible expiry. Stop idle blocked execution without archiving work; test pause/restart and credential/resource cleanup.
+- [ ] **P1-10 — Establish build and compatibility CI:** root Make targets, guide-aligned lint/security/secret scans, real-DB tests, core browser journeys, AX contract checks, scheduled upstream detection, and a disposable-cluster candidate upgrade/recovery rehearsal.
+- [ ] **P1-11 — Provision and recover local accounts:** secure single-use first-owner bootstrap, admin-created invitations/setup/reset links without SMTP, MFA enrollment/recovery, and an audited time-limited operator repair command. Revoke affected sessions/tokens after recovery, prevent default/public-claim admin access, preserve principal history, and verify login-mode changes cannot silently lock out all owners.
+- [ ] **P1-12 — Deliver the reference environment:** versioned profile for dependency setup, database readiness/migrations, application/browser tests, and authenticated preview. Provide bounded service ownership, scoped credentials, time/resource/network controls, concurrent isolation, and cancellation/cleanup. Surface unsupported image-building or privileged-service requirements before launch.
+- [ ] **P1-13 — Establish the frontend/TanStack foundation:** create the product frontend from the selected source patterns with pinned React/TypeScript/Vite and all six adopted TanStack libraries. Configure generated file routes/plugin order, code splitting, root/authenticated error boundaries, one QueryClient, typed Connect hooks, scoped query keys, cancellation, bounded retry classification, and durable-event integration. Verify production deep links, login return navigation, scope changes, and logout/cache/stream teardown. Keep Astronomer's API/domain dependencies out of the product client.
+- [ ] **P1-14 — Adopt global styles and themes:** port Tailwind 4 global tokens, typography, local font assets, borders/radii, table typography, status colors, overlay levels, and reduced-motion rules. Adapt the external pre-paint theme bootstrap and dark/light/system preferences with product-specific storage keys and authenticated preference ownership. Verify first paint, CSP/font loading, contrast/focus, account changes, and light/dark screenshots; remove page-level replacements for shared tokens.
+- [ ] **P1-15 — Adopt application chrome and layouts:** implement the 240/64 px responsive sidebar, 56 px header, product brand, organization/project selector, data-driven authorized navigation, breadcrumbs, search/command entry, theme/account/notification controls, and footer. Reuse PageShell/Header/Section spacing and central 1800 px contained/full-width rules. Verify desktop collapse, tablet/mobile navigation, skip link/focus return, long labels, route errors inside the shell, and no nested-scroll traps. The mobile menu holds navigation, never configuration.
+- [ ] **P1-16 — Adopt shared components and form conventions:** port the required buttons/cards/status/tabs/query-state/typography primitives, TanStack Form field kit, error summaries, secret editing, and confirmation shell. Establish consistent “+” creation controls and composed, routed create/edit pages with grouped sections, explanatory text, save/cancel, retained input after errors, and app-navigation unsaved-change confirmation. Exclude drawers, settings/creation modals, native browser dialogs, and popup-window flows. Verify keyboard/focus, pending/disabled states, server errors, and secret exclusion through real representative pages.
+- [ ] **P1-17 — Adopt the canonical table:** port DataTable and its controller/features/state/toolbar/pagination/virtual helpers against the pinned Table version. Implement stable IDs, client and controlled server search/sort/paging, facets, density, visibility, optional resizing, selection/authorized bulk actions, route state, scoped display preferences, and distinct query states. Verify the 20-row default, client virtualization threshold, preserved server pagination, whole-dataset search, keyboard focus, and selection reset on scope changes. Use the shared table on initial run/project/connection lists instead of page-local grids.
+- [ ] **P1-18 — Deliver consistent account screens:** adapt the split-panel login frame and mobile layout for local username/password, TOTP, enabled OIDC providers, first-owner/setup/reset/change flows, and expired/denied/recovery states. Integrate P1-02/P1-11 authority and no-SMTP behavior using shared forms and typed APIs. Use same-tab provider redirects, validate return destinations, and fail closed on unknown login policy. Verify local-only/OIDC-only/mixed visual and behavioral states, including loading/errors, without copying source email-only assumptions or adding configuration modals.
+- [ ] **P1-19 — Establish frontend regression gates:** adapt meaningful source component/form/table/theme tests; add product-backed Playwright journeys, deterministic light/dark screenshots, and automated plus manual keyboard/accessibility checks. Cover login, inbox, project/team configuration, run detail, final review, connections, and administration across representative desktop/tablet/mobile states. Test the built frontend, not only Vite development mode. Add checks for canonical component adoption and prohibited browser-dialog/drawer/configuration-modal usage where feasible, supplemented by journey review. Record accepted visual adaptations; do not automatically accept regenerated screenshots.
+
+- [ ] **P1-20 — Deliver versioned recipes and instruction bundles:** implement recipe create/clone/version/select, named engineering stages/dependencies, role/profile references, required capability slots, output/check contracts, and finite limits. Integrate the selected specialist stages and preserve mandatory gates. Resolve shared/project skills, scoped repository instructions, approved tools/hooks/MCP configuration, and provenance into immutable bundles. Build routed grouped configuration pages with “+” entry points and preflight capability/access validation; active runs cannot silently adopt edited recipes or instructions.
+- [ ] **P1-21 — Deliver evidence-first interactive Q&A:** implement architect-led main threads and linked task/agent threads; run authorized AX planning/research to gather evidence before asking focused multiple-choice/free-text questions. Persist source references, assumptions, recommendation, blocking state, answers, and decision/requirement links. Support reconnect, duplicate-answer protection, revised answers, scoped visibility, and nonblocking conversation during work. Render questions inline in the workspace rather than configuration modals.
+- [ ] **P1-22 — Deliver steering, amendments, and activity:** expose question/proposal/instruction/pause/stop actions with target/revision validation and delivery/acknowledgement/application states. Implement adapter safe points and explicit restart fallback, authorized specification amendments, affected-task pause/fencing/replanning, valid unaffected-result reuse, and evidence/approval invalidation. Persist normalized progress/waiting/evidence events and summaries; distinguish heartbeat from progress and acceptance. Test stale controls, reconnect/restart, conflicting instructions, and changed answers during implementation.
+- [ ] **P1-23 — Deliver authorized native access:** provide the dedicated browser-terminal route for validated environments and native attachment modes. Enforce connection-aware permissions/disclosure policy, exclusive session control, paused automation, audit/redaction, and bounded disconnect/revocation handling. Reconcile in-flight operations and changed files/context on handback; revalidate evidence and resume or create a replacement attempt. Unsupported attachment is explicitly unavailable, never a hidden second agent. Verify no native delegation or final-approval bypass.
+
+**Frontend task order:** IDs preserve the broader plan's existing references; they are not a command to build pages before their foundation. P0-10 and the typed API contract feed P1-13; P1-14 follows frontend setup; P1-15 and P1-16 build on those foundations; P1-17 builds on the shared primitives/data hooks. P1-18 joins the form/theme work with P1-02/P1-11. P1-05/P1-06/P1-20/21/22/23 consume the shared UI as each capability becomes available. P1-20 supplies recipe/input contracts to P1-07; P1-21/22 join the durable workflow/events and P1-23 depends on proven adapter control plus access enforcement. P1-19 starts with the first adopted component and expands with every feature; it is a gate on the phase, not a final cosmetic task.
+
+**Acceptance:** two authorized humans use the real workflow on Linux/k3s with local accounts and no OIDC/SMTP; equivalent OIDC/mixed journeys enforce the same RBAC. The reference application builds/tests/previews with isolated services. Frozen checks and explicit baseline exceptions govern correction; final approval publishes, and subsequent repository CI separately governs merge readiness. Commenting does not grant control; blocked work releases compute and retains context. Unauthorized/revoked actors cannot use connections or publish output. Restart preserves history; restore recovers data without reviving unverified authority. No credential/setup/MFA marker appears in ordinary metadata, logs, artifacts, or checkpoints.
+
+**Interactive composition acceptance:** the first complete recipe uses a Claude architect, Codex implementer, and independently configured reviewer with a targeted correction. A human receives evidence-backed Q&A, asks a question during work, applies an instruction with visible effect, and amends scope while valid unaffected work survives. Supported native takeover is exclusive and returns through reconciliation/verification. Decisions, effective skills/instructions, and evidence survive browser/controller restart; architect acceptance still precedes final human approval and controlled publication.
+
+**Frontend acceptance:** those journeys use Astronomer's adopted chrome, global styles, component system, TanStack tables/forms, and login treatment in both themes. “+” actions open composed create pages; configuration/details are routed pages; confirmations are accessible in-app modals. No drawers, browser dialogs/popups, or bare configuration forms appear. Session/scope isolation, responsive layouts, table behaviors, account modes, visual baselines, and keyboard checks pass in the production build.
+
+**Scope boundary:** core authorization, credential custody, and audit are already real. Phase 3 expands federation and proves enterprise operation; it does not introduce security for the first time.
+
+### Phase 2 — Concurrent teams, recipe experiments, and Guild improvements
+
+**Outcome:** independent tasks/projects and isolated recipe variants execute concurrently across explicitly selected tools, with controlled corrections and evidence-based human comparison. **Owners:** workflow, execution, identity/access, and web engineering. **Depends on:** the Phase 1 interactive mixed-tool workflow and access lifecycle.
+
+- [ ] **P2-01 — Migrate Guild dispatch and context:** replace lead-model lifecycle instructions with deterministic scheduling/results and portable frozen assignments/handoffs. Validate mandatory context, evidence references, bounded compaction, and cold reconstruction across tools; disable native delegation. Keep useful Guild validators, requirement coverage, evidence, and ledgers without introducing shared cross-run memory.
+- [ ] **P2-02 — Expand mixed role assignments:** extend the Phase 1 mixed-tool proof to concurrent recipe stages and selected specialists, including configurable architects and independently selected reviewers. Persist actual tool/model/settings/account per attempt and validate task overrides and recipe-version isolation.
+- [ ] **P2-03 — Isolate concurrent workers:** separate writable checkouts, indexes, configuration homes, credential paths, sessions, and cleanup ownership. Remove global active-run/tmux/home-directory assumptions. Test simultaneous runs, not only successive runs.
+- [ ] **P2-04 — Coordinate repository work:** enforce repository-wide claims, new-file/rename/shared-config handling, dependency commit handoff, integrated verification, and stale-evidence invalidation.
+- [ ] **P2-05 — Control review loops:** implement structured findings, root-cause deduplication, architect adjudication, finite budgets, no-progress detection, affected-owner corrections, and explicit blocked/halted results. Compare with Phase 0 Guild baselines.
+- [ ] **P2-06 — Make access concurrency safe:** test central refresh ownership, native-tool session constraints, concurrent quota reservations, shared connection limits, credential-version races, and revocation during fan-out. Validate every advertised concurrent auth mode.
+- [ ] **P2-07 — Handle steering and recovery:** enforce delegation before applying feedback/takeover; preserve unaffected decisions/work. Test duplicate dispatch/results, uncertain launch, interrupted upload, affected-task pausing, released compute, grouped blockers/reminders, explicit abandonment, and resume/restart from handoffs with fresh access. Independent authorized branches continue; changed account selection creates an explicit new attempt.
+- [ ] **P2-08 — Complete worker-adjacent integrations:** scoped package/MCP/test-environment/artifact access and isolated previews. Demonstrate development mutations under standing grants, resource limits, and cleanup ownership without routine prompts. Verify publication/production/deployment actions require separate authority and each capability has its own binding.
+- [ ] **P2-09 — Reconcile external mutations:** record operation intent/identity and resource/cleanup ownership before supported mutations. Implement provider-specific idempotency/read-back and explicit unknown outcomes across lost responses, retries, replacement attempts, cancellation, and revocation. Pause for authorized resolution when outcome or safe retry cannot be proved; preserve records without building a general saga system.
+- [ ] **P2-10 — Validate concurrent-work UI:** integrate paced durable events into run/task tables, progress/timelines, blockers, and review screens without per-row streams or full-page resets. Exercise changing sort/filter/page criteria during updates, canceled obsolete queries, corrected revisions, offline/reconnect, connection revocation, and organization/project switches. Keep selection, focus, user edits, and scroll position stable where valid; clear unauthorized/stale state promptly. Demonstrate bounded requests and DOM/memory growth using realistic many-task fixtures while retaining the shared components and interaction rules.
+
+- [ ] **P2-11 — Deliver controlled recipe experiments:** group isolated variant runs under a frozen specification/repository/environment/evaluation baseline with explicit recipes/accounts and experiment-wide/per-variant budgets. Reuse ordinary scheduling, authorization, quotas, cleanup, and evidence storage. Build quality-first comparison tables with linked findings/checks, interventions, time, and measured/estimated usage; expose incomplete/mismatched runs and cancellation. Human candidate selection enters normal final review with provenance and revalidation, without automatic publication or winner promotion. Test concurrent variants, changed evaluations, shared connection limits, exhausted budgets, and target-branch movement.
+
+**Acceptance:** a Claude Code/Codex team delivers one verified change using platform-scheduled workers and portable handoffs; a fresh worker preserves requirements/decisions without the previous tool's private session. Independent runs cannot interfere; discretionary loops terminate while required failures remain blocking. Concurrent use preserves token/quota/result ownership. Connection failure pauses only dependent work, and uncertain external mutations reconcile before retry. Blocked work releases compute without loss; corrections return through final human review. The shared tables/live views remain responsive and correctly scoped during concurrent updates, reconnect, and steering. At least two explicitly selected recipe variants execute against the same frozen baseline in isolation; a human compares evidence and selects a candidate, which cannot publish without normal final approval.
+
+### Phase 3 — Enterprise and multi-cluster readiness
+
+**Outcome:** supported enterprise deployments meet measured authorization, isolation, recovery, and capacity requirements. **Owners:** platform operations, identity/security, execution, and web engineering. **Depends on:** Phase 2 concurrency and lifecycle evidence.
+
+- [ ] **P3-01 — Complete enterprise identity:** prove local-only, OIDC-only, and mixed policies, MFA requirements, verified identity linking, and identical RBAC/separation of duties. Add enabled-directory SCIM or equivalent provisioning/group synchronization and revocation across all linked login methods, streams, and dependent grants. Test local administration/recovery without IdP/SMTP; document the broker route for SAML organizations.
+- [ ] **P3-02 — Complete connection administration:** project personal/company policy, approved providers/destinations/uses, standing grants/delegation, delivery restrictions, platform encryption-key rotation/recovery, grant expiry, administrative revocation, and offboarding without accidental credential reassignment. External secret-manager integration is not a v1 gate.
+- [ ] **P3-03 — Register multiple AX clusters:** authenticated restricted connectors, trust/region/resource declarations, version reporting, capacity placement, per-organization fairness, queue backpressure, draining, and disconnection reconciliation.
+- [ ] **P3-04 — Prove AX upgrade safety:** reject incompatible pools, canary upgrades, validate required current/candidate coexistence, migrate execution state safely, and exercise state-aware rollback/restore or forward recovery with live attempt history. Application/database maintenance upgrades have a separate contract in P3-10.
+- [ ] **P3-05 — Prove access boundaries:** test APIs, object queries, events, artifacts, previews, native-session takeover/handback, provider grants, and all registered execution pools. Include question/thread visibility, recipe/experiment isolation, instruction/amendment authority, shared/project skills, and terminal credential-disclosure restrictions. Verify malicious repository/tool configuration cannot widen scope, enable native delegation, or steal another attempt's bootstrap authority; revocation fences human and automated control.
+- [ ] **P3-06 — Prove operations:** HA storage/control plane, audit export, configured retention, diagnostics, and key rotation. Demonstrate RPO ≤15 minutes/RTO ≤4 hours including restricted recovery, new authority generation, required administrator/owner reauthorization, interrupted operations, and missing clusters. Inject a revocation inside the lost-data window; restore must not revive it. Report time to usable authorized service, not just startup; test cleanup exclusions and expired-content reconciliation.
+- [ ] **P3-07 — Package reproducibly:** signed release artifacts and SBOM, pinned images, and documented connected install/upgrade/uninstall and retention. Validate Linux/k3s single-node and enterprise/multi-cluster profiles, explicit egress, configurable private endpoints/CA trust, and GitHub/GitLab hosted/self-hosted support against the version matrix. Label offline delivery and FIPS as unsupported in v1; they are not release gates.
+- [ ] **P3-08 — Measure capacity:** sustain the Phase 0 workload at 100 concurrent AX implementation/verification workers in total across clusters. Publish hardware, concurrency mix, duration, queue latency, UI/API/event performance, fairness, provider limits, recovery behavior, and storage growth against defined thresholds. Include controlled experiment fan-out/budget enforcement, interactive Q&A/steering, supported native sessions, server-backed collection search/sort/paging, live invalidation/request rates, browser DOM/memory growth, and interaction response under the agreed active-user/data-volume workload. Validate the single-node profile separately; fix demonstrated bottlenecks rather than inferring capacity from node/user counts.
+- [ ] **P3-09 — Validate administrator UX:** bulk local/directory membership, login/MFA policy, account linking/recovery, grants/delegation, grouped blockers/owners/reminders, and raw-delivery restrictions. Cover cluster draining, quotas, retention/expired evidence, restricted-recovery progress, maintenance status, and audit search/export with accessible navigation at enterprise data volumes. All administration uses shared server-backed tables, “+” actions, routed grouped configuration pages, and confirmation dialogs; test partial bulk failure, permission loss, no-SMTP operation, light/dark themes, and keyboard/mobile access. Verify no drawer/settings-modal or browser-popup pattern has reappeared.
+- [ ] **P3-10 — Prove application/database upgrades:** implement documented maintenance entry, dispatch/mutation quiescence, drain/checkpoint, operation reconciliation, backup, exclusive migration, restart, and service validation. Test migration interruption, incompatible old writers, retained work, and supported rollback/restore or forward repair. Snapshot restore invokes restricted recovery; do not promise rolling product upgrades.
+
+**Acceptance:** the enterprise deployment demonstrates 100 concurrent workers and RPO ≤15 minutes/RTO ≤4 hours under documented conditions, including required recovery authorization; single-node evidence is separate. Both launch tools/Git providers pass advertised capabilities. Local/optional OIDC identity, lifecycle, RBAC, isolation, retention, and rotation pass. AX upgrades and scheduled application/database maintenance preserve work; lost revocations cannot restore authority. Administrators resolve blockers/recovery through scoped controls. Larger user-count, offline, FIPS, and rolling application-upgrade claims remain outside this evidence.
+
+**Interactive/experiment proof:** scoped conversations, safe-point steering, amendments, and native-control ownership remain correct through load, disconnection, revocation, and recovery. Recipe experiments respect shared provider/resource budgets and preserve isolated evidence; selecting a candidate never bypasses current verification or final human approval.
+
+### Phase 4 — Broader tools and evidence-based refinement
+
+**Outcome:** expand supported composition after v1 without weakening the shared contracts. **Owners:** adapters, workflow, and product engineering.
+
+- [ ] **P4-01 — Promote OpenCode and Grok:** finish the independently validated adapters and list exact supported provider/model/authentication/interaction combinations. Apply the same lifecycle, credential, evidence, isolation, and upgrade tests.
+- [ ] **P4-02 — Refine recipes from evidence:** expand the Phase 2 comparison fixtures and improve interpretation of outcomes, regressions, repeated findings, interventions, time, and observed/estimated usage. Use measured results to guide explicit human recipe revisions; controlled experiments already ship in v1. Do not introduce automatic search, routing, or winner promotion through this refinement task.
+- [ ] **P4-03 — Improve human review:** measure time to decision, completeness of evidence, correction precision, and context-switching cost; refine the workspace from actual use.
+- [ ] **P4-04 — Reduce maintenance:** remove temporary migration bridges and upstream workarounds when their replacement is proven, update compatibility documentation, and keep the guide/AX review cadence operating. Maintain the Astronomer provenance/adaptation record and review relevant source/security changes; deliberately update tested TanStack/component sets and rerun affected UI gates. Avoid blind frontend syncs that reintroduce foreign APIs, drawers/configuration modals, or divergent identity policy.
+- [ ] **P4-05 — Plan deferred capabilities when scheduled:** separately scope offline delivery/internal models, FIPS, direct SAML, external secret managers, shared project memory, tracked native subagents, worker-driven image builds, and rolling application/database upgrades with their own evidence. Dates/order are not v1 dependencies. Reassess embedded editing, cross-repository changes, hosted delivery, and automatic routing when needed; do not scaffold speculative implementations.
+
+**Acceptance:** advertised capabilities are either supported with evidence or explicitly unavailable. New tools preserve user-selected accounts and final human authority. Future product decisions do not silently enter the current implementation.
+
+### Required project artifacts
+
+Create these as their corresponding tasks are completed; this plan does not scaffold empty implementations:
+
+- Adopted technology/architecture decisions and a dependency/runtime compatibility record.
+- Astronomer source-to-product component/route inventory with pinned provenance, retained notices, explicit adaptations, interaction rules, and reviewed visual/accessibility baselines.
+- Versioned assignment, result, handoff, evidence, verification/exception policy, blocker, external-operation, and access-object contracts within their owning domains.
+- Recipe/profile/instruction-bundle provenance and Guild capability mapping; question/answer, instruction, scope-amendment, activity, experiment/variant, and native-session control contracts with their owning API/event records.
+- Frozen recipe comparison fixtures, quality criteria, retained per-variant evidence, budget/cancellation results, and candidate-selection/final-approval evidence.
+- Harness/authentication capability matrix with refresh/resume/concurrency limits and verification evidence.
+- Hosted/self-hosted GitHub/GitLab support matrix; local-only, mixed, and reference OIDC IdP evidence; explicit guide exceptions; and component/tool licensing and packaging decisions.
+- Meaningful unit/integration/browser/AX contract checks with reproducible commands and retained results.
+- Deployment, local-account setup/recovery, credential rotation/revocation, restricted backup restoration, AX upgrades, application/database maintenance, external-operation reconciliation, and native-session takeover/handback runbooks.
+- Measured Guild improvement report and capacity/SLO report before their respective product claims.
+
+## 13. Verification and success criteria
+
+Use focused automated checks for contracts and security boundaries, plus representative end-to-end runs. Run database/authorization/lease concurrency checks against real PostgreSQL and execution checks against the pinned AX stack. Retain failed attempts and relevant artifacts without storing secrets in test output. Synthetic credential markers should be used for leakage assertions.
+
+The guide's test tooling is the default, but tests must demonstrate behavior at a real boundary rather than mirror implementation details. Parallel tests require isolated tenant/database/runtime state; serialize tests that intentionally exercise one shared resource.
+
+| ID / scenario | Required evidence | First milestone |
+|---|---|---|
+| V-01 Mixed team | Different selected tools/models complete their roles in one run; actual profile/account/billing source match the assignment. | P0-06 probe; P2-02 full workflow |
+| V-02 Final human authority | Required platform checks precede approval, which queues one authorized PR/MR for the exact revision without duplicates. Later repository CI is separately revision-bound and gates merge; missing/failed checks cannot imply readiness. Code corrections repeat verification and human approval before publication. Merge/deploy retain separate authority, and workers cannot approve/publish. | P1-07/08 |
+| V-03 Correction quality | Repeated discretionary findings are adjudicated without endless redispatch; genuine requirement failures remain blocking; exhausted limits produce a report, not a pass. | P0-08 baseline; P2-05 |
+| V-04 Guild compatibility | Requirement IDs/classifications, frozen prompt hashes, and revision-pinned evidence survive export, dispatch, correction, and collection. | P0-08; P1-07; P2-01 |
+| V-05 Repository concurrency | New files, renames, shared configuration, dependency handoffs, disjoint semantic conflicts, and separate runs are handled without shared dirty state. | P2-03/04 |
+| V-06 Cross-tenant access | API/query/stream/artifact/preview/session requests cannot cross tenant or project boundaries by changing an ID; composite relationships cannot link different tenants. | P1-01/02; P3-05 |
+| V-07 Mixed connection ownership | A worker combines a personal model account with organization Git and project package access; each capability has its own grant and payer where relevant. | P1-03/04 |
+| V-08 Grant enforcement | A standing project grant authorizes successive eligible attempts without repeated consent; each attempt gets separate temporary access. View/comment alone cannot apply instructions or exercise another person's connection. Explicit owner-authorized, provider-permitted delegation enables control; expiry/revocation/scope expansion deny it. Own/company reassignment is explicit and personal plans are not pooled. | P1-02/04/05; P2-07 |
+| V-09 Bootstrap/replay | Another attempt/cluster cannot redeem or replay bootstrap authority; a self-asserted ID is rejected; only the current execution owner can obtain access. | P0-04; P1-04 |
+| V-10 AX startup | Private Git credentials exist before materialization; wrong/missing revision, failed workspace setup, missing egress policy, or unexpected template/image prevents harness work and inappropriate credential issuance. | P0-04/05/07 |
+| V-11 Secret propagation | Synthetic secrets from connection custody do not appear in task fields, AX Redis/metadata/templates, ordinary logs/traces, Git configuration, images, artifacts, or unprotected snapshots. Approved raw delivery is tested only in its intended transient location. | P0-05; P1-04/10 |
+| V-12 Ambient authentication | Unexpected provider environment/config credentials are rejected or excluded; AX controller defaults cannot override the selected connection; actual account verification is recorded where supported. | P0-05/06; P1-04 |
+| V-13 OIDC/OAuth/account binding | Optional OIDC works with reference IdP mappings; callback replay, wrong issuer/audience, wrong tenant/session, account substitution, and scope expansion fail. Test secure sessions/CSRF and directory offboarding across linked login methods. Email equality alone never links identities; local login cannot bypass an organization's OIDC-only requirement. | P1-02/03/05; P3-01 |
+| V-14 Refresh concurrency | Multiple workers/replicas cannot corrupt rotating credentials; stale writes are rejected; unsupported native refresh sharing is blocked; uncertain refresh outcomes do not cause an unbounded retry storm. | P0-06; P2-06 |
+| V-15 Revocation/access failure | Revocation, grant expiry, lost consent, and refresh/provider failures stop affected access and pause dependent work while preserving valid outputs; independent authorized branches continue. Reconnection rechecks grants/account/ownership; no silent payer fallback. Offboarding invalidates all affected authority, whereas browser disconnect alone leaves authorized jobs running. Provider revocation limitations and outstanding cleanup are visible. | P1-04/09; P2-07; P3-01/02 |
+| V-16 Pause/resume | Credentials are absent from ordinary checkpoints; supported session state resumes with fresh access; incompatible or inseparable secret state blocks resume or uses the documented protected path. | P0-06/07; P2-07 |
+| V-17 Quotas/billing | Concurrent launches atomically reserve capacity; cleanup is idempotent; rate limits never trigger silent account switching; estimates are distinguished from confirmed charges. | P1-04/09; P2-06 |
+| V-18 Failure recovery | Controller/connector restart, uncertain launch, duplicate events, partial uploads, cluster disconnection, stale owners, and cancellation preserve one accepted result and full attempt history. | P1-09; P2-07; P3-03 |
+| V-19 AX upgrades | Relevant changes are tracked; incompatible pools reject new dispatch; candidate upgrades and required version coexistence pass lifecycle/security checks; recovery preserves artifacts, ownership, and approvals. | P1-10; P3-04 |
+| V-20 Evidence integrity | Missing, stale, malformed, oversized, or mismatched results/artifacts cannot mark work accepted; valid signed/authenticated reporting still requires independent evidence checks. | P1-08; P2-04 |
+| V-21 Tools and previews | Tool output/repo instructions cannot grant access; malicious endpoint overrides are rejected; preview code cannot obtain platform cookies or another user's data; tool mutations respect task grants. | P2-08; P3-05 |
+| V-22 Restore/rotation | Recovered keys decrypt required records after rotation/restore. Inject grant/member revocation inside the lost-data window: restricted recovery invalidates old sessions/leases, fences old workers, and prevents issuance/publication until authority is proved or explicitly reauthorized. Provider token validity cannot stand in for current consent. Measure RPO ≤15 minutes/RTO ≤4 hours to usable authorized service, including operator steps, missing clusters, and external-state reconciliation; report single-node recovery separately. | P1-09/11; P3-02/06 |
+| V-23 Human usability | People define work, understand progress, reconnect accounts, steer safely, request targeted corrections, and review delivery entirely through an accessible web workspace. | P1-05/06; P3-09 |
+| V-24 Scale/operations | The defined workload sustains 100 concurrent AX implementation/verification workers in total across clusters, within declared latency/error/provider limits. Fairness, backpressure, verification bursts, draining, observability, and diagnostics remain effective. Publish workload duration/mix/hardware and separate single-node sizing; do not infer a thousand-user claim. | P0-09; P3-03/06/08 |
+| V-25 Deployment profile | Pinned signed artifacts install/upgrade on Linux/k3s and the enterprise/multi-cluster profile. Configurable private endpoints/CA trust and controlled egress work without hidden public asset/update dependencies. Offline and FIPS profiles are labeled deferred and excluded from v1 claims/gates. | P3-07 |
+| V-26 Retention | Default expiry is 30 days for logs, 90 days after completion for run conversations/artifacts, and one year for security audit. Test boundary times, configured overrides, organization restrictions, active/paused/blocked references, shared artifacts, idempotent cleanup, visible expiry, and backup/restore behavior without destroying active work or using expired evidence for new approval/publication. | P1-09; P3-06/09 |
+| V-27 Git provider coverage | GitHub.com, GitLab.com, and supported GitHub Enterprise Server/company GitLab versions pass private clone, provider authentication, event/check integration, branch protections, and exact-revision PR/MR publication. Test private CA trust, revoked repository access, wrong endpoints, and duplicate publication retries. | P0-01; P1-03/08; P3-07 |
+| V-28 Connection onboarding | Users self-connect permitted accounts without individual admin approval. Unapproved providers/destinations/uses are denied; login alone does not grant project access. Both user/admin paths create scoped records and non-secret audit evidence without leaking stored credentials. | P1-03/05; P3-02 |
+| V-29 Development actions | An explicitly granted worker creates/uses/cleans up bounded test resources unattended. Out-of-scope mutations and ungranted publication/production/deployment are denied. Test cancellation/revocation cleanup without reactivating revoked authority. | P2-08; P3-05 |
+| V-30 Delivery policy | Validate supported brokered, short-lived, and native authentication modes. A raw-delivery prohibition blocks a native-only assignment before sensitive launch. Approved native use has isolated state/refresh behavior; local lease expiry is not misrepresented as provider credential revocation. No unsupported mode, tool, or payer fallback. | P0-05/06; P1-04; P3-02/05 |
+| V-31 Local and mixed identity | Complete local-only installation/login with OIDC and SMTP absent. Test local password/TOTP enrollment, optional and required MFA, rate limiting, per-organization login-mode enforcement, verified linking, shared RBAC, and local/directory offboarding across linked methods. Local users neither gain nor lose permissions merely because of login method. | P1-02; P3-01 |
+| V-32 Account setup/recovery | First-owner bootstrap and admin-issued setup/reset links are scoped, expiring, single-use, and replay-safe; no default password, public admin claim, open signup, or secret in logs. Test no-SMTP invitation, password/MFA recovery, owner lockout, audited time-limited operator repair, session invalidation, and login-policy changes without granting provider consent or delivery approval. | P1-11; P3-01/09 |
+| V-33 Native delegation and prompts | Native agent/team creation is disabled for every advertised profile; repository config/hooks and direct native requests cannot re-enable it. Ordinary test/build processes remain usable. Permitted tool requests use standing grants; unknown authority or missing intent produces a visible owned blocker, not broad auto-approval or a hidden CLI wait. | P0-06; P1-06; P2-01 |
+| V-34 Trusted verification | Baseline checks precede implementation; only authorized humans create specific exceptions before policy freeze. Test new regressions, exception mismatch, skipped checks, changed test commands/assertions, attempted policy weakening, and bounded flaky retries. Candidate changes cannot silently replace trusted policy; exceptions remain visible and never waive mandatory security/locked requirements. | P0-08; P1-07/08; P2-05 |
+| V-35 Portable context | Different tools and a fresh replacement worker reconstruct requirements, accepted decisions, current revision, findings, and remaining work from a validated handoff. Test context limits/compaction, stale or missing references, secret exclusion, cross-tenant access, and supported native resume without requiring shared cross-run memory. | P0-06; P1-07; P2-01/02/07 |
+| V-36 External mutation recovery | Inject a lost response after successful resource creation, repeated dispatch, replacement attempts, provider read-back failure, cancellation, and revocation. Reconcile the same operation/resource before retry; unsupported outcome detection pauses for authorized resolution. Cleanup retains ownership and cannot regain revoked authority; no duplicate resource is accepted as normal recovery. | P2-08/09; P3-06 |
+| V-37 Development environment | Representative frontend/backend completes dependency setup, isolated database readiness/migrations, application/browser tests, and preview access on AX/Linux/k3s. Test parallel isolation, readiness failures, cancellation/cleanup, and explicit rejection of unsupported privileged or OCI-build requirements. No developer-machine dependency or worker cluster administration. | P0-07; P1-12; P2-08 |
+| V-38 Blocked-work lifecycle | One shared cause produces scoped actionable blockers with owner, permitted remedies, reminders, and affected-task views. Idle compute/reservations are released after termination while required work/handoffs remain. Reconnect/restart resumes safely; inactivity alone cannot archive/delete; authorized abandonment cleans up and begins completed-run retention. | P1-06/09; P2-07; P3-09 |
+| V-39 Application/database maintenance | A scheduled window drains/checkpoints work, reconciles external operations, stops old writers, backs up, migrates exclusively, and validates service before reopening. Inject migration failure and restart; exercise documented rollback/restore or forward repair without duplicated actions, lost work, or stale authority. Snapshot restore uses restricted recovery; rolling application compatibility is not implied. | P3-10 |
+| V-40 Frontend routing and data authority | The pinned TanStack stack builds and generated routes work through direct URLs, refresh, back/forward, and safe login return in production. Protected children/streams await valid server authority. Cancel old requests and clear protected caches/subscriptions on logout, access loss, and organization/project changes; no cross-scope data flash or mutation auto-retry. | P1-13/19; P2-10 |
+| V-41 Global styles and themes | Reference typography, tokens, density, borders, status, and overlay ordering are adopted. Local fonts and external theme bootstrap work under CSP without a theme flash. Test dark/light/system, reduced motion, contrast/focus, storage failure, authenticated preference ownership, and account changes in reviewed visual baselines. | P0-10; P1-14/19 |
+| V-42 Chrome and interaction rules | Verify reference desktop geometry, collapsed navigation, breadcrumbs, scope switching, central content widths, responsive in-page mobile navigation, skip link, and route-error containment. “+” actions/empty-state actions reach composed create pages; details/configuration are stable routes with grouped sections and save/cancel. No bare configuration forms, drawers, configuration modals, native browser dialogs, or popup windows. Confirmations identify target/consequence and manage keyboard focus without nested dialogs. | P1-15/16/19; P3-09 |
+| V-43 Canonical tables | Exercise client/server/virtual modes, 20-row default, client auto-virtualization, retained server pagination, whole-dataset search/sort/facets, stable row identity, selection permissions, partial bulk failures, density/visibility/resizing, and scoped preferences. Verify empty/no-match/loading/refresh/error/forbidden states, route history, keyboard/ARIA behavior, and no selection/data leakage after scope changes. | P1-17/19; P2-10; P3-08/09 |
+| V-44 Account and form experience | Login/setup/reset/MFA/recovery retain the branded split panel, mobile form width, themes, and shared fields. Combine V-31/V-32 with visual/keyboard journeys: local username, permitted OIDC, no-SMTP setup, safe return, and no fallback when auth policy cannot load. Configuration pages show labels/help/grouping, preserve input on errors, distinguish secret unchanged/replace/clear, block duplicate submits, and use in-app discard confirmation only for app navigation. | P1-16/18/19; P3-01/09 |
+| V-45 Source adoption and UI regression | The inventory maps adopted source to product components, tested dependency pins, notices, and intentional deviations. Representative product surfaces use canonical page/table/form primitives and pass meaningful unit plus built-app browser checks. Review deterministic desktop/tablet/mobile light/dark screenshots, keyboard/zoom behavior, and automated accessibility results; baseline regeneration or source reuse alone cannot certify success. | P0-03/10; P1-19; P4-04 |
+| V-46 Live workspace performance | At the specified workload, paced refresh preserves cursor/reconnect correctness and keeps request rate, DOM/memory growth, and interactions within Phase 0 thresholds. Test event bursts, updates during selection/editing/search, stale responses, offline/reconnect, and immediate access loss. No per-row streams, unbounded dataset downloads, silent dropped state, or refresh-driven focus loss. Report browser workload/hardware alongside the 100-worker infrastructure result. | P0-09/10; P2-10; P3-08 |
+| V-47 Recipe composition and launch scope | Create/clone/version a recipe with supported dependencies, explicit profiles, selected specialist stages, capabilities, checks, and finite budgets. Preflight rejects unsupported assignments and removal of mandatory gates. Edits cannot change active inputs; launch is authorized through UI/API without automatic trigger/routing behavior. The Guild mapping names supported and deferred capabilities with evidence. | P0-02/08; P1-07/20; P2-02 |
+| V-48 Evidence-first Q&A | A planning/research attempt inspects authorized code/docs/artifacts/tools before asking a focused question. Verify cited evidence, scoped main/task threads, multiple-choice/free text, pending required answers, labeled optional assumptions, attributable revisions, duplicate submission, and reconnect. Human choices become traceable decisions; recommendations/preselection do not count as submitted answers and nonblocking Q&A does not stop useful work. | P0-11; P1-21; P3-05 |
+| V-49 Steering and progress semantics | Questions/proposals do not silently mutate assignments. An authorized instruction reports delivery, acknowledgement, and application distinctly, uses a supported safe point or visible restart, and cannot land on a superseded attempt. Test conflicting instructions, pause/stop acknowledgement, reconnect, stale events, and access loss. Heartbeat and model activity cannot imply substantive progress or accepted completion. | P0-06/11; P1-22; P2-07/10 |
+| V-50 Scope amendments | During active work, authorize a new specification revision, stop/fence affected execution, revise dependencies, preserve only valid unaffected results, and invalidate affected checks/approvals. Test unknown impact, stale late results, changed answers, concurrent/duplicate amendments, and restart. Old assignments/history remain intact; required policy/access cannot be weakened implicitly. | P1-22; P2-04/07 |
+| V-51 Skills and repository instructions | Resolve managed/project skills and root/nested `AGENTS.md` with correct scope, source/hash provenance, and supported harness translation. Test conflicting requirements, unsupported behavior, mid-run source changes, executable hooks/MCP grants, and malicious instructions. An instruction file cannot widen authority, enable native delegation, or silently retune the selected model/account. | P0-06; P1-20; P3-05 |
+| V-52 Native access and handback | Authorized users attach only to supported native sessions; denied users cannot obtain terminal or credential visibility through connection-use permission. Takeover excludes automated/other human control. Test active commands, disconnect/reconnect, revocation, stale control owners, changed files, uncertain operations, and handback with resume/replacement. Evidence is invalidated as needed, secrets are excluded from ordinary logs, unsupported attachment is explicit, and no terminal action substitutes for final approval. | P0-06/11; P1-23; P3-05/08 |
+| V-53 Controlled recipe experiments | Run at least two explicitly selected variants against the same frozen source/specification/environment/evaluation baseline with isolated state and finite shared/per-variant budgets. Test variant interference, input/evaluation drift, incomplete runs, differing interventions, quota races, cancellation, and estimates versus measurements. Compare quality before efficiency; selecting a candidate triggers revalidation and normal final review, never automatic publication or recipe promotion. | P0-08; P2-11; P3-08 |
+| V-54 Interactive mixed-tool delivery | On AX, a Claude architect coordinates a Codex implementer and independently configured reviewer through evidence-first Q&A, a targeted correction, an applied human instruction, and a scope amendment. Reconnect/restart preserves decisions, instruction provenance, and portable handoffs. The architect accepts the integrated result; final human approval then authorizes exact-revision publication, with repository CI tracked separately. | P0-11; P1-07/08/20/21/22; P2-01 |
+
+Security checks must include both positive permitted operations and negative denied operations so a system that simply rejects all work cannot pass. Cover direct access and indirect routes such as steering code that can use a connection, task metadata downloads, exported reports, and support bundles.
+
+Product metrics include time to human-accepted delivery, human intervention count, review turnaround, regressions, repeated findings, correction cycles after checks are clean, queue delay, question resolution and instruction-application latency, and observed/estimated resource usage. Controlled experiments compare these against frozen quality criteria with per-variant evidence and explicit measurement limitations. Operational metrics include bootstrap/refresh failure rates, authorization denials, expired/stale leases, cancellation/cleanup lag, native takeover/handback failures, experiment budget enforcement, and AX compatibility drift. Avoid user/resource identifiers as unbounded metric labels; use scoped logs/traces for investigation.
+
+Before declaring a milestone complete, record the exact product/AX/harness versions, test commands, environment, outcomes, and remaining limitations. Passing a compatibility test on one tool/auth mode does not certify another mode.
+
+## 14. Decision register, risks, and next work
+
+### Settled release choices and remaining engineering evidence
+
+The choices in section 1, the workflow/identity and recipe/interaction interviews, and the Astronomer direction are settled. This register distinguishes completed product decisions from mechanisms and measurements still requiring evidence. Local accounts with optional OIDC supersede the earlier OIDC-first assumption; Astronomer's frontend supersedes the earlier routing/form defaults. Controlled recipe comparisons move into v1, and native access is an explicit supported capability rather than only a troubleshooting fallback. Implementers must not reopen release scope, login modes, workflow authority, UI conventions, or numeric operating targets as unanswered questions; remaining work validates concrete compatible implementations within those choices.
+
+| ID | Decision or validation | Owner / deadline | Status and required follow-through |
+|---|---|---|---|
+| D-01 | First production-validated AX/Substrate/runner combination | Platform integration / Phase 0 | Start from inspected AX `v0.3.0`; AX itself is a settled dependency. Validate actual runtime behavior and maintain pins. |
+| D-02 | Workload identity/bootstrap and secure credential delivery mechanism | Identity + integration / before P1 sensitive execution | Prove identity, replay protection, private Git setup, and absence of persistent secret propagation; choose the minimal supported mechanism. |
+| D-03 | Supported auth/refresh/resume/concurrency and native behavior per harness | Adapter + identity engineering / Phase 0 and each adapter release | Prove authentication, disabling native delegation, visible permission requests, context/handoff limits, and lifecycle in the capability matrix; block unsupported configurations rather than fallback. |
+| D-04 | Disconnected deployment release scope | Product + platform / record in Phase 0 | **Resolved: connected v1; full offline later.** Record the guide exception, retain configurable internal endpoints/CA trust and controlled egress, and exclude offline claims/tests from the v1 gate. |
+| D-05 | Adopted guide/dependency versions and specific conflicting prescriptions | Engineering / Phase 0 | Pin source/version evidence; secure-cookie policy and resource-aware authorization take precedence over weaker examples. Astronomer's TanStack stack/styles/components are the explicit frontend override, retaining typed Connect transport. |
+| D-06 | Reuse and distribution of selected components/tools | Platform + product / Phase 0 | Assess Coder/native reuse against AX/workspace needs and exact licensing/packaging terms, including bundled coding tools and adopted Astronomer code/assets. Record approved distribution/install paths, provenance, and obligations; no automatic dependency on Coder. |
+| D-07 | Initial distribution and runtime/trust validation | Platform + security / Phase 0 | **Distribution resolved: k3s on Linux.** Pin and prove AX/Substrate/isolation-runtime compatibility, resource needs, and trust-class defaults; larger/multi-cluster profiles use the same product release. |
+| D-08 | Initial correction, concurrency, timeout, provider, context, and waiting limits | Workflow + platform / Phase 0 baseline, refine through dogfood | Require finite execution/retry limits and bounded idle shutdown/reminders; tune from evidence. Exhaustion is not approval, and inactivity is not permission to archive or delete work. |
+| D-09 | Operational targets and credential storage | Platform / test design in Phase 0, proof in Phase 3 | **Resolved:** 100 concurrent workers total across clusters; 30-day logs, 90-day completed-run content, one-year audit; enterprise RPO ≤15 minutes/RTO ≤4 hours; encrypted platform database with separate recoverable keys. External secret-manager integration is later. Remaining evidence covers workload mix, sizing, latency/error SLOs, retention behavior, rotation, and recovery. |
+| D-10 | FIPS release scope | Product + security / record in Phase 0; validate a future profile before claiming support | **Resolved: defer beyond v1.** Keep the crypto boundary narrow, record the guide exception, and make no FIPS claim from the default encryption or a build flag. |
+| D-11 | Launch integrations and later adapters | Adapters + identity + repository engineering / Phases 0–3 | **Resolved:** Claude Code + Codex with platform delegation; GitHub + GitLab hosted/self-hosted; local identity with optional OIDC. OpenCode/native Grok and direct SAML follow later. Validate exact versions/auth modes and the optional reference IdP; later release order is not a v1 dependency. |
+| D-12 | Local identity and account lifecycle | Identity + web / Phases 0–1, enterprise proof in Phase 3 | **Resolved:** local-only/OIDC-only/mixed by organization policy, shared RBAC, verified linking, passwords with optional/policy-required TOTP, admin provisioning without SMTP, and audited operator recovery. Select maintained components and prove the complete setup/offboarding/recovery paths. |
+| D-13 | Verification and human approval sequence | Workflow + repository / Phases 0–1 | **Resolved:** frozen human-owned rules, explicit baseline exceptions, platform checks before human approval, then PR/MR and repository merge gates. Corrections require fresh approval; validate trusted checks and provider status reconciliation. |
+| D-14 | Context and reference environment | Workflow + execution / Phases 0–2 | **Resolved:** run-scoped versioned handoffs and a frontend/backend/database/browser-test/preview proof. Shared memory and worker OCI builds are later. Prove context reconstruction and bounded service lifecycle on AX. |
+| D-15 | Uncertain external operations | Integration + workflow / contract in Phase 0, proof in Phase 2 | **Resolved:** reconcile before retry, use provider-specific idempotency/read-back, and require authorized resolution of unprovable outcomes. Validate supported action capabilities and cleanup ownership; no arbitrary exactly-once guarantee. |
+| D-16 | Restored authorization and product upgrades | Identity + operations / design in Phase 0, proof in Phases 1/3 | **Resolved:** restricted recovery with invalidated old authority and reauthorization where needed; scheduled application/database maintenance. Prove lost-revocation handling within the declared RPO/RTO exercise and migration failure recovery. |
+| D-17 | Blocked work and human attention | Workflow + web / Phases 1–3 | **Resolved:** owned/grouped actionable blockers, reminders, released idle compute, retained work, and authorized resume/abandonment. No automatic archive or SMTP dependency. Validate lifecycle and UX at the declared load. |
+| D-18 | Frontend source baseline and interaction model | Web + product / inventory in Phase 0, foundation in Phase 1, scale proof in Phase 3 | **Resolved:** reuse Astronomer's chrome, layout, CSS/themes, components, login style, and TanStack Router/Query/Table/Form/Virtual/Pacer. Use “+” creation actions, composed routed configuration/detail pages, and confirmation-only modals; no drawers, bare configuration forms, browser dialogs, or popup windows. Validate exact dependency compatibility, API/identity adaptations, mobile navigation adjustment, provenance, visual/accessibility evidence, and load behavior. |
+| D-19 | Recipe composition and Guild capability scope | Workflow + adapters / mapping/contracts in Phase 0, first delivery in Phase 1 | **Resolved:** versioned engineering stages/dependencies/profiles/skills/checks/budgets with mandatory policy and final human approval. Forge/Foundry plus research/testing/UI-review/documentation capabilities launch first; other plugins are explicitly mapped to deferred work. Prove a mixed-tool recipe in Phase 1, before broad concurrency. |
+| D-20 | Evidence-first interaction and changing work | Workflow + web / contracts in Phase 0, delivery in Phase 1 | **Resolved:** investigate then ask, architect-led main conversation with task/agent threads, durable evidence-linked answers, safe-point steering, and authorized selective scope amendments. Distinguish progress from heartbeat and instruction delivery from application; validate stale/duplicate controls and restart. |
+| D-21 | Instruction sources and native access | Adapters + identity + web / capability evidence in Phase 0, delivery in Phase 1 | **Resolved:** managed plus repository skills/instructions including scoped `AGENTS.md`, approved tools/hooks/MCP under existing grants, immutable effective bundles, and authorized dedicated-page native access with exclusive takeover/reconciled handback. Validate per-harness support and expose unsupported modes. |
+| D-22 | Experiments, evaluation, and run initiation | Workflow + product / fixtures in Phase 0, experiments in Phase 2 | **Resolved:** isolated same-input comparisons in v1, quality gates before efficiency, explicit budgets, human candidate selection followed by normal final review, and no automatic publication/promotion. UI/API launch only initially; built-in issue/webhook/schedule initiation and automatic search/routing are deferred. |
+
+### Principal risks and treatment
+
+| Risk | Design response / evidence |
+|---|---|
+| AX changes behavior without changing API labels | Pin complete combinations, inspect relevant diffs, run lifecycle/security tests, and canary upgrades. |
+| Credential broker trusts an asserted attempt ID | Make runtime bootstrap an explicit prerequisite with replay and cross-attempt tests. |
+| Raw credential delivery defeats use-without-disclosure | Declare delivery mode, permit stricter project denial, use mediation when supported, and document provider limits. |
+| Shared refresh state races across workers | One coordinated refresh owner or verified independent sessions; transactional versioning and bounded recovery. |
+| Credential leakage through AX/task/snapshot surfaces | Keep reusable secrets out of manifests, validate every custody/materialization path, and test synthetic markers at actual boundaries. |
+| Reviewer loops manufacture more work | Frozen acceptance, structured findings, deduplication, recorded architect decisions, finite budgets, and outcome comparisons. |
+| Concurrency creates conflicting accepted outputs | Isolated trees, dependency/integration checks, durable execution leases, fencing, and idempotent collection. |
+| Enterprise features are deferred until incompatible assumptions harden | Establish tenant scope, authorization, encrypted custody, audit, and revocation in Phase 1, then prove their scale in Phase 3. |
+| Guide snapshots or examples conflict with current dependencies/security needs | Pin the adopted reference, verify primary documentation during implementation, and record explicit project decisions rather than copying examples blindly. |
+| Deferred offline/FIPS work is mistaken for a v1 promise | Record the explicit guide exceptions, label unsupported profiles, retain configuration/crypto boundaries, and require separate evidence before later claims. |
+| A capacity or recovery target is mistaken for proven support | Publish workload and restore evidence for 100 workers and the enterprise RPO/RTO; measure single-node capability separately and do not extrapolate to thousands of developers. |
+| Retention cleanup destroys active evidence or restored backups revive access | Protect active references, make expiry visible, audit idempotent cleanup, and reconcile retention plus current revocations before restored service is exposed. |
+| Candidate edits weaken checks or old failures create endless corrections | Freeze trusted verification policy, identify baseline failures explicitly, require authorized exceptions, and detect changed/skipped checks and new regressions. |
+| Native delegation or context compaction bypasses the intended team | Disable untracked subagents, pin active configuration, and test portable handoffs with mandatory requirements and decision provenance. |
+| A lost response causes repeated external mutations | Persist logical operation/resource identity, reconcile outcomes, and pause unknown results rather than replaying blindly. |
+| Local login bypasses enterprise policy or directory offboarding | Enforce organization login/MFA policy and shared RBAC across stable principals and verified linked identities; test all permitted login modes. |
+| Recent revocations are absent from restored data | Invalidate old authority, restrict restored access, and require current evidence or authorized reauthorization before issuing credentials or publishing. |
+| Frontend reuse becomes a superficial theme or a second competing stack | Adopt the actual shared shell/table/form source with one router/provider/component system, a component-to-surface inventory, and visual/behavioral gates from Phase 1. |
+| Blind Astronomer updates reintroduce foreign auth or prohibited interactions | Pin source and dependencies, preserve explicit API/auth/no-drawer/configuration-page adaptations, review relevant changes, and rerun affected tests before adoption. |
+| A responsive-looking grid hides unbounded data or incorrect search | Require controlled server search/sort/paging/facets for large collections and measure browser/request behavior alongside infrastructure capacity. |
+| Interactive chat looks applied while the worker follows stale instructions | Persist targeted instruction states, acknowledge application separately from delivery, fence superseded attempts, and use safe points or explicit restart. |
+| A scope amendment silently reuses invalid evidence | Record the new specification and affected-task analysis, pause/fence affected work, validate reuse assumptions, and invalidate changed checks/approval. |
+| Recipe comparisons reward cheap failure or compare different problems | Freeze common inputs and evaluation, retain incomplete results/intervention differences, compare quality first, and require human candidate selection plus normal final review. |
+| Native takeover or repository instructions bypass platform control | Preserve scoped grants and instruction provenance, enforce one session controller, reject unsupported modes, and reconcile changes/operations before automation resumes. |
+
+### First implementation sequence
+
+1. Freeze reference/guide snapshots and the initial product/access contracts (P0-01/02); inventory Astronomer reuse and the settled interaction rules alongside that work (P0-10).
+2. Prove AX worker identity and private-repository preparation without persistent credential propagation (P0-04/05).
+3. Validate harness authentication/native-control/context behavior and an independent verifier in the representative application environment; prove mixed-tool Q&A/steering and supported native takeover (P0-06/07/11).
+4. Use Guild runs to establish trusted checks, explicit baseline exceptions, portable context, and finite workflow defaults (P0-08).
+5. Record settled choices and guide exceptions, validate reuse/distribution, and specify operating/recovery/UI tests (P0-03/09/10). Start P1-13/14, then the shared chrome/components/table and account screens (P1-15/16/17/18), so connection/workspace features use the adopted system from the start. Grow the frontend regression gate (P1-19) with each surface.
+6. Deliver the first complete recipe-backed mixed-tool change with evidence-first Q&A, steering/amendments, and supported native access (P1-07/20/21/22/23). Add isolated controlled recipe comparisons as Phase 2 concurrency becomes available (P2-11), before enterprise load/recovery proof.
+
+This sequence produces a reviewable foundation before broad implementation. The intended product remains an enterprise web workspace built on AX for explicitly composed agent teams, with durable access control and final human authority.
+
+## 15. External design references
+
+Validate behavior against pinned versions during implementation; these links are design inputs rather than promises of compatibility.
+
+- Technology Selection Guide: [architecture](https://technology-selection-guide.aws.ablabs.io/01-architecture/), [data](https://technology-selection-guide.aws.ablabs.io/02-data/), [API surface](https://technology-selection-guide.aws.ablabs.io/03-surface/), [infrastructure/tooling](https://technology-selection-guide.aws.ablabs.io/04-infra-tooling/), [observability](https://technology-selection-guide.aws.ablabs.io/05-observability/), [security](https://technology-selection-guide.aws.ablabs.io/06-security/), [testing](https://technology-selection-guide.aws.ablabs.io/07-testing/), [discipline](https://technology-selection-guide.aws.ablabs.io/08-discipline/), [air-gap](https://technology-selection-guide.aws.ablabs.io/09-airgap/), [TypeScript](https://technology-selection-guide.aws.ablabs.io/10-typescript/), and [multiple languages](https://technology-selection-guide.aws.ablabs.io/11-multi-language/).
+- [AX repository](https://github.com/google/ax), [concepts](https://github.com/google/ax/blob/main/docs/concepts.md), and [runner lifecycle](https://github.com/google/ax/blob/main/docs/runner.md).
+- [Coder architecture](https://coder.com/docs/admin/infrastructure/architecture) and [groups and roles](https://coder.com/docs/admin/users/groups-roles).
+- [Kubernetes multi-tenancy guidance](https://kubernetes.io/docs/concepts/security/multi-tenancy/).
+- [Kubernetes Secret practices](https://kubernetes.io/docs/concepts/security/secrets-good-practices/): storage encryption, least privilege, and the disclosure implications of permission to run a workload containing a secret.
+- [OAuth 2.0 Security Best Current Practice, RFC 9700](https://datatracker.ietf.org/doc/html/rfc9700): flow protection, restricted access-token authority, and refresh-token protection.
+- [GitHub App installation access tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app): repository/permission scoping and provider-defined expiry.
+- [GitHub workflow triggers](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request) and [GitLab merge request pipelines](https://docs.gitlab.com/ci/pipelines/merge_request_pipelines/): distinguish checks requiring PR/MR events from pre-publication platform verification.
