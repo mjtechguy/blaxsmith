@@ -98,9 +98,12 @@ This adds evidence for worker identity. The next
 TokenReview, exact service-account identity, and an audience-scoped token for
 bootstrap routes. Denied requests did not resume the actor; the valid request
 still passed actor proof verification. The router strips the token before
-forwarding. There is no durable, one-time pending challenge or
-owner/actor recheck at release. There is still no credential delivery or
-private checkout, so P0-04/05 remain open.
+forwarding. The [PostgreSQL challenge ledger](bootstrap-ledger.md) now stores
+only a nonce hash and consumes an owner/actor-bound proof once; a local real
+database test covers wrong scope, replay, concurrency, expiration, and owner
+or actor replacement. It is not yet connected to the scheduler or connector.
+There is still no live owner/actor/policy recheck at release, credential
+delivery, or private checkout, so P0-04/05 remain open.
 
 ## Guild adoption map
 

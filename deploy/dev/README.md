@@ -313,10 +313,11 @@ service account cannot. The dev probe uses operator-issued TokenRequest tokens;
 a product connector must use a projected audience-scoped token. No token is
 written to the report or repository.
 
-The connector still must consume a durable pending nonce once, recheck the
-current actor and execution owner, and deliver encrypted access before
-sensitive work is permitted. The synthetic Task's release signer is not a
-platform trust root.
+The [local PostgreSQL ledger](../../docs/bootstrap-ledger.md) now consumes an
+owner/actor-bound pending nonce once, but is not connected to this dev
+deployment. The connector still must recheck the current actor and execution
+owner, then deliver encrypted access before sensitive work is permitted. The
+synthetic Task's release signer is not a platform trust root.
 
 ## Original baseline task
 

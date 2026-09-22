@@ -30,9 +30,12 @@ passed release and replay checks across suspend/resume. A separate
 [actor proof](docs/actor-attestation-probe.json) now validates the current
 actor UID and guest challenge against the Substrate cluster CA. The
 [router probe](docs/bootstrap-router-auth-probe.json) also verifies HTTPS and
-an audience-scoped connector identity before bootstrap. One-time attempt
-authorization, credential delivery, and private Git checkout remain
-prerequisites for sensitive work.
+an audience-scoped connector identity before bootstrap. A
+[PostgreSQL challenge ledger](docs/bootstrap-ledger.md) now verifies and
+consumes an attempt/owner-bound proof once in local database tests. It is not
+yet wired to execution or credential release; final live authorization,
+credential delivery, and private Git checkout remain prerequisites for
+sensitive work.
 
 Recipes now accept Claude Code, Codex, and OpenCode profiles. The updated plan
 includes a recent tool-version catalog with latest stable selected for new

@@ -96,11 +96,14 @@ wrong-audience, and plaintext requests before actor resume. This is a tested
 same-cluster transport; product connector enrollment and multi-cluster
 transport are not implemented.
 
-A verifier call still does not consume the nonce or prove the current execution
-owner. Next, store an attempt/cluster/owner-bound pending nonce and consume it transactionally,
-then recheck actor UID, owner, template, image, pool, and effective policy
-before signing release. Probe another attempt, expired/replayed challenges,
-owner and actor replacement, and data/full-snapshot resume. Finally, deliver
-an encrypted single-use private Git setup payload before workspace checkout,
+The [PostgreSQL challenge ledger](bootstrap-ledger.md) now binds a pending
+nonce to cluster, attempt, owner generation, and actor UID; it verifies proof
+and consumes the nonce transactionally. Local database tests cover another
+attempt/cluster, expiry/replay, and owner/actor replacement. The scheduler and
+product connector are not yet wired to that ledger. Next, recheck the live
+actor UID, owner, template, image, pool, and effective policy immediately
+before signing release; fence replacement through payload delivery. Probe
+data/full-snapshot resume. Finally, deliver an encrypted single-use private
+Git setup payload before workspace checkout,
 show failure blocks the command, and trace snapshots/logs for raw access. No
 real accounts or private repositories are admitted until those checks pass.
