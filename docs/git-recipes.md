@@ -54,9 +54,15 @@ precede the single final architect review, which precedes the single human
 review. Human review has no agent profile or prompt. Multiple implement/review
 stages and parallel review/verification are supported by the graph.
 
-Profiles currently accept `claude-code` and `codex`, matching launch scope.
-This compiler is harness-independent; actual launch adapters are not implemented.
-OpenCode and Grok require adapter capability evidence before being admitted.
+Profiles accept `claude-code`, `codex`, and `opencode`, matching the updated launch
+scope. OpenCode requires an explicit `provider/model` identifier. The companion
+`examples/guild/recipe-opencode.json` keeps Claude planning and Codex implementation
+and selects an OpenCode reviewer. Its `example-provider/example-model` and
+`provider-default` effort are fixture values to replace with a verified selection.
+This compiler is harness-independent; actual launch adapters and the recent-version
+installation catalog are not implemented. Compilation proves input validity, not
+model availability, authentication, or runtime compatibility. Native Grok remains
+outside the initial adapter scope.
 
 Limits are explicit: 1–10 correction cycles and 1–86400 timeout seconds. These
 are initial compiler bounds, not measured workflow defaults. The graph captures

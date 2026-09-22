@@ -1,0 +1,51 @@
+{
+  "atespace": "blaxsmith-launch-1ea13ed3c2",
+  "runner_image": "127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:8d1f700ea1f6c780c2ef641c2f07f60d7b589de5d66f59da3028884014bfc705",
+  "checks": [
+    {
+      "check": "missing-gateway",
+      "result": "blocked-before-actor"
+    },
+    {
+      "check": "missing-workspace",
+      "result": "blocked-before-actor"
+    },
+    {
+      "check": "valid-command",
+      "result": "passed"
+    },
+    {
+      "check": "runner-missing",
+      "result": "command-not-started"
+    },
+    {
+      "check": "runner-directory",
+      "result": "command-not-started"
+    },
+    {
+      "check": "runner-git",
+      "result": "command-not-started"
+    },
+    {
+      "check": "runner-skills",
+      "result": "command-not-started"
+    },
+    {
+      "check": "runner-goal",
+      "result": "command-not-started"
+    },
+    {
+      "check": "resume-file-persistence",
+      "result": "passed"
+    }
+  ],
+  "empty_egress_policy": {
+    "baseline_reachable": true,
+    "destination": "dev-registry:/v2/",
+    "still_reachable": true,
+    "conclusion": "UNENFORCED"
+  },
+  "final_task_phase": "Suspended",
+  "recorded_date": "2026-09-22",
+  "controller_image": "127.0.0.1:5001/blaxsmith-ax-controller@sha256:069fbe0bfa235ad70b3de5ee748681b230a463c4e4523937d82d2555f96da97b"
+}

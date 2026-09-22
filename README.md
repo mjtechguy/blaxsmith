@@ -23,6 +23,16 @@ command and suspend/resume file-persistence test. Its [runbook](deploy/dev/READM
 records the tested setup; this is not yet the product installation or a secure
 multi-tenant worker environment.
 
+The [AX compatibility patch](integrations/ax/README.md) now blocks observed
+startup failures and passes local and live gVisor checks. The live test also found
+that an empty AX egress policy did not restrict traffic; effective network
+enforcement and authenticated bootstrap remain prerequisites for credentials.
+
+Recipes now accept Claude Code, Codex, and OpenCode profiles. The updated plan
+includes a recent tool-version catalog with latest stable selected for new
+installations and exact runtime pins afterward. The catalog UI and launch
+adapters are not implemented yet.
+
 ## Workspace layout
 
 ```text

@@ -16,7 +16,9 @@ worker. Reference sources on the node live under `/opt/blaxsmith-dev`.
   `registry.blaxsmith-build.svc:5001` in
   `manifests/ate-install/kind/atelet/kustomization.yaml`. Its build/node label is
   consequently `67253354-dirty`; the Go source is unchanged.
-- AX commit `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`, unchanged source.
+- AX commit `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`. The source checkout
+  remains clean; the deployed controller and follow-up runner include the
+  [Blaxsmith launch patch](../../integrations/ax/README.md) applied to an export.
 - The pinned Substrate tool module supplies ko 0.19.1. Images are built on the
   remote node and retained in the development registry; resolved deployment
   manifests use image digests. [Observed images](../../docs/runtime-images.json)
@@ -78,6 +80,11 @@ controller has **no cluster-wide secret listing permission**, verified with
 to `gs://ate-snapshots/blaxsmith/`; Substrate's local S3 backend resolves that
 storage prefix. Do not disable API TLS or certificate verification.
 
+That describes the original upstream deployment. After deploying the patched
+controller below, remove its namespace RoleBinding too: it no longer looks up
+provider secrets. The follow-up check confirmed it cannot get secrets even in
+`ax-system`. The AX server's separate role is unaffected.
+
 ```sh
 bash /opt/blaxsmith-dev/build-smoke-runner.sh /opt/blaxsmith-dev/ax \
   > /opt/blaxsmith-dev/runner-image.txt
@@ -86,6 +93,62 @@ bash /opt/blaxsmith-dev/build-smoke-runner.sh /opt/blaxsmith-dev/ax \
 The script builds the pinned AX runner into a pinned Alpine AMD64 image using
 crane 0.21.7. This avoids the inaccessible upstream example image and includes
 only the runner and base OS tools. It contains no coding harness or model key.
+
+## Deploy the launch patch
+
+The original smoke runner above remains a baseline comparison. Build the patched
+controller/runner using the product files, not edits to the reference checkout:
+
+```sh
+cd /opt/blaxsmith-dev/blaxsmith
+bash integrations/ax/build.sh /opt/blaxsmith-dev/ax /opt/blaxsmith-dev/ax-fail-closed-build
+bash deploy/dev/publish-ax.sh /opt/blaxsmith-dev/ax-fail-closed-build
+```
+
+Build output directories must be new; use a new name for subsequent builds. The
+publish script checks binary hashes and writes each image digest beside the
+build provenance. The test images contain Alpine and the respective binary;
+they are not tool-equipped worker images. The controller needs its explicit
+entrypoint, so patch command and image atomically:
+
+```sh
+python3 - <<'PY'
+import json, pathlib
+b = pathlib.Path('/opt/blaxsmith-dev/ax-fail-closed-build')
+p = json.loads((b / 'provenance.json').read_text())
+patch = {'spec': {'template': {
+    'metadata': {'annotations': {'blaxsmith.dev/ax-patch-sha256': p['patch_sha256']}},
+    'spec': {'containers': [{'name': 'controller',
+        'image': (b / 'ax-controller.image').read_text().strip(),
+        'command': ['/usr/local/bin/ax-controller']}]}}}}
+(b / 'controller-patch.json').write_text(json.dumps(patch))
+PY
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+kubectl -n ax-system patch deployment ax-controller --type=strategic \
+  --patch-file=/opt/blaxsmith-dev/ax-fail-closed-build/controller-patch.json
+kubectl -n ax-system rollout status deployment ax-controller --timeout=60s
+kubectl -n ax-system delete rolebinding ax-controller --ignore-not-found
+python3 deploy/dev/probe-launch.py \
+  "$(cat /opt/blaxsmith-dev/ax-fail-closed-build/ax-task-runner.image)" \
+  /opt/blaxsmith-dev/launch-probe-evidence
+```
+
+The probe uses a unique synthetic atespace and leaves its task suspended. Its
+report records missing gateway/workspace rejection before actor creation;
+failure to start the command after missing input, directory, Git, skills or
+required-goal setup failure; a successful command; and suspend/resume persistence.
+The successful run's files are at `/opt/blaxsmith-dev/launch-probe-evidence-2`
+on this node; the first invocation lacked `KUBECONFIG` for `kubectl-ate` and
+stopped before creating a runner. [The report](../../docs/launch-probe.json) and
+[build provenance](../../integrations/ax/provenance.json) are retained in Git.
+
+The egress probe separately reports **UNENFORCED**: the dev registry was reachable
+both with allow-all and with an empty actor egress policy. This is a failed
+security gate, not a passing networking test. AX's `PoliciesApplied` status proves
+only storage at this revision. Keep credentials and untrusted tasks out until
+destination enforcement and authenticated bootstrap are implemented and tested.
+
+## Original baseline task
 
 Replace `__WORKER_IMAGE__` and `__SUBSTRATE_VERSION__` in `workerpool.yaml` with
 the digest from `worker-image.txt` and the node's `ate.dev/substrate-version`

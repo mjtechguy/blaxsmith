@@ -116,8 +116,14 @@ func (r Recipe) validate() ([]string, error) {
 	}
 	for _, name := range sortedKeys(r.Profiles) {
 		p := r.Profiles[name]
-		if !identifier.MatchString(name) || (p.Harness != "claude-code" && p.Harness != "codex") || strings.TrimSpace(p.Model) == "" || strings.TrimSpace(p.Effort) == "" {
-			return nil, fmt.Errorf("profile %q requires an explicit Claude Code/Codex harness, model, and effort", name)
+		if !identifier.MatchString(name) || (p.Harness != "claude-code" && p.Harness != "codex" && p.Harness != "opencode") || strings.TrimSpace(p.Model) == "" || strings.TrimSpace(p.Effort) == "" {
+			return nil, fmt.Errorf("profile %q requires an explicit Claude Code/Codex/OpenCode harness, model, and effort", name)
+		}
+		if p.Harness == "opencode" {
+			provider, model, ok := strings.Cut(p.Model, "/")
+			if !ok || strings.TrimSpace(provider) == "" || strings.TrimSpace(model) == "" {
+				return nil, fmt.Errorf("OpenCode profile %q requires a provider/model identifier", name)
+			}
 		}
 		for _, file := range append(slices.Clone(p.Instructions), p.Skills...) {
 			if !validPath(file) {

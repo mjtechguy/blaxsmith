@@ -35,6 +35,23 @@ rules, test procedure, and limitations; [image evidence](runtime-images.json)
 records the deployed versions. This advances the AX runtime spike, not the
 secure bootstrap/lease or tool-adapter acceptance gates.
 
+The follow-up [AX patch](../integrations/ax/README.md) is deployed as a separate
+controller image and synthetic runner image. Reference checkouts are unchanged.
+It closes the launch failures listed below, removes ambient controller-key
+injection, and rechecks resumed runner readiness. The full patched AX test suite
+and vet pass on macOS and Linux (the root-workspace test runs only on Linux here).
+New regression checks fail against unmodified upstream code. The
+[live report](launch-probe.json) records blocked missing inputs, five runner
+failure cases, valid command execution, and suspend/resume file persistence.
+
+The empty-egress-policy test **failed enforcement**: traffic to the controlled
+dev-registry endpoint still succeeded after allow-all was replaced with an empty
+policy. The inspected pinned gateway authenticates actor identity but does not
+consult destination rules. Treat stored policy and effective enforcement as
+separate checks; this blocks credentials/untrusted workloads. No worker identity,
+bootstrap replay protection, credential custody/lease lifecycle, private checkout,
+or real model adapter has been implemented in this slice. P0-04/05 remain open.
+
 ## Guild adoption map
 
 | Guild capability | Platform destination | Evidence / next work |
@@ -76,9 +93,10 @@ tree. The bridge needs explicit preconditions and durable result reporting.
 must not be placed there. These are inspected behaviors, not a completed security
 test or a validated worker contract.
 
-Additional inspected blockers: AX currently falls back to the default template
+Additional inspected upstream blockers: unpatched AX falls back to the default template
 when creating a task-specific template fails, and continues after an egress
-policy application error. The connector must verify the exact installed template
+policy application error. The deployed patch removes both fallbacks. The connector
+must still verify the exact installed template
 and effective policy before releasing a lease. Substrate's pinned authentication
 guide explicitly says authorization/RBAC enforcement is not implemented; defining
 an authorization model in source does not prove tenant isolation. Keep this dev

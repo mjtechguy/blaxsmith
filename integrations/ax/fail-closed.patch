@@ -1,0 +1,802 @@
+diff --git a/internal/controller/reconciler.go b/internal/controller/reconciler.go
+index 31c399b..dc868fa 100644
+--- a/internal/controller/reconciler.go
++++ b/internal/controller/reconciler.go
+@@ -28,7 +28,6 @@ import (
+ 	"strings"
+ 	"time"
+ 
+-	"github.com/google/ax/internal/model"
+ 	"github.com/google/ax/internal/substrate"
+ 	"github.com/google/ax/pkg/apis/v1alpha1"
+ 	"google.golang.org/grpc/codes"
+@@ -38,11 +37,6 @@ import (
+ )
+ 
+ const (
+-	geminiSecretName = "gemini-api-secret"
+-	geminiSecretKey  = "GEMINI_API_KEY"
+-	// secretLookupTimeout bounds the Kubernetes secret lookup so a slow or
+-	// unreachable cluster cannot stall reconciliation.
+-	secretLookupTimeout = 2 * time.Second
+ 	// templateDigestBytes is how many bytes of the spec digest go into a
+ 	// per-task ActorTemplate name.
+ 	templateDigestBytes = 4
+@@ -52,9 +46,6 @@ const (
+ 	workspaceReadyPollInterval   = 500 * time.Millisecond
+ )
+ 
+-// SecretResolver looks up a key from a Kubernetes secret in the given namespace.
+-type SecretResolver func(ctx context.Context, namespace, secretName, key string) (string, error)
+-
+ // TaskReconciler reconciles Task resources by provisioning and orchestrating
+ // sandboxed Actors on Agent Substrate.
+ type TaskReconciler struct {
+@@ -63,10 +54,6 @@ type TaskReconciler struct {
+ 	defaultTemplate         string
+ 	defaultTemplateAtespace string
+ 
+-	// SecretResolver resolves the Gemini API key for task containers. It defaults
+-	// to the Kubernetes secret lookup; tests replace it to avoid touching a cluster.
+-	SecretResolver SecretResolver
+-
+ 	// WorkspaceReadyTimeout bounds how long Reconcile waits for the actor's workspace
+ 	// to report ready before recording it as still initializing.
+ 	WorkspaceReadyTimeout time.Duration
+@@ -85,7 +72,6 @@ func NewTaskReconciler(client *substrate.Client, defaultTemplate, defaultTemplat
+ 		httpClient:              &http.Client{Timeout: 2 * time.Second},
+ 		defaultTemplate:         defaultTemplate,
+ 		defaultTemplateAtespace: defaultTemplateAtespace,
+-		SecretResolver:          model.GetKubernetesSecret,
+ 		WorkspaceReadyTimeout:   defaultWorkspaceReadyTimeout,
+ 	}
+ }
+@@ -131,6 +117,39 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, task *v1alpha1.Task, gat
+ 		task.Status.Id = fmt.Sprintf("task-%s-%d", task.Metadata.Name, now.Unix())
+ 	}
+ 
++	// Stopping must not depend on template creation or egress policy updates.
++	if task.Spec != nil && task.Spec.Suspend {
++		slog.Info("suspending actor on Substrate", "actor", actorName)
++		if err := r.client.SuspendActor(ctx, atespace, actorName); err != nil {
++			r.setNotReady(task, "ActorSuspendFailed", err.Error(), now)
++			task.Status.Phase = "Failed"
++			return task, fmt.Errorf("suspending actor: %w", err)
++		}
++		task.Status.WorkerIp = ""
++		task.Status.Phase = "Suspended"
++		r.setCondition(task, condReady, "False", "TaskSuspended", "Task is suspended", now)
++		slog.Info("task successfully suspended", "name", task.Metadata.Name, "actor", actorName)
++		return task, nil
++	}
++
++	// Missing referenced inputs must not become empty workspaces or default egress.
++	if ref := task.Spec.GetGateway(); ref != nil && ref.Name != "" {
++		if gateway.GetMetadata().GetName() != ref.Name || gateway.GetSpec().GetEgress().GetAllowlist() == nil {
++			return r.blockExecution(ctx, task, "GatewayUnavailable", fmt.Errorf("required gateway unavailable"), now)
++		}
++	}
++	for _, ref := range task.Spec.WorkspaceRefs() {
++		found := false
++		for _, ws := range workspaces {
++			if ref.GetName() != "" && ws.GetMetadata().GetName() == ref.GetName() {
++				found = true
++			}
++		}
++		if !found {
++			return r.blockExecution(ctx, task, "WorkspaceUnavailable", fmt.Errorf("required workspace unavailable"), now)
++		}
++	}
++
+ 	// 3. Ensure Actor exists on Substrate
+ 	templateName := r.defaultTemplate
+ 	templateAtespace := r.defaultTemplateAtespace
+@@ -139,7 +158,7 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, task *v1alpha1.Task, gat
+ 		templateName = parts[1]
+ 	}
+ 
+-	// Prepare container environment variables (task env + credentials + specs)
++	// Prepare container environment variables (task env + specs; never controller credentials)
+ 	extraEnv := make(map[string]string)
+ 	if task.Spec != nil {
+ 		for _, e := range task.Spec.Env {
+@@ -149,10 +168,6 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, task *v1alpha1.Task, gat
+ 		}
+ 	}
+ 
+-	if geminiKey := r.lookupGeminiKey(ctx, atespace); geminiKey != "" {
+-		extraEnv[geminiSecretKey] = geminiKey
+-	}
+-
+ 	// Inject Task YAML specification into container environment
+ 	if taskYAML, err := yaml.Marshal(task); err == nil {
+ 		extraEnv["AX_TASK_YAML"] = string(taskYAML)
+@@ -170,8 +185,10 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, task *v1alpha1.Task, gat
+ 
+ 		tmpl, err := r.client.EnsureActorTemplateWithImage(ctx, templateAtespace, templateName, atespace, customTemplateName, task.Spec.Image, extraEnv)
+ 		if err != nil {
+-			slog.Warn("could not create custom ActorTemplate, falling back to default template", "error", err)
+-		} else if tmpl != nil && tmpl.Metadata != nil {
++			return r.blockExecution(ctx, task, "TemplateCreationFailed", err, now)
++		} else if tmpl == nil || tmpl.GetMetadata().GetAtespace() != atespace || tmpl.GetMetadata().GetName() != customTemplateName {
++			return r.blockExecution(ctx, task, "TemplateCreationFailed", fmt.Errorf("unexpected actor template identity"), now)
++		} else {
+ 			templateAtespace = tmpl.Metadata.Atespace
+ 			templateName = tmpl.Metadata.Name
+ 			slog.Info("using custom ActorTemplate for actor", "templateAtespace", templateAtespace, "templateName", templateName)
+@@ -198,27 +215,12 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, task *v1alpha1.Task, gat
+ 		}
+ 	}
+ 	if err := r.client.ApplyEgressPolicy(ctx, atespace, actorName, egressAllowlist); err != nil {
+-		slog.Warn("could not apply egress policy (continuing)", "actor", actorName, "error", err)
+ 		r.setCondition(task, condGatewayReady, "False", "PolicyApplyFailed", err.Error(), now)
++		return r.blockExecution(ctx, task, "PolicyApplyFailed", err, now)
+ 	} else {
+ 		r.setCondition(task, condGatewayReady, "True", "PoliciesApplied", "Network policies active", now)
+ 	}
+ 
+-	// 5. Suspend or Resume the Actor
+-	if task.Spec != nil && task.Spec.Suspend {
+-		slog.Info("suspending actor on Substrate", "actor", actorName)
+-		if err := r.client.SuspendActor(ctx, atespace, actorName); err != nil {
+-			r.setNotReady(task, "ActorSuspendFailed", err.Error(), now)
+-			task.Status.Phase = "Failed"
+-			return task, fmt.Errorf("suspending actor: %w", err)
+-		}
+-		task.Status.WorkerIp = ""
+-		task.Status.Phase = "Suspended"
+-		r.setCondition(task, condReady, "False", "TaskSuspended", "Task is suspended", now)
+-		slog.Info("task successfully suspended", "name", task.Metadata.Name, "actor", actorName)
+-		return task, nil
+-	}
+-
+ 	// Resume the Actor to activate container execution
+ 	slog.Info("resuming actor on Substrate worker", "actor", actorName)
+ 	_, workerIP, err := r.client.ResumeActor(ctx, atespace, actorName)
+@@ -239,9 +241,8 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, task *v1alpha1.Task, gat
+ 		port = p
+ 	}
+ 	readyURL := fmt.Sprintf("http://%s:%s/readyz?check=workspace", host, port)
+-	// Workspace setup happens once per task. After it has completed, WorkspaceReady stays
+-	// True across suspend/resume cycles, so only poll while it is still initializing.
+-	workspaceReady := r.conditionTrue(task, condWorkspaceReady)
++	// A restored marker or an old task condition is not current runner readiness.
++	workspaceReady := false
+ 	if workerIP != "" && !workspaceReady {
+ 		// Poll briefly for workspace setup completion
+ 		pollCtx, cancel := context.WithTimeout(ctx, r.WorkspaceReadyTimeout)
+@@ -326,6 +327,22 @@ const (
+ 	condGatewayReady = "GatewayReady"
+ )
+ 
++// blockExecution prevents activation and attempts to stop any prior execution.
++// Failure to stop stays visible; it is not proof of revoked provider access.
++func (r *TaskReconciler) blockExecution(ctx context.Context, task *v1alpha1.Task, reason string, cause error, now time.Time) (*v1alpha1.Task, error) {
++	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
++	defer cancel()
++	stopErr := r.client.SuspendActor(stopCtx, task.Metadata.Atespace, task.Status.Actor)
++	if stopErr == nil || status.Code(stopErr) == codes.NotFound {
++		task.Status.WorkerIp = ""
++	} else {
++		cause = errors.Join(cause, fmt.Errorf("failed to stop existing execution: %w", stopErr))
++	}
++	task.Status.Phase = "Failed"
++	r.setNotReady(task, reason, cause.Error(), now)
++	return task, cause
++}
++
+ // setNotReady marks the task's Ready condition False. WorkspaceReady is left untouched:
+ // workspace setup is a one-time step whose result outlives actor failures and suspends.
+ func (r *TaskReconciler) setNotReady(task *v1alpha1.Task, reason, message string, t time.Time) {
+@@ -365,25 +382,6 @@ func (r *TaskReconciler) setCondition(task *v1alpha1.Task, condType, status, rea
+ 	})
+ }
+ 
+-// lookupGeminiKey resolves the Gemini API key for the task container, preferring the
+-// Kubernetes secret in the task's atespace and falling back to the controller's own
+-// environment. It returns "" when neither source has a value.
+-func (r *TaskReconciler) lookupGeminiKey(ctx context.Context, atespace string) string {
+-	if r.SecretResolver != nil {
+-		lookupCtx, cancel := context.WithTimeout(ctx, secretLookupTimeout)
+-		defer cancel()
+-		if key, err := r.SecretResolver(lookupCtx, atespace, geminiSecretName, geminiSecretKey); err == nil && key != "" {
+-			slog.Info("resolved GEMINI_API_KEY from kubernetes secret for actor template", "atespace", atespace)
+-			return key
+-		}
+-	}
+-	if key := os.Getenv(geminiSecretKey); key != "" {
+-		slog.Info("resolved GEMINI_API_KEY from controller environment for actor template")
+-		return key
+-	}
+-	return ""
+-}
+-
+ // taskTemplateName derives the per-task ActorTemplate name from the task name and a
+ // digest of the image and container environment, so a spec change yields a new template.
+ func taskTemplateName(taskName, image string, env map[string]string) string {
+diff --git a/internal/controller/reconciler_test.go b/internal/controller/reconciler_test.go
+index e699ee0..f75483e 100644
+--- a/internal/controller/reconciler_test.go
++++ b/internal/controller/reconciler_test.go
+@@ -16,8 +16,10 @@ package controller_test
+ 
+ import (
+ 	"context"
++	"errors"
+ 	"net"
+ 	"net/http"
++	"strings"
+ 	"testing"
+ 	"time"
+ 
+@@ -26,7 +28,9 @@ import (
+ 	"github.com/google/ax/internal/substrate"
+ 	"github.com/google/ax/pkg/apis/v1alpha1"
+ 	"google.golang.org/grpc"
++	"google.golang.org/grpc/codes"
+ 	"google.golang.org/grpc/credentials/insecure"
++	"google.golang.org/grpc/status"
+ )
+ 
+ type mockControlServer struct {
+@@ -40,11 +44,26 @@ type mockControlServer struct {
+ 	deletedActors    []string
+ 	actorTemplates   map[string]bool
+ 	deletedTemplates []string
++	templateErr      error
++	policyErr        error
++	suspendErr       error
++	badTemplate      bool
++	createdTemplate  *ateapipb.ActorTemplate
+ }
+ 
+-// noSecrets is a SecretResolver for tests: it never finds a key and never touches a cluster.
+-func noSecrets(context.Context, string, string, string) (string, error) {
+-	return "", nil
++func (m *mockControlServer) GetActorTemplate(context.Context, *ateapipb.GetActorTemplateRequest) (*ateapipb.ActorTemplate, error) {
++	return nil, status.Error(codes.NotFound, "no template")
++}
++
++func (m *mockControlServer) CreateActorTemplate(_ context.Context, req *ateapipb.CreateActorTemplateRequest) (*ateapipb.ActorTemplate, error) {
++	if m.templateErr != nil {
++		return nil, m.templateErr
++	}
++	m.createdTemplate = req.ActorTemplate
++	if m.badTemplate {
++		return &ateapipb.ActorTemplate{}, nil
++	}
++	return req.ActorTemplate, nil
+ }
+ 
+ func (m *mockControlServer) CreateAtespace(ctx context.Context, req *ateapipb.CreateAtespaceRequest) (*ateapipb.Atespace, error) {
+@@ -101,7 +120,7 @@ func (m *mockControlServer) SuspendActor(ctx context.Context, req *ateapipb.Susp
+ 		name = req.Actor.Name
+ 	}
+ 	m.suspendedActors = append(m.suspendedActors, name)
+-	return &ateapipb.SuspendActorResponse{}, nil
++	return &ateapipb.SuspendActorResponse{}, m.suspendErr
+ }
+ 
+ func (m *mockControlServer) CreateActorEgressPolicy(ctx context.Context, req *ateapipb.CreateActorEgressPolicyRequest) (*ateapipb.EgressPolicy, error) {
+@@ -110,7 +129,7 @@ func (m *mockControlServer) CreateActorEgressPolicy(ctx context.Context, req *at
+ 		actorName = req.Actor.Name
+ 	}
+ 	m.createdPolicies = append(m.createdPolicies, actorName)
+-	return &ateapipb.EgressPolicy{}, nil
++	return &ateapipb.EgressPolicy{}, m.policyErr
+ }
+ 
+ func (m *mockControlServer) DeleteActor(ctx context.Context, req *ateapipb.DeleteActorRequest) (*ateapipb.Actor, error) {
+@@ -161,7 +180,6 @@ func TestTaskReconciler(t *testing.T) {
+ 
+ 	// 3. Reconcile Task
+ 	reconciler := controller.NewTaskReconciler(client, "test-template", "ax-system")
+-	reconciler.SecretResolver = noSecrets
+ 	reconciler.WorkspaceReadyTimeout = 200 * time.Millisecond
+ 
+ 	task := &v1alpha1.Task{
+@@ -184,6 +202,7 @@ func TestTaskReconciler(t *testing.T) {
+ 	}
+ 
+ 	gateway := &v1alpha1.Gateway{
++		Metadata: &v1alpha1.ObjectMeta{Name: "default-gateway"},
+ 		Spec: &v1alpha1.GatewaySpec{
+ 			Egress: &v1alpha1.EgressConfig{
+ 				Allowlist: &v1alpha1.EgressAllowlist{
+@@ -249,7 +268,6 @@ func TestTaskReconciler_Suspend(t *testing.T) {
+ 	defer client.Close()
+ 
+ 	reconciler := controller.NewTaskReconciler(client, "test-template", "ax-system")
+-	reconciler.SecretResolver = noSecrets
+ 	reconciler.WorkspaceReadyTimeout = 200 * time.Millisecond
+ 
+ 	task := &v1alpha1.Task{
+@@ -327,7 +345,6 @@ func TestTaskReconciler_WorkspaceReady(t *testing.T) {
+ 	defer client.Close()
+ 
+ 	reconciler := controller.NewTaskReconciler(client, "test-template", "ax-system")
+-	reconciler.SecretResolver = noSecrets
+ 	reconciler.WorkspaceReadyTimeout = 200 * time.Millisecond
+ 
+ 	task := &v1alpha1.Task{
+@@ -371,8 +388,7 @@ func TestTaskReconciler_WorkspaceReady(t *testing.T) {
+ 	assertCondition(t, reconciledSuspended, "Ready", "False", "TaskSuspended")
+ 	assertCondition(t, reconciledSuspended, "WorkspaceReady", "True", "SetupComplete")
+ 
+-	// Case 4: Resuming with the worker unreachable -> the reconciler trusts the recorded
+-	// WorkspaceReady instead of re-polling, so the task is Ready again immediately.
++	// Case 4: An old WorkspaceReady condition cannot bypass the new runner's probe.
+ 	mockSrv.workerIP = "127.0.0.1:1"
+ 	task = reconciledSuspended
+ 	task.Spec.Suspend = false
+@@ -380,8 +396,98 @@ func TestTaskReconciler_WorkspaceReady(t *testing.T) {
+ 	if err != nil {
+ 		t.Fatalf("Reconcile with resume failed: %v", err)
+ 	}
+-	assertCondition(t, reconciledResumed, "WorkspaceReady", "True", "SetupComplete")
+-	assertCondition(t, reconciledResumed, "Ready", "True", "TaskRunning")
++	assertCondition(t, reconciledResumed, "WorkspaceReady", "False", "Initializing")
++	assertCondition(t, reconciledResumed, "Ready", "False", "WorkspaceInitializing")
++}
++
++func TestBlaxsmithLaunchBoundaries(t *testing.T) {
++	for _, tc := range []struct {
++		name, reason string
++		server       mockControlServer
++		suspend      bool
++	}{
++		{name: "template failure", reason: "TemplateCreationFailed", server: mockControlServer{templateErr: status.Error(codes.PermissionDenied, "template denied")}},
++		{name: "invalid template", reason: "TemplateCreationFailed", server: mockControlServer{badTemplate: true}},
++		{name: "policy failure", reason: "PolicyApplyFailed", server: mockControlServer{policyErr: status.Error(codes.PermissionDenied, "policy denied")}},
++		{name: "stop failure", reason: "PolicyApplyFailed", server: mockControlServer{policyErr: errors.New("policy denied"), suspendErr: errors.New("stop denied")}},
++		{name: "suspend bypasses broken provisioning", suspend: true, server: mockControlServer{templateErr: errors.New("template denied"), policyErr: errors.New("policy denied")}},
++		{name: "no ambient credential"},
++		{name: "missing gateway", reason: "GatewayUnavailable"},
++		{name: "missing workspace", reason: "WorkspaceUnavailable"},
++		{name: "empty egress allowlist"},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			t.Setenv("GEMINI_API_KEY", "blaxsmith-synthetic-ambient-key")
++			lis, err := net.Listen("tcp", "127.0.0.1:0")
++			if err != nil {
++				t.Fatal(err)
++			}
++			server := grpc.NewServer()
++			ateapipb.RegisterControlServer(server, &tc.server)
++			go server.Serve(lis)
++			defer server.Stop()
++			client, err := substrate.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
++			if err != nil {
++				t.Fatal(err)
++			}
++			defer client.Close()
++			r := controller.NewTaskReconciler(client, "default-template", "ax-system")
++			r.WorkspaceReadyTimeout = time.Millisecond
++			task := &v1alpha1.Task{Metadata: &v1alpha1.ObjectMeta{Name: "boundary", Atespace: "test"}, Spec: &v1alpha1.TaskSpec{Image: "example.invalid/runner", Suspend: tc.suspend}, Status: &v1alpha1.TaskStatus{WorkerIp: "prior-worker"}}
++			var gateway *v1alpha1.Gateway
++			if tc.name == "missing gateway" {
++				task.Spec.Gateway = &v1alpha1.GatewayRef{Name: "missing"}
++			}
++			if tc.name == "missing workspace" {
++				task.Spec.Workspaces = []*v1alpha1.WorkspaceRef{{Name: "missing"}}
++			}
++			if tc.name == "empty egress allowlist" {
++				gateway = &v1alpha1.Gateway{Spec: &v1alpha1.GatewaySpec{Egress: &v1alpha1.EgressConfig{Allowlist: &v1alpha1.EgressAllowlist{}}}}
++			}
++			got, err := r.Reconcile(context.Background(), task, gateway)
++			if tc.name == "empty egress allowlist" && len(tc.server.createdPolicies) != 1 {
++				t.Fatal("empty allowlist did not install a deny policy")
++			}
++			if tc.reason != "" {
++				if err == nil || got.Status.Phase != "Failed" {
++					t.Fatalf("expected blocked execution, got %v / %v", got.Status, err)
++				}
++				assertCondition(t, got, "Ready", "False", tc.reason)
++				if len(tc.server.resumedActors) != 0 {
++					t.Fatal("resumed despite failed prerequisite")
++				}
++				if tc.reason == "TemplateCreationFailed" && len(tc.server.createdActors) != 0 {
++					t.Fatal("fell back to another template")
++				}
++				if tc.server.suspendErr != nil {
++					if !strings.Contains(err.Error(), "failed to stop existing execution") || got.Status.WorkerIp == "" {
++						t.Fatal("stop failure was hidden")
++					}
++				} else if got.Status.WorkerIp != "" {
++					t.Fatal("stale worker remained routable")
++				}
++			} else if err != nil {
++				t.Fatal(err)
++			}
++			if tc.reason != "" || tc.suspend {
++				if len(tc.server.suspendedActors) != 1 {
++					t.Fatal("did not attempt to stop execution")
++				}
++			}
++			if tc.suspend && (got.Status.Phase != "Suspended" || tc.server.createdTemplate != nil || len(tc.server.createdPolicies) != 0) {
++				t.Fatal("suspend depended on provisioning")
++			}
++			if tc.server.createdTemplate != nil {
++				for _, c := range tc.server.createdTemplate.GetContainers() {
++					for _, e := range c.GetEnv() {
++						if e.GetName() == "GEMINI_API_KEY" || strings.Contains(e.GetValue(), "blaxsmith-synthetic-ambient-key") {
++							t.Fatal("ambient controller credential entered template")
++						}
++					}
++				}
++			}
++		})
++	}
+ }
+ 
+ // assertCondition fails the test unless the task has a condition of the given type with
+@@ -428,7 +534,6 @@ func TestReconcileDelete_RemovesActorAndTemplates(t *testing.T) {
+ 	defer client.Close()
+ 
+ 	reconciler := controller.NewTaskReconciler(client, "test-template", "ax-system")
+-	reconciler.SecretResolver = noSecrets
+ 	reconciler.WorkspaceReadyTimeout = 200 * time.Millisecond
+ 
+ 	if err := reconciler.ReconcileDelete(ctx, "default", "job"); err != nil {
+diff --git a/internal/controller/worker.go b/internal/controller/worker.go
+index 398b090..5f3d1e2 100644
+--- a/internal/controller/worker.go
++++ b/internal/controller/worker.go
+@@ -137,8 +137,8 @@ func (w *Worker) processEvent(ctx context.Context, ev store.TaskEvent) error {
+ 		}
+ 	}
+ 
+-	// Resolve every bound workspace. A missing one is skipped so the task still
+-	// runs; the runner creates an empty directory at its path.
++	// Resolve every bound workspace. The reconciler rejects any missing binding
++	// before activation, including failed lookups omitted here.
+ 	var workspaces []*v1alpha1.Workspace
+ 	for _, ref := range task.Spec.WorkspaceRefs() {
+ 		if ref.Name == "" {
+diff --git a/internal/controller/worker_test.go b/internal/controller/worker_test.go
+index 91acd61..3229bf5 100644
+--- a/internal/controller/worker_test.go
++++ b/internal/controller/worker_test.go
+@@ -54,7 +54,6 @@ func TestWorkerReconciliation(t *testing.T) {
+ 	defer subClient.Close()
+ 
+ 	reconciler := controller.NewTaskReconciler(subClient, "default-template", "ax-system")
+-	reconciler.SecretResolver = noSecrets
+ 	reconciler.WorkspaceReadyTimeout = 200 * time.Millisecond
+ 
+ 	// 3. In-memory store
+@@ -137,7 +136,6 @@ func TestWorkerDeletion(t *testing.T) {
+ 	defer subClient.Close()
+ 
+ 	reconciler := controller.NewTaskReconciler(subClient, "default-template", "ax-system")
+-	reconciler.SecretResolver = noSecrets
+ 	reconciler.WorkspaceReadyTimeout = 200 * time.Millisecond
+ 
+ 	memStore := memory.NewStore()
+diff --git a/internal/substrate/client.go b/internal/substrate/client.go
+index bacb078..39d9c35 100644
+--- a/internal/substrate/client.go
++++ b/internal/substrate/client.go
+@@ -448,8 +448,8 @@ func (c *Client) DeleteActorTemplate(ctx context.Context, atespace, templateName
+ 
+ // ApplyEgressPolicy applies egress rules to the Actor from a Gateway's allowlist.
+ func (c *Client) ApplyEgressPolicy(ctx context.Context, atespace, actorName string, allowlist *v1alpha1.EgressAllowlist) error {
+-	if allowlist == nil || len(allowlist.Hosts) == 0 {
+-		return nil
++	if allowlist == nil {
++		return fmt.Errorf("egress allowlist is required")
+ 	}
+ 
+ 	var patterns []string
+diff --git a/internal/workspace/setup.go b/internal/workspace/setup.go
+index 600d2d7..a40fe0e 100644
+--- a/internal/workspace/setup.go
++++ b/internal/workspace/setup.go
+@@ -78,8 +78,8 @@ type SetupResult struct {
+ // bootstrap when a goal is provided. A marker file under AXDir records a completed
+ // maiden run so subsequent calls are no-ops.
+ //
+-// Git failures are logged and recorded under AXDir but do not abort setup. The marker
+-// is withheld in that case so the next start retries the clone.
++// Required Git, skills, bootstrap, and marker failures abort setup. No success
++// marker is written until every required step succeeds.
+ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath string, goal string) (*SetupResult, error) {
+ 	if targetPath == "" {
+ 		targetPath = defaultWorkspacePath
+@@ -95,34 +95,49 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
+ 		return nil, fmt.Errorf("creating workspace directory %s: %w", targetPath, err)
+ 	}
+ 	if err := os.MkdirAll(AXDir, dirPerm); err != nil {
+-		slog.Warn("creating ax state directory", "dir", AXDir, "error", err)
++		return nil, fmt.Errorf("creating ax state directory: %w", err)
+ 	}
+ 
+ 	markerPath := filepath.Join(AXDir, MarkerName(targetPath))
+-	if _, err := os.Stat(markerPath); err == nil {
++	if info, err := os.Lstat(markerPath); err == nil {
++		if !info.Mode().IsRegular() {
++			return nil, fmt.Errorf("workspace marker must be a regular file")
++		}
+ 		slog.Info("workspace already initialized; skipping maiden run setup", "path", targetPath)
+ 		return res, nil
++	} else if !errors.Is(err, os.ErrNotExist) {
++		return nil, fmt.Errorf("reading workspace marker: %w", err)
+ 	}
+ 
+ 	slog.Info("executing workspace maiden run setup", "path", targetPath)
+ 	res.IsMaidenRun = true
+ 
+-	gitOK := true
+ 	if ws != nil && ws.Spec != nil {
++		var gitOK bool
+ 		res.ClonedRepos, gitOK = cloneRepos(ctx, ws.Spec.Git, targetPath)
+-		res.SkillsMounted = setupSkills(ws.Spec.Skills)
++		if !gitOK {
++			return res, fmt.Errorf("required Git checkout failed")
++		}
++		var err error
++		res.SkillsMounted, err = setupSkills(ws.Spec.Skills)
++		if err != nil {
++			return res, err
++		}
+ 	}
+ 
+ 	if goal != "" {
+ 		res.BootstrapRan = runBootstrap(ctx, goal, targetPath)
++		if !res.BootstrapRan {
++			return res, fmt.Errorf("required workspace bootstrap did not complete")
++		}
+ 	}
+ 
+-	if !gitOK {
+-		slog.Warn("maiden run workspace setup completed with errors; marker omitted to allow retry", "path", targetPath)
+-		return res, nil
++	if err := ctx.Err(); err != nil {
++		return res, err
++	}
++	if err := writeMarker(markerPath, ws); err != nil {
++		return res, fmt.Errorf("recording workspace initialization: %w", err)
+ 	}
+-
+-	writeMarker(markerPath, ws)
+ 	slog.Info("maiden run workspace setup completed successfully", "path", targetPath)
+ 	return res, nil
+ }
+@@ -134,6 +149,7 @@ func cloneRepos(ctx context.Context, repos []*v1alpha1.GitRepo, targetPath strin
+ 	ok := true
+ 	for _, repo := range repos {
+ 		if repo == nil || repo.Repo == "" {
++			ok = false
+ 			continue
+ 		}
+ 
+@@ -259,21 +275,21 @@ func retry(ctx context.Context, attempts int, delay time.Duration, op func() ([]
+ }
+ 
+ // setupSkills creates the skills directory if one is declared and returns its path.
+-func setupSkills(skills *v1alpha1.SkillsConfig) string {
++func setupSkills(skills *v1alpha1.SkillsConfig) (string, error) {
+ 	if skills == nil || skills.Path == "" {
+-		return ""
++		return "", nil
+ 	}
+ 	if err := os.MkdirAll(skills.Path, dirPerm); err != nil {
+-		slog.Warn("creating skills dir", "path", skills.Path, "error", err)
++		return "", fmt.Errorf("creating skills directory: %w", err)
+ 	}
+-	return skills.Path
++	return skills.Path, nil
+ }
+ 
+ // runBootstrap hands the goal to the Antigravity agent so it can prepare the workspace.
+ // It reports whether the agent ran to completion. The agent needs the bootstrap script
+ // installed and an API key in the environment; when either is missing the step is
+-// skipped with a log line. Failures are logged and otherwise ignored so the task's own
+-// command still starts.
++// reported as incomplete. SetupWorkspace treats an incomplete required goal as
++// a failure, so the task command cannot start against an unprepared workspace.
+ func runBootstrap(ctx context.Context, goal, targetPath string) bool {
+ 	if _, err := os.Stat(bootstrapScriptPath); err != nil {
+ 		slog.Info("Antigravity bootstrap script not installed; skipping", "script", bootstrapScriptPath)
+@@ -344,15 +360,13 @@ func MarkerName(path string) string {
+ }
+ 
+ // writeMarker records a completed maiden run.
+-func writeMarker(path string, ws *v1alpha1.Workspace) {
++func writeMarker(path string, ws *v1alpha1.Workspace) error {
+ 	name := "unknown"
+ 	if ws != nil && ws.GetMetadata() != nil && ws.GetMetadata().GetName() != "" {
+ 		name = ws.GetMetadata().GetName()
+ 	}
+ 	content := fmt.Sprintf("workspace: %s\ninitialized_at: %s\n", name, time.Now().UTC().Format(time.RFC3339))
+-	if err := os.WriteFile(path, []byte(content), filePerm); err != nil {
+-		slog.Warn("failed to write initialized marker file", "path", path, "error", err)
+-	}
++	return os.WriteFile(path, []byte(content), filePerm)
+ }
+ 
+ // writeStateFile writes a diagnostic file under AXDir, logging rather than failing on error.
+diff --git a/internal/workspace/setup_test.go b/internal/workspace/setup_test.go
+index 9026369..cd1ad41 100644
+--- a/internal/workspace/setup_test.go
++++ b/internal/workspace/setup_test.go
+@@ -50,7 +50,7 @@ func TestSetupWorkspace_MaidenRun(t *testing.T) {
+ 	defer func() { workspace.AXDir = origAXDir }()
+ 
+ 	// 1. Maiden run
+-	res1, err := workspace.SetupWorkspace(context.Background(), ws, tempDir, "Test maiden run setup")
++	res1, err := workspace.SetupWorkspace(context.Background(), ws, tempDir, "")
+ 	if err != nil {
+ 		t.Fatalf("maiden setup failed: %v", err)
+ 	}
+@@ -176,7 +176,9 @@ func TestSetupWorkspace_GitError(t *testing.T) {
+ 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+ 	defer cancel()
+ 
+-	_, _ = workspace.SetupWorkspace(ctx, ws, tempDir, "")
++	if _, err := workspace.SetupWorkspace(ctx, ws, tempDir, ""); err == nil {
++		t.Fatal("required Git checkout failed but setup returned success")
++	}
+ 
+ 	// Verify git-error.log is created under stateDir and NOT inside workspace
+ 	errLog := filepath.Join(stateDir, "git-error.log")
+diff --git a/runner/runner.go b/runner/runner.go
+index 4eaadb0..5562267 100644
+--- a/runner/runner.go
++++ b/runner/runner.go
+@@ -73,13 +73,16 @@ type mount struct {
+ }
+ 
+ // resolveMounts lines up the task's workspace bindings with the Workspace
+-// resources in cfg. Bindings are matched by name; a binding whose Workspace was
+-// not supplied is set up as an empty directory.
+-func resolveMounts(cfg Config) []mount {
++// resources in cfg. Every declared binding must have its Workspace supplied.
++func resolveMounts(cfg Config) ([]mount, error) {
+ 	byName := make(map[string]*v1alpha1.Workspace, len(cfg.Workspaces))
+ 	for _, ws := range cfg.Workspaces {
+ 		if ws != nil {
+-			byName[ws.GetMetadata().GetName()] = ws
++			name := ws.GetMetadata().GetName()
++			if name == "" || byName[name] != nil {
++				return nil, fmt.Errorf("workspace has an empty or duplicate name")
++			}
++			byName[name] = ws
+ 		}
+ 	}
+ 
+@@ -88,9 +91,12 @@ func resolveMounts(cfg Config) []mount {
+ 	paths := spec.WorkspacePaths()
+ 	mounts := make([]mount, len(refs))
+ 	for i, ref := range refs {
++		if byName[ref.GetName()] == nil {
++			return nil, fmt.Errorf("bound workspace %q was not supplied", ref.GetName())
++		}
+ 		mounts[i] = mount{ref: ref, ws: byName[ref.GetName()], path: paths[i]}
+ 	}
+-	return mounts
++	return mounts, nil
+ }
+ 
+ // CommandExit describes how the task command finished.
+@@ -113,15 +119,17 @@ type CommandExit struct {
+ // cancelled a running command is sent SIGTERM, given a grace period, and then
+ // killed.
+ //
+-// Workspace setup failures are logged but do not abort the run; the task simply
+-// never reports ready. Run returns an error only when the runner itself cannot
+-// start, for example when the metadata server or the command fails to launch.
++// Missing workspace inputs or failed setup abort before readiness or command
++// launch. Callers must treat the returned error as a blocked execution.
+ func Run(ctx context.Context, cfg Config) error {
+ 	port := cfg.Port
+ 	if port <= 0 {
+ 		port = DefaultPort
+ 	}
+-	mounts := resolveMounts(cfg)
++	mounts, err := resolveMounts(cfg)
++	if err != nil {
++		return err
++	}
+ 	if len(mounts) == 0 {
+ 		// Nothing bound: still provide an empty working directory at the default path.
+ 		mounts = []mount{{ref: &v1alpha1.WorkspaceRef{}, path: DefaultWorkspacePath}}
+@@ -152,17 +160,16 @@ func Run(ctx context.Context, cfg Config) error {
+ 		_ = metaServer.Stop(context.Background())
+ 	}()
+ 
+-	ready := true
+ 	for _, m := range mounts {
+ 		if _, err := workspace.SetupWorkspace(ctx, m.ws, m.path, m.ref.GetGoal()); err != nil {
+-			slog.Error("workspace maiden run setup failed", "workspace", m.ref.GetName(), "path", m.path, "error", err)
+-			ready = false
++			return fmt.Errorf("workspace %q setup failed: %w", m.ref.GetName(), err)
+ 		}
+ 	}
+-	if ready {
+-		metaServer.SetWorkspaceReady(true)
+-		slog.Info("workspace maiden run setup marked ready", "count", len(mounts))
++	if err := ctx.Err(); err != nil {
++		return err
+ 	}
++	metaServer.SetWorkspaceReady(true)
++	slog.Info("workspace maiden run setup marked ready", "count", len(mounts))
+ 
+ 	cmdArgs := cfg.Task.GetSpec().GetCommand()
+ 	if len(cmdArgs) == 0 {
+diff --git a/runner/runner_test.go b/runner/runner_test.go
+index e44cea1..f432c04 100644
+--- a/runner/runner_test.go
++++ b/runner/runner_test.go
+@@ -121,6 +121,9 @@ func TestRun_WithoutCommandWaitsForContext(t *testing.T) {
+ }
+ 
+ func TestRun_DefaultsWithoutTask(t *testing.T) {
++	if err := os.MkdirAll(runner.DefaultWorkspacePath, 0o755); err != nil {
++		t.Skip("default workspace requires a writable /workspace")
++	}
+ 	// A nil Task still serves metadata; the port comes from Config.
+ 	h := newHarness(t)
+ 	h.cfg.Task = nil
+@@ -179,11 +182,61 @@ func newHarness(t *testing.T) *harness {
+ 	h.cfg = runner.Config{
+ 		Port:          freePort(t),
+ 		Task:          h.task,
++		Workspaces:    []*v1alpha1.Workspace{{Metadata: &v1alpha1.ObjectMeta{Name: "ws"}}},
+ 		OnCommandExit: func(e runner.CommandExit) { h.exited <- e },
+ 	}
+ 	return h
+ }
+ 
++func TestBlaxsmithRunnerBlocksIncompleteWorkspace(t *testing.T) {
++	for _, kind := range []string{"missing", "duplicate", "directory", "git", "skills", "goal", "state"} {
++		t.Run(kind, func(t *testing.T) {
++			h := newHarness(t)
++			sentinel := filepath.Join(t.TempDir(), "command-started")
++			h.task.Spec.Command = []string{"touch", sentinel}
++			badPath := filepath.Join(t.TempDir(), "file")
++			if err := os.WriteFile(badPath, []byte("not a directory"), 0o600); err != nil {
++				t.Fatal(err)
++			}
++			ws := h.cfg.Workspaces[0]
++			ws.Spec = &v1alpha1.WorkspaceSpec{}
++			switch kind {
++			case "missing":
++				h.cfg.Workspaces = nil
++			case "duplicate":
++				h.cfg.Workspaces = append(h.cfg.Workspaces, ws)
++			case "directory":
++				h.task.Spec.Workspaces[0].Path = badPath
++			case "git":
++				ws.Spec.Git = []*v1alpha1.GitRepo{{Repo: filepath.Join(t.TempDir(), "missing.git")}}
++			case "skills":
++				ws.Spec.Skills = &v1alpha1.SkillsConfig{Path: badPath}
++			case "goal":
++				t.Setenv("GEMINI_API_KEY", "")
++				h.task.Spec.Workspaces[0].Goal = "required but unavailable bootstrap"
++			case "state":
++				workspace.AXDir = badPath
++			}
++			ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
++			defer cancel()
++			if err := runner.Run(ctx, h.cfg); err == nil {
++				t.Fatal("incomplete workspace returned success")
++			}
++			if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
++				t.Fatal("command started against incomplete workspace")
++			}
++			select {
++			case <-h.exited:
++				t.Fatal("command was launched")
++			default:
++			}
++			if _, err := os.Stat(filepath.Join(workspace.AXDir, workspace.MarkerName(h.wsPath))); err == nil {
++				t.Fatal("failed setup wrote success marker")
++			}
++		})
++	}
++}
++
+ // start launches Run in the background. Cleanup cancels it and waits for it to
+ // return so no runner outlives its test.
+ func (h *harness) start(t *testing.T) {

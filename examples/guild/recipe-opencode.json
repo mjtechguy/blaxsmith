@@ -1,0 +1,87 @@
+{
+  "schema_version": "blaxsmith.recipe/v1alpha1",
+  "name": "guild-with-opencode-review",
+  "profiles": {
+    "architect": {
+      "harness": "claude-code",
+      "model": "opus",
+      "effort": "high",
+      "skills": [
+        "examples/guild/skills/evidence/SKILL.md"
+      ]
+    },
+    "implementer": {
+      "harness": "codex",
+      "model": "gpt-5.6-luna",
+      "effort": "xhigh"
+    },
+    "reviewer": {
+      "harness": "opencode",
+      "model": "example-provider/example-model",
+      "effort": "provider-default",
+      "skills": [
+        "examples/guild/skills/evidence/SKILL.md"
+      ]
+    }
+  },
+  "stages": [
+    {
+      "id": "plan",
+      "kind": "plan",
+      "profile": "architect",
+      "prompt": "examples/guild/prompts/plan.md"
+    },
+    {
+      "id": "implement",
+      "kind": "implement",
+      "profile": "implementer",
+      "depends_on": [
+        "plan"
+      ],
+      "prompt": "examples/guild/prompts/implement.md"
+    },
+    {
+      "id": "review",
+      "kind": "review",
+      "profile": "reviewer",
+      "depends_on": [
+        "implement"
+      ],
+      "prompt": "examples/guild/prompts/review.md"
+    },
+    {
+      "id": "verify",
+      "kind": "verify",
+      "profile": "reviewer",
+      "depends_on": [
+        "implement"
+      ],
+      "prompt": "examples/guild/prompts/verify.md"
+    },
+    {
+      "id": "architect-review",
+      "kind": "architect_review",
+      "profile": "architect",
+      "depends_on": [
+        "review",
+        "verify"
+      ],
+      "prompt": "examples/guild/prompts/architect-review.md"
+    },
+    {
+      "id": "human-review",
+      "kind": "human_review",
+      "depends_on": [
+        "architect-review"
+      ]
+    }
+  ],
+  "required_checks": [
+    "project-tests",
+    "requirement-coverage"
+  ],
+  "limits": {
+    "max_correction_cycles": 3,
+    "timeout_seconds": 1800
+  }
+}

@@ -16,6 +16,19 @@ import (
 
 const example = "examples/guild/"
 
+func TestFreezeOpenCodeProfile(t *testing.T) {
+	in := testRepo(t)
+	in.Recipe = example + "recipe-opencode.json"
+	bundle, err := Freeze(t.Context(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := bundle.Recipe.Profiles["reviewer"]
+	if profile.Harness != "opencode" || profile.Model != "example-provider/example-model" || profile.Effort != "provider-default" {
+		t.Fatalf("OpenCode selection changed: %+v", profile)
+	}
+}
+
 func TestFreezeCommittedGuildWorkflow(t *testing.T) {
 	in := testRepo(t)
 	write(t, in.Repo, "AGENTS.md", "Root instructions.\n")
@@ -98,9 +111,14 @@ func TestRejectInvalidRunInputs(t *testing.T) {
 		{"missing profile", func(t *testing.T, in *Input, r *Recipe) { r.Stages[1].Profile = "unknown" }, "known profile"},
 		{"unsupported harness", func(t *testing.T, in *Input, r *Recipe) {
 			p := r.Profiles["implementer"]
-			p.Harness = "opencode"
+			p.Harness = "native-grok"
 			r.Profiles["implementer"] = p
 		}, "explicit Claude Code/Codex"},
+		{"opencode missing provider", func(t *testing.T, in *Input, r *Recipe) {
+			p := r.Profiles["implementer"]
+			p.Harness, p.Model = "opencode", "unqualified-model"
+			r.Profiles["implementer"] = p
+		}, "provider/model"},
 		{"path escape", func(t *testing.T, in *Input, r *Recipe) { r.Stages[1].Prompt = "../outside.md" }, "prompt file"},
 		{"missing file", func(t *testing.T, in *Input, r *Recipe) { in.Transcript = "missing.md" }, "not committed"},
 		{"scope is file", func(t *testing.T, in *Input, r *Recipe) { in.Scope = in.Spec }, "contains no committed files"},
