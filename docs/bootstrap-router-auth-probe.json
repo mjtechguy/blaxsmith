@@ -1,0 +1,19 @@
+{
+  "atespace": "blaxsmith-gate-2bb31a39f4",
+  "task": "gated-runner",
+  "checks": [
+    "missing connector identity rejected before actor resume",
+    "wrong principal connector identity rejected before actor resume",
+    "wrong audience connector identity rejected before actor resume",
+    "plaintext request with spoofed TLS header rejected",
+    "cluster CA, actor UID, signature, nonce, guest challenge verified",
+    "wrong actor UID rejected",
+    "wrong connector nonce rejected",
+    "tampered guest challenge rejected",
+    "wrong cluster CA rejected",
+    "malformed connector nonce rejected by atunnel",
+    "wrong actor route rejected"
+  ],
+  "actor_uid": "ac7de25b-a270-48ce-8047-1f2f082a73a7",
+  "final_phase": "Suspended"
+}

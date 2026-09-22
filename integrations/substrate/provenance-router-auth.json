@@ -1,0 +1,10 @@
+{
+  "upstream_commit": "672533541dbfcd29084e4de2475267088bda3651",
+  "patch_sha256": "95a541da166b7f0f1bbfe9d97d3f67d09f072c949e3bee353c2765a1b428b85c",
+  "attestation_patch_sha256": "b21af36b49380e1b64377ee707952a36358d445e7c6fe73edf645d13995fdaa3",
+  "router_auth_patch_sha256": "4de53e2fcfbed69d23a999ecd8bee0762418eb578bb6ee917dc04b35d465fcc0",
+  "go_version": "go version go1.27.1 linux/amd64",
+  "platform": "linux/amd64",
+  "binary_sha256": "b36667a3b2731519ecb8edbce7c12075e03b342235b9ad62852ba2d7250f0c5c",
+  "ateom_gvisor_sha256": "b9fed1f26f77cc773e1d9bf3453c83d94500d79ab9c9dde7c832de5bf55ad99b"
+}

@@ -1,0 +1,324 @@
+diff --git a/cmd/atenet/internal/router/bootstrap_auth_test.go b/cmd/atenet/internal/router/bootstrap_auth_test.go
+new file mode 100644
+index 0000000..99c6585
+--- /dev/null
++++ b/cmd/atenet/internal/router/bootstrap_auth_test.go
+@@ -0,0 +1,42 @@
++package router
++
++import (
++	"context"
++	"testing"
++
++	authenticationv1 "k8s.io/api/authentication/v1"
++	"k8s.io/apimachinery/pkg/runtime"
++	"k8s.io/client-go/kubernetes/fake"
++	ktesting "k8s.io/client-go/testing"
++)
++
++func TestReviewBootstrapTokenChecksAudienceAndPrincipal(t *testing.T) {
++	client := fake.NewSimpleClientset()
++	var status authenticationv1.TokenReviewStatus
++	client.PrependReactor("create", "tokenreviews", func(action ktesting.Action) (bool, runtime.Object, error) {
++		review := action.(ktesting.CreateAction).GetObject().(*authenticationv1.TokenReview)
++		if review.Spec.Token != "token" || len(review.Spec.Audiences) != 1 || review.Spec.Audiences[0] != "blaxsmith-bootstrap" {
++			t.Fatal("TokenReview did not bind the expected token and audience")
++		}
++		return true, &authenticationv1.TokenReview{Status: status}, nil
++	})
++	check := func(want bool) {
++		t.Helper()
++		got, err := reviewBootstrapToken(context.Background(), client, "blaxsmith-bootstrap",
++			"system:serviceaccount:ate-system:blaxsmith-connector", "token")
++		if err != nil || got != want {
++			t.Fatalf("review result = %v, %v; want %v", got, err, want)
++		}
++	}
++	status = authenticationv1.TokenReviewStatus{Authenticated: true,
++		Audiences: []string{"blaxsmith-bootstrap"},
++		User:      authenticationv1.UserInfo{Username: "system:serviceaccount:ate-system:blaxsmith-connector"}}
++	check(true)
++	status.User.Username = "system:serviceaccount:ate-system:other"
++	check(false)
++	status.User.Username = "system:serviceaccount:ate-system:blaxsmith-connector"
++	status.Audiences = []string{"another-audience"}
++	check(false)
++	status.Authenticated = false
++	check(false)
++}
+diff --git a/cmd/atenet/internal/router/cmd.go b/cmd/atenet/internal/router/cmd.go
+index 3c70cb9..28d509e 100644
+--- a/cmd/atenet/internal/router/cmd.go
++++ b/cmd/atenet/internal/router/cmd.go
+@@ -62,6 +62,8 @@ func NewRouterCmd() *cobra.Command {
+ 	cmd.Flags().StringVar(&cfg.UpstreamTrustBundlePath, "upstream-trust-bundle", "/run/podidentity.podcert.ate.dev/trust-bundle.pem", "PEM trust bundle used to validate the actor's atunnel ingress server certificate.")
+ 	cmd.Flags().StringVar(&cfg.UpstreamSpiffePrefix, "upstream-spiffe-prefix", "spiffe://cluster.local/", "SPIFFE URI SAN prefix (trust domain) the actor's atunnel server cert must match. Empty falls back to default SAN check against the dialed pod IP (which SPIFFE-only certs never match).")
+ 	cmd.Flags().StringVar(&cfg.ActorIdentityCAFile, "actor-identity-ca-file", "", "PEM trust bundle for the actor-identity CA, used to verify the actor client certificates presented on egress CONNECTs. Required by the egress gateway's ext_proc sidecar; empty (the default) leaves egress authentication unconfigured and every egress CONNECT is denied.")
++	cmd.Flags().StringVar(&cfg.BootstrapAudience, "bootstrap-audience", "", "Kubernetes TokenReview audience accepted for Blaxsmith bootstrap routes; empty keeps those routes closed")
++	cmd.Flags().StringVar(&cfg.BootstrapClientUsername, "bootstrap-client-username", "", "Exact connector ServiceAccount username accepted for Blaxsmith bootstrap routes; empty keeps those routes closed")
+ 	// Envoy learns the collector over xDS rather than from its own environment,
+ 	// so the router has to carry the address for it. Defaulting to
+ 	// OTEL_EXPORTER_OTLP_ENDPOINT — the same variable the router's own exporter
+diff --git a/cmd/atenet/internal/router/config.go b/cmd/atenet/internal/router/config.go
+index 16297ee..8dd9672 100644
+--- a/cmd/atenet/internal/router/config.go
++++ b/cmd/atenet/internal/router/config.go
+@@ -110,6 +110,11 @@ type routerConfig struct {
+ 	// every egress CONNECT fail closed and is correct for an ingress-only
+ 	// router (it never sees the egress listener).
+ 	ActorIdentityCAFile string
++	// BootstrapAudience and BootstrapClientUsername restrict signed challenge
++	// and release routes to the enrolled connector's Kubernetes identity.
++	// Empty values leave those routes closed.
++	BootstrapAudience       string
++	BootstrapClientUsername string
+ 
+ 	LogLevel    string
+ 	MetricsAddr string
+@@ -209,6 +214,9 @@ func (c routerConfig) drainTimeout(parkCfg ingress.ParkedRequestConfig) time.Dur
+ // validate rejects flag combinations that would make the router misbehave
+ // rather than merely differ.
+ func (c routerConfig) validate() error {
++	if (c.BootstrapAudience == "") != (c.BootstrapClientUsername == "") {
++		return fmt.Errorf("--bootstrap-audience and --bootstrap-client-username must be set together")
++	}
+ 	switch c.atenetRouter() {
+ 	case atenetRouterEnvoy, atenetRouterAgentgateway:
+ 	default:
+diff --git a/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go b/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go
+new file mode 100644
+index 0000000..f3319da
+--- /dev/null
++++ b/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go
+@@ -0,0 +1,72 @@
++package ingress
++
++import (
++	"context"
++	"errors"
++	"testing"
++
++	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
++	"google.golang.org/grpc"
++	"google.golang.org/protobuf/types/known/structpb"
++
++	"github.com/agent-substrate/substrate/cmd/atenet/internal/router/extproc"
++	"github.com/agent-substrate/substrate/pkg/proto/ateapipb"
++)
++
++func TestBootstrapRouteRequiresConnectorAndStripsToken(t *testing.T) {
++	resumes := 0
++	h := New(&mockClient{resumeFn: func(context.Context, *ateapipb.ResumeActorRequest, ...grpc.CallOption) (*ateapipb.ResumeActorResponse, error) {
++		resumes++
++		return &ateapipb.ResumeActorResponse{Actor: &ateapipb.Actor{Status: &ateapipb.ActorStatus{
++			WorkerAssignment: &ateapipb.WorkerAssignment{WorkerPodIp: "10.0.0.52"},
++		}}}, nil
++	}}, ParkedRequestConfig{}, nil)
++	seen := ""
++	h.RequireBootstrapAuth(func(_ context.Context, token string) (bool, error) {
++		seen = token
++		return token == "good", nil
++	})
++	request := func(path, auth string) (*extproc.Result, error) {
++		md := requestMetadata("actor-1", "team-a",
++			&corev3.HeaderValue{Key: ":path", Value: path},
++			&corev3.HeaderValue{Key: ":method", Value: "GET"},
++			&corev3.HeaderValue{Key: "Authorization", Value: auth},
++		)
++		md.Attributes = map[string]*structpb.Struct{"envoy.filters.http.ext_proc": {
++			Fields: map[string]*structpb.Value{"connection.tls_version": structpb.NewStringValue("TLSv1.3")},
++		}}
++		result, err := h.HandleRequestHeaders(context.Background(), md)
++		return &result, err
++	}
++	withoutTLS := requestMetadata("actor-1", "team-a",
++		&corev3.HeaderValue{Key: ":path", Value: "/blaxsmith/bootstrap/challenge"},
++		&corev3.HeaderValue{Key: ":method", Value: "GET"},
++		&corev3.HeaderValue{Key: "Authorization", Value: "Bearer good"},
++		&corev3.HeaderValue{Key: "x-forwarded-proto", Value: "https"},
++	)
++	if _, err := h.HandleRequestHeaders(context.Background(), withoutTLS); err == nil {
++		t.Fatal("plaintext client spoofed TLS using a header")
++	}
++	for _, auth := range []string{"", "Basic good", "Bearer bad"} {
++		if _, err := request("/blaxsmith/bootstrap/challenge", auth); err == nil {
++			t.Fatalf("bootstrap accepted %q", auth)
++		}
++	}
++	if resumes != 0 {
++		t.Fatal("unauthorized bootstrap resumed the actor")
++	}
++	for _, path := range []string{"/blaxsmith/bootstrap/challenge", "/%62laxsmith/bootstrap/challenge?x=1"} {
++		result, err := request(path, "Bearer good")
++		if err != nil || seen != "good" || resumes == 0 {
++			t.Fatalf("authorized bootstrap = %v, seen %q", err, seen)
++		}
++		removed := result.Response.GetResponse().GetHeaderMutation().GetRemoveHeaders()
++		if len(removed) != 1 || removed[0] != "authorization" {
++			t.Fatalf("connector token forwarded: removed headers %v", removed)
++		}
++	}
++	h.RequireBootstrapAuth(func(context.Context, string) (bool, error) { return false, errors.New("apiserver unavailable") })
++	if _, err := request("/blaxsmith/bootstrap/challenge", "Bearer good"); err == nil {
++		t.Fatal("TokenReview outage allowed bootstrap")
++	}
++}
+diff --git a/cmd/atenet/internal/router/ingress/ingress.go b/cmd/atenet/internal/router/ingress/ingress.go
+index 433e940..fca5c4e 100644
+--- a/cmd/atenet/internal/router/ingress/ingress.go
++++ b/cmd/atenet/internal/router/ingress/ingress.go
+@@ -28,7 +28,10 @@ import (
+ 	"log/slog"
+ 	"net"
+ 	"net/http"
++	"net/url"
++	"path"
+ 	"strconv"
++	"strings"
+ 
+ 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+ 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+@@ -59,8 +62,9 @@ const (
+ 
+ // Handler routes ingress requests to the worker hosting their actor.
+ type Handler struct {
+-	resumer *ActorResumer
+-	parking *parkingLot
++	resumer       *ActorResumer
++	parking       *parkingLot
++	bootstrapAuth func(context.Context, string) (bool, error)
+ }
+ 
+ func New(apiClient ateapipb.ControlClient, parkCfg ParkedRequestConfig, parkMetrics *ParkingMetrics) *Handler {
+@@ -75,8 +79,40 @@ func (h *Handler) Direction() extproc.Direction { return extproc.DirectionIngres
+ // ParkingStatus returns a snapshot of the parking lot for the /statusz page.
+ func (h *Handler) ParkingStatus() ParkingStatus { return h.parking.status() }
+ 
++// RequireBootstrapAuth checks the connector token before any bootstrap route
++// can resume an actor. An unset authorizer denies bootstrap requests.
++func (h *Handler) RequireBootstrapAuth(authorize func(context.Context, string) (bool, error)) {
++	h.bootstrapAuth = authorize
++}
++
+ func (h *Handler) HandleRequestHeaders(ctx context.Context, md *extproc.RequestMetadata) (extproc.Result, error) {
+ 	slog.InfoContext(ctx, "Request", slog.String("host", md.Host))
++	bootstrap, err := isBootstrapPath(md.Path)
++	if err != nil {
++		return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_BadRequest, "invalid request path")
++	}
++	if bootstrap {
++		if md.Attribute("connection.tls_version") == "" {
++			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_UpgradeRequired, "bootstrap requires TLS")
++		}
++		if md.Method != http.MethodGet && md.Method != http.MethodPost {
++			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_MethodNotAllowed, "bootstrap method denied")
++		}
++		scheme, token, ok := strings.Cut(md.Header("authorization"), " ")
++		if !ok || !strings.EqualFold(scheme, "Bearer") || token == "" || len(token) > 16384 || strings.ContainsAny(token, " \t\r\n") {
++			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_Unauthorized, "bootstrap authentication required")
++		}
++		if h.bootstrapAuth == nil {
++			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_ServiceUnavailable, "bootstrap authentication unavailable")
++		}
++		allowed, err := h.bootstrapAuth(ctx, token)
++		if err != nil {
++			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_ServiceUnavailable, "bootstrap authentication unavailable")
++		}
++		if !allowed {
++			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_Forbidden, "bootstrap identity denied")
++		}
++	}
+ 
+ 	// The dataplane doesn't propagate trace context into the ext_proc gRPC
+ 	// stream's metadata — the per-request traceparent arrives in the
+@@ -163,6 +199,9 @@ func (h *Handler) HandleRequestHeaders(ctx context.Context, md *extproc.RequestM
+ 	// Overwrite the routing header so a client-provided value cannot select a
+ 	// different actor after this request has been resolved.
+ 	mutation := &extprocv3.HeaderMutation{}
++	if bootstrap {
++		mutation.RemoveHeaders = []string{"authorization"}
++	}
+ 	mutation.SetHeaders = append(mutation.SetHeaders, &corev3.HeaderValueOption{
+ 		Header: &corev3.HeaderValue{
+ 			Key:      atenet.TargetActorHeader,
+@@ -181,6 +220,17 @@ func (h *Handler) HandleRequestHeaders(ctx context.Context, md *extproc.RequestM
+ 	return res, nil
+ }
+ 
++func isBootstrapPath(raw string) (bool, error) {
++	if raw == "" { // CONNECT authority is not a request path.
++		return false, nil
++	}
++	u, err := url.ParseRequestURI(raw)
++	if err != nil {
++		return false, err
++	}
++	return strings.HasPrefix(path.Clean(u.Path), "/blaxsmith/bootstrap/"), nil
++}
++
+ func routingValue(md *extproc.RequestMetadata, header, attribute string) string {
+ 	if value := md.Header(header); value != "" {
+ 		return value
+diff --git a/cmd/atenet/internal/router/router.go b/cmd/atenet/internal/router/router.go
+index 28536f8..bbbdd4e 100644
+--- a/cmd/atenet/internal/router/router.go
++++ b/cmd/atenet/internal/router/router.go
+@@ -24,6 +24,7 @@ import (
+ 	"net/http"
+ 	"os"
+ 	"os/signal"
++	"slices"
+ 	"syscall"
+ 
+ 	"github.com/spf13/cobra"
+@@ -31,6 +32,8 @@ import (
+ 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+ 	"golang.org/x/sync/errgroup"
+ 	"google.golang.org/grpc"
++	authenticationv1 "k8s.io/api/authentication/v1"
++	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+ 	"k8s.io/client-go/kubernetes"
+ 	"k8s.io/client-go/tools/clientcmd"
+ 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+@@ -64,6 +67,17 @@ type RouterServer struct {
+ 	health         *routerHealth
+ }
+ 
++func reviewBootstrapToken(ctx context.Context, client kubernetes.Interface, audience, username, token string) (bool, error) {
++	review, err := client.AuthenticationV1().TokenReviews().Create(ctx, &authenticationv1.TokenReview{
++		Spec: authenticationv1.TokenReviewSpec{Token: token, Audiences: []string{audience}},
++	}, metav1.CreateOptions{})
++	if err != nil {
++		return false, err
++	}
++	return review.Status.Authenticated && review.Status.User.Username == username &&
++		slices.Contains(review.Status.Audiences, audience), nil
++}
++
+ func NewRouterServer(cfg routerConfig) (*RouterServer, error) {
+ 	var clientset kubernetes.Interface
+ 
+@@ -198,6 +212,11 @@ func (s *RouterServer) Run(ctx context.Context) error {
+ 			return fmt.Errorf("failed to create parking metrics: %w", err)
+ 		}
+ 		s.ingressHandler = ingress.New(s.apiClient, parkCfg, parkMetrics)
++		if s.cfg.BootstrapAudience != "" {
++			s.ingressHandler.RequireBootstrapAuth(func(ctx context.Context, token string) (bool, error) {
++				return reviewBootstrapToken(ctx, s.clientset, s.cfg.BootstrapAudience, s.cfg.BootstrapClientUsername, token)
++			})
++		}
+ 		handlers[s.ingressHandler.Direction()] = s.ingressHandler
+ 	}
+ 	if s.cfg.Mode.ServesEgress() {
+diff --git a/cmd/atenet/internal/router/xds.go b/cmd/atenet/internal/router/xds.go
+index 0b759fc..8b17309 100644
+--- a/cmd/atenet/internal/router/xds.go
++++ b/cmd/atenet/internal/router/xds.go
+@@ -1042,6 +1042,7 @@ func (x *XdsServer) buildHcm(statPrefix string, captureActorRouting bool) *anypb
+ 		RequestAttributes: []string{
+ 			extproc.TargetActorFilterStateAttribute,
+ 			extproc.ConnectAuthorityFilterStateAttribute,
++			"connection.tls_version",
+ 		},
+ 		MetadataOptions: &extprocv3filter.MetadataOptions{
+ 			ForwardingNamespaces: &extprocv3filter.MetadataOptions_MetadataNamespaces{

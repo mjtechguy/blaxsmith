@@ -87,10 +87,17 @@ CA. The [live probe](actor-attestation-probe.json) accepted that proof and
 rejected a wrong UID, nonce, response, CA, malformed request, and wrong actor
 route. It used no credential and left the task suspended.
 
-This proof is intentionally not a grant. The current ingress client lacks
-authentication; a verifier call alone does not consume the nonce or prove the
-current execution owner. Next, authenticate the connector-to-router leg, store
-an attempt/cluster/owner-bound pending nonce and consume it transactionally,
+This proof is intentionally not a grant. The initial ingress client lacked
+authentication. The [router follow-up](bootstrap-router-auth-probe.json) now
+requires verified HTTPS and an audience-scoped connector service-account token
+for bootstrap routes, with TokenReview on each request. The router removes the
+token before forwarding, and the live probe denied missing, wrong-principal,
+wrong-audience, and plaintext requests before actor resume. This is a tested
+same-cluster transport; product connector enrollment and multi-cluster
+transport are not implemented.
+
+A verifier call still does not consume the nonce or prove the current execution
+owner. Next, store an attempt/cluster/owner-bound pending nonce and consume it transactionally,
 then recheck actor UID, owner, template, image, pool, and effective policy
 before signing release. Probe another attempt, expired/replayed challenges,
 owner and actor replacement, and data/full-snapshot resume. Finally, deliver

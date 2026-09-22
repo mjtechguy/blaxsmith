@@ -250,7 +250,7 @@ or credential delivery occurs in this gate probe.
 
 ## Probe activation-bound actor attestation
 
-Build both pinned Substrate overlays from an exported source revision and
+Build the pinned Substrate overlays from an exported source revision and
 publish the verified worker binary atop the original digest-pinned worker
 image. Use a new build directory each time:
 
@@ -266,32 +266,57 @@ kubectl -n ax-system patch workerpool blaxsmith-smoke --type=merge \
   -p "{\"spec\":{\"workerImage\":\"$(cat "$built/ateom-gvisor.image")\"}}"
 ```
 
-Wait for the worker pool to become ready, then probe the existing suspended
-synthetic gated Task through the in-cluster router:
-
-```sh
-python3 deploy/dev/probe-attestation.py blaxsmith-gate-2bb31a39f4 \
-  gated-runner http://10.43.36.216 \
-  "/opt/blaxsmith-dev/attestation-probe-evidence-$(date +%s)"
-```
-
-The probe resumes the task, reads the current actor UID, requests a fresh
-signed challenge, verifies the certificate against the cluster actor CA, and
-checks wrong UID/nonce/body/CA plus malformed nonce and wrong actor route. It
-suspends the task in its cleanup path. Use a new evidence directory for a
-rerun. The [passing report](../../docs/actor-attestation-probe.json) and
+The initial probe used the then-unauthenticated HTTP router. It resumed the
+synthetic gated Task, read the current actor UID, requested a fresh
+signed challenge, verified the certificate against the cluster actor CA, and
+checked wrong UID/nonce/body/CA plus malformed nonce and wrong actor route. It
+suspended the task in its cleanup path. The [passing report](../../docs/actor-attestation-probe.json) and
 [build provenance](../../integrations/substrate/provenance-attestation.json)
 record the tested result. The deployed worker image is
 `127.0.0.1:5001/blaxsmith-ateom-gvisor@sha256:355c526a5c7c1aefe619d942a00670db17b3699a0e33744972573606a9e9ebcd`.
 The proof and CA files in the remote evidence directory contain no secrets;
 only the summary report is checked in.
 
-This endpoint is still reachable by an unauthenticated ingress client. It
-provides actor identity evidence, not authorization or private Git access.
-The connector must authenticate to the router, consume a pending nonce once,
-recheck current actor and owner, then deliver encrypted access before sensitive
-work is permitted. The synthetic Task's release signer is not a platform trust
-root.
+That first endpoint was reachable by an unauthenticated ingress client. The
+router follow-up below closes that path for bootstrap requests. Actor identity
+alone is not authorization or private Git access.
+
+## Deploy and probe connector-authenticated bootstrap ingress
+
+Publish the newly verified `atenet` binary and configure the router's
+audience, connector service-account username, and TokenReview permission:
+
+```sh
+cd /opt/blaxsmith-dev/blaxsmith
+built=/opt/blaxsmith-dev/substrate-router-auth-build-$(date +%s)
+bash integrations/substrate/build.sh /opt/blaxsmith-dev/substrate "$built"
+bash deploy/dev/publish-atenet.sh "$built"
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+python3 deploy/dev/enable-bootstrap-router-auth.py "$built"
+python3 deploy/dev/probe-attestation.py blaxsmith-gate-2bb31a39f4 \
+  gated-runner 10.43.36.216 \
+  "/opt/blaxsmith-dev/router-auth-probe-evidence-$(date +%s)"
+```
+
+The probe obtains three short-lived synthetic service-account tokens in memory,
+validates the router's HTTPS certificate against the service-DNS cluster trust
+bundle, rejects missing/wrong-principal/wrong-audience/plaintext requests
+before actor resume, then repeats actor proof verification. The plaintext case
+spoofs `x-forwarded-proto: https`; the router uses Envoy's connection TLS
+attribute instead. The probe suspends the Task in its cleanup path. The
+[passing report](../../docs/bootstrap-router-auth-probe.json) and
+[Linux provenance](../../integrations/substrate/provenance-router-auth.json)
+record the tested combination. The deployed router image is
+`127.0.0.1:5001/blaxsmith-atenet@sha256:fe456b6f9a56183af4396223f49432cee15324ea4c0c6fbd4c968754e86f35e1`.
+The router service account can create TokenReviews; the synthetic connector
+service account cannot. The dev probe uses operator-issued TokenRequest tokens;
+a product connector must use a projected audience-scoped token. No token is
+written to the report or repository.
+
+The connector still must consume a durable pending nonce once, recheck the
+current actor and execution owner, and deliver encrypted access before
+sensitive work is permitted. The synthetic Task's release signer is not a
+platform trust root.
 
 ## Original baseline task
 

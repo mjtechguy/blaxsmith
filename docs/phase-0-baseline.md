@@ -93,8 +93,12 @@ cluster-CA/current-actor-UID verification and rejected a wrong UID, nonce,
 body, CA, malformed nonce, and wrong route. The key remains outside gVisor;
 the task ended suspended. The source and Linux build are pinned in
 [attestation provenance](../integrations/substrate/provenance-attestation.json).
-This adds evidence for worker identity, but the ingress client remains
-unauthenticated and there is no durable, one-time pending challenge or
+This adds evidence for worker identity. The next
+[router-auth probe](bootstrap-router-auth-probe.json) uses verified HTTPS,
+TokenReview, exact service-account identity, and an audience-scoped token for
+bootstrap routes. Denied requests did not resume the actor; the valid request
+still passed actor proof verification. The router strips the token before
+forwarding. There is no durable, one-time pending challenge or
 owner/actor recheck at release. There is still no credential delivery or
 private checkout, so P0-04/05 remain open.
 

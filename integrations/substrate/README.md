@@ -1,22 +1,23 @@
-# Substrate egress and actor attestation patches
+# Substrate egress and bootstrap patches
 
 Upstream: `github.com/agent-substrate/substrate`, commit
 `672533541dbfcd29084e4de2475267088bda3651`, Apache-2.0 (see LICENSE).
 `egress-policy.patch` changes the egress gateway handler and tests.
 `actor-attestation.patch` extends the gVisor worker's `atunnel` and its tests.
+`bootstrap-router-auth.patch` restricts bootstrap ingress to the connector.
 The reference checkout stays untouched. Rebuild with:
 
 ```sh
 bash integrations/substrate/build.sh ../reference/substrate /tmp/blaxsmith-substrate-build
 ```
 
-The build exports the pinned commit, applies both patches, runs focused tests
+The build exports the pinned commit, applies all three patches, runs focused tests
 and `go vet`, builds Linux/AMD64 `atenet` and `ateom-gvisor`, and records
 source/patch/binary hashes.
 On the prepared development node, `deploy/dev/publish-atenet.sh` adds that binary
-to a pinned Alpine image. Deploy its digest to the `atenet-egress` `ext-proc`
-container with `/usr/local/bin/atenet` as command. The ingress gateway is not
-changed. [Linux build provenance](provenance.json) and the [live AX/gVisor
+to a pinned Alpine image. The first egress deployment used its digest in the
+`atenet-egress` `ext-proc` container with `/usr/local/bin/atenet` as command.
+[Linux build provenance](provenance.json) and the [live AX/gVisor
 probe](../../docs/egress-probe.json) record this tested combination.
 
 For actor attestation, `deploy/dev/publish-ateom.sh` adds the verified worker
@@ -32,13 +33,25 @@ certificate purpose, signature, nonce, and guest challenge lifetime. The live
 probe rejected a wrong UID, changed nonce/response, wrong CA, malformed nonce,
 and wrong actor route. It left the synthetic task suspended.
 
-The ingress client is still unauthenticated and the verifier is deliberately
-side-effect-free. This is an identity proof, **not** permission to release a
-credential. The connector must authenticate to the router, bind the nonce to
-a durable pending attempt and consume it once, recheck current actor/owner and
-effective policy immediately before release, and prove encrypted private Git
-setup. Until then, this endpoint carries no secret and only synthetic tasks
-run on this node.
+The router now requires verified HTTPS plus a Kubernetes TokenReview for any
+`/blaxsmith/bootstrap/` route, with an exact service-account username and
+`blaxsmith-bootstrap` audience. Missing, wrong-principal, wrong-audience, and
+plaintext requests fail before actor resume. It removes the bearer token before
+forwarding. Empty router configuration closes bootstrap routes. The
+[live router probe](../../docs/bootstrap-router-auth-probe.json) and
+[Linux provenance](provenance-router-auth.json) cover this follow-up. On the
+dev node, `deploy/dev/bootstrap-router-auth.yaml` grants only the router
+service account permission to create TokenReviews; the synthetic connector
+service account has no API permission. The test token is short-lived and
+exists only in probe memory.
+
+The proof verifier is still side-effect-free. Authentication identifies the
+connector, **not** an authorized attempt. The connector must bind the nonce
+to a durable pending attempt and consume it once, recheck current actor/owner
+and effective policy immediately before release, and prove encrypted private
+Git setup. Until then, this endpoint carries no secret and only synthetic
+tasks run on this node. Production connector enrollment and cross-cluster
+transport remain unimplemented.
 
 The gateway now checks the current actor egress policy on every new CONNECT,
 after verifying the actor certificate, UID, and RUNNING state. No policy or no
