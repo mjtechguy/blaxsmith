@@ -67,13 +67,15 @@ func TestLedgerPostgres(t *testing.T) {
 	if _, err := pool.Exec(ctx, string(schemaSQL)); err != nil {
 		t.Fatal(err)
 	}
-	owner := Scope{ClusterID: "cluster-a", AttemptID: "attempt-a", OwnerGeneration: 1}
-	if _, err := pool.Exec(ctx, `INSERT INTO bootstrap_owners
-		(cluster_id, attempt_id, owner_generation, actor_atespace, actor_name, actor_uid, active)
-		VALUES ($1,$2,$3,'team-a','task-a','uid-a',true)`, owner.ClusterID, owner.AttemptID, owner.OwnerGeneration); err != nil {
-		t.Fatal(err)
-	}
 	ledger := NewLedger(pool)
+	actor := Actor{Atespace: "team-a", Name: "task-a", UID: "uid-a"}
+	owner, err := ledger.Assign(ctx, "cluster-a", "attempt-a", 0, actor)
+	if err != nil || owner.OwnerGeneration != 1 {
+		t.Fatalf("initial owner: %+v, %v", owner, err)
+	}
+	if _, err := ledger.Assign(ctx, owner.ClusterID, owner.AttemptID, 0, actor); !errors.Is(err, ErrDenied) {
+		t.Fatalf("duplicate initial assignment: %v", err)
+	}
 	issue := func(scope Scope) Offer {
 		t.Helper()
 		offer, err := ledger.Issue(ctx, scope)
@@ -153,15 +155,21 @@ func TestLedgerPostgres(t *testing.T) {
 	denied(owner, expired, expiredProof, expiredRoots)
 	stale := issue(owner)
 	staleProof, staleRoots := signedProof(t, stale)
-	if _, err := pool.Exec(ctx, `UPDATE bootstrap_owners SET owner_generation=2, actor_uid='uid-b'
-		WHERE cluster_id=$1 AND attempt_id=$2`, owner.ClusterID, owner.AttemptID); err != nil {
-		t.Fatal(err)
+	newOwner, err := ledger.Assign(ctx, owner.ClusterID, owner.AttemptID, owner.OwnerGeneration,
+		Actor{Atespace: actor.Atespace, Name: actor.Name, UID: "uid-b"})
+	if err != nil || newOwner.OwnerGeneration != 2 {
+		t.Fatalf("replacement owner: %+v, %v", newOwner, err)
 	}
 	denied(owner, stale, staleProof, staleRoots)
 	if _, err := ledger.Issue(ctx, owner); !errors.Is(err, ErrDenied) {
 		t.Fatalf("stale owner issued challenge: %v", err)
 	}
-	newOwner := Scope{ClusterID: owner.ClusterID, AttemptID: owner.AttemptID, OwnerGeneration: 2}
+	if _, err := ledger.Deactivate(ctx, owner); !errors.Is(err, ErrDenied) {
+		t.Fatalf("stale owner deactivated replacement: %v", err)
+	}
+	if _, err := ledger.Assign(ctx, owner.ClusterID, owner.AttemptID, owner.OwnerGeneration, actor); !errors.Is(err, ErrDenied) {
+		t.Fatalf("stale owner assignment: %v", err)
+	}
 	current := issue(newOwner)
 	if current.ActorUID != "uid-b" {
 		t.Fatal("new challenge bound to stale actor UID")
@@ -174,11 +182,46 @@ func TestLedgerPostgres(t *testing.T) {
 	denied(newOwner, current, currentProof, currentRoots)
 	current = issue(newOwner)
 	currentProof, currentRoots = signedProof(t, current)
-	if _, err := pool.Exec(ctx, `UPDATE bootstrap_owners SET active=false WHERE cluster_id=$1 AND attempt_id=$2`,
-		owner.ClusterID, owner.AttemptID); err != nil {
-		t.Fatal(err)
+	inactive, err := ledger.Deactivate(ctx, newOwner)
+	if err != nil || inactive.OwnerGeneration != 3 {
+		t.Fatalf("deactivate owner: %+v, %v", inactive, err)
 	}
 	denied(newOwner, current, currentProof, currentRoots)
+	if _, err := ledger.Deactivate(ctx, newOwner); !errors.Is(err, ErrDenied) {
+		t.Fatalf("repeated deactivate: %v", err)
+	}
+	if _, err := ledger.Issue(ctx, inactive); !errors.Is(err, ErrDenied) {
+		t.Fatalf("inactive owner issued challenge: %v", err)
+	}
+	resumed, err := ledger.Assign(ctx, owner.ClusterID, owner.AttemptID, inactive.OwnerGeneration, actor)
+	if err != nil || resumed.OwnerGeneration != 4 {
+		t.Fatalf("resume with new generation: %+v, %v", resumed, err)
+	}
+	denied(resumed, current, currentProof, currentRoots)
+	assignments := make(chan error, 2)
+	for _, uid := range []string{"uid-rival-a", "uid-rival-b"} {
+		group.Go(func() {
+			_, err := ledger.Assign(ctx, owner.ClusterID, owner.AttemptID, resumed.OwnerGeneration,
+				Actor{Atespace: actor.Atespace, Name: actor.Name, UID: uid})
+			assignments <- err
+		})
+	}
+	group.Wait()
+	close(assignments)
+	success, replay = 0, 0
+	for err := range assignments {
+		switch {
+		case err == nil:
+			success++
+		case errors.Is(err, ErrDenied):
+			replay++
+		default:
+			t.Fatal(err)
+		}
+	}
+	if success != 1 || replay != 1 {
+		t.Fatalf("concurrent assignments: %d success, %d denied", success, replay)
+	}
 }
 
 func signedProof(t *testing.T, offer Offer) (Proof, *x509.CertPool) {

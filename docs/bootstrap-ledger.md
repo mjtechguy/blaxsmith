@@ -4,13 +4,15 @@
 first durable piece of P0-04. They do not issue credentials or release the AX
 runner.
 
-The scheduler owns one `bootstrap_owners` row per cluster/attempt. It must
-advance `owner_generation` and replace the actor identity when assigning a new
-execution owner, or set `active=false` when ending the attempt. These writes
-must use the same durable authority domain as the ledger. A caller of `Issue`
-must already be authorized for that cluster and attempt; `Scope` is an input,
-not authentication. The trusted caller supplies the enrolled cluster CA to
-`Redeem`; neither the worker nor request body selects it.
+The scheduler owns one `bootstrap_owners` row per cluster/attempt. `Assign`
+creates its first generation or replaces an owner only when the caller supplies
+the current generation. `Deactivate` likewise compares and advances the
+generation; a stale scheduler call cannot stop a replacement. These are
+database fences, not scheduler authorization: only the future trusted
+scheduler may call them. A caller of `Issue` must already be authorized for
+that cluster and attempt; `Scope` is an input, not authentication. The trusted
+caller supplies the enrolled cluster CA to `Redeem`; neither the worker nor
+request body selects it.
 
 `Issue` locks the active owner row, cancels any pending challenge for that
 attempt, and stores a random challenge ID and SHA-256 nonce verifier. The raw
@@ -29,8 +31,11 @@ current grant/binding/policy and effective isolation/egress, bind the payload
 to the fresh guest encryption key, and fence owner replacement through
 delivery. Product connector authentication, the platform release signer,
 encrypted private-Git payload, lease lifecycle, recovery generation, and
-snapshot/revocation probes are still pending. A restored database must not
-resurrect old bootstrap authority.
+full-snapshot/revocation probes are still pending. The pinned Substrate
+[actor-UID fence](../integrations/substrate/README.md) now rejects a bootstrap
+request if the routed actor or receiving `atunnel` activation has a different
+UID. The connector does not yet pass this ledger's UID to that route. A
+restored database must not resurrect old bootstrap authority.
 
 The focused test uses a real PostgreSQL instance. Set
 `BLAXSMITH_TEST_DATABASE_URL` to a disposable database where the test user can
@@ -38,5 +43,6 @@ create schemas, then run `go test -race -count=1 -run TestLedgerPostgres
 ./internal/bootstrap`. The test creates a temporary schema and checks durable
 redeem from a second pool, cancellation, expiration, wrong scope/nonce/CA,
 replay, concurrent redemption, changed owner generation or actor UID, and an
-inactive owner. Without that environment variable, `make check` compiles the
-test but skips the database exercise.
+inactive owner. It also checks duplicate, stale, and concurrent scheduler
+assignments. Without that environment variable, `make check` compiles the test
+but skips the database exercise.

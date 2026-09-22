@@ -105,6 +105,14 @@ or actor replacement. It is not yet connected to the scheduler or connector.
 There is still no live owner/actor/policy recheck at release, credential
 delivery, or private checkout, so P0-04/05 remain open.
 
+The next pinned [Substrate actor-UID patch](../integrations/substrate/README.md)
+compares the connector's expected UID after router resume and again at the
+worker's current `atunnel` activation. The [live proof](bootstrap-actor-fence-proof.json)
+and [gate probe](bootstrap-actor-fence-gate.json) rejected a stale UID while
+preserving valid proof and replay behavior. The ledger now provides
+compare-and-swap `Assign`/`Deactivate` owner transitions; real scheduler and
+connector wiring, authorization, and access delivery remain open.
+
 ## Guild adoption map
 
 | Guild capability | Platform destination | Evidence / next work |

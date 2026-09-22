@@ -23,6 +23,12 @@ type Scope struct {
 	OwnerGeneration int64
 }
 
+type Actor struct {
+	Atespace string
+	Name     string
+	UID      string
+}
+
 type Offer struct {
 	ID            string
 	Nonce         [32]byte
@@ -51,6 +57,53 @@ type Redeemed struct {
 type Ledger struct{ db *pgxpool.Pool }
 
 func NewLedger(db *pgxpool.Pool) *Ledger { return &Ledger{db: db} }
+
+// Assign records the scheduler's next execution owner. previousGeneration is
+// zero only for a new attempt; otherwise it must match the current row.
+func (l *Ledger) Assign(ctx context.Context, clusterID, attemptID string, previousGeneration int64, actor Actor) (Scope, error) {
+	if clusterID == "" || attemptID == "" || previousGeneration < 0 ||
+		actor.Atespace == "" || actor.Name == "" || actor.UID == "" {
+		return Scope{}, ErrDenied
+	}
+	scope := Scope{ClusterID: clusterID, AttemptID: attemptID}
+	var err error
+	if previousGeneration == 0 {
+		err = l.db.QueryRow(ctx, `INSERT INTO bootstrap_owners
+			(cluster_id, attempt_id, owner_generation, actor_atespace, actor_name, actor_uid, active)
+			VALUES ($1,$2,1,$3,$4,$5,true) ON CONFLICT DO NOTHING RETURNING owner_generation`,
+			clusterID, attemptID, actor.Atespace, actor.Name, actor.UID).Scan(&scope.OwnerGeneration)
+	} else {
+		err = l.db.QueryRow(ctx, `UPDATE bootstrap_owners SET owner_generation=owner_generation+1,
+			actor_atespace=$4, actor_name=$5, actor_uid=$6, active=true
+			WHERE cluster_id=$1 AND attempt_id=$2 AND owner_generation=$3 RETURNING owner_generation`,
+			clusterID, attemptID, previousGeneration, actor.Atespace, actor.Name, actor.UID).Scan(&scope.OwnerGeneration)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Scope{}, ErrDenied
+	}
+	if err != nil {
+		return Scope{}, fmt.Errorf("assign bootstrap owner: %w", err)
+	}
+	return scope, nil
+}
+
+// Deactivate fences the current owner. A stale generation cannot stop its replacement.
+func (l *Ledger) Deactivate(ctx context.Context, scope Scope) (Scope, error) {
+	if !validScope(scope) {
+		return Scope{}, ErrDenied
+	}
+	err := l.db.QueryRow(ctx, `UPDATE bootstrap_owners SET active=false,
+		owner_generation=owner_generation+1 WHERE cluster_id=$1 AND attempt_id=$2
+		AND owner_generation=$3 AND active RETURNING owner_generation`,
+		scope.ClusterID, scope.AttemptID, scope.OwnerGeneration).Scan(&scope.OwnerGeneration)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Scope{}, ErrDenied
+	}
+	if err != nil {
+		return Scope{}, fmt.Errorf("deactivate bootstrap owner: %w", err)
+	}
+	return scope, nil
+}
 
 // Issue returns a fresh connector nonce for the current execution owner.
 // Only its SHA-256 digest is persisted; a new offer cancels the old one.

@@ -60,8 +60,9 @@ class RouterConnection(http.client.HTTPSConnection):
         self.sock = self._context.wrap_socket(raw, server_hostname=router_host)
 
 
-def request(nonce, token=None, target=task):
-    headers = {"ate-target-actor": f"{space}/{target}", "X-Blaxsmith-Request-Nonce": nonce}
+def request(nonce, token=None, target=task, uid=None):
+    headers = {"ate-target-actor": f"{space}/{target}", "X-Blaxsmith-Request-Nonce": nonce,
+               "X-Blaxsmith-Actor-UID": uid if uid is not None else expected_uid}
     if token is not None:
         headers["Authorization"] = "Bearer " + token
     connection = RouterConnection(router_host, context=ssl.create_default_context(cadata=service_ca()), timeout=15)
@@ -74,6 +75,7 @@ def request(nonce, token=None, target=task):
 
 
 try:
+    expected_uid = actor()["metadata"]["uid"]
     connector_token = run("kubectl", "-n", "ate-system", "create", "token", "blaxsmith-connector",
                           "--audience=blaxsmith-bootstrap", "--duration=10m").strip()
     other_token = run("kubectl", "-n", "ate-system", "create", "token", "atenet-router",
@@ -124,6 +126,10 @@ try:
                              "-ca", str(output / "actor-ca.pem")))
     report["actor_uid"] = uid
     report["checks"].extend(checked["checks"])
+    status, _, _ = request(nonce, connector_token, uid="stale-actor-uid")
+    if status != 409:
+        raise RuntimeError(f"stale actor UID returned HTTP {status}")
+    report["checks"].append("stale actor UID denied before routing")
     status, _, _ = request("bad", connector_token)
     if status != 400:
         raise RuntimeError(f"malformed nonce returned HTTP {status}")

@@ -30,7 +30,8 @@ args = [arg for arg in router["args"] if not arg.startswith((
 args += ["--bootstrap-audience=blaxsmith-bootstrap",
          "--bootstrap-client-username=system:serviceaccount:ate-system:blaxsmith-connector"]
 patch = {"spec": {"template": {
-    "metadata": {"annotations": {"blaxsmith.dev/router-auth-patch-sha256": record["router_auth_patch_sha256"]}},
+    "metadata": {"annotations": {"blaxsmith.dev/router-auth-patch-sha256": record["router_auth_patch_sha256"],
+                             "blaxsmith.dev/actor-fence-patch-sha256": record["actor_fence_patch_sha256"]}},
     "spec": {"containers": [{"name": "atenet-router", "image": image,
                             "command": ["/usr/local/bin/atenet"], "args": args}]},
 }}}

@@ -1,0 +1,239 @@
+diff --git a/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go b/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go
+index f3319da..08951ef 100644
+--- a/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go
++++ b/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go
+@@ -17,7 +17,7 @@ func TestBootstrapRouteRequiresConnectorAndStripsToken(t *testing.T) {
+ 	resumes := 0
+ 	h := New(&mockClient{resumeFn: func(context.Context, *ateapipb.ResumeActorRequest, ...grpc.CallOption) (*ateapipb.ResumeActorResponse, error) {
+ 		resumes++
+-		return &ateapipb.ResumeActorResponse{Actor: &ateapipb.Actor{Status: &ateapipb.ActorStatus{
++		return &ateapipb.ResumeActorResponse{Actor: &ateapipb.Actor{Metadata: &ateapipb.ResourceMetadata{Uid: "uid-1"}, Status: &ateapipb.ActorStatus{
+ 			WorkerAssignment: &ateapipb.WorkerAssignment{WorkerPodIp: "10.0.0.52"},
+ 		}}}, nil
+ 	}}, ParkedRequestConfig{}, nil)
+@@ -26,11 +26,12 @@ func TestBootstrapRouteRequiresConnectorAndStripsToken(t *testing.T) {
+ 		seen = token
+ 		return token == "good", nil
+ 	})
+-	request := func(path, auth string) (*extproc.Result, error) {
++	request := func(path, auth, uid string) (*extproc.Result, error) {
+ 		md := requestMetadata("actor-1", "team-a",
+ 			&corev3.HeaderValue{Key: ":path", Value: path},
+ 			&corev3.HeaderValue{Key: ":method", Value: "GET"},
+ 			&corev3.HeaderValue{Key: "Authorization", Value: auth},
++			&corev3.HeaderValue{Key: bootstrapActorUIDHeader, Value: uid},
+ 		)
+ 		md.Attributes = map[string]*structpb.Struct{"envoy.filters.http.ext_proc": {
+ 			Fields: map[string]*structpb.Value{"connection.tls_version": structpb.NewStringValue("TLSv1.3")},
+@@ -42,21 +43,31 @@ func TestBootstrapRouteRequiresConnectorAndStripsToken(t *testing.T) {
+ 		&corev3.HeaderValue{Key: ":path", Value: "/blaxsmith/bootstrap/challenge"},
+ 		&corev3.HeaderValue{Key: ":method", Value: "GET"},
+ 		&corev3.HeaderValue{Key: "Authorization", Value: "Bearer good"},
++		&corev3.HeaderValue{Key: bootstrapActorUIDHeader, Value: "uid-1"},
+ 		&corev3.HeaderValue{Key: "x-forwarded-proto", Value: "https"},
+ 	)
+ 	if _, err := h.HandleRequestHeaders(context.Background(), withoutTLS); err == nil {
+ 		t.Fatal("plaintext client spoofed TLS using a header")
+ 	}
+ 	for _, auth := range []string{"", "Basic good", "Bearer bad"} {
+-		if _, err := request("/blaxsmith/bootstrap/challenge", auth); err == nil {
++		if _, err := request("/blaxsmith/bootstrap/challenge", auth, "uid-1"); err == nil {
+ 			t.Fatalf("bootstrap accepted %q", auth)
+ 		}
+ 	}
+ 	if resumes != 0 {
+ 		t.Fatal("unauthorized bootstrap resumed the actor")
+ 	}
++	if _, err := request("/blaxsmith/bootstrap/challenge", "Bearer good", ""); err == nil {
++		t.Fatal("bootstrap accepted missing actor UID")
++	}
++	if resumes != 0 {
++		t.Fatal("missing UID resumed the actor")
++	}
++	if _, err := request("/blaxsmith/bootstrap/challenge", "Bearer good", "old-uid"); err == nil {
++		t.Fatal("bootstrap routed to replacement actor")
++	}
+ 	for _, path := range []string{"/blaxsmith/bootstrap/challenge", "/%62laxsmith/bootstrap/challenge?x=1"} {
+-		result, err := request(path, "Bearer good")
++		result, err := request(path, "Bearer good", "uid-1")
+ 		if err != nil || seen != "good" || resumes == 0 {
+ 			t.Fatalf("authorized bootstrap = %v, seen %q", err, seen)
+ 		}
+@@ -64,9 +75,18 @@ func TestBootstrapRouteRequiresConnectorAndStripsToken(t *testing.T) {
+ 		if len(removed) != 1 || removed[0] != "authorization" {
+ 			t.Fatalf("connector token forwarded: removed headers %v", removed)
+ 		}
++		foundUID := false
++		for _, header := range result.Response.GetResponse().GetHeaderMutation().GetSetHeaders() {
++			if header.GetHeader().GetKey() == bootstrapActorUIDHeader && string(header.GetHeader().GetRawValue()) == "uid-1" {
++				foundUID = true
++			}
++		}
++		if !foundUID {
++			t.Fatal("router did not pin actor UID for atunnel")
++		}
+ 	}
+ 	h.RequireBootstrapAuth(func(context.Context, string) (bool, error) { return false, errors.New("apiserver unavailable") })
+-	if _, err := request("/blaxsmith/bootstrap/challenge", "Bearer good"); err == nil {
++	if _, err := request("/blaxsmith/bootstrap/challenge", "Bearer good", "uid-1"); err == nil {
+ 		t.Fatal("TokenReview outage allowed bootstrap")
+ 	}
+ }
+diff --git a/cmd/atenet/internal/router/ingress/ingress.go b/cmd/atenet/internal/router/ingress/ingress.go
+index fca5c4e..6cc552e 100644
+--- a/cmd/atenet/internal/router/ingress/ingress.go
++++ b/cmd/atenet/internal/router/ingress/ingress.go
+@@ -49,6 +49,8 @@ import (
+ // defaultActorPort is the actor's port when a request names no other one.
+ const defaultActorPort = 80
+ 
++const bootstrapActorUIDHeader = "X-Blaxsmith-Actor-UID"
++
+ const (
+ 	// OriginalDstMetadataKey is the dynamic-metadata namespace carrying the
+ 	// resolved worker address and port. xds.go's ORIGINAL_DST cluster reads
+@@ -112,6 +114,9 @@ func (h *Handler) HandleRequestHeaders(ctx context.Context, md *extproc.RequestM
+ 		if !allowed {
+ 			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_Forbidden, "bootstrap identity denied")
+ 		}
++		if md.Header(bootstrapActorUIDHeader) == "" {
++			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_BadRequest, "bootstrap actor UID required")
++		}
+ 	}
+ 
+ 	// The dataplane doesn't propagate trace context into the ext_proc gRPC
+@@ -157,6 +162,9 @@ func (h *Handler) HandleRequestHeaders(ctx context.Context, md *extproc.RequestM
+ 	if err != nil {
+ 		return extproc.Result{Resume: string(resumeOutcome)}, mapResumeError(actorRef, err)
+ 	}
++	if bootstrap && actor.GetMetadata().GetUid() != md.Header(bootstrapActorUIDHeader) {
++		return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_Conflict, "bootstrap actor changed")
++	}
+ 
+ 	// ActorTemplate reference, used as low-cardinality route-latency metric
+ 	// attributes.
+@@ -201,6 +209,10 @@ func (h *Handler) HandleRequestHeaders(ctx context.Context, md *extproc.RequestM
+ 	mutation := &extprocv3.HeaderMutation{}
+ 	if bootstrap {
+ 		mutation.RemoveHeaders = []string{"authorization"}
++		mutation.SetHeaders = append(mutation.SetHeaders, &corev3.HeaderValueOption{
++			Header:       &corev3.HeaderValue{Key: bootstrapActorUIDHeader, RawValue: []byte(actor.GetMetadata().GetUid())},
++			AppendAction: corev3.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
++		})
+ 	}
+ 	mutation.SetHeaders = append(mutation.SetHeaders, &corev3.HeaderValueOption{
+ 		Header: &corev3.HeaderValue{
+diff --git a/internal/atunnel/bootstrap_test.go b/internal/atunnel/bootstrap_test.go
+index 673b369..6dfd310 100644
+--- a/internal/atunnel/bootstrap_test.go
++++ b/internal/atunnel/bootstrap_test.go
+@@ -53,22 +53,28 @@ func TestBootstrapProofRoutesOnlyCurrentActor(t *testing.T) {
+ 	if _, err := rand.Read(nonce[:]); err != nil {
+ 		t.Fatal(err)
+ 	}
+-	request := func(actor, challenge string) *httptest.ResponseRecorder {
++	request := func(actor, uid, challenge string) *httptest.ResponseRecorder {
+ 		r := httptest.NewRequest(http.MethodGet, "https://worker"+bootstrapChallengePath, nil)
+ 		r.Header.Set(atenet.TargetActorHeader, actor)
++		r.Header.Set(BootstrapActorUIDHeader, uid)
+ 		r.Header.Set(BootstrapChallengeHeader, challenge)
+ 		w := httptest.NewRecorder()
+ 		s.ServeHTTP(w, r)
+ 		return w
+ 	}
+ 	validNonce := base64.RawURLEncoding.EncodeToString(nonce[:])
+-	if got := request("team-a/other", validNonce).Code; got != http.StatusMisdirectedRequest {
++	if got := request("team-a/other", "uid-1", validNonce).Code; got != http.StatusMisdirectedRequest {
+ 		t.Fatalf("wrong actor status = %d", got)
+ 	}
+-	if got := request("team-a/actor-1", "bad").Code; got != http.StatusBadRequest {
++	for _, uid := range []string{"", "uid-2"} {
++		if got := request("team-a/actor-1", uid, validNonce).Code; got != http.StatusMisdirectedRequest {
++			t.Fatalf("wrong actor UID status = %d", got)
++		}
++	}
++	if got := request("team-a/actor-1", "uid-1", "bad").Code; got != http.StatusBadRequest {
+ 		t.Fatalf("malformed nonce status = %d", got)
+ 	}
+-	response := request("team-a/actor-1", validNonce)
++	response := request("team-a/actor-1", "uid-1", validNonce)
+ 	if response.Code != http.StatusOK || !bytes.Equal(attestor.nonce, nonce[:]) || !bytes.Equal(attestor.body, response.Body.Bytes()) {
+ 		t.Fatalf("proof response = %d, nonce/body mismatch", response.Code)
+ 	}
+@@ -78,6 +84,37 @@ func TestBootstrapProofRoutesOnlyCurrentActor(t *testing.T) {
+ 	}
+ }
+ 
++func TestBootstrapReleaseRequiresCurrentActorUID(t *testing.T) {
++	forwarded := 0
++	guest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		forwarded++
++		w.WriteHeader(http.StatusNoContent)
++	}))
++	defer guest.Close()
++	upstream, _ := url.Parse(guest.URL)
++	s := newTestServer(t, upstream)
++	if err := s.ActivateAttested("team-a", "actor-1", &testBootstrapAttestor{}); err != nil {
++		t.Fatal(err)
++	}
++	defer s.Deactivate(context.Background())
++	for _, uid := range []string{"", "old-uid", "uid-1"} {
++		r := httptest.NewRequest(http.MethodPost, "https://worker/blaxsmith/bootstrap/release", nil)
++		r.Header.Set(atenet.TargetActorHeader, "team-a/actor-1")
++		r.Header.Set(BootstrapActorUIDHeader, uid)
++		w := httptest.NewRecorder()
++		s.ServeHTTP(w, r)
++		if uid == "uid-1" && w.Code != http.StatusNoContent {
++			t.Fatalf("current actor release status = %d", w.Code)
++		}
++		if uid != "uid-1" && w.Code != http.StatusMisdirectedRequest {
++			t.Fatalf("stale actor release status = %d", w.Code)
++		}
++	}
++	if forwarded != 1 {
++		t.Fatalf("forwarded %d release requests", forwarded)
++	}
++}
++
+ func TestBootstrapSourceSignsCurrentCertificate(t *testing.T) {
+ 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+ 	if err != nil {
+diff --git a/internal/atunnel/ingress.go b/internal/atunnel/ingress.go
+index ba9cae3..e0e76e3 100644
+--- a/internal/atunnel/ingress.go
++++ b/internal/atunnel/ingress.go
+@@ -30,6 +30,7 @@ import (
+ 	"net/http/httputil"
+ 	"net/url"
+ 	"os"
++	"path"
+ 	"strconv"
+ 	"strings"
+ 	"sync"
+@@ -45,6 +46,7 @@ const (
+ 	BootstrapChallengeHeader   = "X-Blaxsmith-Request-Nonce"
+ 	BootstrapCertificateHeader = "X-Blaxsmith-Actor-Certificate"
+ 	BootstrapSignatureHeader   = "X-Blaxsmith-Actor-Signature"
++	BootstrapActorUIDHeader    = "X-Blaxsmith-Actor-UID"
+ 	bootstrapChallengePath     = "/blaxsmith/bootstrap/challenge"
+ 	maxBootstrapBody           = 2048
+ 	// DefaultConnectPort is the worker port on which atunnel accepts inbound
+@@ -496,6 +498,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+ 		return
+ 	}
+ 	defer release()
++	if strings.HasPrefix(path.Clean(r.URL.Path), "/blaxsmith/bootstrap/") {
++		if active.attestor == nil {
++			s.reject(w)
++			return
++		}
++		_, _, uid := active.attestor.ActorIdentity()
++		if r.Header.Get(BootstrapActorUIDHeader) == "" || r.Header.Get(BootstrapActorUIDHeader) != uid {
++			s.reject(w)
++			return
++		}
++		r.Header.Del(BootstrapActorUIDHeader)
++	}
+ 	if r.URL.Path == bootstrapChallengePath && r.Header.Get(BootstrapChallengeHeader) != "" {
+ 		s.serveBootstrapChallenge(w, r.WithContext(requestCtx), active)
+ 		return

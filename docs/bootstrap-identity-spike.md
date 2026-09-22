@@ -107,3 +107,10 @@ data/full-snapshot resume. Finally, deliver an encrypted single-use private
 Git setup payload before workspace checkout,
 show failure blocks the command, and trace snapshots/logs for raw access. No
 real accounts or private repositories are admitted until those checks pass.
+
+The pinned Substrate [actor-UID overlay](../integrations/substrate/README.md)
+now checks the expected UID after router resume and at the receiving `atunnel`.
+The [live proof](bootstrap-actor-fence-proof.json) and
+[gate run](bootstrap-actor-fence-gate.json) reject stale-UID requests. This
+closes the direct bootstrap route's name-to-UID gap, but the product connector
+still must supply the ledger's UID and make the final authorization decision.

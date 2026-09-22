@@ -2,22 +2,24 @@
 """Synthetic AX bootstrap gate probe. No credential or private repository."""
 
 import base64
+import http.client
 import json
 import pathlib
+import socket
+import ssl
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 import uuid
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 if len(sys.argv) != 4 or "@sha256:" not in sys.argv[1]:
-    sys.exit("usage: probe-bootstrap.py PINNED_RUNNER_IMAGE ROUTER_URL NEW_EVIDENCE_DIRECTORY")
+    sys.exit("usage: probe-bootstrap.py PINNED_RUNNER_IMAGE ROUTER_IP NEW_EVIDENCE_DIRECTORY")
 
-image, router, output = sys.argv[1], sys.argv[2].rstrip("/"), pathlib.Path(sys.argv[3])
+image, router_ip, output = sys.argv[1], sys.argv[2], pathlib.Path(sys.argv[3])
+router_host = "atenet-router.ate-system.svc"
 output.mkdir()
 space = "blaxsmith-gate-" + uuid.uuid4().hex[:10]
 task = "gated-runner"
@@ -26,6 +28,29 @@ public = signer.public_key().public_bytes(
     encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
 )
 report = {"atespace": space, "image": image, "checks": []}
+
+
+def kubectl(*args):
+    result = subprocess.run(("kubectl", *args), text=True, capture_output=True, timeout=30)
+    if result.returncode:
+        raise RuntimeError(f"kubectl: {result.stderr}")
+    return result.stdout
+
+
+bundles = json.loads(kubectl("get", "clustertrustbundles.certificates.k8s.io", "-o", "json"))["items"]
+matching = [item["spec"]["trustBundle"] for item in bundles
+            if item["spec"]["signerName"] == "servicedns.podcert.ate.dev/identity"]
+if len(matching) != 1:
+    raise RuntimeError("expected exactly one service DNS trust bundle")
+router_tls = ssl.create_default_context(cadata=matching[0])
+connector_token = kubectl("-n", "ate-system", "create", "token", "blaxsmith-connector",
+                          "--audience=blaxsmith-bootstrap", "--duration=10m").strip()
+
+
+class RouterConnection(http.client.HTTPSConnection):
+    def connect(self):
+        raw = socket.create_connection((router_ip, 443), timeout=15)
+        self.sock = self._context.wrap_socket(raw, server_hostname=router_host)
 
 
 def ax(*args):
@@ -93,16 +118,20 @@ def activate_initial():
     raise RuntimeError("initial actor did not run")
 
 
-def request(path, body=None):
+def request(path, body=None, uid=None):
     headers = {"ate-target-actor": f"{space}/{task}"}
+    if path.startswith("/blaxsmith/bootstrap/"):
+        headers["Authorization"] = "Bearer " + connector_token
+        headers["X-Blaxsmith-Actor-UID"] = current_uid if uid is None else uid
     if body is not None:
         headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(router + path, data=body, headers=headers)
+    connection = RouterConnection(router_host, context=router_tls, timeout=15)
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            return response.status, response.read()
-    except urllib.error.HTTPError as error:
-        return error.code, error.read()
+        connection.request("POST" if body is not None else "GET", path, body=body, headers=headers)
+        response = connection.getresponse()
+        return response.status, response.read()
+    finally:
+        connection.close()
 
 
 def until_challenge():
@@ -144,7 +173,11 @@ manifest = {
 try:
     ax("apply", "-f", str(output / "task.json"))
     activate_initial()
+    current_uid = ate("get", "actor", task, "-a", space, "-o", "json")["actors"][0]["metadata"]["uid"]
     first = until_challenge()
+    if request("/blaxsmith/bootstrap/challenge", uid="stale-actor-uid")[0] != 409:
+        raise RuntimeError("stale actor UID was routed to the guest")
+    report["checks"].append("stale actor UID denied before challenge")
     status, _ = request("/readyz")
     if status == 200:
         raise RuntimeError("workspace reported ready before release")
@@ -165,6 +198,7 @@ try:
     wait_template_ready()
     ax("resume", "task", task)
     wait_actor_state("ACTOR_STATE_RUNNING")
+    current_uid = ate("get", "actor", task, "-a", space, "-o", "json")["actors"][0]["metadata"]["uid"]
     second = until_challenge()
     if second["nonce"] == first["nonce"]:
         raise RuntimeError("resume reused pre-suspend challenge")

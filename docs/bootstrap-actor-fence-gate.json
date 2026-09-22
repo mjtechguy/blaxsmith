@@ -1,0 +1,11 @@
+{
+  "atespace": "blaxsmith-gate-51c7f4724d",
+  "image": "127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:01bf918ad286bfb11762094746a7556a9ad6a6a3b7296ff175b711255e264754",
+  "checks": [
+    "stale actor UID denied before challenge",
+    "workspace blocked before release",
+    "signed release starts workspace",
+    "data-snapshot resume requires fresh release; replay denied"
+  ],
+  "final_phase": "Suspended"
+}

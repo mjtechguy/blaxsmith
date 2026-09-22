@@ -229,13 +229,15 @@ construct gated ActorTemplates with Substrate `/healthz` transport readiness;
 the runner still reports workspace readiness on `/readyz`. The tested Linux
 build is [recorded here](../../integrations/ax/provenance-bootstrap.json).
 The dev node has Python's `cryptography` package for the ephemeral Ed25519 test
-signer. Run with the router's in-cluster HTTP service address:
+signer. Run with the router's in-cluster service IP; the probe verifies its
+HTTPS certificate and uses a short-lived connector-audience token only on
+bootstrap routes:
 
 ```sh
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 python3 deploy/dev/probe-bootstrap.py \
   "$(cat /opt/blaxsmith-dev/ax-bootstrap-ready-build/ax-task-runner.image)" \
-  http://10.43.36.216 /opt/blaxsmith-dev/bootstrap-probe-evidence-4
+  10.43.36.216 /opt/blaxsmith-dev/bootstrap-probe-evidence-4
 ```
 
 Use a new evidence directory per invocation. The [passing report](../../docs/bootstrap-gate-probe.json)
@@ -244,9 +246,10 @@ and a fresh challenge/replay denial after data-snapshot resume. The one-worker
 pool may cold-start the task before the golden snapshot is ready; the probe
 releases and suspends the cold actor, then waits for the golden snapshot before
 resuming. An earlier run with Substrate pointed at `/readyz` deadlocked actor
-activation. This is only a synthetic startup/replay proof. The signer is chosen
-by the Task, the ingress client is unauthenticated, and no actor-UID attestation
-or credential delivery occurs in this gate probe.
+activation. The later [actor-fence run](../../docs/bootstrap-actor-fence-gate.json)
+also rejects a stale actor UID under connector-authenticated HTTPS. This is
+only a synthetic startup/replay proof: the signer is chosen by the Task, and
+there is no platform credential delivery.
 
 ## Probe activation-bound actor attestation
 
@@ -304,10 +307,11 @@ bundle, rejects missing/wrong-principal/wrong-audience/plaintext requests
 before actor resume, then repeats actor proof verification. The plaintext case
 spoofs `x-forwarded-proto: https`; the router uses Envoy's connection TLS
 attribute instead. The probe suspends the Task in its cleanup path. The
-[passing report](../../docs/bootstrap-router-auth-probe.json) and
+[earlier passing report](../../docs/bootstrap-router-auth-probe.json) and
 [Linux provenance](../../integrations/substrate/provenance-router-auth.json)
-record the tested combination. The deployed router image is
-`127.0.0.1:5001/blaxsmith-atenet@sha256:fe456b6f9a56183af4396223f49432cee15324ea4c0c6fbd4c968754e86f35e1`.
+record that tested combination. The current dev router also includes the
+[actor-UID fence](../../integrations/substrate/README.md), with image
+`127.0.0.1:5001/blaxsmith-atenet@sha256:c814f43dc8bb46108e7a2dd5487f73a3b59b9c21b3abfe5354192773b33918f2`.
 The router service account can create TokenReviews; the synthetic connector
 service account cannot. The dev probe uses operator-issued TokenRequest tokens;
 a product connector must use a projected audience-scoped token. No token is
@@ -315,8 +319,10 @@ written to the report or repository.
 
 The [local PostgreSQL ledger](../../docs/bootstrap-ledger.md) now consumes an
 owner/actor-bound pending nonce once, but is not connected to this dev
-deployment. The connector still must recheck the current actor and execution
-owner, then deliver encrypted access before sensitive work is permitted. The
+deployment. Its `Assign`/`Deactivate` methods compare owner generations, and
+the live ingress now rejects a stale actor UID on the direct bootstrap route.
+The product connector still must join these checks, recheck policy, and deliver
+encrypted access before sensitive work is permitted. The
 synthetic Task's release signer is not a platform trust root.
 
 ## Original baseline task
