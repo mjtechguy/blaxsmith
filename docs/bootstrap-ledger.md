@@ -29,7 +29,12 @@ Redeeming is **proof, not permission**. `Release` first commits an irrevocable
 release attempt, then holds the current owner row while the connector checks
 the live actor, template UID, pinned image, worker pod UID/pool, signer key,
 and an authorization callback. It signs the guest challenge only after these
-checks. A failed or uncertain send cannot retry the same redemption; a new
+checks. The authorization and credential-selection callbacks now receive the
+same PostgreSQL transaction used through the send. A caller can lock current
+grant, binding, and connection rows there so revocation serializes with
+release; the focused PostgreSQL test proves a policy-row update waits for
+the send transaction and a later release sees revocation. The synthetic dev
+callback still checks only runtime properties. A failed or uncertain send cannot retry the same redemption; a new
 challenge is required. The connector sends the ledger actor UID through the
 authenticated HTTPS router, which fences the receiving `atunnel` activation.
 The [live synthetic probe](bootstrap-ledger-release-probe.json) passed initial
@@ -48,7 +53,7 @@ rejects a template unless pause and commit use data-only snapshots, resume
 starts from the golden image, and the dev storage location matches the
 configured snapshot bucket. The [live rerun](bootstrap-private-git-probe.json)
 also observed data-only external snapshots after both suspensions. A [bounded
-surface scan](bootstrap-private-git-secret-scan.json) found no token in 145 AX Redis
+surface scan](bootstrap-private-git-secret-scan.json) found no token in 153 AX Redis
 keys, eight runtime container logs, the dev bootstrap database, fixture logs,
 or nine probe evidence files. The owner ended inactive at generation 3.
 
@@ -75,5 +80,6 @@ replay, concurrent redemption, changed owner generation or actor UID, an
 inactive owner, release replay, unknown send outcome, and superseded redemption.
 It also checks duplicate, stale, and concurrent scheduler assignments. Without
 that environment variable, `make check` compiles the test but skips the
-database exercise. `TestConnectorDoesNotFollowRedirectWithToken` runs without
+database exercise. It also proves a row-locked policy check remains fenced
+through send. `TestConnectorDoesNotFollowRedirectWithToken` runs without
 PostgreSQL and rejects redirect-based connector-token forwarding.

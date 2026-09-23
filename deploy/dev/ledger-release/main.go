@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
 )
@@ -151,7 +152,7 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 	connector := &bootstrap.Connector{Ledger: ledger, Client: &http.Client{Transport: transport, Timeout: 20 * time.Second},
 		RouterURL: "https://atenet-router.ate-system.svc", Roots: actorRoots, Signer: signer,
 		Token: func(context.Context) (string, error) { return token, nil }, Current: current,
-		Authorize: func(_ context.Context, runtime bootstrap.Runtime) error {
+		Authorize: func(_ context.Context, _ pgx.Tx, runtime bootstrap.Runtime) error {
 			if runtime.Image != image || runtime.WorkerPool != pool || runtime.SandboxClass != "SANDBOX_CLASS_GVISOR" || !dataSnapshots(runtime) {
 				return bootstrap.ErrDenied
 			}
@@ -159,7 +160,7 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 		},
 	}
 	if gitRepo != "" {
-		connector.GitSetup = func(context.Context, bootstrap.Runtime) (bootstrap.GitSetup, error) {
+		connector.GitSetup = func(context.Context, pgx.Tx, bootstrap.Runtime) (bootstrap.GitSetup, error) {
 			info, err := os.Stat(gitTokenFile)
 			if err != nil || info.Mode().Perm()&0077 != 0 {
 				return bootstrap.GitSetup{}, bootstrap.ErrDenied

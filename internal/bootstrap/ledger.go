@@ -234,9 +234,10 @@ func (l *Ledger) Redeem(ctx context.Context, scope Scope, id string, nonce [32]b
 
 // Release records an irrevocable attempt before calling checkAndSend. The
 // callback must recheck live runtime and policy, then send the release while
-// this method holds the owner row lock. Any error leaves the attempt unknown;
+// this method holds the owner row lock. Policy reads must use the supplied
+// transaction and lock rows that revocation changes. Any error leaves the attempt unknown;
 // callers must issue a new challenge rather than retry this redemption.
-func (l *Ledger) Release(ctx context.Context, redeemed Redeemed, checkAndSend func(context.Context) error) (time.Time, error) {
+func (l *Ledger) Release(ctx context.Context, redeemed Redeemed, checkAndSend func(context.Context, pgx.Tx) error) (time.Time, error) {
 	if !validScope(redeemed.Scope) || redeemed.ID == "" || redeemed.ActorAtespace == "" ||
 		redeemed.ActorName == "" || redeemed.ActorUID == "" || checkAndSend == nil {
 		return time.Time{}, ErrDenied
@@ -307,7 +308,7 @@ func (l *Ledger) Release(ctx context.Context, redeemed Redeemed, checkAndSend fu
 	}
 	sendCtx, cancel := context.WithTimeout(ctx, deadline.Sub(dbNow))
 	defer cancel()
-	if err := checkAndSend(sendCtx); err != nil {
+	if err := checkAndSend(sendCtx, sendTx); err != nil {
 		return time.Time{}, err
 	}
 	if err := sendCtx.Err(); err != nil {

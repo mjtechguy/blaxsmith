@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Runtime is read from the trusted AX/Substrate control plane, never a Task
@@ -51,10 +53,12 @@ type Connector struct {
 	Roots     *x509.CertPool
 	Signer    ed25519.PrivateKey
 	Current   func(context.Context) (Runtime, error)
-	Authorize func(context.Context, Runtime) error
+	// Authorize and GitSetup must use the supplied release transaction for
+	// policy/credential reads whose revocation must fence delivery.
+	Authorize func(context.Context, pgx.Tx, Runtime) error
 	// GitSetup runs only after proof, owner fencing, runtime check, and policy.
 	// The returned token byte slice is consumed and cleared by Open.
-	GitSetup func(context.Context, Runtime) (GitSetup, error)
+	GitSetup func(context.Context, pgx.Tx, Runtime) (GitSetup, error)
 }
 
 type GitSetup struct {
@@ -103,7 +107,7 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 	if err != nil {
 		return err
 	}
-	_, err = c.Ledger.Release(ctx, redeemed, func(sendCtx context.Context) error {
+	_, err = c.Ledger.Release(ctx, redeemed, func(sendCtx context.Context, tx pgx.Tx) error {
 		current, err := c.Current(sendCtx)
 		if err != nil {
 			return err
@@ -111,7 +115,7 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 		if current != expected {
 			return ErrDenied
 		}
-		if err := c.Authorize(sendCtx, current); err != nil {
+		if err := c.Authorize(sendCtx, tx, current); err != nil {
 			return err
 		}
 		challenge := redeemed.Challenge
@@ -119,7 +123,7 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 			strconv.FormatInt(challenge.ExpiresAt, 10) + "\n" + challenge.Atespace + "\n" + challenge.Task + "\n")
 		var envelope *Envelope
 		if c.GitSetup != nil {
-			setup, err := c.GitSetup(sendCtx, current)
+			setup, err := c.GitSetup(sendCtx, tx, current)
 			if err != nil {
 				return err
 			}
