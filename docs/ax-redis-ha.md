@@ -25,12 +25,22 @@ Redis/Sentinel authentication. Mispaired Sentinel settings or TLS files fail
 startup; certificate verification cannot be disabled through this overlay.
 
 The integration tests start authenticated Redis master and replica processes and
-an authenticated Sentinel. They wait until a task tombstone appears on the
-replica, promote it, verify the client reconnects through Sentinel, and verify a
-late `SaveTask` remains rejected. Another test uses a real TLS Redis process
+an authenticated Sentinel. They wait until a task tombstone and a pending stream
+entry appear on the replica, promote it, verify the client reconnects through
+Sentinel, recover the pending entry, and verify a late `SaveTask` remains rejected.
+Another test uses a real TLS Redis process
 with a locally generated certificate; an incorrect server name is rejected.
 The pinned [build script](../integrations/ax/build.sh) runs these tests and
 records the overlay hash in provenance.
+
+The [consumer-recovery overlay](../integrations/ax/consumer-recovery.patch)
+adds `XAUTOCLAIM` after one minute of pending idle time. The controller reads
+one event at a time and renews its ownership every ten seconds while it
+reconciles. Renewal failure cancels reconciliation and leaves the entry pending.
+Acknowledgement checks ownership atomically, so a former consumer cannot erase
+an entry another controller claimed. A real Redis restart test verifies the
+pending entry survives, is claimed by a replacement, and rejects the old
+consumer's acknowledgement. Redis 6.2 or newer is required for `XAUTOCLAIM`.
 
 **This is connection compatibility, not yet a production HA claim.** Redis
 replication is asynchronous. A tombstone acknowledged by the old master can be
@@ -38,9 +48,11 @@ lost if promotion occurs before it reaches the chosen replica; the test
 deliberately waits for replication and does not close that window. A production
 topology needs a proven durable tombstone/fencing contract across all allowed
 promotions, persistent no-eviction Redis storage and restore drills, and a
-multi-Sentinel or managed failover test under real outage conditions. AX's
-current stream consumer does not claim pending messages left by a dead
-controller; that recovery path also needs a test and fix before controller HA.
+multi-Sentinel or managed failover test under real outage conditions. Stream
+recovery remains at-least-once: if a controller loses Redis while an external
+Substrate call completes despite context cancellation, its replacement can
+repeat that call. The product must prove per-attempt Substrate side effects are
+idempotent or externally fenced before enabling multiple controllers.
 Do not enable automatic uncertain-attempt cancellation or call the AX execution
 plane HA until these gates pass. PostgreSQL remains the authoritative product
 workflow ledger.

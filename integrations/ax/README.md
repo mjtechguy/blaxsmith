@@ -4,7 +4,8 @@ Upstream: `github.com/google/ax`, commit
 `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`, Apache-2.0 (see LICENSE).
 `fail-closed.patch`, `egress-policy.patch`, `bootstrap-gate.patch`,
 `platform-bootstrap-key.patch`, `encrypted-git-bootstrap.patch`,
-`command-exit-readback.patch`, `task-tombstones.patch`, and `redis-ha.patch` change the files named in their
+`command-exit-readback.patch`, `task-tombstones.patch`, `redis-ha.patch`, and
+`consumer-recovery.patch` change the files named in their
 diffs; the reference checkout stays untouched. This is a temporary integration overlay, not a claim that AX
 has accepted these changes or that secure bootstrap is finished.
 
@@ -36,6 +37,8 @@ The patch closes observed launch failures at their source:
   reaches AX before the first upsert.
 - [Redis connection overlay](../../docs/ax-redis-ha.md) adds authenticated TLS
   and Sentinel master discovery to both AX API and controller processes.
+- [Consumer recovery overlay](../../docs/ax-redis-ha.md) reclaims stale pending
+  stream entries, renews active ownership, and rejects former-owner acknowledgements.
 
 ## Rebuild and verify
 
@@ -48,7 +51,7 @@ it ran on the Linux development node.
 bash integrations/ax/build.sh ../reference/ax /tmp/blaxsmith-ax-build
 ```
 
-The script exports committed source into a temporary directory, applies all eight
+The script exports committed source into a temporary directory, applies all nine
 patches without changing the checkout, runs the full AX test suite and `go vet`,
 and builds the server, controller and runner. It records source/patch/binary hashes in
 `provenance.json`. Changing the upstream revision fails before building; update
@@ -58,7 +61,8 @@ provenance](provenance-egress.json), [bootstrap-gate provenance](provenance-boot
 [platform-key provenance](provenance-platform-key.json), [encrypted-Git
 provenance](provenance-encrypted-git.json), and [task-tombstone
 provenance](provenance-task-tombstones.json), and [Redis connection
-provenance](provenance-redis-ha.json) are evidence of tested Linux builds, not
+provenance](provenance-redis-ha.json), and [consumer-recovery
+provenance](provenance-consumer-recovery.json) are evidence of tested Linux builds, not
 signatures.
 
 ## Synthetic bootstrap gate

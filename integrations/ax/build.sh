@@ -36,15 +36,17 @@ git apply --check --whitespace=error-all "$integration/task-tombstones.patch"
 git apply "$integration/task-tombstones.patch"
 git apply --check --whitespace=error-all "$integration/redis-ha.patch"
 git apply "$integration/redis-ha.patch"
+git apply --check --whitespace=error-all "$integration/consumer-recovery.patch"
+git apply "$integration/consumer-recovery.patch"
 go test ./...
 go vet ./...
 for component in ax-server ax-controller ax-task-runner; do
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
     -ldflags='-s -w' -o "$output/$component" "./cmd/$component"
 done
-python3 - "$output" "$integration/fail-closed.patch" "$integration/egress-policy.patch" "$integration/bootstrap-gate.patch" "$integration/platform-bootstrap-key.patch" "$integration/encrypted-git-bootstrap.patch" "$integration/command-exit-readback.patch" "$integration/task-tombstones.patch" "$integration/redis-ha.patch" "$integration/blaxsmith-git-askpass" "$expected" <<'PY'
+python3 - "$output" "$integration/fail-closed.patch" "$integration/egress-policy.patch" "$integration/bootstrap-gate.patch" "$integration/platform-bootstrap-key.patch" "$integration/encrypted-git-bootstrap.patch" "$integration/command-exit-readback.patch" "$integration/task-tombstones.patch" "$integration/redis-ha.patch" "$integration/consumer-recovery.patch" "$integration/blaxsmith-git-askpass" "$expected" <<'PY'
 import hashlib, json, pathlib, subprocess, sys
-output, patch, egress_patch, bootstrap_patch, platform_key_patch, encrypted_git_patch, command_exit_patch, tombstone_patch, redis_ha_patch, askpass, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5]), pathlib.Path(sys.argv[6]), pathlib.Path(sys.argv[7]), pathlib.Path(sys.argv[8]), pathlib.Path(sys.argv[9]), pathlib.Path(sys.argv[10]), sys.argv[11]
+output, patch, egress_patch, bootstrap_patch, platform_key_patch, encrypted_git_patch, command_exit_patch, tombstone_patch, redis_ha_patch, recovery_patch, askpass, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5]), pathlib.Path(sys.argv[6]), pathlib.Path(sys.argv[7]), pathlib.Path(sys.argv[8]), pathlib.Path(sys.argv[9]), pathlib.Path(sys.argv[10]), pathlib.Path(sys.argv[11]), sys.argv[12]
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 record = {
     'upstream_commit': revision,
@@ -56,6 +58,7 @@ record = {
     'command_exit_patch_sha256': sha(command_exit_patch),
     'task_tombstones_patch_sha256': sha(tombstone_patch),
     'redis_ha_patch_sha256': sha(redis_ha_patch),
+    'consumer_recovery_patch_sha256': sha(recovery_patch),
     'askpass_sha256': sha(askpass),
     'go_version': subprocess.check_output(['go', 'version'], text=True).strip(),
     'platform': 'linux/amd64',

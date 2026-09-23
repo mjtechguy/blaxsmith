@@ -1,0 +1,20 @@
+{
+  "upstream_commit": "d8ed0fe38bceb7842d3c47817d53d16ccdfcb601",
+  "patch_sha256": "454bacec8418e89d89be2e48f775dc66536bff66c41a4c9648c2f13251224a9f",
+  "egress_patch_sha256": "7fe6304da1195d78d5bfaa66280cc0c9308199159937ebee55edb1d63c359b31",
+  "bootstrap_patch_sha256": "581e555785e44a1656fd2c801889a2d387b5b178134140f2ea78da12221d7a75",
+  "platform_key_patch_sha256": "bab9de307caeb75fd3a855ccfec2acc4661bfbd67558789cd6b1ab4fffb60f5b",
+  "encrypted_git_patch_sha256": "36cdece4b5e79f10e991484e793a6ed28351803f5f827711c15b57d7465887ce",
+  "command_exit_patch_sha256": "7e62be52ce0910d6011a8db6bc682574477605281365a2f829831b71f76c0907",
+  "task_tombstones_patch_sha256": "319f4a7ac03d5df79fa1a6409534c535846e29330c9ca2f54c810da63c224ef1",
+  "redis_ha_patch_sha256": "cb7f6d2c4f03c7ad4cb24e559921779da6b6167f467cd2405314135a8c095da7",
+  "consumer_recovery_patch_sha256": "318f1d3cfda64aec7e40896729c5a673951c4dc98c2ae62ed3ea3ea71e322e23",
+  "askpass_sha256": "3c5b14494a6a80147507a3d802ca3a4c29714b4b330e63ae27350cda32f2237e",
+  "go_version": "go version go1.27.1 darwin/arm64",
+  "platform": "linux/amd64",
+  "binaries": {
+    "ax-server": "d732ad75e881033b2b5ad26a1ac39495977aeb4acd10ae28c6e47653b16d423f",
+    "ax-controller": "79f4d88727499249c3cf8e63603a63f3c110227674d698cf5da95c5d724e26a5",
+    "ax-task-runner": "34ec87813800146a6ed8c68060490554316e3bbddb902892a3ca2e7f7245abba"
+  }
+}

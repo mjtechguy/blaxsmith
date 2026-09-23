@@ -1,0 +1,425 @@
+diff --git a/internal/controller/worker.go b/internal/controller/worker.go
+index 5f3d1e2..ea4de1f 100644
+--- a/internal/controller/worker.go
++++ b/internal/controller/worker.go
+@@ -31,6 +31,8 @@ const (
+ 	// readRetryDelay is how long the worker waits after a transient error from the
+ 	// event queue before trying again.
+ 	readRetryDelay = time.Second
++	// Renew well before the Redis claim threshold while reconciliation is active.
++	eventRenewInterval = 10 * time.Second
+ )
+ 
+ // Worker consumes task events from the store's event queue and reconciles each
+@@ -89,7 +91,40 @@ func (w *Worker) Run(ctx context.Context) error {
+ 			continue
+ 		}
+ 
+-		if err := w.processEvent(ctx, ev); err != nil {
++		if err := sub.Renew(ctx, ev); err != nil {
++			slog.Warn("task event ownership lost before processing", "id", ev.ID, "error", err)
++			continue
++		}
++		eventCtx, cancel := context.WithCancel(ctx)
++		renewDone := make(chan error, 1)
++		go func() {
++			ticker := time.NewTicker(eventRenewInterval)
++			defer ticker.Stop()
++			for {
++				select {
++				case <-eventCtx.Done():
++					renewDone <- nil
++					return
++				case <-ticker.C:
++					if err := sub.Renew(eventCtx, ev); err != nil {
++						if eventCtx.Err() != nil {
++							renewDone <- nil
++						} else {
++							renewDone <- err
++							cancel()
++						}
++						return
++					}
++				}
++			}
++		}()
++		processErr := w.processEvent(eventCtx, ev)
++		cancel()
++		if err := <-renewDone; err != nil {
++			slog.Error("task event ownership could not be renewed; leaving pending", "id", ev.ID, "error", err)
++			continue
++		}
++		if err := processErr; err != nil {
+ 			slog.Error("error processing task event",
+ 				"id", ev.ID,
+ 				"atespace", ev.Atespace,
+diff --git a/internal/redisconn/client_test.go b/internal/redisconn/client_test.go
+index aa3beda..a5a9055 100644
+--- a/internal/redisconn/client_test.go
++++ b/internal/redisconn/client_test.go
+@@ -15,6 +15,7 @@
+ package redisconn
+ 
+ import (
++	"context"
+ 	"crypto/ed25519"
+ 	"crypto/rand"
+ 	"crypto/x509"
+@@ -80,6 +81,26 @@ func TestSentinelPromotionPreservesTaskTombstone(t *testing.T) {
+ 	defer client.Close()
+ 	waitFor(t, func() bool { return client.Ping(ctx).Err() == nil })
+ 	taskStore := redisstore.NewStore(client, redisstore.Options{})
++	dead, err := taskStore.Subscribe(ctx, "failover-controllers", "dead-controller")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := taskStore.SaveTask(ctx, &v1alpha1.Task{
++		Metadata: &v1alpha1.ObjectMeta{Name: "attempt-pending"},
++		Spec:     &v1alpha1.TaskSpec{Image: "alpine"},
++	}); err != nil {
++		t.Fatal(err)
++	}
++	pending, err := dead.Next(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	_ = dead.Close()
++	if err := client.Do(ctx, "XCLAIM", "ax:stream:tasks", "failover-controllers", "dead-controller", 0,
++		pending.ID, "IDLE", int64((time.Minute+time.Second)/time.Millisecond), "JUSTID").Err(); err != nil {
++		t.Fatal(err)
++	}
++	waitFor(t, func() bool { return replica.XPending(ctx, "ax:stream:tasks", "failover-controllers").Val().Count == 1 })
+ 	if err := taskStore.MarkTaskDeleting(ctx, "default", "attempt-fenced"); !errors.Is(err, store.ErrNotFound) {
+ 		t.Fatalf("deleting absent task: %v", err)
+ 	}
+@@ -95,6 +116,20 @@ func TestSentinelPromotionPreservesTaskTombstone(t *testing.T) {
+ 	if got, err := client.Get(ctx, marker).Result(); err != nil || got != "1" {
+ 		t.Fatalf("tombstone after promotion: %q, %v", got, err)
+ 	}
++	replacement, err := taskStore.Subscribe(ctx, "failover-controllers", "replacement-controller")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer replacement.Close()
++	recoveryCtx, cancelRecovery := context.WithTimeout(ctx, 5*time.Second)
++	defer cancelRecovery()
++	recovered, err := replacement.Next(recoveryCtx)
++	if err != nil || recovered.ID != pending.ID {
++		t.Fatalf("pending event after promotion: %+v, %v", recovered, err)
++	}
++	if err := replacement.Ack(ctx, recovered); err != nil {
++		t.Fatal(err)
++	}
+ 	if err := taskStore.SaveTask(ctx, &v1alpha1.Task{Metadata: &v1alpha1.ObjectMeta{Name: "attempt-fenced"}, Spec: &v1alpha1.TaskSpec{Image: "alpine"}}); !errors.Is(err, store.ErrTaskDeleted) {
+ 		t.Fatalf("late upsert after promotion: %v", err)
+ 	}
+diff --git a/internal/store/memory/store.go b/internal/store/memory/store.go
+index 15b415b..6668ba8 100644
+--- a/internal/store/memory/store.go
++++ b/internal/store/memory/store.go
+@@ -401,6 +401,10 @@ func (sub *subscription) Ack(ctx context.Context, ev store.TaskEvent) error {
+ 	return nil
+ }
+ 
++func (sub *subscription) Renew(ctx context.Context, ev store.TaskEvent) error {
++	return ctx.Err()
++}
++
+ func (sub *subscription) Close() error {
+ 	return nil
+ }
+diff --git a/internal/store/redis/recovery_test.go b/internal/store/redis/recovery_test.go
+new file mode 100644
+index 0000000..2ada5c7
+--- /dev/null
++++ b/internal/store/redis/recovery_test.go
+@@ -0,0 +1,131 @@
++// Copyright 2026 Blaxsmith contributors
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++package redis
++
++import (
++	"context"
++	"net"
++	"os"
++	"os/exec"
++	"strconv"
++	"testing"
++	"time"
++
++	"github.com/google/ax/pkg/apis/v1alpha1"
++	redisclient "github.com/redis/go-redis/v9"
++)
++
++func TestPendingEventRecoveredAfterRedisRestart(t *testing.T) {
++	redisPath, err := exec.LookPath("redis-server")
++	if err != nil {
++		t.Skip("redis-server is required for pending recovery test")
++	}
++	listener, err := net.Listen("tcp", "127.0.0.1:0")
++	if err != nil {
++		t.Fatal(err)
++	}
++	port := listener.Addr().(*net.TCPAddr).Port
++	_ = listener.Close()
++	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
++	dir := t.TempDir()
++	var server *exec.Cmd
++	start := func() {
++		server = exec.Command(redisPath, "--bind", "127.0.0.1", "--port", strconv.Itoa(port),
++			"--save", "", "--appendonly", "yes", "--appendfsync", "always", "--dir", dir)
++		server.Env = append(os.Environ(), "LC_ALL=C")
++		if err := server.Start(); err != nil {
++			t.Fatal(err)
++		}
++	}
++	start()
++	t.Cleanup(func() {
++		if server != nil {
++			_ = server.Process.Kill()
++			_ = server.Wait()
++		}
++	})
++	ctx := t.Context()
++	client := redisclient.NewClient(&redisclient.Options{Addr: addr})
++	t.Cleanup(func() { _ = client.Close() })
++	waitReady := func() {
++		deadline := time.Now().Add(5 * time.Second)
++		for client.Ping(ctx).Err() != nil {
++			if time.Now().After(deadline) {
++				t.Fatal("redis-server did not start")
++			}
++			time.Sleep(10 * time.Millisecond)
++		}
++	}
++	waitReady()
++	s := NewStore(client, Options{KeyPrefix: "recovery", StreamName: "recovery:tasks", ReadBlock: 20 * time.Millisecond})
++	dead, err := s.Subscribe(ctx, "controllers", "dead")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := s.SaveTask(ctx, &v1alpha1.Task{
++		Metadata: &v1alpha1.ObjectMeta{Atespace: "org", Name: "attempt"},
++		Spec:     &v1alpha1.TaskSpec{Image: "alpine"},
++	}); err != nil {
++		t.Fatal(err)
++	}
++	ev, err := dead.Next(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := dead.Renew(ctx, ev); err != nil {
++		t.Fatal(err)
++	}
++	// A live owner's refreshed entry must not be stolen.
++	if entries, _, err := client.XAutoClaim(ctx, &redisclient.XAutoClaimArgs{
++		Stream: s.opts.StreamName, Group: "controllers", Consumer: "other",
++		MinIdle: claimMinIdle, Start: "0-0", Count: 1,
++	}).Result(); err != nil || len(entries) != 0 {
++		t.Fatalf("claimed live entry: %v, %v", entries, err)
++	}
++	_ = dead.Close() // controller died before Ack
++	// Backdate pending idle time without sleeping a minute.
++	if err := client.Do(ctx, "XCLAIM", s.opts.StreamName, "controllers", "dead", 0,
++		ev.ID, "IDLE", int64((claimMinIdle+time.Second)/time.Millisecond), "JUSTID").Err(); err != nil {
++		t.Fatal(err)
++	}
++	_ = server.Process.Kill()
++	_ = server.Wait()
++	server = nil
++	start()
++	waitReady()
++	replacement, err := s.Subscribe(ctx, "controllers", "replacement")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer replacement.Close()
++	nextCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
++	defer cancel()
++	recovered, err := replacement.Next(nextCtx)
++	if err != nil || recovered.ID != ev.ID {
++		t.Fatalf("pending event was not recovered: %+v, %v", recovered, err)
++	}
++	if err := dead.Ack(ctx, ev); err == nil {
++		t.Fatal("former owner acknowledged a reclaimed event")
++	}
++	if err := replacement.Renew(ctx, recovered); err != nil {
++		t.Fatal(err)
++	}
++	if err := replacement.Ack(ctx, recovered); err != nil {
++		t.Fatal(err)
++	}
++	if pending := client.XPending(ctx, s.opts.StreamName, "controllers").Val(); pending.Count != 0 {
++		t.Fatalf("acknowledged entry remains pending: %d", pending.Count)
++	}
++}
+diff --git a/internal/store/redis/store.go b/internal/store/redis/store.go
+index 7d053e5..29329f9 100644
+--- a/internal/store/redis/store.go
++++ b/internal/store/redis/store.go
+@@ -29,9 +29,9 @@ import (
+ )
+ 
+ const (
+-	defaultStreamName    = "ax:stream:tasks"
+-	defaultReadBatchSize = 10
+-	defaultReadBlock     = 2 * time.Second
++	defaultStreamName = "ax:stream:tasks"
++	defaultReadBlock  = 2 * time.Second
++	claimMinIdle      = time.Minute
+ )
+ 
+ var (
+@@ -75,6 +75,16 @@ redis.call('SET', KEYS[2], '1')
+ redis.call('DEL', KEYS[1])
+ redis.call('ZREM', KEYS[3], ARGV[1])
+ redis.call('ZREM', KEYS[4], ARGV[2])
++return 1`)
++	// XPENDING and XACK/XCLAIM must be one Redis operation. A former owner
++	// cannot acknowledge an entry after another consumer reclaimed it.
++	ownedEventScript = redis.NewScript(`
++local pending = redis.call('XPENDING', KEYS[1], ARGV[1], ARGV[3], ARGV[3], 1)
++if #pending == 0 or pending[1][2] ~= ARGV[2] then return 0 end
++if ARGV[4] == 'ack' then
++  return redis.call('XACK', KEYS[1], ARGV[1], ARGV[3])
++end
++redis.call('XCLAIM', KEYS[1], ARGV[1], ARGV[2], 0, ARGV[3], 'JUSTID')
+ return 1`)
+ )
+ 
+@@ -84,8 +94,6 @@ type Options struct {
+ 	KeyPrefix  string
+ 	TTL        time.Duration // Optional TTL for task records
+ 
+-	// ReadBatchSize is how many events one XREADGROUP call may return.
+-	ReadBatchSize int64
+ 	// ReadBlock is how long one XREADGROUP call waits for events before returning
+ 	// empty. Shorter values make shutdown more responsive at the cost of more calls.
+ 	ReadBlock time.Duration
+@@ -105,9 +113,6 @@ func NewStore(client *redis.Client, opts Options) *Store {
+ 	if opts.KeyPrefix == "" {
+ 		opts.KeyPrefix = "ax"
+ 	}
+-	if opts.ReadBatchSize <= 0 {
+-		opts.ReadBatchSize = defaultReadBatchSize
+-	}
+ 	if opts.ReadBlock <= 0 {
+ 		opts.ReadBlock = defaultReadBlock
+ 	}
+@@ -755,33 +760,44 @@ func (s *Store) Subscribe(ctx context.Context, group, consumer string) (store.Su
+ 	if err != nil && !strings.Contains(err.Error(), "BUSYGROUP") {
+ 		return nil, fmt.Errorf("creating consumer group %q: %w", group, err)
+ 	}
+-	return &subscription{store: s, group: group, consumer: consumer}, nil
++	return &subscription{store: s, group: group, consumer: consumer, claimCursor: "0-0"}, nil
+ }
+ 
+-// subscription reads from a consumer group in batches and hands events out one
+-// at a time. Delivery is at-least-once: an event stays in the group's pending
+-// list until Ack is called for it.
++// subscription keeps only one event in flight. Delivery is at-least-once: an
++// event stays pending until its current owner acknowledges it.
+ type subscription struct {
+-	store    *Store
+-	group    string
+-	consumer string
+-	pending  []store.TaskEvent
++	store       *Store
++	group       string
++	consumer    string
++	claimCursor string
+ }
+ 
+ func (sub *subscription) Next(ctx context.Context) (store.TaskEvent, error) {
+-	for len(sub.pending) == 0 {
++	for {
+ 		if err := ctx.Err(); err != nil {
+ 			return store.TaskEvent{}, err
+ 		}
++		// Scan stale pending entries on every pass, even while new work is flowing.
++		messages, cursor, err := sub.store.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
++			Stream: sub.store.opts.StreamName, Group: sub.group,
++			Consumer: sub.consumer, MinIdle: claimMinIdle,
++			Start: sub.claimCursor, Count: 1,
++		}).Result()
++		if err != nil {
++			return store.TaskEvent{}, fmt.Errorf("claiming stale task event: %w", err)
++		}
++		sub.claimCursor = cursor
++		if len(messages) != 0 {
++			return eventFromMessage(messages[0]), nil
++		}
+ 		events, err := sub.read(ctx)
+ 		if err != nil {
+ 			return store.TaskEvent{}, err
+ 		}
+-		sub.pending = events
++		if len(events) != 0 {
++			return events[0], nil
++		}
+ 	}
+-	ev := sub.pending[0]
+-	sub.pending = sub.pending[1:]
+-	return ev, nil
+ }
+ 
+ // read performs one blocking XREADGROUP call. It returns an empty slice, not an
+@@ -791,7 +807,7 @@ func (sub *subscription) read(ctx context.Context) ([]store.TaskEvent, error) {
+ 		Group:    sub.group,
+ 		Consumer: sub.consumer,
+ 		Streams:  []string{sub.store.opts.StreamName, ">"},
+-		Count:    sub.store.opts.ReadBatchSize,
++		Count:    1,
+ 		Block:    sub.store.opts.ReadBlock,
+ 	}).Result()
+ 	if err != nil {
+@@ -811,7 +827,23 @@ func (sub *subscription) read(ctx context.Context) ([]store.TaskEvent, error) {
+ }
+ 
+ func (sub *subscription) Ack(ctx context.Context, ev store.TaskEvent) error {
+-	return sub.store.client.XAck(ctx, sub.store.opts.StreamName, sub.group, ev.ID).Err()
++	return sub.ownedEvent(ctx, ev.ID, "ack")
++}
++
++func (sub *subscription) Renew(ctx context.Context, ev store.TaskEvent) error {
++	return sub.ownedEvent(ctx, ev.ID, "renew")
++}
++
++func (sub *subscription) ownedEvent(ctx context.Context, id, action string) error {
++	ok, err := ownedEventScript.Run(ctx, sub.store.client,
++		[]string{sub.store.opts.StreamName}, sub.group, sub.consumer, id, action).Int()
++	if err != nil {
++		return fmt.Errorf("%s task event: %w", action, err)
++	}
++	if ok != 1 {
++		return fmt.Errorf("%s task event %s: consumer no longer owns entry", action, id)
++	}
++	return nil
+ }
+ 
+ // Close releases the subscription. The consumer is deliberately left registered
+diff --git a/internal/store/store.go b/internal/store/store.go
+index 7c3c266..db5cc2d 100644
+--- a/internal/store/store.go
++++ b/internal/store/store.go
+@@ -50,6 +50,8 @@ type Subscription interface {
+ 	Next(ctx context.Context) (TaskEvent, error)
+ 	// Ack marks an event as processed so it is not delivered again.
+ 	Ack(ctx context.Context, ev TaskEvent) error
++	// Renew retains ownership while a reconciliation is still running.
++	Renew(ctx context.Context, ev TaskEvent) error
+ 	// Close releases the subscription. Unacknowledged events stay pending for the group.
+ 	Close() error
+ }
