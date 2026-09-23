@@ -1,0 +1,48 @@
+name: Packaging
+
+on:
+  push:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - deploy/charts/blaxsmith-preview/**
+      - deploy/images/**
+      - frontend/**
+      - cmd/**
+      - db/**
+      - gen/go/**
+      - internal/**
+      - go.mod
+      - go.sum
+      - .github/workflows/packaging.yml
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - deploy/charts/blaxsmith-preview/**
+      - deploy/images/**
+      - frontend/**
+      - cmd/**
+      - db/**
+      - gen/go/**
+      - internal/**
+      - go.mod
+      - go.sum
+      - .github/workflows/packaging.yml
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install pinned Helm
+        run: |
+          curl -fsSL https://get.helm.sh/helm-v4.2.1-linux-amd64.tar.gz -o "$RUNNER_TEMP/helm.tar.gz"
+          echo "479dca836e5b45e8bd222400c5591b0e3a647378f03ff96597180db97c17fdae  $RUNNER_TEMP/helm.tar.gz" | sha256sum --check -
+          tar -xzf "$RUNNER_TEMP/helm.tar.gz" -C "$RUNNER_TEMP" linux-amd64/helm
+          echo "$RUNNER_TEMP/linux-amd64" >> "$GITHUB_PATH"
+      - run: deploy/charts/blaxsmith-preview/test.sh
+      - run: deploy/charts/blaxsmith-preview/smoke.sh

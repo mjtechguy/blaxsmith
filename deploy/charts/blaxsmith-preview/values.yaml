@@ -1,0 +1,20 @@
+replicaCount: 1
+
+# Build both Dockerfile targets and supply immutable image references.
+apiImage: ""
+webImage: ""
+imagePullPolicy: IfNotPresent
+imagePullSecrets: [] # Names of existing registry pull Secrets in the release namespace.
+
+apiResources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+webResources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi

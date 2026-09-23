@@ -1,0 +1,14 @@
+{
+	admin off
+}
+
+:8080 {
+	root * /srv
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8001
+	}
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}

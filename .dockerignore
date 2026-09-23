@@ -1,0 +1,11 @@
+.git
+.env
+**/.env
+**/node_modules
+frontend/dist
+bin
+reference
+deploy/dev
+docs
+*.md
+!frontend/README.md

@@ -134,7 +134,7 @@ The private repository is [mjtechguy/blaxsmith](https://github.com/mjtechguy/bla
 - **Local development:** React/Vite and Go run locally, Compose supplies supporting services, and agent work runs on a real AX/Substrate execution cluster.
 - **Cluster enrollment:** an authorized administrator registers a pool, installs the connector and validated runtime prerequisites, and completes scoped enrollment before it becomes eligible for work.
 
-There is no custom Blaxsmith operator or Compose-based agent runtime in the initial scope. Product Helm charts and Compose files are still planned. The recipe CLI, public catalog API, and local web preview described above are runnable now.
+There is no custom Blaxsmith operator or Compose-based agent runtime in the initial scope. A [preview Helm chart](deploy/charts/blaxsmith-preview/README.md) packages only the read-only catalog UI/API; authenticated product and connector charts remain planned. The recipe CLI, public catalog API, and local web preview described above are runnable now.
 
 ## Beginning implementation
 

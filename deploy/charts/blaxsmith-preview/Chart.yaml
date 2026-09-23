@@ -1,0 +1,6 @@
+apiVersion: v2
+name: blaxsmith-preview
+description: Read-only public tool catalog preview (no login or agent execution)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
