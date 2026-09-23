@@ -8,3 +8,5 @@ b2f016c942e8f89953ac420aa60b1b46885ad3c6:integrations/ax/provenance-encrypted-gi
 96a586ed455e65f3b50246ec332e3ba2ad3789b7:integrations/substrate/provenance-router-auth.json:generic-api-key:5
 # SHA-256 of the reviewed AX platform-key patch in the tombstone build provenance.
 13d5f12ab6dd60a2e0bacdd069b5efc063034159:integrations/ax/provenance-task-tombstones.json:generic-api-key:6
+# SHA-256 of the reviewed AX platform-key patch in the Redis compatibility build provenance.
+307a1a9ce97899c2755e8da86e69b4f5c3f960a6:integrations/ax/provenance-redis-ha.json:generic-api-key:6
