@@ -114,15 +114,29 @@ func (s *Store) GetProject(ctx context.Context, orgID, projectID string) (Projec
 	return p, err
 }
 
-// ListProjects and ListRuns use keyset pagination so newly inserted rows do
-// not shift pages while a workspace is browsing an organization.
-func (s *Store) ListProjects(ctx context.Context, orgID string, before time.Time, beforeID string, limit int) ([]Project, error) {
-	if !uuidPattern.MatchString(orgID) || !validPage(before, beforeID, limit) {
+// ListPage keeps search and sorting on the server; UUID breaks equal sort keys.
+type ListPage struct {
+	Search, Sort, Direction, AfterKey, AfterID string
+	AfterTime                                  time.Time
+	Limit                                      int
+}
+
+func (s *Store) ListProjects(ctx context.Context, orgID string, page ListPage) ([]Project, error) {
+	if !uuidPattern.MatchString(orgID) || !validPage(page) {
 		return nil, ErrInvalid
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id,organization_id,slug,name,created_at FROM workflow_projects
-		WHERE organization_id=$1 AND (created_at,id)<($2,$3::uuid)
-		ORDER BY created_at DESC,id DESC LIMIT $4`, orgID, before, beforeID, limit)
+	order := "created_at"
+	key := any(page.AfterTime)
+	if page.Sort == "name" {
+		order, key = `name COLLATE "C"`, page.AfterKey
+	} else if page.Sort != "created_at" {
+		return nil, ErrInvalid
+	}
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`SELECT id,organization_id,slug,name,created_at FROM workflow_projects
+		WHERE organization_id=$1 AND ($2='' OR position(lower($2) in lower(name || ' ' || slug))>0)
+		AND ($3='' OR (%s,id)%s($4,NULLIF($3,'')::uuid))
+		ORDER BY %s %s,id %s LIMIT $5`, order, pageOperator(page.Direction), order, page.Direction, page.Direction),
+		orgID, page.Search, page.AfterID, key, page.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -138,14 +152,28 @@ func (s *Store) ListProjects(ctx context.Context, orgID string, before time.Time
 	return projects, rows.Err()
 }
 
-func (s *Store) ListRuns(ctx context.Context, orgID, projectID string, before time.Time, beforeID string, limit int) ([]Run, error) {
-	if !ids(orgID, projectID) || !validPage(before, beforeID, limit) {
+func (s *Store) ListRuns(ctx context.Context, orgID, projectID string, page ListPage) ([]Run, error) {
+	if !ids(orgID, projectID) || !validPage(page) {
 		return nil, ErrInvalid
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id,organization_id,project_id,launch_key,source_commit,
+	order := "created_at"
+	key := any(page.AfterTime)
+	switch page.Sort {
+	case "created_at":
+	case "launch_key":
+		order, key = `launch_key COLLATE "C"`, page.AfterKey
+	case "state":
+		order, key = "state", page.AfterKey
+	default:
+		return nil, ErrInvalid
+	}
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`SELECT id,organization_id,project_id,launch_key,source_commit,
 		bundle_sha256,verification_sha256,state,created_at FROM workflow_runs
-		WHERE organization_id=$1 AND project_id=$2 AND (created_at,id)<($3,$4::uuid)
-		ORDER BY created_at DESC,id DESC LIMIT $5`, orgID, projectID, before, beforeID, limit)
+		WHERE organization_id=$1 AND project_id=$2
+		AND ($3='' OR position(lower($3) in lower(launch_key || ' ' || source_commit))>0)
+		AND ($4='' OR (%s,id)%s($5,NULLIF($4,'')::uuid))
+		ORDER BY %s %s,id %s LIMIT $6`, order, pageOperator(page.Direction), order, page.Direction, page.Direction),
+		orgID, projectID, page.Search, page.AfterID, key, page.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -162,8 +190,16 @@ func (s *Store) ListRuns(ctx context.Context, orgID, projectID string, before ti
 	return runs, rows.Err()
 }
 
-func validPage(before time.Time, beforeID string, limit int) bool {
-	return !before.IsZero() && uuidPattern.MatchString(beforeID) && limit >= 1 && limit <= 101
+func validPage(page ListPage) bool {
+	return (page.Direction == "asc" || page.Direction == "desc") &&
+		(page.AfterID == "" || uuidPattern.MatchString(page.AfterID)) && page.Limit >= 1 && page.Limit <= 101
+}
+
+func pageOperator(direction string) string {
+	if direction == "asc" {
+		return ">"
+	}
+	return "<"
 }
 
 // CreateRun treats the project-scoped launch key as an idempotency key. A

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Header, ReactTable, RowData, TableFeatures } from "@tanstack/react-table";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 type Props<TFeatures extends TableFeatures, TData extends RowData> = {
   table: ReactTable<TFeatures, TData>;
@@ -15,7 +16,9 @@ export function DataTable<TFeatures extends TableFeatures, TData extends RowData
         const column = header.column;
         const sorted = "getCanSort" in column && column.getCanSort() && "getIsSorted" in column ? column.getIsSorted() : null;
         return <th key={header.id} scope="col" aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : sorted === false ? "none" : undefined}>
-          {renderHeader ? renderHeader(header) : <span className="table-label"><table.FlexRender header={header} /></span>}
+          {renderHeader ? renderHeader(header) : sorted !== null ? <button type="button" onClick={() => { if ("toggleSorting" in column) column.toggleSorting(); }} aria-label={`Sort by ${String(column.columnDef.header)}`}>
+            <table.FlexRender header={header} />{sorted === "asc" ? <ArrowUp size={13} /> : sorted === "desc" ? <ArrowDown size={13} /> : <ArrowUpDown size={13} />}
+          </button> : <span className="table-label"><table.FlexRender header={header} /></span>}
         </th>;
       })}</tr>)}</thead>
       <tbody>{table.getRowModel().rows.map((row) => <tr key={row.id}>{row.getAllCells().map((cell) => <td key={cell.id}><table.FlexRender cell={cell} /></td>)}</tr>)}</tbody>

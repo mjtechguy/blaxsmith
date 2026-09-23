@@ -41,6 +41,9 @@ message GetProjectResponse { Project project = 1; }
 message ListProjectsRequest {
   int32 page_size = 1; // 1-100; zero selects 50.
   string page_token = 2;
+  string search = 3; // Case-insensitive substring of project name or slug.
+  string sort_by = 4; // created_at (default) or name.
+  string sort_direction = 5; // desc (default) or asc.
 }
 message ListProjectsResponse {
   repeated Project projects = 1;
@@ -54,6 +57,9 @@ message ListRunsRequest {
   string project_id = 1;
   int32 page_size = 2; // 1-100; zero selects 50.
   string page_token = 3;
+  string search = 4; // Case-insensitive substring of launch key or source commit.
+  string sort_by = 5; // created_at (default), launch_key, or state.
+  string sort_direction = 6; // desc (default) or asc.
 }
 message ListRunsResponse {
   repeated Run runs = 1;

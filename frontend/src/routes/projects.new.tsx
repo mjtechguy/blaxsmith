@@ -7,7 +7,7 @@ import { ArrowLeft, FolderPlus, RefreshCw } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
 import { TextField } from "../form-field";
 import { PageHeader, PageShell } from "../page";
-import { createProject, projectQueries } from "../workflow";
+import { createProject } from "../workflow";
 
 export const Route = createFileRoute("/projects/new")({ component: NewProject });
 const slugPattern = /^[a-z][a-z0-9-]{2,63}$/;
@@ -27,7 +27,7 @@ function NewProject() {
       }
       try {
         const response = await createProject(value.slug.trim(), value.name.trim());
-        await queryClient.invalidateQueries({ queryKey: projectQueries(session.data?.organizationId || "") });
+        await queryClient.invalidateQueries({ queryKey: ["projects", session.data?.organizationId || ""] });
         if (response.project?.id) await navigate({ to: "/projects/$projectId", params: { projectId: response.project.id } });
       } catch (cause) {
         setError(ConnectError.from(cause).code === Code.AlreadyExists ? "That project URL is already in use." : "Project could not be created. Please try again.");

@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -23,9 +25,9 @@ type workflowService struct {
 type pageCursor struct {
 	CreatedAt time.Time `json:"t"`
 	ID        string    `json:"id"`
+	Key       string    `json:"k,omitempty"`
+	Scope     string    `json:"s,omitempty"`
 }
-
-var firstPage = pageCursor{CreatedAt: time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC), ID: "ffffffff-ffff-ffff-ffff-ffffffffffff"}
 
 func (s *workflowService) CreateProject(ctx context.Context, req *connect.Request[api.CreateProjectRequest]) (*connect.Response[api.CreateProjectResponse], error) {
 	caller, err := s.guard.Caller(ctx, req.Header(), true)
@@ -71,18 +73,19 @@ func (s *workflowService) ListProjects(ctx context.Context, req *connect.Request
 	if err != nil {
 		return nil, err
 	}
-	cursor, err := decodeCursor(req.Msg.PageToken)
+	page, scope, err := listPage(req.Msg.PageToken, caller.OrganizationID, "", req.Msg.Search, req.Msg.SortBy, req.Msg.SortDirection, size, "name")
 	if err != nil {
 		return nil, err
 	}
-	projects, err := s.store.ListProjects(ctx, caller.OrganizationID, cursor.CreatedAt, cursor.ID, size+1)
+	projects, err := s.store.ListProjects(ctx, caller.OrganizationID, page)
 	if err != nil {
 		return nil, workflowError(err)
 	}
 	response := &api.ListProjectsResponse{}
 	if len(projects) > size {
 		projects = projects[:size]
-		response.NextPageToken = encodeCursor(projects[len(projects)-1].CreatedAt, projects[len(projects)-1].ID)
+		last := projects[len(projects)-1]
+		response.NextPageToken = encodeCursor(last.CreatedAt, last.Name, last.ID, scope)
 	}
 	for _, project := range projects {
 		response.Projects = append(response.Projects, projectMessage(project))
@@ -111,21 +114,26 @@ func (s *workflowService) ListRuns(ctx context.Context, req *connect.Request[api
 	if err != nil {
 		return nil, err
 	}
-	cursor, err := decodeCursor(req.Msg.PageToken)
+	page, scope, err := listPage(req.Msg.PageToken, caller.OrganizationID, req.Msg.ProjectId, req.Msg.Search, req.Msg.SortBy, req.Msg.SortDirection, size, "launch_key", "state")
 	if err != nil {
 		return nil, err
 	}
 	if _, err := s.store.GetProject(ctx, caller.OrganizationID, req.Msg.ProjectId); err != nil {
 		return nil, workflowError(err)
 	}
-	runs, err := s.store.ListRuns(ctx, caller.OrganizationID, req.Msg.ProjectId, cursor.CreatedAt, cursor.ID, size+1)
+	runs, err := s.store.ListRuns(ctx, caller.OrganizationID, req.Msg.ProjectId, page)
 	if err != nil {
 		return nil, workflowError(err)
 	}
 	response := &api.ListRunsResponse{}
 	if len(runs) > size {
 		runs = runs[:size]
-		response.NextPageToken = encodeCursor(runs[len(runs)-1].CreatedAt, runs[len(runs)-1].ID)
+		last := runs[len(runs)-1]
+		key := last.LaunchKey
+		if page.Sort == "state" {
+			key = last.State
+		}
+		response.NextPageToken = encodeCursor(last.CreatedAt, key, last.ID, scope)
 	}
 	for _, run := range runs {
 		response.Runs = append(response.Runs, runMessage(run))
@@ -264,11 +272,39 @@ func pageSize(value int32) (int, error) {
 	return int(value), nil
 }
 
-func decodeCursor(raw string) (pageCursor, error) {
-	if raw == "" {
-		return firstPage, nil
+func listPage(raw, orgID, projectID, search, sortBy, direction string, size int, extraSorts ...string) (workflow.ListPage, string, error) {
+	search = strings.TrimSpace(search)
+	if len(search) > 120 {
+		return workflow.ListPage{}, "", connect.NewError(connect.CodeInvalidArgument, errors.New("search is too long"))
 	}
-	if len(raw) > 256 {
+	if sortBy == "" {
+		sortBy = "created_at"
+	}
+	if direction == "" {
+		direction = "desc"
+	}
+	validSort := sortBy == "created_at"
+	for _, allowed := range extraSorts {
+		validSort = validSort || sortBy == allowed
+	}
+	if !validSort || (direction != "asc" && direction != "desc") {
+		return workflow.ListPage{}, "", connect.NewError(connect.CodeInvalidArgument, errors.New("invalid list sorting"))
+	}
+	hash := sha256.Sum256([]byte(orgID + "\x00" + projectID + "\x00" + search + "\x00" + sortBy + "\x00" + direction))
+	scope := hex.EncodeToString(hash[:])
+	cursor, err := decodeCursor(raw, scope, sortBy)
+	if err != nil {
+		return workflow.ListPage{}, "", err
+	}
+	return workflow.ListPage{Search: search, Sort: sortBy, Direction: direction, AfterKey: cursor.Key,
+		AfterID: cursor.ID, AfterTime: cursor.CreatedAt, Limit: size + 1}, scope, nil
+}
+
+func decodeCursor(raw, scope, sortBy string) (pageCursor, error) {
+	if raw == "" {
+		return pageCursor{}, nil
+	}
+	if len(raw) > 2048 {
 		return pageCursor{}, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid page token"))
 	}
 	data, err := base64.RawURLEncoding.DecodeString(raw)
@@ -276,14 +312,15 @@ func decodeCursor(raw string) (pageCursor, error) {
 		return pageCursor{}, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid page token"))
 	}
 	var cursor pageCursor
-	if json.Unmarshal(data, &cursor) != nil || cursor.CreatedAt.IsZero() || len(cursor.ID) != 36 {
+	if json.Unmarshal(data, &cursor) != nil || cursor.Scope != scope || len(cursor.ID) != 36 || len(cursor.Key) > 640 ||
+		(sortBy == "created_at" && cursor.CreatedAt.IsZero()) || (sortBy != "created_at" && cursor.Key == "") {
 		return pageCursor{}, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid page token"))
 	}
 	return cursor, nil
 }
 
-func encodeCursor(at time.Time, id string) string {
-	data, _ := json.Marshal(pageCursor{CreatedAt: at.UTC(), ID: id})
+func encodeCursor(at time.Time, key, id, scope string) string {
+	data, _ := json.Marshal(pageCursor{CreatedAt: at.UTC(), Key: key, ID: id, Scope: scope})
 	return base64.RawURLEncoding.EncodeToString(data)
 }
 

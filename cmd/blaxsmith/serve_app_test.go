@@ -450,6 +450,20 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if err != nil || len(pageTwo.Msg.Projects) != 1 || pageTwo.Msg.Projects[0].Id != first.Id {
 		t.Fatalf("second project page: %+v, %v", pageTwo, err)
 	}
+	page.Msg = &api.ListProjectsRequest{PageSize: 1, Search: "PROJECT", SortBy: "name", SortDirection: "asc"}
+	byName, err := w.ListProjects(ctx, page)
+	if err != nil || len(byName.Msg.Projects) != 1 || byName.Msg.Projects[0].Id != first.Id || byName.Msg.NextPageToken == "" {
+		t.Fatalf("server project search/sort first page: %+v, %v", byName, err)
+	}
+	page.Msg.PageToken = byName.Msg.NextPageToken
+	byName, err = w.ListProjects(ctx, page)
+	if err != nil || len(byName.Msg.Projects) != 1 || byName.Msg.Projects[0].Id != second.Id {
+		t.Fatalf("server project search/sort second page: %+v, %v", byName, err)
+	}
+	page.Msg.Search = "first"
+	if _, err := w.ListProjects(ctx, page); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("changed project search accepted old cursor: %v", err)
+	}
 	store, err := workflow.New(pool)
 	if err != nil {
 		t.Fatal(err)
@@ -508,6 +522,26 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if got, err := w.ListRuns(ctx, listRuns); err != nil || len(got.Msg.Runs) != 1 || got.Msg.Runs[0].Id != run.ID {
 		t.Fatalf("own run list: %+v, %v", got, err)
 	}
+	otherRun, err := store.CreateRun(ctx, workflow.RunInput{OrganizationID: owner.OrganizationID, ProjectID: first.Id,
+		LaunchKey: "zeta-read", SourceCommit: strings.Repeat("d", 40), BundleSHA256: strings.Repeat("b", 64), VerificationSHA256: strings.Repeat("c", 64)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listRuns.Msg = &api.ListRunsRequest{ProjectId: first.Id, PageSize: 1, Search: "READ", SortBy: "launch_key", SortDirection: "asc"}
+	byKey, err := w.ListRuns(ctx, listRuns)
+	if err != nil || len(byKey.Msg.Runs) != 1 || byKey.Msg.Runs[0].Id != run.ID || byKey.Msg.NextPageToken == "" {
+		t.Fatalf("server run search/sort first page: %+v, %v", byKey, err)
+	}
+	listRuns.Msg.PageToken = byKey.Msg.NextPageToken
+	byKey, err = w.ListRuns(ctx, listRuns)
+	if err != nil || len(byKey.Msg.Runs) != 1 || byKey.Msg.Runs[0].Id != otherRun.ID {
+		t.Fatalf("server run search/sort second page: %+v, %v", byKey, err)
+	}
+	listRuns.Msg.SortBy = "source_commit"
+	if _, err := w.ListRuns(ctx, listRuns); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("unsupported run sort accepted: %v", err)
+	}
+	listRuns.Msg = &api.ListRunsRequest{ProjectId: first.Id}
 	events := connect.NewRequest(&api.EventsAfterRequest{RunId: run.ID})
 	events.Header().Set("Origin", origin)
 	if got, err := w.EventsAfter(ctx, events); err != nil || len(got.Msg.Events) != 1 || got.Msg.Events[0].Kind != "run.created" {

@@ -6,11 +6,11 @@ import { EventsAfterResponseSchema, WorkflowEventSchema, WorkflowService, type E
 
 const client = createClient(WorkflowService, browserTransport);
 
-export const projectQueries = (organizationId: string) => ["projects", organizationId] as const;
-export const runQueries = (organizationId: string, projectId: string) => ["runs", organizationId, projectId] as const;
+export const projectQueries = (organizationId: string, search = "", sortBy = "created_at", sortDirection = "desc") => ["projects", organizationId, search, sortBy, sortDirection] as const;
+export const runQueries = (organizationId: string, projectId: string, search = "", sortBy = "created_at", sortDirection = "desc") => ["runs", organizationId, projectId, search, sortBy, sortDirection] as const;
 
-export async function listProjects(pageToken = "", signal?: AbortSignal) {
-  return client.listProjects({ pageSize: 50, pageToken }, { signal });
+export async function listProjects(pageToken = "", search = "", sortBy = "created_at", sortDirection = "desc", signal?: AbortSignal) {
+  return client.listProjects({ pageSize: 50, pageToken, search, sortBy, sortDirection }, { signal });
 }
 
 export async function getProject(projectId: string, signal?: AbortSignal) {
@@ -22,8 +22,8 @@ export async function createProject(slug: string, name: string) {
   return client.createProject({ slug, name }, { headers: { "X-Blaxsmith-CSRF": token } });
 }
 
-export async function listRuns(projectId: string, pageToken = "", signal?: AbortSignal) {
-  return client.listRuns({ projectId, pageSize: 50, pageToken }, { signal });
+export async function listRuns(projectId: string, pageToken = "", search = "", sortBy = "created_at", sortDirection = "desc", signal?: AbortSignal) {
+  return client.listRuns({ projectId, pageSize: 50, pageToken, search, sortBy, sortDirection }, { signal });
 }
 
 export async function getRun(runId: string, signal?: AbortSignal) {
