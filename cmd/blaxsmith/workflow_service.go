@@ -192,7 +192,7 @@ func (s *workflowService) ListCommandExits(ctx context.Context, req *connect.Req
 		response.Observations = append(response.Observations, &api.CommandExitObservation{
 			EventId: observation.EventID, TaskId: observation.TaskID, AttemptId: observation.AttemptID,
 			ActorUid: observation.ActorUID, SignerId: observation.SignerID, ReceiptSha256: observation.ReceiptSHA256,
-			ExitCode: int32(observation.ExitCode), Signal: int32(observation.Signal),
+			ExitCode: observation.ExitCode, Signal: observation.Signal,
 			Interrupted: observation.Interrupted, ObservedAtUnixNanos: observation.ObservedAt,
 			ReceivedAt: observation.ReceivedAt.UTC().Format(time.RFC3339Nano),
 		})

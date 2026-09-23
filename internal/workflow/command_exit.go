@@ -33,8 +33,8 @@ type CommandExitObservation struct {
 	ActorUID      string
 	SignerID      string
 	ReceiptSHA256 string
-	ExitCode      int
-	Signal        int
+	ExitCode      int32
+	Signal        int32
 	Interrupted   bool
 	ObservedAt    int64 // runner-reported Unix nanoseconds
 	ReceivedAt    time.Time
@@ -47,7 +47,7 @@ func (s *Store) ListCommandExits(ctx context.Context, orgID, runID string, after
 		return nil, ErrInvalid
 	}
 	rows, err := s.pool.Query(ctx, `SELECT e.id,c.task_id,c.attempt_id,r.actor_uid,c.signer_id,c.report_sha256,
-		c.exit_code,c.report_json,c.received_at
+		c.exit_code,(c.report_json->>'signal')::integer,c.report_json,c.received_at
 		FROM workflow_events e JOIN workflow_command_exits c
 		ON c.organization_id=e.organization_id AND c.run_id=e.run_id AND c.task_id=e.task_id AND c.attempt_id=e.attempt_id
 		JOIN workflow_attempt_runtime r ON r.organization_id=c.organization_id AND r.attempt_id=c.attempt_id
@@ -62,7 +62,7 @@ func (s *Store) ListCommandExits(ctx context.Context, orgID, runID string, after
 		var o CommandExitObservation
 		var body []byte
 		if err := rows.Scan(&o.EventID, &o.TaskID, &o.AttemptID, &o.ActorUID, &o.SignerID,
-			&o.ReceiptSHA256, &o.ExitCode, &body, &o.ReceivedAt); err != nil {
+			&o.ReceiptSHA256, &o.ExitCode, &o.Signal, &body, &o.ReceivedAt); err != nil {
 			return nil, err
 		}
 		var report runnerexit.ExitReport
@@ -70,10 +70,11 @@ func (s *Store) ListCommandExits(ctx context.Context, orgID, runID string, after
 			return nil, err
 		}
 		if report.OrganizationID != orgID || report.RunID != runID || report.TaskID != o.TaskID ||
-			report.AttemptID != o.AttemptID || report.ActorUID != o.ActorUID || report.ExitCode != o.ExitCode {
+			report.AttemptID != o.AttemptID || report.ActorUID != o.ActorUID ||
+			report.ExitCode != int(o.ExitCode) || report.Signal != int(o.Signal) {
 			return nil, ErrConflict
 		}
-		o.Signal, o.Interrupted, o.ObservedAt = report.Signal, report.Interrupted, report.ObservedAt
+		o.Interrupted, o.ObservedAt = report.Interrupted, report.ObservedAt
 		observations = append(observations, o)
 	}
 	return observations, rows.Err()
