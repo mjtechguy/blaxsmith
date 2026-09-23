@@ -5,9 +5,12 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -20,12 +23,14 @@ const sessionLifetime = 7 * 24 * time.Hour
 
 var ErrUnauthenticated = errors.New("authentication failed")
 var ErrRefreshReuse = errors.New("refresh token reused; session revoked")
+var ErrSessionConfiguration = errors.New("invalid session signing configuration")
 
 type SessionManager struct {
 	db     *pgxpool.Pool
 	issuer string
 	signer ed25519.PrivateKey
-	public ed25519.PublicKey
+	keyID  string
+	keys   map[string]ed25519.PublicKey
 }
 
 type Tokens struct {
@@ -52,13 +57,57 @@ type accessClaims struct {
 	jwt.RegisteredClaims
 }
 
-func NewSessionManager(db *pgxpool.Pool, issuer string, signer ed25519.PrivateKey) (*SessionManager, error) {
+// Previous public keys may overlap only while their access tokens remain live.
+// Refresh tokens are server-side and always mint with the current signer.
+func NewSessionManager(db *pgxpool.Pool, issuer string, signer ed25519.PrivateKey, previous ...ed25519.PublicKey) (*SessionManager, error) {
 	if db == nil || issuer == "" || len(signer) != ed25519.PrivateKeySize {
-		return nil, ErrUnauthenticated
+		return nil, ErrSessionConfiguration
 	}
 	copyKey := append(ed25519.PrivateKey(nil), signer...)
-	return &SessionManager{db: db, issuer: issuer, signer: copyKey,
-		public: append(ed25519.PublicKey(nil), copyKey.Public().(ed25519.PublicKey)...)}, nil
+	seed := copyKey.Seed()
+	valid := subtle.ConstantTimeCompare(copyKey, ed25519.NewKeyFromSeed(seed)) == 1
+	clear(seed)
+	if !valid {
+		clear(copyKey)
+		return nil, ErrSessionConfiguration
+	}
+	active := append(ed25519.PublicKey(nil), copyKey.Public().(ed25519.PublicKey)...)
+	keys := map[string]ed25519.PublicKey{signingKeyID(active): active}
+	for _, key := range previous {
+		if len(key) != ed25519.PublicKeySize {
+			clear(copyKey)
+			return nil, ErrSessionConfiguration
+		}
+		keys[signingKeyID(key)] = append(ed25519.PublicKey(nil), key...)
+	}
+	return &SessionManager{db: db, issuer: issuer, signer: copyKey, keyID: signingKeyID(active), keys: keys}, nil
+}
+
+func signingKeyID(public ed25519.PublicKey) string {
+	digest := sha256.Sum256(public)
+	return base64.RawURLEncoding.EncodeToString(digest[:])
+}
+
+// LoadSessionSigner reads a 32-byte seed from a platform-mounted file. It
+// permits group read for Kubernetes Secret mounts but never world access.
+func LoadSessionSigner(path string) (ed25519.PrivateKey, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open session signer: %w", err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o027 != 0 || info.Size() != ed25519.SeedSize {
+		return nil, ErrSessionConfiguration
+	}
+	seed := make([]byte, ed25519.SeedSize)
+	if _, err := io.ReadFull(file, seed); err != nil {
+		clear(seed)
+		return nil, ErrSessionConfiguration
+	}
+	signer := ed25519.NewKeyFromSeed(seed)
+	clear(seed)
+	return signer, nil
 }
 
 // LoginLocal is an internal operation. Do not expose it over HTTP until login
@@ -135,7 +184,17 @@ func (m *SessionManager) ValidateAccess(ctx context.Context, raw string) (Caller
 		return Caller{}, ErrUnauthenticated
 	}
 	claims := &accessClaims{}
-	token, err := jwt.ParseWithClaims(raw, claims, func(*jwt.Token) (any, error) { return m.public, nil },
+	token, err := jwt.ParseWithClaims(raw, claims, func(token *jwt.Token) (any, error) {
+		kid, ok := token.Header["kid"].(string)
+		if !ok {
+			return nil, ErrUnauthenticated
+		}
+		key, ok := m.keys[kid]
+		if !ok {
+			return nil, ErrUnauthenticated
+		}
+		return key, nil
+	},
 		jwt.WithValidMethods([]string{jwt.SigningMethodEdDSA.Alg()}), jwt.WithIssuer(m.issuer),
 		jwt.WithAudience("blaxsmith-api"), jwt.WithExpirationRequired(), jwt.WithNotBeforeRequired(), jwt.WithIssuedAt())
 	if err != nil || !token.Valid || claims.Subject == "" || claims.OrganizationID == "" || claims.SessionID == "" ||
@@ -297,7 +356,9 @@ func (m *SessionManager) sign(now time.Time, orgID, principalID, sessionID, role
 		RegisteredClaims: jwt.RegisteredClaims{Issuer: m.issuer, Subject: principalID,
 			Audience: jwt.ClaimStrings{"blaxsmith-api"}, IssuedAt: jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(expires)}}
-	encoded, err := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims).SignedString(m.signer)
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+	token.Header["kid"] = m.keyID
+	encoded, err := token.SignedString(m.signer)
 	return encoded, expires, err
 }
 

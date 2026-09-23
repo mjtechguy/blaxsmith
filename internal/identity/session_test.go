@@ -1,12 +1,46 @@
 package identity
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
+
+func TestLoadSessionSigner(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.seed")
+	seed := make([]byte, ed25519.SeedSize)
+	if _, err := rand.Read(seed); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, seed, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	signer, err := LoadSessionSigner(path)
+	if err != nil || !bytes.Equal(signer, ed25519.NewKeyFromSeed(seed)) {
+		t.Fatalf("valid signer rejected: %v", err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSessionSigner(path); !errors.Is(err, ErrSessionConfiguration) {
+		t.Fatalf("world-readable signer accepted: %v", err)
+	}
+	if err := os.WriteFile(path, seed[:16], 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSessionSigner(path); !errors.Is(err, ErrSessionConfiguration) {
+		t.Fatalf("short signer accepted: %v", err)
+	}
+}
 
 func TestSessionLifecyclePostgres(t *testing.T) {
 	pool := identityTestPool(t)
@@ -33,6 +67,39 @@ func TestSessionLifecyclePostgres(t *testing.T) {
 	first, err := manager.LoginLocal(ctx, "engineering", "alice", password)
 	if err != nil {
 		t.Fatal(err)
+	}
+	_, nextSigner, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rotated, err := NewSessionManager(pool, "blaxsmith-test", nextSigner, signer.Public().(ed25519.PublicKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rotated.ValidateAccess(ctx, first.Access); err != nil {
+		t.Fatalf("previous signing key rejected during overlap: %v", err)
+	}
+	withoutPrevious, err := NewSessionManager(pool, "blaxsmith-test", nextSigner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := withoutPrevious.ValidateAccess(ctx, first.Access); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("untrusted signing key accepted: %v", err)
+	}
+	newAccess, _, err := rotated.sign(time.Now().UTC(), first.Organization, first.Principal, first.SessionID, first.Role)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rotated.ValidateAccess(ctx, newAccess); err != nil {
+		t.Fatalf("rotated signing key rejected: %v", err)
+	}
+	if _, err := manager.ValidateAccess(ctx, newAccess); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("new signing key accepted without trust: %v", err)
+	}
+	corrupt := append(ed25519.PrivateKey(nil), signer...)
+	corrupt[len(corrupt)-1] ^= 1
+	if _, err := NewSessionManager(pool, "blaxsmith-test", corrupt); !errors.Is(err, ErrSessionConfiguration) {
+		t.Fatalf("corrupt signing key accepted: %v", err)
 	}
 	caller, err := manager.ValidateAccess(ctx, first.Access)
 	if err != nil || caller.OrganizationID != owner.OrganizationID || caller.PrincipalID != owner.PrincipalID || caller.Role != "owner" {

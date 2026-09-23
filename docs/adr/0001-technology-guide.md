@@ -30,8 +30,10 @@ The operator command never accepts a password argument or environment variable.
 The internal session service uses Ed25519 JWTs via `golang-jwt/jwt/v5`, ten-minute
 access validity, seven-day server-side sessions, hashed single-use refresh
 tokens, current membership/policy checks, and auditable revocation/replay.
-Its signing key is in memory only in tests; persistent key loading/rotation,
-login throttling, and browser transport are not implemented. No login/session
+Tokens carry a signing-key ID; a replacement signer can accept prior public keys
+for the access-token overlap. A platform-mounted 32-byte seed loader rejects
+world-readable files. Deployment key custody, rotation orchestration, login
+throttling, and browser transport are not implemented. No login/session
 endpoint is exposed yet. Browser sessions will require
 `HttpOnly`, `Secure`, `SameSite` cookies plus CSRF/origin protection as described
 by the [OWASP session](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
