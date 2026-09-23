@@ -172,19 +172,21 @@ func (h *runActivityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !ok || count == activityReplayLimit {
 			return
 		}
+		heartbeat := false
 		select {
 		case <-r.Context().Done():
 			return
 		case <-wake:
 		case <-ticker.C:
-			current, err := h.guard.StreamCaller(r.Context(), r.Header)
-			if err != nil || current.OrganizationID != caller.OrganizationID || current.PrincipalID != caller.PrincipalID ||
-				current.SessionID != caller.SessionID || current.Role != caller.Role {
-				return
-			}
-			if !writeActivity(w, flusher, ": heartbeat\n\n") {
-				return
-			}
+			heartbeat = true
+		}
+		current, err := h.guard.StreamCaller(r.Context(), r.Header)
+		if err != nil || current.OrganizationID != caller.OrganizationID || current.PrincipalID != caller.PrincipalID ||
+			current.SessionID != caller.SessionID || current.Role != caller.Role {
+			return
+		}
+		if heartbeat && !writeActivity(w, flusher, ": heartbeat\n\n") {
+			return
 		}
 	}
 }

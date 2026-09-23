@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -646,6 +647,34 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	viewerDecision.Header().Set("X-Blaxsmith-CSRF", csrf)
 	if _, err := w.DecideReview(ctx, viewerDecision); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("viewer decided final review: %v", err)
+	}
+	head, err := store.EventHead(ctx, owner.OrganizationID, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokedRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, origin+"/api/runs/"+run.ID+"/events?after="+strconv.FormatInt(head, 10), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokedRequest.Header.Set("Origin", origin)
+	revokedStream, err := client.Do(revokedRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer revokedStream.Body.Close()
+	if revokedStream.StatusCode != http.StatusOK {
+		t.Fatalf("pre-revocation stream: HTTP %d", revokedStream.StatusCode)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE identity_sessions SET revoked_at=clock_timestamp()
+		WHERE organization_id=$1 AND principal_id=$2 AND revoked_at IS NULL`, owner.OrganizationID, owner.PrincipalID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `SELECT pg_notify('blaxsmith_workflow_events',$1)`, owner.OrganizationID+":"+run.ID); err != nil {
+		t.Fatal(err)
+	}
+	content, err := io.ReadAll(revokedStream.Body)
+	if err != nil || strings.Contains(string(content), "data:") {
+		t.Fatalf("revoked stream kept delivering: %q, %v", content, err)
 	}
 }
 
