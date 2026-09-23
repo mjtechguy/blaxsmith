@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -61,6 +62,19 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 		WHERE organization_id=$1 AND run_id=$2`, org, run.ID).Scan(&deps); err != nil || deps != 5 {
 		t.Fatalf("wrong dependency count %d: %v", deps, err)
 	}
+	graph, err := store.ListRunTasks(t.Context(), org, run.ID)
+	if err != nil || len(graph) != 5 {
+		t.Fatalf("run graph: %+v, %v", graph, err)
+	}
+	byKey := make(map[string]RunTask, len(graph))
+	for _, task := range graph {
+		byKey[task.Key] = task
+	}
+	if !slices.Equal(byKey["implement"].DependsOn, []string{"plan"}) ||
+		!slices.Equal(byKey["architect-review"].DependsOn, []string{"review", "verify"}) ||
+		byKey["plan"].Generation != 0 || byKey["plan"].State != "pending" {
+		t.Fatalf("wrong task read model: %+v", byKey)
+	}
 	var bundle, verification []byte
 	if err := pool.QueryRow(t.Context(), `SELECT bundle_json,verification_json FROM workflow_run_bundles
 		WHERE organization_id=$1 AND run_id=$2`, org, run.ID).Scan(&bundle, &verification); err != nil || len(bundle) == 0 || len(verification) == 0 {
@@ -104,6 +118,11 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 	binding.ActorUID = "actor-one"
 	if err := store.ConfirmStarted(t.Context(), attempt); err != nil {
 		t.Fatal(err)
+	}
+	graph, err = store.ListRunTasks(t.Context(), org, run.ID)
+	if err != nil || len(graph) != 5 || graph[0].Key != "plan" || graph[0].State != "running" ||
+		graph[0].Generation != 1 || graph[0].ActiveAttemptID == nil || *graph[0].ActiveAttemptID != attempt.ID {
+		t.Fatalf("active task read model: %+v, %v", graph, err)
 	}
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -156,6 +175,9 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 		t.Fatalf("receipt cursor replay: %+v, %v", older, err)
 	}
 	other := organization(t, pool, "frozen-other")
+	if leaked, err := store.ListRunTasks(t.Context(), other, run.ID); err != nil || len(leaked) != 0 {
+		t.Fatalf("cross-tenant task graph: %+v, %v", leaked, err)
+	}
 	if leaked, err := store.ListCommandExits(t.Context(), other, run.ID, 0, 1); err != nil || len(leaked) != 0 {
 		t.Fatalf("cross-tenant command exit: %+v, %v", leaked, err)
 	}
