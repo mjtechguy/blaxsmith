@@ -164,9 +164,19 @@ func TestSessionLifecyclePostgres(t *testing.T) {
 	if _, err := manager.ValidateAccess(ctx, last.Access); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("revoked access accepted: %v", err)
 	}
+	final, err := manager.LoginLocal(ctx, "engineering", "alice", password, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.RevokeRefresh(ctx, final.Refresh); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.ValidateAccess(ctx, final.Access); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("refresh-token logout left access valid: %v", err)
+	}
 	var audits int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM identity_audit_events
-		WHERE organization_id=$1`, owner.OrganizationID).Scan(&audits); err != nil || audits != 7 {
+		WHERE organization_id=$1`, owner.OrganizationID).Scan(&audits); err != nil || audits != 9 {
 		t.Fatalf("session audit count: %d, %v", audits, err)
 	}
 }

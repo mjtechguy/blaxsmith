@@ -51,6 +51,7 @@ type Caller struct {
 	PrincipalID    string
 	SessionID      string
 	Role           string
+	AccessExpires  time.Time
 }
 
 type accessClaims struct {
@@ -249,19 +250,18 @@ func (m *SessionManager) ValidateAccess(ctx context.Context, raw string) (Caller
 	if err != nil {
 		return Caller{}, fmt.Errorf("validate session: %w", err)
 	}
-	return Caller{claims.OrganizationID, claims.Subject, claims.SessionID, role}, nil
+	return Caller{OrganizationID: claims.OrganizationID, PrincipalID: claims.Subject,
+		SessionID: claims.SessionID, Role: role, AccessExpires: claims.ExpiresAt.Time}, nil
 }
 
 func (m *SessionManager) Refresh(ctx context.Context, raw string) (Tokens, error) {
-	if m == nil || len(raw) != 43 {
+	if m == nil {
 		return Tokens{}, ErrUnauthenticated
 	}
-	secret, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil || len(secret) != 32 {
-		return Tokens{}, ErrUnauthenticated
+	hash, err := hashRefresh(raw)
+	if err != nil {
+		return Tokens{}, err
 	}
-	hash := sha256.Sum256(secret)
-	clear(secret)
 	tx, err := m.db.Begin(ctx)
 	if err != nil {
 		return Tokens{}, err
@@ -381,6 +381,44 @@ func (m *SessionManager) Revoke(ctx context.Context, caller Caller) error {
 	return tx.Commit(ctx)
 }
 
+// RevokeRefresh supports logout even after the short access token expires.
+func (m *SessionManager) RevokeRefresh(ctx context.Context, raw string) error {
+	if m == nil {
+		return ErrUnauthenticated
+	}
+	hash, err := hashRefresh(raw)
+	if err != nil {
+		return err
+	}
+	tx, err := m.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var orgID, sessionID, principalID string
+	err = tx.QueryRow(ctx, `SELECT t.organization_id,t.session_id,s.principal_id
+		FROM identity_refresh_tokens t JOIN identity_sessions s
+		ON s.organization_id=t.organization_id AND s.id=t.session_id
+		WHERE t.token_hash=$1 AND s.revoked_at IS NULL FOR UPDATE OF s`, hash[:]).
+		Scan(&orgID, &sessionID, &principalID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrUnauthenticated
+	}
+	if err != nil {
+		return fmt.Errorf("find logout session: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE identity_sessions SET revoked_at=clock_timestamp()
+		WHERE organization_id=$1 AND id=$2`, orgID, sessionID); err != nil {
+		return fmt.Errorf("revoke logout session: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO identity_audit_events
+		(organization_id,actor_kind,actor_id,action,subject_id)
+		VALUES ($1,'principal',$2,'identity.logout',$3)`, orgID, principalID, sessionID); err != nil {
+		return fmt.Errorf("audit logout: %w", err)
+	}
+	return tx.Commit(ctx)
+}
+
 func (m *SessionManager) sign(now time.Time, orgID, principalID, sessionID, role string) (string, time.Time, error) {
 	expires := now.Add(accessLifetime)
 	claims := accessClaims{OrganizationID: orgID, SessionID: sessionID, Role: role,
@@ -402,4 +440,17 @@ func newRefresh() (string, [32]byte, error) {
 	hash := sha256.Sum256(secret[:])
 	clear(secret[:])
 	return text, hash, nil
+}
+
+func hashRefresh(raw string) ([32]byte, error) {
+	if len(raw) != 43 {
+		return [32]byte{}, ErrUnauthenticated
+	}
+	secret, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil || len(secret) != 32 {
+		return [32]byte{}, ErrUnauthenticated
+	}
+	hash := sha256.Sum256(secret)
+	clear(secret)
+	return hash, nil
 }

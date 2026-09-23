@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package blaxsmith.api.v1;
+
+message GetCsrfRequest {}
+message GetCsrfResponse { string token = 1; }
+
+message LoginLocalRequest {
+  string organization_slug = 1;
+  string username = 2;
+  string password = 3;
+}
+
+message SessionIdentity {
+  string organization_id = 1;
+  string principal_id = 2;
+  string role = 3;
+  string access_expires_at = 4; // RFC 3339.
+}
+
+message LoginLocalResponse { SessionIdentity session = 1; }
+message RefreshSessionRequest {}
+message RefreshSessionResponse { SessionIdentity session = 1; }
+message CurrentSessionRequest {}
+message CurrentSessionResponse { SessionIdentity session = 1; }
+message LogoutRequest {}
+message LogoutResponse {}
+
+service AuthService {
+  rpc GetCsrf(GetCsrfRequest) returns (GetCsrfResponse);
+  rpc LoginLocal(LoginLocalRequest) returns (LoginLocalResponse);
+  rpc RefreshSession(RefreshSessionRequest) returns (RefreshSessionResponse);
+  rpc CurrentSession(CurrentSessionRequest) returns (CurrentSessionResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+}

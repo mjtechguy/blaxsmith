@@ -35,10 +35,12 @@ for the access-token overlap. A platform-mounted 32-byte seed loader rejects
 world-readable files. PostgreSQL-backed per-source and per-account/source
 login limits apply across replicas before bounded password hashing; a second
 identity read under lock prevents policy or password changes from racing session
-creation. Deployment key custody, rotation orchestration, scheduled limit-key
-pruning, and browser transport are not implemented. No login/session
-endpoint is exposed yet. Browser sessions will require
-`HttpOnly`, `Secure`, `SameSite` cookies plus CSRF/origin protection as described
-by the [OWASP session](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
+creation. A generated Connect browser handler verifies HTTPS/host/origin and
+CSRF, uses `__Host-` `HttpOnly`, `Secure`, `SameSite=Lax` cookies, and never
+returns bearer tokens in response bodies. It is currently unwired: deployment
+key custody, rotation orchestration, trusted ingress client-address handling,
+scheduled limit-key pruning, and frontend/session integration remain open. No
+login/session endpoint is exposed by `serve`. The cookie and CSRF design follows
+the [OWASP session](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
 and [CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
 guides.
