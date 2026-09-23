@@ -43,7 +43,7 @@ export function LoginPage() {
         <form.Field name="password" validators={{ onBlur: ({ value }) => value ? undefined : "Password is required" }}>
           {(field) => <TextField label="Password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="Enter your password"
             name={field.name} value={field.state.value} onBlur={field.handleBlur} onChange={field.handleChange}
-            error={field.state.meta.errors.join(", ")} trailing={<button type="button" className="auth-reveal" onClick={() => setShowPassword(!showPassword)}
+            error={field.state.meta.errors.join(", ")} trailing={<button type="button" className="field-action" onClick={() => setShowPassword(!showPassword)}
               aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}</button>} />}
         </form.Field>
       </div>

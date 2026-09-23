@@ -23,4 +23,9 @@ async function visit(dir) {
 
 await visit(src);
 if (!(await readFile(main, "utf8")).includes('import "./styles.css"')) failures.push("main.tsx: global stylesheet missing");
+for (const [index, line] of (await readFile(css, "utf8")).split(/\r?\n/).entries()) {
+  if (/#[\da-fA-F]{3,8}\b|\b(?:rgb|hsl)a?\(/.test(line) && !/^\s*--[\w-]+:/.test(line)) {
+    failures.push(`styles.css:${index + 1}: define colors as semantic theme tokens`);
+  }
+}
 if (failures.length) { console.error(failures.join("\n")); process.exitCode = 1; }

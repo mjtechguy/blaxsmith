@@ -91,3 +91,20 @@ the real public `blaxsmith serve` catalog on `/tools` without AuthService, and
 browser checks of blocked workspace, direct protected-route redirect, local
 sign-in, failed sign-in, sign-out, two-tab sign-out propagation, and mobile
 login/navigation against a temporary mock API.
+
+## Shared UI contract
+
+Light and dark color values live in semantic tokens in the single global
+`frontend/src/styles.css`. PageShell, TextField, and TanStack DataTable remain
+the route-level building blocks. DataTable exposes a keyboard-focusable scroll
+region and sort state; the shared field owns its label and error IDs.
+`npm run check:ui` rejects new CSS files, inline JSX styles, raw route tables,
+browser dialogs, and color literals outside theme tokens. These checks enforce
+structure, not visual quality.
+
+Validation on 2026-09-23: UI convention check, production build/typecheck, and
+auth/workflow tests with local Node 25.8.0; browser inspection of login and catalog unavailable
+states in light, dark, desktop, and mobile layouts. This inspection did not
+exercise a live table or authenticated workspace because the Vite proxy had no
+backend on port 8001; those views still need live visual and accessibility QA.
+CI must validate the declared Node 24 engine after integration.
