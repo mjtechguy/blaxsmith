@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useMatchRoute } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, ArrowRight, GitBranch, RefreshCw } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
@@ -25,6 +25,7 @@ const columns: ColumnDef<typeof features, Run>[] = [
 
 function ProjectRuns() {
   const { projectId } = Route.useParams();
+  const runDetail = useMatchRoute()({ to: "/projects/$projectId/runs/$runId" });
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const project = useQuery({ queryKey: ["project", projectId], queryFn: ({ signal }) => getProject(projectId, signal) });
   const runs = useInfiniteQuery({
@@ -34,6 +35,8 @@ function ProjectRuns() {
   });
   const rows = useMemo(() => runs.data?.pages.flatMap((page) => page.runs) || [], [runs.data]);
   const table = useTable({ features, data: rows, columns, getRowId: (row) => row.id });
+
+  if (runDetail) return <Outlet />;
 
   return <PageShell>
     <PageHeader eyebrow="Workspace / Project" title={project.data?.project?.name || "Project runs"} description={project.data?.project ? `Project URL: ${project.data.project.slug}` : "Runs and evidence for this project."} />
