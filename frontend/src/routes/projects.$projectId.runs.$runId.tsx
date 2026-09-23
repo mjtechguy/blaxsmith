@@ -54,11 +54,13 @@ function FinalReview({ runId, state }: { runId: string; state: string }) {
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const review = useQuery({ queryKey: ["run-review", runId], queryFn: ({ signal }) => getCurrentReview(runId, signal), refetchInterval: 10_000 });
   const [confirmation, setConfirmation] = useState<{ action: ReviewAction; packageId: string } | null>(null);
+  const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
   const decide = useMutation({
-    mutationFn: ({ action, packageId }: { action: ReviewAction; packageId: string }) => decideReview(runId, packageId, action),
+    mutationFn: ({ action, packageId }: { action: ReviewAction; packageId: string }) => decideReview(runId, packageId, action, action === "request_changes" ? feedback : ""),
     onSuccess: async () => {
       setConfirmation(null);
+      setFeedback("");
       setError("");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["run-review", runId] }),
@@ -66,7 +68,6 @@ function FinalReview({ runId, state }: { runId: string; state: string }) {
       ]);
     },
     onError: async (cause) => {
-      setConfirmation(null);
       const code = ConnectError.from(cause).code;
       setError(code === Code.FailedPrecondition ? "This review package changed. Check the latest package before deciding again."
         : code === Code.PermissionDenied ? "Your session is not allowed to make this decision."
@@ -77,6 +78,7 @@ function FinalReview({ runId, state }: { runId: string; state: string }) {
   const current = review.data;
   const mayDecide = session.data?.role === "owner" || session.data?.role === "admin";
   const confirmCurrent = confirmation?.packageId === current?.id;
+  const feedbackLength = Array.from(feedback.trim()).length;
 
   return <section className="review-card" aria-labelledby="review-heading">
     <div className="review-heading"><div><p className="eyebrow">Final gate</p><h2 id="review-heading">Human review</h2><p>A person makes the final decision on the current, verified package.</p></div>
@@ -94,11 +96,25 @@ function FinalReview({ runId, state }: { runId: string; state: string }) {
         <div><dt>Verification policy SHA-256</dt><dd><code>{current.verificationSha256}</code></dd></div>
         <div><dt>Recipe bundle SHA-256</dt><dd><code>{current.bundleSha256}</code></dd></div>
       </dl>
-      {current.decision ? <p className="review-decision"><Check size={16} aria-hidden="true" /> {current.decision.action === "approve" ? "Approved" : "Changes requested"} by {current.decision.principalId === session.data?.principalId ? "you" : `principal ${current.decision.principalId}`} on <time dateTime={current.decision.decidedAt}>{new Date(current.decision.decidedAt).toLocaleString()}</time>.</p> : null}
+      {current.decision ? <div className="review-decision">
+        <p><Check size={16} aria-hidden="true" /> {current.decision.action === "approve" ? "Approved" : "Changes requested"} by {current.decision.principalId === session.data?.principalId ? "you" : `principal ${current.decision.principalId}`} on <time dateTime={current.decision.decidedAt}>{new Date(current.decision.decidedAt).toLocaleString()}</time>.</p>
+        {current.decision.feedback ? <p className="review-feedback">{current.decision.feedback}</p> : null}
+      </div> : null}
       {!current.decision && mayDecide ? <div className="review-actions">
         {error ? <p className="auth-alert" role="alert">{error}</p> : null}
-        {confirmation ? <div className="review-confirm" role="group" aria-label="Confirm final review decision"><p>{confirmCurrent ? `Confirm ${confirmation.action === "approve" ? "approval" : "request for changes"} for revision ${current.revision.toString()}?` : "The review package changed. Choose an action for the current revision."}</p><div><button type="button" className="secondary-button" disabled={decide.isPending} onClick={() => setConfirmation(null)}>Cancel</button><button type="button" className="primary-button" disabled={!confirmCurrent || decide.isPending} onClick={() => { setError(""); decide.mutate(confirmation); }}>{decide.isPending ? "Saving…" : "Confirm decision"}</button></div></div>
-          : <><button type="button" className="secondary-button" onClick={() => setConfirmation({ action: "request_changes", packageId: current.id })}>Request changes</button><button type="button" className="primary-button" onClick={() => setConfirmation({ action: "approve", packageId: current.id })}>Approve package</button></>}
+        {confirmation ? <div className="review-confirm" role="group" aria-label="Confirm final review decision">
+          <p>{confirmCurrent ? `Confirm ${confirmation.action === "approve" ? "approval" : "request for changes"} for revision ${current.revision.toString()}?` : "The review package changed. Choose an action for the current revision."}</p>
+          {confirmation.action === "request_changes" && confirmCurrent ? <div className="review-feedback-input">
+            <label htmlFor={`review-feedback-${runId}`}>What needs to change?</label>
+            <textarea id={`review-feedback-${runId}`} value={feedback} maxLength={4000} rows={4} onChange={(event) => setFeedback(event.target.value)} placeholder="Give the team specific corrections to make." />
+            <small>10–4,000 characters. Be specific enough to guide the next pass.</small>
+          </div> : null}
+          <div className="review-confirm-actions">
+            <button type="button" className="secondary-button" disabled={decide.isPending} onClick={() => { setConfirmation(null); setFeedback(""); }}>Cancel</button>
+            <button type="button" className="primary-button" disabled={!confirmCurrent || decide.isPending || (confirmation.action === "request_changes" && feedbackLength < 10)} onClick={() => { setError(""); decide.mutate(confirmation); }}>{decide.isPending ? "Saving…" : "Confirm decision"}</button>
+          </div>
+        </div>
+          : <><button type="button" className="secondary-button" onClick={() => { setError(""); setFeedback(""); setConfirmation({ action: "request_changes", packageId: current.id }); }}>Request changes</button><button type="button" className="primary-button" onClick={() => { setError(""); setFeedback(""); setConfirmation({ action: "approve", packageId: current.id }); }}>Approve package</button></>}
       </div> : null}
       {!current.decision && !mayDecide && session.data ? <p className="review-message">Only organization owners and admins can make the final decision.</p> : null}
     </> : null}

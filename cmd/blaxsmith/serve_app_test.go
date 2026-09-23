@@ -465,11 +465,19 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 		IdempotencyKey: "browser-changes", Action: "request_changes"})
 	changes.Header().Set("Origin", origin)
 	changes.Header().Set("X-Blaxsmith-CSRF", csrf)
-	if got, err := w.DecideReview(ctx, changes); err != nil || got.Msg.Decision.Action != "request_changes" {
+	if _, err := w.DecideReview(ctx, changes); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("empty correction feedback accepted: %v", err)
+	}
+	changes.Msg.Feedback = "Please fix the failed verification and rerun the checks."
+	if got, err := w.DecideReview(ctx, changes); err != nil || got.Msg.Decision.Action != "request_changes" || got.Msg.Decision.Feedback != changes.Msg.Feedback {
 		t.Fatalf("owner requested changes: %+v, %v", got, err)
 	}
-	if got, err := w.GetCurrentReview(ctx, getReview); err != nil || got.Msg.Package.Decision.Action != "request_changes" {
+	if got, err := w.GetCurrentReview(ctx, getReview); err != nil || got.Msg.Package.Decision.Action != "request_changes" || got.Msg.Package.Decision.Feedback != changes.Msg.Feedback {
 		t.Fatalf("review decision not visible: %+v, %v", got, err)
+	}
+	changes.Msg.Feedback = "Please change a different thing instead."
+	if _, err := w.DecideReview(ctx, changes); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("replayed correction changed feedback: %v", err)
 	}
 	var otherOrg string
 	if err := pool.QueryRow(ctx, `INSERT INTO identity_organizations (id,slug,name)

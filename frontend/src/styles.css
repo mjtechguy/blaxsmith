@@ -218,12 +218,20 @@ tbody tr:hover { background: var(--canvas); }
 .review-facts dt { margin-bottom: 5px; color: var(--muted); font-size: 11px; font-weight: 650; }
 .review-facts dd { margin: 0; font-size: 12px; }
 .review-facts code { overflow-wrap: anywhere; font-size: 11px; }
-.review-decision { display: flex; align-items: center; gap: 7px; margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12px; }
+.review-decision { margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12px; }
+.review-decision p { margin: 0; }
+.review-decision p:first-child { display: flex; align-items: center; gap: 7px; }
+.review-decision .review-feedback { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
 .review-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
 .review-actions .auth-alert { flex: 1 0 100%; }
-.review-confirm { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; }
+.review-confirm { display: grid; gap: 14px; width: 100%; }
 .review-confirm p { margin: 0; font-size: 12px; font-weight: 600; }
-.review-confirm > div { display: flex; flex: none; gap: 8px; }
+.review-feedback-input { display: grid; gap: 7px; }
+.review-feedback-input label { font-size: 12px; font-weight: 650; }
+.review-feedback-input textarea { width: 100%; min-height: 92px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; resize: vertical; }
+.review-feedback-input textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.review-feedback-input small { color: var(--muted); }
+.review-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 @media (max-width: 800px) {
   .app-frame { display: grid; grid-template-rows: 56px auto auto 1fr; }
@@ -246,8 +254,6 @@ tbody tr:hover { background: var(--canvas); }
   .event-list li { flex-wrap: wrap; }
   .event-list time { margin-left: 41px; }
   .review-facts { grid-template-columns: 1fr; }
-  .review-confirm { flex-direction: column; align-items: stretch; }
-  .review-confirm > div { justify-content: flex-end; }
 }
 
 @media (max-width: 500px) {

@@ -880,6 +880,7 @@ type ReviewDecision struct {
 	PrincipalId   string                 `protobuf:"bytes,3,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"`
 	Action        string                 `protobuf:"bytes,4,opt,name=action,proto3" json:"action,omitempty"`                        // approve or request_changes.
 	DecidedAt     string                 `protobuf:"bytes,5,opt,name=decided_at,json=decidedAt,proto3" json:"decided_at,omitempty"` // RFC 3339.
+	Feedback      string                 `protobuf:"bytes,6,opt,name=feedback,proto3" json:"feedback,omitempty"`                    // Required for request_changes; empty for approve.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -945,6 +946,13 @@ func (x *ReviewDecision) GetAction() string {
 func (x *ReviewDecision) GetDecidedAt() string {
 	if x != nil {
 		return x.DecidedAt
+	}
+	return ""
+}
+
+func (x *ReviewDecision) GetFeedback() string {
+	if x != nil {
+		return x.Feedback
 	}
 	return ""
 }
@@ -1158,7 +1166,8 @@ type DecideReviewRequest struct {
 	RunId          string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
 	PackageId      string                 `protobuf:"bytes,2,opt,name=package_id,json=packageId,proto3" json:"package_id,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,3,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	Action         string                 `protobuf:"bytes,4,opt,name=action,proto3" json:"action,omitempty"` // approve or request_changes.
+	Action         string                 `protobuf:"bytes,4,opt,name=action,proto3" json:"action,omitempty"`     // approve or request_changes.
+	Feedback       string                 `protobuf:"bytes,5,opt,name=feedback,proto3" json:"feedback,omitempty"` // 10-4000 characters for request_changes.
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1217,6 +1226,13 @@ func (x *DecideReviewRequest) GetIdempotencyKey() string {
 func (x *DecideReviewRequest) GetAction() string {
 	if x != nil {
 		return x.Action
+	}
+	return ""
+}
+
+func (x *DecideReviewRequest) GetFeedback() string {
+	if x != nil {
+		return x.Feedback
 	}
 	return ""
 }
@@ -1333,7 +1349,7 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\x05limit\x18\x03 \x01(\x05R\x05limit\"r\n" +
 	"\x13EventsAfterResponse\x127\n" +
 	"\x06events\x18\x01 \x03(\v2\x1f.blaxsmith.api.v1.WorkflowEventR\x06events\x12\"\n" +
-	"\rnext_after_id\x18\x02 \x01(\x03R\vnextAfterId\"\x99\x01\n" +
+	"\rnext_after_id\x18\x02 \x01(\x03R\vnextAfterId\"\xb5\x01\n" +
 	"\x0eReviewDecision\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -1341,7 +1357,8 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\fprincipal_id\x18\x03 \x01(\tR\vprincipalId\x12\x16\n" +
 	"\x06action\x18\x04 \x01(\tR\x06action\x12\x1d\n" +
 	"\n" +
-	"decided_at\x18\x05 \x01(\tR\tdecidedAt\"\x84\x03\n" +
+	"decided_at\x18\x05 \x01(\tR\tdecidedAt\x12\x1a\n" +
+	"\bfeedback\x18\x06 \x01(\tR\bfeedback\"\x84\x03\n" +
 	"\rReviewPackage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1a\n" +
@@ -1357,13 +1374,14 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\x17GetCurrentReviewRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\"U\n" +
 	"\x18GetCurrentReviewResponse\x129\n" +
-	"\apackage\x18\x01 \x01(\v2\x1f.blaxsmith.api.v1.ReviewPackageR\apackage\"\x8c\x01\n" +
+	"\apackage\x18\x01 \x01(\v2\x1f.blaxsmith.api.v1.ReviewPackageR\apackage\"\xa8\x01\n" +
 	"\x13DecideReviewRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1d\n" +
 	"\n" +
 	"package_id\x18\x02 \x01(\tR\tpackageId\x12'\n" +
 	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\x12\x16\n" +
-	"\x06action\x18\x04 \x01(\tR\x06action\"T\n" +
+	"\x06action\x18\x04 \x01(\tR\x06action\x12\x1a\n" +
+	"\bfeedback\x18\x05 \x01(\tR\bfeedback\"T\n" +
 	"\x14DecideReviewResponse\x12<\n" +
 	"\bdecision\x18\x01 \x01(\v2 .blaxsmith.api.v1.ReviewDecisionR\bdecision2\xf1\x05\n" +
 	"\x0fWorkflowService\x12`\n" +

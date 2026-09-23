@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "vite build && tsc --noEmit",
     "test:auth": "node --test tests/auth.test.mjs",
+    "test:workflow": "node --test tests/workflow.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

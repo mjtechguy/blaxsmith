@@ -89,15 +89,15 @@ func TestReviewPostgres(t *testing.T) {
 	if again, err := store.PresentForReview(ctx, org, run.ID, commit, evidence, input.VerificationSHA256); err != nil || again.ID != first.ID {
 		t.Fatalf("duplicate package: %+v, %v", again, err)
 	}
-	if _, err := store.DecideReview(ctx, outsider, run.ID, first.ID, "outsider", "approve"); !errors.Is(err, ErrNotFound) {
+	if _, err := store.DecideReview(ctx, outsider, run.ID, first.ID, "outsider", "approve", ""); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cross-tenant approval: %v", err)
 	}
-	if _, err := store.DecideReview(ctx, viewer, run.ID, first.ID, "viewer", "approve"); !errors.Is(err, ErrReviewDenied) {
+	if _, err := store.DecideReview(ctx, viewer, run.ID, first.ID, "viewer", "approve", ""); !errors.Is(err, ErrReviewDenied) {
 		t.Fatalf("viewer approval: %v", err)
 	}
 	fake := caller
 	fake.SessionID = outsider.SessionID
-	if _, err := store.DecideReview(ctx, fake, run.ID, first.ID, "agent", "approve"); !errors.Is(err, ErrReviewDenied) {
+	if _, err := store.DecideReview(ctx, fake, run.ID, first.ID, "agent", "approve", ""); !errors.Is(err, ErrReviewDenied) {
 		t.Fatalf("unbound caller approval: %v", err)
 	}
 
@@ -108,7 +108,7 @@ func TestReviewPostgres(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			decision, err := store.DecideReview(ctx, caller, run.ID, first.ID, "approve-once", "approve")
+			decision, err := store.DecideReview(ctx, caller, run.ID, first.ID, "approve-once", "approve", "")
 			results <- decision
 			errorsSeen <- err
 		}()
@@ -139,13 +139,13 @@ func TestReviewPostgres(t *testing.T) {
 	}
 	renewed := caller
 	renewed.SessionID = renewedSession
-	if replay, err := store.DecideReview(ctx, renewed, run.ID, first.ID, "approve-once", "approve"); err != nil || replay.ID != decisionID {
+	if replay, err := store.DecideReview(ctx, renewed, run.ID, first.ID, "approve-once", "approve", ""); err != nil || replay.ID != decisionID {
 		t.Fatalf("authenticated same-principal replay: %+v, %v", replay, err)
 	}
-	if _, err := store.DecideReview(ctx, caller, run.ID, first.ID, "different-key", "approve"); !errors.Is(err, ErrConflict) {
+	if _, err := store.DecideReview(ctx, caller, run.ID, first.ID, "different-key", "approve", ""); !errors.Is(err, ErrConflict) {
 		t.Fatalf("second decision accepted: %v", err)
 	}
-	if _, err := store.DecideReview(ctx, caller, run.ID, first.ID, "approve-once", "request_changes"); !errors.Is(err, ErrConflict) {
+	if _, err := store.DecideReview(ctx, caller, run.ID, first.ID, "approve-once", "request_changes", "Please correct the failing tests."); !errors.Is(err, ErrConflict) {
 		t.Fatalf("changed idempotent decision accepted: %v", err)
 	}
 	var count int
@@ -160,19 +160,42 @@ func TestReviewPostgres(t *testing.T) {
 		org, decisionID); err == nil {
 		t.Fatal("immutable decision changed")
 	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_review_decisions SET feedback='tampered feedback' WHERE organization_id=$1 AND id=$2`,
+		org, decisionID); err == nil {
+		t.Fatal("immutable feedback changed")
+	}
 
 	second, err := store.PresentForReview(ctx, org, run.ID, commit, strings.Repeat("f", 64), input.VerificationSHA256)
 	if err != nil || second.Revision != 2 || second.ID == first.ID || second.Decision != nil {
 		t.Fatalf("evidence invalidation: %+v, %v", second, err)
 	}
-	if _, err := store.DecideReview(ctx, caller, run.ID, first.ID, "approve-once", "approve"); !errors.Is(err, ErrConflict) {
+	if _, err := store.DecideReview(ctx, caller, run.ID, first.ID, "approve-once", "approve", ""); !errors.Is(err, ErrConflict) {
 		t.Fatalf("stale approval replay accepted: %v", err)
 	}
-	if _, err := store.DecideReview(ctx, caller, run.ID, second.ID, "approve-once", "approve"); !errors.Is(err, ErrConflict) {
+	if _, err := store.DecideReview(ctx, caller, run.ID, second.ID, "approve-once", "approve", ""); !errors.Is(err, ErrConflict) {
 		t.Fatalf("old idempotency key reused: %v", err)
 	}
-	if change, err := store.DecideReview(ctx, caller, run.ID, second.ID, "request-corrections", "request_changes"); err != nil || change.Action != "request_changes" {
+	if _, err := pool.Exec(ctx, `INSERT INTO workflow_review_decisions
+		(organization_id,run_id,package_id,idempotency_key,principal_id,session_id,action)
+		VALUES ($1,$2,$3,'direct-empty-feedback',$4,$5,'request_changes')`,
+		org, run.ID, second.ID, caller.PrincipalID, caller.SessionID); err == nil {
+		t.Fatal("database accepted a correction without feedback")
+	}
+	if _, err := store.DecideReview(ctx, caller, run.ID, second.ID, "missing-feedback", "request_changes", "  "); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("empty correction feedback accepted: %v", err)
+	}
+	if _, err := store.DecideReview(ctx, caller, run.ID, second.ID, "short-feedback", "request_changes", "too short"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("vague correction feedback accepted: %v", err)
+	}
+	feedback := "  Please fix the failed verification and attach the passing result.  "
+	if change, err := store.DecideReview(ctx, caller, run.ID, second.ID, "request-corrections", "request_changes", feedback); err != nil || change.Action != "request_changes" || change.Feedback != strings.TrimSpace(feedback) {
 		t.Fatalf("request changes: %+v, %v", change, err)
+	}
+	if _, err := store.DecideReview(ctx, caller, run.ID, second.ID, "request-corrections", "request_changes", "Please change something else instead."); !errors.Is(err, ErrConflict) {
+		t.Fatalf("replayed correction changed feedback: %v", err)
+	}
+	if current, err := store.GetCurrentReview(ctx, org, run.ID); err != nil || current.Decision == nil || current.Decision.Feedback != strings.TrimSpace(feedback) {
+		t.Fatalf("correction feedback not visible: %+v, %v", current, err)
 	}
 	third, err := store.PresentForReview(ctx, org, run.ID, strings.Repeat("1", 40), evidence, input.VerificationSHA256)
 	if err != nil || third.Revision != 3 || third.Decision != nil {
@@ -182,11 +205,11 @@ func TestReviewPostgres(t *testing.T) {
 		WHERE organization_id=$1 AND id=$2`, org, caller.SessionID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DecideReview(ctx, caller, run.ID, third.ID, "revoked", "approve"); !errors.Is(err, ErrReviewDenied) {
+	if _, err := store.DecideReview(ctx, caller, run.ID, third.ID, "revoked", "approve", ""); !errors.Is(err, ErrReviewDenied) {
 		t.Fatalf("revoked session approved: %v", err)
 	}
 	fresh := reviewer(t, pool, org, "admin", "review-admin")
-	if _, err := store.DecideReview(ctx, fresh, run.ID, third.ID, "fresh-approval", "approve"); err != nil {
+	if _, err := store.DecideReview(ctx, fresh, run.ID, third.ID, "fresh-approval", "approve", ""); err != nil {
 		t.Fatal(err)
 	}
 	current, err := store.GetCurrentReview(ctx, org, run.ID)
@@ -237,7 +260,7 @@ func TestReviewPostgres(t *testing.T) {
 	}, 1)
 	go func() {
 		<-start
-		_, err := store.DecideReview(ctx, fresh, run.ID, fourth.ID, "raced-approval", "approve")
+		_, err := store.DecideReview(ctx, fresh, run.ID, fourth.ID, "raced-approval", "approve", "")
 		approved <- err
 	}()
 	go func() {

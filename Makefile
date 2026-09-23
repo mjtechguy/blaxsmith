@@ -15,6 +15,7 @@ example:
 web-check:
 	cd frontend && npm ci && npm run build
 	cd frontend && npm run test:auth
+	cd frontend && npm run test:workflow
 
 proto-check:
 	cd frontend && npm ci

@@ -76,6 +76,7 @@ message ReviewDecision {
   string principal_id = 3;
   string action = 4; // approve or request_changes.
   string decided_at = 5; // RFC 3339.
+  string feedback = 6; // Required for request_changes; empty for approve.
 }
 
 message ReviewPackage {
@@ -99,6 +100,7 @@ message DecideReviewRequest {
   string package_id = 2;
   string idempotency_key = 3;
   string action = 4; // approve or request_changes.
+  string feedback = 5; // 10-4000 characters for request_changes.
 }
 message DecideReviewResponse { ReviewDecision decision = 1; }
 

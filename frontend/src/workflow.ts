@@ -41,8 +41,8 @@ export async function getCurrentReview(runId: string, signal?: AbortSignal) {
   }
 }
 
-export async function decideReview(runId: string, packageId: string, action: "approve" | "request_changes") {
+export async function decideReview(runId: string, packageId: string, action: "approve" | "request_changes", feedback = "") {
   const token = await csrfToken();
-  return client.decideReview({ runId, packageId, action, idempotencyKey: crypto.randomUUID() },
+  return client.decideReview({ runId, packageId, action, feedback: feedback.trim(), idempotencyKey: crypto.randomUUID() },
     { headers: { "X-Blaxsmith-CSRF": token } });
 }

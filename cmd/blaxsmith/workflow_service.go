@@ -185,7 +185,7 @@ func (s *workflowService) DecideReview(ctx context.Context, req *connect.Request
 	if err != nil {
 		return nil, err
 	}
-	decision, err := s.store.DecideReview(ctx, caller, req.Msg.RunId, req.Msg.PackageId, req.Msg.IdempotencyKey, req.Msg.Action)
+	decision, err := s.store.DecideReview(ctx, caller, req.Msg.RunId, req.Msg.PackageId, req.Msg.IdempotencyKey, req.Msg.Action, req.Msg.Feedback)
 	if err != nil {
 		return nil, workflowError(err)
 	}
@@ -205,7 +205,7 @@ func reviewPackageMessage(current workflow.ReviewPackage) *api.ReviewPackage {
 
 func reviewDecisionMessage(decision workflow.ReviewDecision) *api.ReviewDecision {
 	return &api.ReviewDecision{Id: decision.ID, PackageId: decision.PackageID,
-		PrincipalId: decision.PrincipalID, Action: decision.Action,
+		PrincipalId: decision.PrincipalID, Action: decision.Action, Feedback: decision.Feedback,
 		DecidedAt: decision.DecidedAt.UTC().Format(time.RFC3339Nano)}
 }
 

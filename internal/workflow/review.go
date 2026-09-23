@@ -3,7 +3,9 @@ package workflow
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
@@ -33,6 +35,7 @@ type ReviewDecision struct {
 	PrincipalID string
 	SessionID   string
 	Action      string
+	Feedback    string
 	DecidedAt   time.Time
 }
 
@@ -119,10 +122,14 @@ func (s *Store) PresentForReview(ctx context.Context, orgID, runID, integratedCo
 // DecideReview requires a Caller produced by SessionManager.ValidateAccess.
 // It rechecks the live human session, identity policy, and owner/admin role
 // under database locks before committing one decision for the current package.
-func (s *Store) DecideReview(ctx context.Context, caller identity.Caller, runID, packageID, idempotencyKey, action string) (ReviewDecision, error) {
+func (s *Store) DecideReview(ctx context.Context, caller identity.Caller, runID, packageID, idempotencyKey, action, feedback string) (ReviewDecision, error) {
+	feedback = strings.TrimSpace(feedback)
+	feedbackLength := utf8.RuneCountInString(feedback)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID, runID, packageID) ||
 		len(idempotencyKey) < 1 || len(idempotencyKey) > 128 ||
-		(action != "approve" && action != "request_changes") {
+		(action != "approve" && action != "request_changes") ||
+		(action == "approve" && feedback != "") ||
+		(action == "request_changes" && (feedbackLength < 10 || feedbackLength > 4000)) {
 		return ReviewDecision{}, ErrInvalid
 	}
 	tx, err := s.pool.Begin(ctx)
@@ -164,14 +171,14 @@ func (s *Store) DecideReview(ctx context.Context, caller identity.Caller, runID,
 	}
 	var existing ReviewDecision
 	var key string
-	err = tx.QueryRow(ctx, `SELECT id,package_id,principal_id,session_id,action,decided_at,idempotency_key
+	err = tx.QueryRow(ctx, `SELECT id,package_id,principal_id,session_id,action,feedback,decided_at,idempotency_key
 		FROM workflow_review_decisions WHERE organization_id=$1 AND run_id=$2 AND
 		(package_id=$3 OR idempotency_key=$4) FOR UPDATE`, caller.OrganizationID, runID, packageID, idempotencyKey).
 		Scan(&existing.ID, &existing.PackageID, &existing.PrincipalID, &existing.SessionID,
-			&existing.Action, &existing.DecidedAt, &key)
+			&existing.Action, &existing.Feedback, &existing.DecidedAt, &key)
 	if err == nil {
 		if existing.PackageID != packageID || existing.PrincipalID != caller.PrincipalID ||
-			existing.Action != action || key != idempotencyKey {
+			existing.Action != action || existing.Feedback != feedback || key != idempotencyKey {
 			return ReviewDecision{}, ErrConflict
 		}
 		return existing, tx.Commit(ctx)
@@ -180,15 +187,15 @@ func (s *Store) DecideReview(ctx context.Context, caller identity.Caller, runID,
 		return ReviewDecision{}, err
 	}
 	err = tx.QueryRow(ctx, `INSERT INTO workflow_review_decisions
-		(organization_id,run_id,package_id,idempotency_key,principal_id,session_id,action)
-		VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id,decided_at`, caller.OrganizationID, runID,
-		packageID, idempotencyKey, caller.PrincipalID, caller.SessionID, action).
+		(organization_id,run_id,package_id,idempotency_key,principal_id,session_id,action,feedback)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,decided_at`, caller.OrganizationID, runID,
+		packageID, idempotencyKey, caller.PrincipalID, caller.SessionID, action, feedback).
 		Scan(&existing.ID, &existing.DecidedAt)
 	if err != nil {
 		return ReviewDecision{}, err
 	}
-	existing.PackageID, existing.PrincipalID, existing.SessionID, existing.Action =
-		packageID, caller.PrincipalID, caller.SessionID, action
+	existing.PackageID, existing.PrincipalID, existing.SessionID, existing.Action, existing.Feedback =
+		packageID, caller.PrincipalID, caller.SessionID, action, feedback
 	kind := "review.approved"
 	if action == "request_changes" {
 		kind = "review.changes_requested"
@@ -219,11 +226,11 @@ type reviewQuerier interface {
 
 func readCurrentReview(ctx context.Context, q reviewQuerier, orgID, runID string) (ReviewPackage, error) {
 	var p ReviewPackage
-	var decisionID, principalID, sessionID, action *string
+	var decisionID, principalID, sessionID, action, feedback *string
 	var decidedAt *time.Time
 	err := q.QueryRow(ctx, `SELECT p.id,p.organization_id,p.run_id,p.revision,p.source_commit,p.bundle_sha256,
 		p.verification_sha256,p.integrated_commit,p.evidence_sha256,p.presented_at,
-		d.id::text,d.principal_id::text,d.session_id::text,d.action,d.decided_at
+		d.id::text,d.principal_id::text,d.session_id::text,d.action,d.feedback,d.decided_at
 		FROM workflow_runs r JOIN workflow_review_packages p
 		ON p.organization_id=r.organization_id AND p.run_id=r.id AND p.id=r.review_package_id
 		LEFT JOIN workflow_review_decisions d
@@ -231,7 +238,7 @@ func readCurrentReview(ctx context.Context, q reviewQuerier, orgID, runID string
 		WHERE r.organization_id=$1 AND r.id=$2`, orgID, runID).
 		Scan(&p.ID, &p.OrganizationID, &p.RunID, &p.Revision, &p.SourceCommit, &p.BundleSHA256,
 			&p.VerificationSHA256, &p.IntegratedCommit, &p.EvidenceSHA256, &p.PresentedAt,
-			&decisionID, &principalID, &sessionID, &action, &decidedAt)
+			&decisionID, &principalID, &sessionID, &action, &feedback, &decidedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ReviewPackage{}, ErrNotFound
 	}
@@ -240,7 +247,7 @@ func readCurrentReview(ctx context.Context, q reviewQuerier, orgID, runID string
 	}
 	if decisionID != nil {
 		p.Decision = &ReviewDecision{ID: *decisionID, PackageID: p.ID,
-			PrincipalID: *principalID, SessionID: *sessionID, Action: *action, DecidedAt: *decidedAt}
+			PrincipalID: *principalID, SessionID: *sessionID, Action: *action, Feedback: *feedback, DecidedAt: *decidedAt}
 	}
 	return p, nil
 }
