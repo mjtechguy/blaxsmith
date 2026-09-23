@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
@@ -76,8 +77,22 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 		WHERE organization_id=$1 AND run_id=$2 AND task_key='plan'`, org, run.ID).Scan(&firstTask); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ReserveAttempt(context.Background(), org, run.ID, firstTask); err != nil {
+	attempt, err := store.ReserveAttempt(context.Background(), org, run.ID, firstTask)
+	if err != nil {
 		t.Fatalf("sealed root task could not reserve: %v", err)
+	}
+	binding := RuntimeBinding{AXAtespace: "team", AXTask: "attempt", ActorUID: "actor-one",
+		TemplateUID: "template-one", Image: "runner@sha256:" + strings.Repeat("a", 64),
+		WorkerPool: "pool-one", CommandSHA256: strings.Repeat("b", 64)}
+	if err := store.BindRuntime(t.Context(), attempt, binding); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BindRuntime(t.Context(), attempt, binding); err != nil {
+		t.Fatalf("same runtime binding was not idempotent: %v", err)
+	}
+	binding.ActorUID = "different-actor"
+	if err := store.BindRuntime(t.Context(), attempt, binding); !errors.Is(err, ErrConflict) {
+		t.Fatalf("runtime identity changed: %v", err)
 	}
 }
 
