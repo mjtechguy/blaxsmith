@@ -13,6 +13,12 @@ database Secret with a PostgreSQL URL under `url`. The certificate must match
 the exact `origin` value. PostgreSQL requires verified TLS by default. The
 chart projects TLS and signer material as group-readable, non-world-readable
 files for UID/GID 65532; it does not create, log, or rotate those secrets.
+For a planned signing-key rotation, set `previousSignerPublicSecretName` to an
+existing Secret containing a raw 32-byte key under `public`. Pre-stage the new
+public key while the old signer is active, roll to the new signer while trusting
+the old public key, then remove that trust after the access-token lifetime and
+rollout/clock margin. Each step requires a rollout; use the same Secret versions
+across replicas.
 
 ```sh
 helm upgrade --install app deploy/charts/blaxsmith-app \

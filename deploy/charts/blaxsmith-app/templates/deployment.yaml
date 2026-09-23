@@ -54,6 +54,10 @@ spec:
             - /run/blaxsmith/tls/tls.key
             - --signer-file
             - /run/blaxsmith/signer/seed
+            {{- if .Values.previousSignerPublicSecretName }}
+            - --previous-signer-public-file
+            - /run/blaxsmith/previous-signer/public
+            {{- end }}
             - --static-dir
             - /srv
           env:
@@ -98,6 +102,11 @@ spec:
             - name: signer
               mountPath: /run/blaxsmith/signer
               readOnly: true
+            {{- if .Values.previousSignerPublicSecretName }}
+            - name: previous-signer
+              mountPath: /run/blaxsmith/previous-signer
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tls
           secret:
@@ -107,3 +116,9 @@ spec:
           secret:
             secretName: {{ .Values.signerSecretName | quote }}
             defaultMode: 288
+        {{- if .Values.previousSignerPublicSecretName }}
+        - name: previous-signer
+          secret:
+            secretName: {{ .Values.previousSignerPublicSecretName | quote }}
+            defaultMode: 288
+        {{- end }}

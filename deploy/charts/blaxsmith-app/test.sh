@@ -17,6 +17,9 @@ grep -F -q 'readOnlyRootFilesystem: true' "$rendered"
 grep -F -q 'scheme: HTTPS' "$rendered"
 grep -F -q 'name: BLAXSMITH_DATABASE_URL' "$rendered"
 grep -F -q 'defaultMode: 288' "$rendered"
+helm template app "$chart" "$@" --set-string previousSignerPublicSecretName=prior-key > "$rendered"
+grep -F -q -- '--previous-signer-public-file' "$rendered"
+grep -F -q 'secretName: "prior-key"' "$rendered"
 if helm template app "$chart" --set-string image=example.invalid/blaxsmith-app:latest \
   --set-string origin=https://app.example.test --set-string tlsSecretName=app-tls \
   --set-string signerSecretName=app-signer --set-string databaseSecretName=app-database >/dev/null 2>&1; then

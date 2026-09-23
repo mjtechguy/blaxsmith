@@ -5,6 +5,7 @@ imagePullSecrets: []
 origin: "" # Exact public HTTPS origin covered by tlsSecretName.
 tlsSecretName: "" # Existing kubernetes.io/tls Secret.
 signerSecretName: "" # Existing Secret with a 32-byte seed under key seed.
+previousSignerPublicSecretName: "" # Optional Secret with a 32-byte public key under key public.
 databaseSecretName: "" # Existing Secret with PostgreSQL URL under key url; verified TLS required.
 resources:
   requests:
