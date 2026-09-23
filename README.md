@@ -161,6 +161,15 @@ resource policy remain release work. The
 [guide adoption record](docs/adr/0001-technology-guide.md)
 tracks exact baseline choices and current deviations.
 
+Run detail streams committed activity from the same HTTPS origin with an
+authenticated `EventSource`. `Last-Event-ID` resumes the ordered PostgreSQL
+event log; a single `LISTEN` connection per app instance only wakes readers.
+The stream rechecks the live session and catches missed notifications every
+30 seconds. Each app instance caps active streams at 128 and sends at most
+500 events before asking the browser to reconnect. This first slice opens one
+stream for the active run view, not one per table row; a workspace-wide
+multiplexed feed will be needed before many simultaneous run views scale well.
+
 ## Workspace layout
 
 ```text

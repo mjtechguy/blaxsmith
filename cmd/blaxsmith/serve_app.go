@@ -95,7 +95,20 @@ func serveAppContext(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	handler, err := newAppHandler(pool, manager, config.origin, config.staticDir)
+	serveCtx, stopServing := context.WithCancel(ctx)
+	defer stopServing()
+	activity := newActivityHub(pool)
+	listenerDone := make(chan struct{})
+	go func() { defer close(listenerDone); activity.listen(serveCtx) }()
+	defer func() { stopServing(); <-listenerDone }()
+	select {
+	case <-activity.ready:
+	case <-time.After(5 * time.Second):
+		return errors.New("run activity listener unavailable")
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	handler, err := newAppHandler(pool, manager, config.origin, config.staticDir, activity)
 	if err != nil {
 		return err
 	}
@@ -115,8 +128,6 @@ func serveAppContext(ctx context.Context, args []string) error {
 		ReadTimeout: 15 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 60 * time.Second,
 		MaxHeaderBytes: 16 << 10,
 		TLSConfig:      &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{certificate}}}
-	serveCtx, stopServing := context.WithCancel(ctx)
-	defer stopServing()
 	shutdownDone := make(chan error, 1)
 	go func() {
 		<-serveCtx.Done()
@@ -202,7 +213,7 @@ func validateDatabaseTransport(config *pgxpool.Config, allowLocal bool) error {
 	return nil
 }
 
-func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin, staticDir string) (http.Handler, error) {
+func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin, staticDir string, activity *activityHub) (http.Handler, error) {
 	authPath, authHandler, err := identity.NewBrowserHandler(manager, origin)
 	if err != nil {
 		return nil, err
@@ -219,6 +230,7 @@ func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin,
 	mux.Handle("/api"+authPath, http.StripPrefix("/api", authHandler))
 	workflowPath, workflowHandler := apiv1connect.NewWorkflowServiceHandler(&workflowService{guard: guard, store: store}, connect.WithReadMaxBytes(4096))
 	mux.Handle("/api"+workflowPath, http.StripPrefix("/api", guard.Wrap(workflowHandler)))
+	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity}))
 	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(&catalogService{client: &http.Client{Timeout: 30 * time.Second}})
 	mux.Handle("/api"+catalogPath, http.StripPrefix("/api", catalogHandler))
 	mux.HandleFunc("/api", http.NotFound)

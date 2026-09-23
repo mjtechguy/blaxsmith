@@ -712,6 +712,19 @@ func (s *Store) EventsAfter(ctx context.Context, orgID, runID string, after int6
 	return events, rows.Err()
 }
 
+// EventHead verifies run visibility and bounds a reconnect cursor.
+func (s *Store) EventHead(ctx context.Context, orgID, runID string) (int64, error) {
+	if !ids(orgID, runID) {
+		return 0, ErrInvalid
+	}
+	var head int64
+	err := s.pool.QueryRow(ctx, `SELECT event_seq FROM workflow_runs WHERE organization_id=$1 AND id=$2`, orgID, runID).Scan(&head)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	return head, err
+}
+
 func event(ctx context.Context, tx pgx.Tx, orgID, runID, taskID, attemptID, kind string) error {
 	// A per-run counter is advanced under the run row lock in this transaction.
 	// Sequence IDs therefore commit in cursor order, unlike global sequences.
@@ -729,6 +742,11 @@ func event(ctx context.Context, tx pgx.Tx, orgID, runID, taskID, attemptID, kind
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO workflow_events (id,organization_id,run_id,task_id,attempt_id,kind)
 		VALUES ($1,$2,$3,$4,$5,$6)`, id, orgID, runID, task, attempt, kind)
+	if err != nil {
+		return err
+	}
+	// PostgreSQL delivers this only after commit. Durable replay remains the source of truth.
+	_, err = tx.Exec(ctx, `SELECT pg_notify('blaxsmith_workflow_events',$1)`, orgID+":"+runID)
 	return err
 }
 

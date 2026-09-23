@@ -1,6 +1,8 @@
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
+import { create, fromJson } from "@bufbuild/protobuf";
+import type { InfiniteData } from "@tanstack/react-query";
 import { browserTransport, csrfToken } from "./auth";
-import { WorkflowService } from "./gen/blaxsmith/api/v1/workflow_pb";
+import { EventsAfterResponseSchema, WorkflowEventSchema, WorkflowService, type EventsAfterResponse, type WorkflowEvent } from "./gen/blaxsmith/api/v1/workflow_pb";
 
 const client = createClient(WorkflowService, browserTransport);
 
@@ -30,6 +32,31 @@ export async function getRun(runId: string, signal?: AbortSignal) {
 
 export async function eventsAfter(runId: string, afterId = 0n, signal?: AbortSignal) {
   return client.eventsAfter({ runId, afterId, limit: 100 }, { signal });
+}
+
+export type RunEventPages = InfiniteData<EventsAfterResponse, bigint>;
+
+export function parseLiveEvent(raw: string, runId: string): WorkflowEvent {
+  const event = fromJson(WorkflowEventSchema, JSON.parse(raw));
+  if (event.runId !== runId || event.id < 1n) throw new Error("Invalid run event");
+  return event;
+}
+
+export function appendRunEvent(data: RunEventPages | undefined, event: WorkflowEvent): { data: RunEventPages | undefined; gap: boolean } {
+  if (!data?.pages.length) return { data, gap: true };
+  const last = data.pages[data.pages.length - 1];
+  if (event.id <= last.nextAfterId) return { data, gap: false };
+  if (event.id !== last.nextAfterId + 1n) return { data, gap: true };
+  if (last.events.length >= 100) return { data: {
+    pages: [...data.pages, create(EventsAfterResponseSchema, { events: [event], nextAfterId: event.id })],
+    pageParams: [...data.pageParams, last.nextAfterId],
+  }, gap: false };
+  return { data: { ...data, pages: [...data.pages.slice(0, -1), create(EventsAfterResponseSchema,
+    { events: [...last.events, event], nextAfterId: event.id })] }, gap: false };
+}
+
+export function liveEventsUrl(runId: string, afterId: bigint): string {
+  return `${window.location.origin}/api/runs/${encodeURIComponent(runId)}/events?after=${afterId}`;
 }
 
 export async function getCurrentReview(runId: string, signal?: AbortSignal) {

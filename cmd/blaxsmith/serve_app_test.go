@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"crypto/ed25519"
@@ -11,6 +12,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"math/big"
 	"net"
@@ -21,6 +23,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -310,7 +313,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := newAppHandler(pool, manager, origin, staticDir)
+	handler, err := newAppHandler(pool, manager, origin, staticDir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -384,6 +387,27 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if err != nil {
 		t.Fatal(err)
 	}
+	streamURL := origin + "/api/runs/" + run.ID + "/events?after=0"
+	streamRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	streamRequest.Header.Set("Origin", origin)
+	stream, err := client.Do(streamRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Body.Close()
+	if stream.StatusCode != http.StatusOK || !strings.HasPrefix(stream.Header.Get("Content-Type"), "text/event-stream") {
+		t.Fatalf("run activity stream: HTTP %d %s", stream.StatusCode, stream.Header.Get("Content-Type"))
+	}
+	if stream.Header.Get("Cache-Control") != "no-store" || stream.Header.Get("X-Accel-Buffering") != "no" {
+		t.Fatalf("stream buffering/cache headers: %v", stream.Header)
+	}
+	reader := bufio.NewReader(stream.Body)
+	if got := readRunActivityEvent(t, reader); got.ID != "1" || got.Kind != "run.created" || got.RunID != run.ID {
+		t.Fatalf("initial durable stream event: %+v", got)
+	}
 	getRun := connect.NewRequest(&api.GetRunRequest{RunId: run.ID})
 	getRun.Header().Set("Origin", origin)
 	if got, err := w.GetRun(ctx, getRun); err != nil || got.Msg.Run.Id != run.ID {
@@ -407,6 +431,61 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	task, err := store.AddTask(ctx, owner.OrganizationID, run.ID, "implement", run.BundleSHA256, 1)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if got := readRunActivityEvent(t, reader); got.ID != "2" || got.Kind != "task.created" || got.TaskID != task {
+		t.Fatalf("live committed stream event: %+v", got)
+	}
+	reconnect, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reconnect.Header.Set("Origin", origin)
+	reconnect.Header.Set("Last-Event-ID", "1")
+	replayed, err := client.Do(reconnect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readRunActivityEvent(t, bufio.NewReader(replayed.Body)); got.ID != "2" || got.Kind != "task.created" {
+		t.Fatalf("Last-Event-ID replay: %+v", got)
+	}
+	replayed.Body.Close()
+	for _, test := range []struct {
+		origin, cursor string
+		want           int
+	}{
+		{"https://outside.example", "0", http.StatusUnauthorized},
+		{"", "0", http.StatusUnauthorized},
+		{origin, "999999", http.StatusBadRequest},
+		{origin, "-1", http.StatusBadRequest},
+	} {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, origin+"/api/runs/"+run.ID+"/events?after="+test.cursor, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if test.origin != "" {
+			req.Header.Set("Origin", test.origin)
+		}
+		got, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got.Body.Close()
+		if got.StatusCode != test.want {
+			t.Fatalf("stream origin/cursor check: HTTP %d, want %d", got.StatusCode, test.want)
+		}
+	}
+	fetchMetadata, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fetchMetadata.Header.Set("Sec-Fetch-Site", "same-origin")
+	fetchResponse, err := client.Do(fetchMetadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fetchResponse.Body.Close()
+	if fetchResponse.StatusCode != http.StatusOK {
+		t.Fatalf("native EventSource metadata denied: HTTP %d", fetchResponse.StatusCode)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, owner.OrganizationID, run.ID); err != nil {
 		t.Fatal(err)
@@ -498,6 +577,20 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	}
 	other := apiv1connect.NewWorkflowServiceClient(&http.Client{Timeout: 3 * time.Second, Transport: client.Transport}, origin+"/api")
 	cookie := "__Host-blaxsmith_access=" + otherTokens.Access
+	otherStream, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherStream.Header.Set("Origin", origin)
+	otherStream.Header.Set("Cookie", cookie)
+	otherResponse, err := (&http.Client{Timeout: 3 * time.Second, Transport: client.Transport}).Do(otherStream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherResponse.Body.Close()
+	if otherResponse.StatusCode != http.StatusNotFound {
+		t.Fatalf("cross-tenant event stream: HTTP %d", otherResponse.StatusCode)
+	}
 	otherProjects := connect.NewRequest(&api.ListProjectsRequest{})
 	otherProjects.Header().Set("Origin", origin)
 	otherProjects.Header().Set("Cookie", cookie)
@@ -553,6 +646,46 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	viewerDecision.Header().Set("X-Blaxsmith-CSRF", csrf)
 	if _, err := w.DecideReview(ctx, viewerDecision); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("viewer decided final review: %v", err)
+	}
+}
+
+func readRunActivityEvent(t *testing.T, reader *bufio.Reader) struct {
+	ID     string `json:"id"`
+	RunID  string `json:"runId"`
+	TaskID string `json:"taskId"`
+	Kind   string `json:"kind"`
+} {
+	t.Helper()
+	var id, data string
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		line = strings.TrimSuffix(line, "\n")
+		switch {
+		case strings.HasPrefix(line, "id: "):
+			id = strings.TrimPrefix(line, "id: ")
+		case strings.HasPrefix(line, "data: "):
+			data = strings.TrimPrefix(line, "data: ")
+		case line == "" && data != "":
+			if _, err := strconv.ParseInt(id, 10, 64); err != nil {
+				t.Fatal(err)
+			}
+			var event struct {
+				ID     string `json:"id"`
+				RunID  string `json:"runId"`
+				TaskID string `json:"taskId"`
+				Kind   string `json:"kind"`
+			}
+			if err := json.Unmarshal([]byte(data), &event); err != nil {
+				t.Fatal(err)
+			}
+			if id != event.ID {
+				t.Fatalf("SSE id %s differs from event %s", id, event.ID)
+			}
+			return event
+		}
 	}
 }
 

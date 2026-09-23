@@ -1,24 +1,85 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { ArrowLeft, Check, GitCommitHorizontal, RefreshCw } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
 import { PageHeader, PageShell } from "../page";
-import { decideReview, eventsAfter, getCurrentReview, getRun } from "../workflow";
+import { appendRunEvent, decideReview, eventsAfter, getCurrentReview, getRun, liveEventsUrl, parseLiveEvent, type RunEventPages } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId/runs/$runId")({ component: RunDetail });
 
 function RunDetail() {
   const { projectId, runId } = Route.useParams();
-  const run = useQuery({ queryKey: ["run", runId], queryFn: ({ signal }) => getRun(runId, signal), refetchInterval: 10_000 });
+  const queryClient = useQueryClient();
+  const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
+  const scope = session.data ? `${session.data.organizationId}:${session.data.principalId}` : "";
+  const runKey = ["run", scope, runId];
+  const eventKey = ["run-events", scope, runId];
+  const reviewKey = ["run-review", scope, runId];
+  const run = useQuery({ queryKey: runKey, queryFn: ({ signal }) => getRun(runId, signal), enabled: !!scope });
   const activity = useInfiniteQuery({
-    queryKey: ["run-events", runId], enabled: run.data?.run?.projectId === projectId, initialPageParam: 0n,
+    queryKey: eventKey, enabled: !!scope && run.data?.run?.projectId === projectId, initialPageParam: 0n,
     queryFn: ({ pageParam, signal }) => eventsAfter(runId, pageParam, signal),
     getNextPageParam: (page) => page.events.length === 100 ? page.nextAfterId : undefined,
-    refetchInterval: 10_000,
   });
   const events = useMemo(() => activity.data?.pages.flatMap((page) => page.events) || [], [activity.data]);
+  const latestDelivered = useRef(0n);
+  const recoverRef = useRef<(() => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    if (!scope || run.data?.run?.projectId !== projectId || !activity.isSuccess) return;
+    const key = ["run-events", scope, runId];
+    const cursor = () => queryClient.getQueryData<RunEventPages>(key)?.pages.at(-1)?.nextAfterId ?? 0n;
+    latestDelivered.current = cursor();
+    let closed = false;
+    let recovering = false;
+    let checkedSession = false;
+    let retryRecovery: number | undefined;
+    const recover = async () => {
+      if (closed || recovering) return;
+      window.clearTimeout(retryRecovery);
+      recovering = true;
+      try {
+        for (let batch = 0; batch < 5 && !closed; batch++) {
+          const after = cursor();
+          const page = await eventsAfter(runId, after);
+          for (const event of page.events) queryClient.setQueryData<RunEventPages>(key, (old) => appendRunEvent(old, event).data);
+          if (page.events.length < 100 || cursor() <= after) break;
+        }
+      } catch {
+        if (!closed) retryRecovery = window.setTimeout(() => void recover(), 5_000);
+      } finally { recovering = false; }
+    };
+    recoverRef.current = recover;
+    const source = new EventSource(liveEventsUrl(runId, cursor()));
+    source.onopen = () => { checkedSession = false; void recover(); };
+    source.onmessage = ({ data }) => {
+      try {
+        const event = parseLiveEvent(data, runId);
+        latestDelivered.current = event.id > latestDelivered.current ? event.id : latestDelivered.current;
+        let gap = false;
+        queryClient.setQueryData<RunEventPages>(key, (old) => {
+          const merged = appendRunEvent(old, event);
+          gap = merged.gap;
+          return merged.data;
+        });
+        if (gap) void recover();
+        if (event.kind.startsWith("run.")) void queryClient.invalidateQueries({ queryKey: ["run", scope, runId] });
+        if (event.kind.startsWith("review.")) void queryClient.invalidateQueries({ queryKey: ["run-review", scope, runId] });
+      } catch { void recover(); }
+    };
+    source.onerror = () => {
+      if (!checkedSession) { checkedSession = true; void queryClient.invalidateQueries({ queryKey: sessionQueryKey }); }
+    };
+    return () => { closed = true; window.clearTimeout(retryRecovery); recoverRef.current = null; source.close(); };
+  }, [activity.isSuccess, projectId, queryClient, run.data?.run?.projectId, runId, scope]);
+
+  useEffect(() => {
+    if (activity.data?.pages.at(-1)?.nextAfterId && activity.data.pages.at(-1)!.nextAfterId < latestDelivered.current) {
+      void recoverRef.current?.();
+    }
+  }, [activity.data]);
 
   if (run.data?.run && run.data.run.projectId !== projectId) {
     return <Navigate to="/projects/$projectId/runs/$runId" params={{ projectId: run.data.run.projectId, runId }} replace />;
@@ -26,7 +87,7 @@ function RunDetail() {
 
   return <PageShell>
     <PageHeader eyebrow="Project / Run" title={run.data?.run?.launchKey || "Run"} description="Execution record and durable event history."
-      actions={<button type="button" className="secondary-button" onClick={() => { void run.refetch(); void activity.refetch(); }}><RefreshCw size={15} aria-hidden="true" /> Refresh</button>} />
+      actions={<button type="button" className="secondary-button" onClick={() => { void run.refetch(); void activity.refetch(); void queryClient.invalidateQueries({ queryKey: reviewKey }); }}><RefreshCw size={15} aria-hidden="true" /> Refresh</button>} />
     <Link to="/projects/$projectId" params={{ projectId }} className="text-action"><ArrowLeft size={15} aria-hidden="true" /> Project runs</Link>
     {run.isPending ? <div className="state-panel" role="status"><RefreshCw className="spin" size={22} aria-hidden="true" /><h2>Loading run</h2></div> : null}
     {run.isError ? <div className="state-panel" role="alert"><h2>Run unavailable</h2><p>This run could not be loaded.</p><button type="button" className="secondary-button" onClick={() => void run.refetch()}>Try again</button></div> : null}
@@ -35,24 +96,24 @@ function RunDetail() {
       <section className="summary-card"><span className="summary-label">Source commit</span><strong className="summary-value mono" title={run.data.run.sourceCommit}>{run.data.run.sourceCommit.slice(0, 12)}</strong><span className="summary-meta">Pinned at launch</span></section>
       <section className="summary-card"><span className="summary-label">Created</span><strong className="summary-value"><time dateTime={run.data.run.createdAt}>{new Date(run.data.run.createdAt).toLocaleDateString()}</time></strong><span className="summary-meta">{new Date(run.data.run.createdAt).toLocaleTimeString()}</span></section>
     </div> : null}
-    {run.data?.run ? <FinalReview runId={runId} state={run.data.run.state} /> : null}
+    {run.data?.run ? <FinalReview runId={runId} scope={scope} state={run.data.run.state} /> : null}
     <section className="table-section" aria-labelledby="activity-heading">
-      <div className="table-heading"><div><h2 id="activity-heading">Activity</h2><p>Committed events are shown in sequence and can be refreshed after reconnecting.</p></div><span className="fetched-time">{events.length} events</span></div>
+      <div className="table-heading"><div><h2 id="activity-heading">Activity</h2><p>Committed events update live and replay after reconnecting.</p></div><span className="fetched-time">{events.length} events</span></div>
       {run.data?.run && activity.isPending ? <div className="table-empty" role="status">Loading activity…</div> : null}
       {activity.isError ? <div className="table-empty" role="alert">Activity is unavailable. <button type="button" className="text-action" onClick={() => void activity.refetch()}>Try again</button></div> : null}
       {activity.data && events.length === 0 ? <div className="table-empty">No activity has been recorded yet.</div> : null}
       {events.length > 0 ? <ol className="event-list">{events.map((event) => <li key={event.id.toString()}><span className="event-mark"><GitCommitHorizontal size={15} aria-hidden="true" /></span><div><strong>{event.kind.replaceAll(".", " · ").replaceAll("_", " ")}</strong><small>{event.taskId ? `Task ${event.taskId.slice(0, 8)} · ` : ""}{event.attemptId ? `Attempt ${event.attemptId.slice(0, 8)}` : ""}</small></div><time dateTime={event.occurredAt}>{new Date(event.occurredAt).toLocaleString()}</time></li>)}</ol> : null}
-      {activity.hasNextPage ? <div className="table-footer"><span>Older activity is available</span><button type="button" className="secondary-button" disabled={activity.isFetchingNextPage} onClick={() => void activity.fetchNextPage()}>{activity.isFetchingNextPage ? "Loading…" : "Load more"}</button></div> : null}
+      {activity.hasNextPage ? <div className="table-footer"><span>More activity may be available</span><button type="button" className="secondary-button" disabled={activity.isFetchingNextPage} onClick={() => void activity.fetchNextPage()}>{activity.isFetchingNextPage ? "Loading…" : "Load more"}</button></div> : null}
     </section>
   </PageShell>;
 }
 
 type ReviewAction = "approve" | "request_changes";
 
-function FinalReview({ runId, state }: { runId: string; state: string }) {
+function FinalReview({ runId, scope, state }: { runId: string; scope: string; state: string }) {
   const queryClient = useQueryClient();
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
-  const review = useQuery({ queryKey: ["run-review", runId], queryFn: ({ signal }) => getCurrentReview(runId, signal), refetchInterval: 10_000 });
+  const review = useQuery({ queryKey: ["run-review", scope, runId], queryFn: ({ signal }) => getCurrentReview(runId, signal) });
   const [confirmation, setConfirmation] = useState<{ action: ReviewAction; packageId: string } | null>(null);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
@@ -63,8 +124,8 @@ function FinalReview({ runId, state }: { runId: string; state: string }) {
       setFeedback("");
       setError("");
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["run-review", runId] }),
-        queryClient.invalidateQueries({ queryKey: ["run-events", runId] }),
+        queryClient.invalidateQueries({ queryKey: ["run-review", scope, runId] }),
+        queryClient.invalidateQueries({ queryKey: ["run-events", scope, runId] }),
       ]);
     },
     onError: async (cause) => {
@@ -72,7 +133,7 @@ function FinalReview({ runId, state }: { runId: string; state: string }) {
       setError(code === Code.FailedPrecondition ? "This review package changed. Check the latest package before deciding again."
         : code === Code.PermissionDenied ? "Your session is not allowed to make this decision."
           : "The decision could not be saved. Please try again.");
-      await queryClient.invalidateQueries({ queryKey: ["run-review", runId] });
+      await queryClient.invalidateQueries({ queryKey: ["run-review", scope, runId] });
     },
   });
   const current = review.data;

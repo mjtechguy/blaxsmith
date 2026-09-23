@@ -29,3 +29,30 @@ test("review correction sends trimmed feedback with CSRF", async () => {
     globalThis.fetch = previousFetch;
   }
 });
+
+test("live activity merges replay once and detects missing events", async () => {
+  const previousWindow = globalThis.window;
+  globalThis.window = { location: { origin: "https://blaxsmith.test" } };
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { appendRunEvent, liveEventsUrl, parseLiveEvent } = await server.ssrLoadModule("/src/workflow.ts");
+    const parse = (id, runId = "run") => parseLiveEvent(JSON.stringify({ id: String(id), runId, kind: "attempt.started", occurredAt: "2026-09-23T00:00:00Z" }), "run");
+    assert.equal(liveEventsUrl("run", 12n), "https://blaxsmith.test/api/runs/run/events?after=12");
+    assert.throws(() => parse(1, "other"), /Invalid run event/);
+    let data = { pages: [{ events: [], nextAfterId: 0n }], pageParams: [0n] };
+    for (let id = 1; id <= 101; id++) {
+      const merged = appendRunEvent(data, parse(id));
+      assert.equal(merged.gap, false);
+      data = merged.data;
+    }
+    assert.equal(data.pages.length, 2);
+    assert.equal(data.pages[1].nextAfterId, 101n);
+    assert.deepEqual(data.pageParams, [0n, 100n]);
+    assert.equal(appendRunEvent(data, parse(101)).data, data);
+    assert.equal(appendRunEvent(data, parse(103)).gap, true);
+    assert.equal(data.pages[1].events.length, 1);
+  } finally {
+    await server.close();
+    globalThis.window = previousWindow;
+  }
+});

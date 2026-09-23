@@ -76,6 +76,21 @@ func (g *BrowserGuard) Caller(ctx context.Context, header http.Header, mutation 
 	return caller, nil
 }
 
+// StreamCaller accepts the headers native same-origin EventSource sends. It
+// cannot set the custom Origin header required by Connect read requests.
+func (g *BrowserGuard) StreamCaller(ctx context.Context, header http.Header) (Caller, error) {
+	origin, site := header.Get("Origin"), header.Get("Sec-Fetch-Site")
+	if (origin == "" && site == "") || (origin != "" && origin != g.origin) ||
+		(site != "" && site != "same-origin") {
+		return Caller{}, connect.NewError(connect.CodePermissionDenied, errors.New("request origin denied"))
+	}
+	caller, err := g.manager.ValidateAccess(ctx, cookieValue(header, accessCookie))
+	if err != nil {
+		return Caller{}, browserAuthError(err)
+	}
+	return caller, nil
+}
+
 func NewBrowserHandler(manager *SessionManager, origin string) (string, http.Handler, error) {
 	guard, err := NewBrowserGuard(manager, origin)
 	if err != nil {
