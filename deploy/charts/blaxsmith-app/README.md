@@ -31,7 +31,39 @@ helm upgrade --install app deploy/charts/blaxsmith-app \
   --wait
 ```
 
-Run `deploy/charts/blaxsmith-app/test.sh` to lint and render the chart. The
+The default remains one replica. To stage multiple application replicas, use
+Kubernetes 1.30+ with at least two schedulable nodes labeled
+`kubernetes.io/hostname`, enough capacity for one surge pod, and the same
+database, TLS, and signer Secrets on every pod:
+
+```sh
+helm upgrade --install app deploy/charts/blaxsmith-app \
+  --namespace blaxsmith --create-namespace \
+  --set-string image=REGISTRY/blaxsmith-app@sha256:IMAGE_DIGEST \
+  --set-string origin=https://app.example.com \
+  --set-string tlsSecretName=app-tls \
+  --set-string signerSecretName=app-signer \
+  --set-string databaseSecretName=app-database \
+  --set ha.enabled=true --set replicaCount=3 --wait
+```
+
+More than one replica requires `ha.enabled=true`; HA mode requires at least two
+replicas. It spreads pods across hostnames with `maxSkew: 1` and
+`minDomains: 2`; a second replica stays pending on a one-node cluster. A
+disruption budget allows one voluntary eviction at a time. The
+Deployment waits five seconds after readiness and starts one replacement before
+removing an old pod. Readiness checks PostgreSQL; liveness is independent of
+it. A node failure can still reduce capacity, and a disruption budget only
+governs voluntary evictions ([Kubernetes PDB semantics](https://kubernetes.io/docs/tasks/run-application/configure-pdb/)).
+
+This is application replica placement, not a product HA claim. CloudNativePG,
+the Barman Cloud plugin, and AX Redis remain separately operated per
+[ADR 0002](../../../docs/adr/0002-ha-and-live-workspace.md). Production rollout
+requires restore and failover tests; application version upgrades also require
+a scheduled migration with old writers stopped, since mixed-version schema
+compatibility has not been established.
+
+Run `deploy/charts/blaxsmith-app/test.sh` to lint and render both modes. The
 app image is built in packaging CI. This is a staging foundation, not a
 real-user production installation: no external L4 exposure or trusted client
 address design, key-rotation rollout, RBAC-protected project APIs, or AX

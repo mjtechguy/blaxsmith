@@ -6,6 +6,15 @@
 {{- fail (printf "%s is required" $name) -}}
 {{- end -}}
 {{- end -}}
+{{- if and (gt (int .Values.replicaCount) 1) (not .Values.ha.enabled) -}}
+{{- fail "replicaCount > 1 requires ha.enabled=true" -}}
+{{- end -}}
+{{- if and .Values.ha.enabled (lt (int .Values.replicaCount) 2) -}}
+{{- fail "ha.enabled requires replicaCount >= 2" -}}
+{{- end -}}
+{{- if and .Values.ha.enabled (not (semverCompare ">=1.30.0-0" .Capabilities.KubeVersion.Version)) -}}
+{{- fail "ha.enabled requires Kubernetes 1.30+ for topologySpreadConstraints.minDomains" -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,6 +24,14 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  {{- if .Values.ha.enabled }}
+  minReadySeconds: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: blaxsmith-app
@@ -26,6 +43,17 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       automountServiceAccountToken: false
+      {{- if .Values.ha.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          minDomains: 2
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: blaxsmith-app
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

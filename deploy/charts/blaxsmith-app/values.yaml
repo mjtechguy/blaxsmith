@@ -1,4 +1,6 @@
 replicaCount: 1
+ha:
+  enabled: false # Requires at least two replicas and Kubernetes 1.30+.
 image: "" # Immutable Dockerfile app target, repository@sha256:digest.
 imagePullPolicy: IfNotPresent
 imagePullSecrets: []
