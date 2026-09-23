@@ -371,7 +371,7 @@ func (l *Ledger) BindActivation(ctx context.Context, tx pgx.Tx, redeemed Redeeme
 // owner and its exact actor/template/image/pool. Old unbound releases deny.
 func (l *Ledger) VerifyActivation(ctx context.Context, scope Scope, runtime Runtime, nonce string) error {
 	decoded, err := base64.RawURLEncoding.DecodeString(nonce)
-	if l == nil || !validScope(scope) || runtime.Actor.Atespace == "" ||
+	if l == nil || l.db == nil || !validScope(scope) || runtime.Actor.Atespace == "" ||
 		runtime.Actor.Name == "" || runtime.Actor.UID == "" || runtime.TemplateUID == "" ||
 		runtime.Image == "" || runtime.WorkerPool == "" || err != nil || len(decoded) != 32 ||
 		base64.RawURLEncoding.EncodeToString(decoded) != nonce {
