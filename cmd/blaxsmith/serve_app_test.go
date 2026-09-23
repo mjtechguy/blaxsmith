@@ -228,6 +228,44 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	// A second process shares the public origin and database, as it would
+	// behind an ingress. The request target differs, but the Host stays public.
+	secondListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondAddress := secondListener.Addr().String()
+	secondListener.Close()
+	secondArgs := append([]string(nil), appArgs...)
+	secondArgs[1] = secondAddress
+	secondCtx, stopSecond := context.WithCancel(ctx)
+	defer stopSecond()
+	secondResult := make(chan error, 1)
+	go func() { secondResult <- serveAppContext(secondCtx, secondArgs) }()
+	secondOrigin := "https://" + secondAddress
+	for {
+		request, err := http.NewRequest(http.MethodGet, secondOrigin+"/healthz", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Host = address
+		response, err := client.Do(request)
+		if err == nil {
+			response.Body.Close()
+			if response.StatusCode == http.StatusOK {
+				break
+			}
+		}
+		select {
+		case err := <-secondResult:
+			t.Fatalf("second app failed before readiness: %v", err)
+		default:
+		}
+		if time.Now().After(deadline.Add(8 * time.Second)) {
+			t.Fatal("second app did not become ready")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	var remaining int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM identity_login_limits WHERE key_hash=$1`, oldHash[:]).Scan(&remaining); err != nil || remaining != 0 {
 		t.Fatalf("old login limit was not pruned: %d, %v", remaining, err)
@@ -280,7 +318,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if real != 1 || spoofed != 0 {
 		t.Fatalf("forwarded IP affected login limits: real=%d spoofed=%d", real, spoofed)
 	}
-	testWorkflowBrowserAPI(t, ctx, pool, client, origin, csrf.Msg.Token, owner, password, seed)
+	testWorkflowBrowserAPI(t, ctx, pool, client, origin, secondOrigin, csrf.Msg.Token, owner, password, seed)
 	for path, want := range map[string]int{"/": http.StatusOK, "/tools": http.StatusOK,
 		"/assets/app.js": http.StatusOK, "/assets/missing.js": http.StatusNotFound,
 		"/api/missing": http.StatusNotFound} {
@@ -302,6 +340,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 		t.Fatal("catalog was not mounted on the application origin")
 	}
 	stop()
+	stopSecond()
 	select {
 	case err := <-result:
 		if err != nil {
@@ -309,6 +348,14 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 		}
 	case <-time.After(15 * time.Second):
 		t.Fatal("app did not shut down")
+	}
+	select {
+	case err := <-secondResult:
+		if err != nil {
+			t.Fatalf("second app shutdown failed: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("second app did not shut down")
 	}
 	manager, err := identity.NewSessionManager(pool, origin, ed25519.NewKeyFromSeed(seed))
 	if err != nil {
@@ -332,7 +379,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 }
 
 func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, client *http.Client,
-	origin, csrf string, owner identity.FirstOwner, password, seed []byte) {
+	origin, secondOrigin, csrf string, owner identity.FirstOwner, password, seed []byte) {
 	t.Helper()
 	w := apiv1connect.NewWorkflowServiceClient(client, origin+"/api")
 	create := func(slug string) *api.Project {
@@ -409,6 +456,24 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if got := readRunActivityEvent(t, reader); got.ID != "1" || got.Kind != "run.created" || got.RunID != run.ID {
 		t.Fatalf("initial durable stream event: %+v", got)
 	}
+	secondRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, secondOrigin+"/api/runs/"+run.ID+"/events?after=0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondRequest.Host = strings.TrimPrefix(origin, "https://")
+	secondRequest.Header.Set("Origin", origin)
+	secondStream, err := client.Do(secondRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secondStream.Body.Close()
+	if secondStream.StatusCode != http.StatusOK {
+		t.Fatalf("second replica activity stream: HTTP %d", secondStream.StatusCode)
+	}
+	secondReader := bufio.NewReader(secondStream.Body)
+	if got := readRunActivityEvent(t, secondReader); got.ID != "1" || got.Kind != "run.created" {
+		t.Fatalf("second replica durable replay: %+v", got)
+	}
 	getRun := connect.NewRequest(&api.GetRunRequest{RunId: run.ID})
 	getRun.Header().Set("Origin", origin)
 	if got, err := w.GetRun(ctx, getRun); err != nil || got.Msg.Run.Id != run.ID {
@@ -436,6 +501,24 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if got := readRunActivityEvent(t, reader); got.ID != "2" || got.Kind != "task.created" || got.TaskID != task {
 		t.Fatalf("live committed stream event: %+v", got)
 	}
+	if got := readRunActivityEvent(t, secondReader); got.ID != "2" || got.Kind != "task.created" || got.TaskID != task {
+		t.Fatalf("cross-replica notification did not wake stream: %+v", got)
+	}
+	secondReconnect, err := http.NewRequestWithContext(ctx, http.MethodGet, secondOrigin+"/api/runs/"+run.ID+"/events?after=0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondReconnect.Host = strings.TrimPrefix(origin, "https://")
+	secondReconnect.Header.Set("Origin", origin)
+	secondReconnect.Header.Set("Last-Event-ID", "1")
+	secondReplay, err := client.Do(secondReconnect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readRunActivityEvent(t, bufio.NewReader(secondReplay.Body)); got.ID != "2" || got.Kind != "task.created" {
+		t.Fatalf("second replica reconnect cursor replay: %+v", got)
+	}
+	secondReplay.Body.Close()
 	reconnect, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -584,6 +667,7 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	}
 	otherStream.Header.Set("Origin", origin)
 	otherStream.Header.Set("Cookie", cookie)
+	otherStream.Header.Set("Last-Event-ID", "2")
 	otherResponse, err := (&http.Client{Timeout: 3 * time.Second, Transport: client.Transport}).Do(otherStream)
 	if err != nil {
 		t.Fatal(err)
@@ -665,6 +749,20 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if revokedStream.StatusCode != http.StatusOK {
 		t.Fatalf("pre-revocation stream: HTTP %d", revokedStream.StatusCode)
 	}
+	secondRevokedRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, secondOrigin+"/api/runs/"+run.ID+"/events?after="+strconv.FormatInt(head, 10), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondRevokedRequest.Host = strings.TrimPrefix(origin, "https://")
+	secondRevokedRequest.Header.Set("Origin", origin)
+	secondRevokedStream, err := client.Do(secondRevokedRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secondRevokedStream.Body.Close()
+	if secondRevokedStream.StatusCode != http.StatusOK {
+		t.Fatalf("second pre-revocation stream: HTTP %d", secondRevokedStream.StatusCode)
+	}
 	if _, err := pool.Exec(ctx, `UPDATE identity_sessions SET revoked_at=clock_timestamp()
 		WHERE organization_id=$1 AND principal_id=$2 AND revoked_at IS NULL`, owner.OrganizationID, owner.PrincipalID); err != nil {
 		t.Fatal(err)
@@ -676,7 +774,69 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if err != nil || strings.Contains(string(content), "data:") {
 		t.Fatalf("revoked stream kept delivering: %q, %v", content, err)
 	}
+	content, err = io.ReadAll(secondRevokedStream.Body)
+	if err != nil || strings.Contains(string(content), "data:") {
+		t.Fatalf("revoked stream on second replica kept delivering: %q, %v", content, err)
+	}
+	// Revoke exactly after the first 100 replayed records. A stream must
+	// recheck its session before reading and sending the next batch.
+	fresh, err := manager.LoginLocal(ctx, "engineering", "alice", password, netip.MustParseAddr("192.0.2.88"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	caller, err := manager.ValidateAccess(ctx, fresh.Access)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := store.EventHead(ctx, owner.OrganizationID, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `WITH advanced AS (
+		UPDATE workflow_runs SET event_seq=event_seq+101 WHERE organization_id=$1 AND id=$2
+		RETURNING event_seq-101 AS previous
+	) INSERT INTO workflow_events (id,organization_id,run_id,kind)
+	SELECT previous+n,$1,$2,'run.created' FROM advanced,generate_series(1,101) AS n`, owner.OrganizationID, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	guard, err := identity.NewBrowserGuard(manager, origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayCtx, cancelReplay := context.WithTimeout(ctx, time.Second)
+	defer cancelReplay()
+	replayRequest := httptest.NewRequestWithContext(replayCtx, http.MethodGet,
+		origin+"/api/runs/"+run.ID+"/events?after="+strconv.FormatInt(before, 10), nil)
+	replayRequest.SetPathValue("runID", run.ID)
+	replayRequest.Header.Set("Origin", origin)
+	replayRequest.Header.Set("Cookie", "__Host-blaxsmith_access="+fresh.Access)
+	var revokeErr error
+	writer := &revokingActivityWriter{ResponseRecorder: httptest.NewRecorder()}
+	writer.onHundredth = func() { revokeErr = manager.Revoke(ctx, caller) }
+	(&runActivityHandler{guard: guard, store: store, hub: newActivityHub(pool)}).ServeHTTP(writer, replayRequest)
+	if revokeErr != nil || writer.count != 100 {
+		t.Fatalf("replay continued after revocation: events=%d revoke=%v", writer.count, revokeErr)
+	}
 }
+
+type revokingActivityWriter struct {
+	*httptest.ResponseRecorder
+	onHundredth func()
+	count       int
+}
+
+func (w *revokingActivityWriter) Write(p []byte) (int, error) {
+	n, err := w.ResponseRecorder.Write(p)
+	if strings.HasPrefix(string(p), "id: ") {
+		w.count++
+		if w.count == 100 {
+			w.onHundredth()
+		}
+	}
+	return n, err
+}
+
+func (w *revokingActivityWriter) SetWriteDeadline(time.Time) error { return nil }
 
 func readRunActivityEvent(t *testing.T, reader *bufio.Reader) struct {
 	ID     string `json:"id"`

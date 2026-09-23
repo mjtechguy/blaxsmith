@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { QueryClient } from "@tanstack/react-query";
 import { createServer } from "vite";
 
 test("review correction sends trimmed feedback with CSRF", async () => {
@@ -62,6 +63,24 @@ test("live activity merges replay once and detects missing events", async () => 
     assert.equal(cursor(), 500n);
     assert.equal(await recoverRunEventBatch(fetchPage, cursor, append), false);
     assert.equal(cursor(), 600n);
+  } finally {
+    await server.close();
+    globalThis.window = previousWindow;
+  }
+});
+
+test("session scope change removes cached run activity", async () => {
+  const previousWindow = globalThis.window;
+  globalThis.window = { location: { origin: "https://blaxsmith.test" } };
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { clearWorkspaceCache, sessionQueryKey } = await server.ssrLoadModule("/src/auth.ts");
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(sessionQueryKey, { organizationId: "first", principalId: "user" });
+    queryClient.setQueryData(["run-events", "first:user", "run"], { pages: [{ events: [{ id: 1n }], nextAfterId: 1n }], pageParams: [0n] });
+    await clearWorkspaceCache(queryClient);
+    assert.equal(queryClient.getQueryData(["run-events", "first:user", "run"]), undefined);
+    assert.equal(queryClient.getQueryData(sessionQueryKey).organizationId, "first");
   } finally {
     await server.close();
     globalThis.window = previousWindow;

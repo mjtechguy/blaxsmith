@@ -168,7 +168,7 @@ func (h *runActivityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for {
-		count, ok := h.replay(w, flusher, r.Context(), caller.OrganizationID, runID, &after)
+		count, ok := h.replay(w, flusher, r.Context(), r.Header, caller, runID, &after)
 		if !ok || count == activityReplayLimit {
 			return
 		}
@@ -180,9 +180,7 @@ func (h *runActivityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case <-ticker.C:
 			heartbeat = true
 		}
-		current, err := h.guard.StreamCaller(r.Context(), r.Header)
-		if err != nil || current.OrganizationID != caller.OrganizationID || current.PrincipalID != caller.PrincipalID ||
-			current.SessionID != caller.SessionID || current.Role != caller.Role {
+		if !h.sameCaller(r.Context(), r.Header, caller) {
 			return
 		}
 		if heartbeat && !writeActivity(w, flusher, ": heartbeat\n\n") {
@@ -216,10 +214,19 @@ func activityCursor(r *http.Request) (int64, error) {
 	return n, nil
 }
 
-func (h *runActivityHandler) replay(w http.ResponseWriter, flusher http.Flusher, ctx context.Context, orgID, runID string, after *int64) (int, bool) {
+func (h *runActivityHandler) sameCaller(ctx context.Context, header http.Header, caller identity.Caller) bool {
+	current, err := h.guard.StreamCaller(ctx, header)
+	return err == nil && current.OrganizationID == caller.OrganizationID && current.PrincipalID == caller.PrincipalID &&
+		current.SessionID == caller.SessionID && current.Role == caller.Role
+}
+
+func (h *runActivityHandler) replay(w http.ResponseWriter, flusher http.Flusher, ctx context.Context, header http.Header, caller identity.Caller, runID string, after *int64) (int, bool) {
 	count := 0
 	for count < activityReplayLimit {
-		events, err := h.store.EventsAfter(ctx, orgID, runID, *after, activityBatch)
+		if count > 0 && !h.sameCaller(ctx, header, caller) {
+			return count, false
+		}
+		events, err := h.store.EventsAfter(ctx, caller.OrganizationID, runID, *after, activityBatch)
 		if err != nil {
 			return count, false
 		}
