@@ -15,13 +15,13 @@ import (
 	"errors"
 	"math/big"
 	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/db"
 )
 
 func TestLedgerPostgres(t *testing.T) {
@@ -60,18 +60,8 @@ func TestLedgerPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	migrations, err := filepath.Glob(filepath.Join("..", "..", "db", "migrations", "*.sql"))
-	if err != nil {
+	if _, err := db.Migrate(ctx, pool); err != nil {
 		t.Fatal(err)
-	}
-	for _, migration := range migrations {
-		schemaSQL, err := os.ReadFile(migration)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := pool.Exec(ctx, string(schemaSQL)); err != nil {
-			t.Fatal(err)
-		}
 	}
 	ledger := NewLedger(pool)
 	actor := Actor{Atespace: "team-a", Name: "task-a", UID: "uid-a"}

@@ -10,6 +10,8 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/catalog"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 )
@@ -23,7 +25,7 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve> [flags]")
+		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve|migrate> [flags]")
 	}
 	if os.Args[1] == "tools" {
 		return listTools(os.Args[2:])
@@ -31,8 +33,11 @@ func run() error {
 	if os.Args[1] == "serve" {
 		return serve(os.Args[2:])
 	}
+	if os.Args[1] == "migrate" {
+		return migrateDatabase(os.Args[2:])
+	}
 	if os.Args[1] != "check" && os.Args[1] != "freeze" {
-		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve> [flags]")
+		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve|migrate> [flags]")
 	}
 	var in recipe.Input
 	flags := flag.NewFlagSet(os.Args[1], flag.ContinueOnError)
@@ -63,6 +68,31 @@ func run() error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(bundle)
+}
+
+func migrateDatabase(args []string) error {
+	if len(args) != 0 {
+		return fmt.Errorf("migrate accepts no arguments; set BLAXSMITH_DATABASE_URL")
+	}
+	dsn := os.Getenv("BLAXSMITH_DATABASE_URL")
+	if dsn == "" {
+		return fmt.Errorf("set BLAXSMITH_DATABASE_URL")
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		return fmt.Errorf("configure database: %w", err)
+	}
+	defer pool.Close()
+	count, err := db.Migrate(ctx, pool)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Applied %d database migrations\n", count)
+	return nil
 }
 
 func listTools(args []string) error {

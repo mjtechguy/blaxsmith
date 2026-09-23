@@ -74,6 +74,29 @@ npm run dev
 
 Open `http://127.0.0.1:3000/tools`. The API binds only to `127.0.0.1:8001`; Vite proxies `/api` in development. `make web-check` builds the frontend and checks its types. This preview contains public release metadata only and has no login or access to product records.
 
+## Local PostgreSQL
+
+The local Compose service runs a digest-pinned PostgreSQL 18 image on
+`127.0.0.1:55434` with a persistent volume. It is a supporting service, not an
+agent runtime. Create a local-only password and start it:
+
+```sh
+umask 077
+printf 'BLAXSMITH_DEV_DB_PASSWORD=%s\n' "$(openssl rand -hex 24)" > .env
+docker compose up -d --wait postgres
+set -a
+. ./.env
+set +a
+export BLAXSMITH_DATABASE_URL="postgres://blaxsmith:${BLAXSMITH_DEV_DB_PASSWORD}@127.0.0.1:55434/blaxsmith?sslmode=disable"
+go run ./cmd/blaxsmith migrate
+BLAXSMITH_TEST_DATABASE_URL="$BLAXSMITH_DATABASE_URL" make check
+```
+
+`migrate` embeds the numbered SQL files, runs them once under a PostgreSQL lock,
+and rejects changed or unknown applied versions. Use `docker compose down` to
+stop the service without deleting its data. The `.env` file is ignored by Git;
+the password applies when the volume is first initialized.
+
 ## Workspace layout
 
 ```text

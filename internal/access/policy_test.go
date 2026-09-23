@@ -6,12 +6,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/db"
 )
 
 func TestGitReadAuthorityPostgres(t *testing.T) {
@@ -172,18 +172,8 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	migrations, err := filepath.Glob(filepath.Join("..", "..", "db", "migrations", "*.sql"))
-	if err != nil {
+	if _, err := db.Migrate(ctx, pool); err != nil {
 		t.Fatal(err)
-	}
-	for _, name := range migrations {
-		migration, err := os.ReadFile(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := pool.Exec(ctx, string(migration)); err != nil {
-			t.Fatal(err)
-		}
 	}
 	return pool
 }
