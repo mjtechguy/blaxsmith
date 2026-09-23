@@ -143,6 +143,25 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 	if err := collector.Record(t.Context(), signed); err != nil {
 		t.Fatalf("same signed receipt was not idempotent: %v", err)
 	}
+	observations, err := store.ListCommandExits(t.Context(), org, run.ID, 0, 1)
+	if err != nil || len(observations) != 1 || observations[0].TaskID != firstTask ||
+		observations[0].AttemptID != attempt.ID || observations[0].ActorUID != binding.ActorUID ||
+		observations[0].SignerID != "pool-one/connector" ||
+		observations[0].ExitCode != 0 || observations[0].Signal != 0 || observations[0].Interrupted ||
+		observations[0].ObservedAt != report.ObservedAt || observations[0].ReceivedAt.IsZero() ||
+		observations[0].EventID < 1 {
+		t.Fatalf("command exit observation: %+v, %v", observations, err)
+	}
+	if older, err := store.ListCommandExits(t.Context(), org, run.ID, observations[0].EventID, 1); err != nil || len(older) != 0 {
+		t.Fatalf("receipt cursor replay: %+v, %v", older, err)
+	}
+	other := organization(t, pool, "frozen-other")
+	if leaked, err := store.ListCommandExits(t.Context(), other, run.ID, 0, 1); err != nil || len(leaked) != 0 {
+		t.Fatalf("cross-tenant command exit: %+v, %v", leaked, err)
+	}
+	if _, err := store.ListCommandExits(t.Context(), org, run.ID, -1, 1); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("negative command exit cursor accepted: %v", err)
+	}
 	report.ExitCode = 1
 	wrong, err = runnerexit.Sign(report, private)
 	if err != nil {

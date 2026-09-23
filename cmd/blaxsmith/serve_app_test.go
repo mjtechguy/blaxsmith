@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -36,6 +37,7 @@ import (
 	api "github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1"
 	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -489,6 +491,21 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if got, err := w.EventsAfter(ctx, events); err != nil || len(got.Msg.Events) != 1 || got.Msg.Events[0].Kind != "run.created" {
 		t.Fatalf("own events: %+v, %v", got, err)
 	}
+	exits := connect.NewRequest(&api.ListCommandExitsRequest{RunId: run.ID})
+	exits.Header().Set("Origin", origin)
+	if got, err := w.ListCommandExits(ctx, exits); err != nil || len(got.Msg.Observations) != 0 || got.Msg.NextAfterEventId != 0 {
+		t.Fatalf("empty command exit feed: %+v, %v", got, err)
+	}
+	exits.Msg.AfterEventId = -1
+	if _, err := w.ListCommandExits(ctx, exits); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("invalid command exit cursor: %v", err)
+	}
+	exits.Msg.AfterEventId = 0
+	exits.Header().Set("Origin", "https://outside.example")
+	if _, err := w.ListCommandExits(ctx, exits); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("cross-origin command exit feed: %v", err)
+	}
+	exits.Header().Set("Origin", origin)
 	getReview := connect.NewRequest(&api.GetCurrentReviewRequest{RunId: run.ID})
 	getReview.Header().Set("Origin", origin)
 	if _, err := w.GetCurrentReview(ctx, getReview); connect.CodeOf(err) != connect.CodeNotFound {
@@ -578,9 +595,50 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if err != nil {
 		t.Fatal(err)
 	}
+	binding := workflow.RuntimeBinding{AXAtespace: "api-test", AXTask: "task-one", ActorUID: "actor-one",
+		TemplateUID: "template-one", Image: "runner@sha256:" + strings.Repeat("a", 64),
+		WorkerPool: "pool-one", CommandSHA256: strings.Repeat("b", 64)}
+	if err := store.BindRuntime(ctx, attempt, binding); err != nil {
+		t.Fatal(err)
+	}
 	if err := store.ConfirmStarted(ctx, attempt); err != nil {
 		t.Fatal(err)
 	}
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var nonce [32]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		t.Fatal(err)
+	}
+	empty := sha256.Sum256(nil)
+	report := runnerexit.ExitReport{Schema: runnerexit.Schema, OrganizationID: owner.OrganizationID,
+		RunID: run.ID, TaskID: task, AttemptID: attempt.ID, OwnerGeneration: attempt.OwnerGeneration,
+		AXAtespace: binding.AXAtespace, AXTask: binding.AXTask, ActorUID: binding.ActorUID,
+		TemplateUID: binding.TemplateUID, ActivationNonce: base64.RawURLEncoding.EncodeToString(nonce[:]),
+		CommandSHA256: binding.CommandSHA256, ExitCode: 0, Sequence: 1,
+		EvidenceSHA256: hex.EncodeToString(empty[:]), ObservedAt: time.Now().UnixNano()}
+	signed, err := runnerexit.Sign(report, private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector := workflow.CommandExitCollector{Store: store, SignerID: "pool-one/connector", PublicKey: public, WorkerPool: "pool-one"}
+	if err := collector.Record(ctx, signed); err != nil {
+		t.Fatal(err)
+	}
+	observed, err := w.ListCommandExits(ctx, exits)
+	if err != nil || len(observed.Msg.Observations) != 1 || observed.Msg.Observations[0].ExitCode != 0 ||
+		observed.Msg.Observations[0].ActorUid != binding.ActorUID || observed.Msg.Observations[0].AttemptId != attempt.ID ||
+		observed.Msg.Observations[0].SignerId != "pool-one/connector" ||
+		observed.Msg.Observations[0].ReceiptSha256 == "" || observed.Msg.NextAfterEventId < 1 {
+		t.Fatalf("signed command exit feed: %+v, %v", observed, err)
+	}
+	exits.Msg.AfterEventId = observed.Msg.NextAfterEventId
+	if replay, err := w.ListCommandExits(ctx, exits); err != nil || len(replay.Msg.Observations) != 0 {
+		t.Fatalf("command exit page cursor: %+v, %v", replay, err)
+	}
+	exits.Msg.AfterEventId = 0
 	if err := store.FinishAttempt(ctx, attempt, true, run.BundleSHA256); err != nil {
 		t.Fatal(err)
 	}
@@ -697,6 +755,10 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	events.Header().Set("Cookie", cookie)
 	if _, err := other.EventsAfter(ctx, events); connect.CodeOf(err) != connect.CodeNotFound {
 		t.Fatalf("cross-tenant events: %v", err)
+	}
+	exits.Header().Set("Cookie", cookie)
+	if _, err := other.ListCommandExits(ctx, exits); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("cross-tenant command exits: %v", err)
 	}
 	getReview.Header().Set("Cookie", cookie)
 	if _, err := other.GetCurrentReview(ctx, getReview); connect.CodeOf(err) != connect.CodeNotFound {

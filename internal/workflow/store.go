@@ -428,7 +428,9 @@ func (s *Store) transition(ctx context.Context, a Attempt, from, to, kind string
 }
 
 // FinishAttempt accepts a result only from the current confirmed owner. A
-// failed result releases the task for a finite retry, or blocks it at budget.
+// runtime-bound success also needs a clean command exit; the caller must still
+// independently verify the result. Runtime-bound failures require an actor
+// stop proof before retry, so this method never releases a live AX actor.
 func (s *Store) FinishAttempt(ctx context.Context, a Attempt, succeeded bool, resultSHA256 string) error {
 	if !validAttempt(a) || !hashPattern.MatchString(resultSHA256) {
 		return ErrInvalid
@@ -477,6 +479,29 @@ func (s *Store) FinishAttempt(ctx context.Context, a Attempt, succeeded bool, re
 	}
 	if taskState != "running" || attemptState != "running" {
 		return ErrConflict
+	}
+	var runtimeBound bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM workflow_attempt_runtime
+		WHERE organization_id=$1 AND attempt_id=$2)`, a.OrganizationID, a.ID).Scan(&runtimeBound); err != nil {
+		return err
+	}
+	if runtimeBound {
+		// The actor remains live after its command exits. A failed result must
+		// use the connector's revoke/delete/actor-gone proof before retry.
+		if !succeeded {
+			return ErrConflict
+		}
+		var exitCode int
+		var interrupted bool
+		err := tx.QueryRow(ctx, `SELECT exit_code,(report_json->>'interrupted')::boolean
+			FROM workflow_command_exits WHERE organization_id=$1 AND attempt_id=$2`, a.OrganizationID, a.ID).
+			Scan(&exitCode, &interrupted)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && (exitCode != 0 || interrupted)) {
+			return ErrConflict
+		}
+		if err != nil {
+			return err
+		}
 	}
 	attemptFinal, taskFinal := "failed", "pending"
 	if succeeded {

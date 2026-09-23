@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
@@ -20,6 +21,62 @@ type CommandExitCollector struct {
 	SignerID   string
 	PublicKey  ed25519.PublicKey
 	WorkerPool string
+}
+
+// CommandExitObservation is a signed connector observation, not a verified
+// task result or artifact. The receipt remains visible if the attempt is later
+// fenced, stopped, or retried.
+type CommandExitObservation struct {
+	EventID       int64
+	TaskID        string
+	AttemptID     string
+	ActorUID      string
+	SignerID      string
+	ReceiptSHA256 string
+	ExitCode      int
+	Signal        int
+	Interrupted   bool
+	ObservedAt    int64 // runner-reported Unix nanoseconds
+	ReceivedAt    time.Time
+}
+
+// ListCommandExits pages by the durable run event cursor, which also gives
+// clients a stable ordering across retries and reconnects.
+func (s *Store) ListCommandExits(ctx context.Context, orgID, runID string, after int64, limit int) ([]CommandExitObservation, error) {
+	if !ids(orgID, runID) || after < 0 || limit < 1 || limit > 100 {
+		return nil, ErrInvalid
+	}
+	rows, err := s.pool.Query(ctx, `SELECT e.id,c.task_id,c.attempt_id,r.actor_uid,c.signer_id,c.report_sha256,
+		c.exit_code,c.report_json,c.received_at
+		FROM workflow_events e JOIN workflow_command_exits c
+		ON c.organization_id=e.organization_id AND c.run_id=e.run_id AND c.task_id=e.task_id AND c.attempt_id=e.attempt_id
+		JOIN workflow_attempt_runtime r ON r.organization_id=c.organization_id AND r.attempt_id=c.attempt_id
+		WHERE e.organization_id=$1 AND e.run_id=$2 AND e.kind='attempt.command_exited' AND e.id>$3
+		ORDER BY e.id LIMIT $4`, orgID, runID, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	observations := []CommandExitObservation{}
+	for rows.Next() {
+		var o CommandExitObservation
+		var body []byte
+		if err := rows.Scan(&o.EventID, &o.TaskID, &o.AttemptID, &o.ActorUID, &o.SignerID,
+			&o.ReceiptSHA256, &o.ExitCode, &body, &o.ReceivedAt); err != nil {
+			return nil, err
+		}
+		var report runnerexit.ExitReport
+		if err := json.Unmarshal(body, &report); err != nil {
+			return nil, err
+		}
+		if report.OrganizationID != orgID || report.RunID != runID || report.TaskID != o.TaskID ||
+			report.AttemptID != o.AttemptID || report.ActorUID != o.ActorUID || report.ExitCode != o.ExitCode {
+			return nil, ErrConflict
+		}
+		o.Signal, o.Interrupted, o.ObservedAt = report.Signal, report.Interrupted, report.ObservedAt
+		observations = append(observations, o)
+	}
+	return observations, rows.Err()
 }
 
 func (c CommandExitCollector) Record(ctx context.Context, signed runnerexit.SignedReport) error {

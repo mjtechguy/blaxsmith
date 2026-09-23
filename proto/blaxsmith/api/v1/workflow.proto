@@ -70,6 +70,31 @@ message EventsAfterResponse {
   int64 next_after_id = 2;
 }
 
+// A signed connector readback. It does not verify task success or artifacts.
+message CommandExitObservation {
+  int64 event_id = 1;
+  string task_id = 2;
+  string attempt_id = 3;
+  string actor_uid = 4;
+  string receipt_sha256 = 5;
+  int32 exit_code = 6;
+  int32 signal = 7;
+  bool interrupted = 8;
+  int64 observed_at_unix_nanos = 9; // Runner-reported time.
+  string received_at = 10; // Database receipt time, RFC 3339.
+  string signer_id = 11; // Enrolled connector identity; no signing key is exposed.
+}
+
+message ListCommandExitsRequest {
+  string run_id = 1;
+  int64 after_event_id = 2;
+  int32 limit = 3; // 1-100; zero selects 50.
+}
+message ListCommandExitsResponse {
+  repeated CommandExitObservation observations = 1;
+  int64 next_after_event_id = 2;
+}
+
 message ReviewDecision {
   string id = 1;
   string package_id = 2;
@@ -112,6 +137,7 @@ service WorkflowService {
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
   rpc EventsAfter(EventsAfterRequest) returns (EventsAfterResponse);
+  rpc ListCommandExits(ListCommandExitsRequest) returns (ListCommandExitsResponse);
   rpc GetCurrentReview(GetCurrentReviewRequest) returns (GetCurrentReviewResponse);
   rpc DecideReview(DecideReviewRequest) returns (DecideReviewResponse);
 }

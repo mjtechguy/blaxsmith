@@ -161,6 +161,32 @@ func TestAttemptDispatchAndUncertainReadBack(t *testing.T) {
 		t.Fatalf("stopped owner published: %v", err)
 	}
 
+	failed := reserve("failed-command")
+	bridge = makeBridge(failed, &fakeAX{write: true})
+	if _, err := bridge.Launch(ctx, failed); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.FinishAttempt(ctx, failed, false, strings.Repeat("f", 64)); !errors.Is(err, workflow.ErrConflict) {
+		t.Fatalf("failed result released live AX actor: %v", err)
+	}
+	if _, err := store.ReserveAttempt(ctx, org, failed.RunID, failed.TaskID); !errors.Is(err, workflow.ErrConflict) {
+		t.Fatalf("replacement overlapped live actor: %v", err)
+	}
+	if err := bridge.StopKnown(ctx, failed); !errors.Is(err, workflow.ErrFenced) {
+		t.Fatalf("active stop skipped owner revocation: %v", err)
+	}
+	bridge.RevokeOwner = func(context.Context, workflow.Attempt) error { return nil }
+	if err := bridge.StopKnown(ctx, failed); err != nil {
+		t.Fatalf("active failed actor could not be stopped: %v", err)
+	}
+	replacement, err := store.ReserveAttempt(ctx, org, failed.RunID, failed.TaskID)
+	if err != nil || replacement.OwnerGeneration != failed.OwnerGeneration+1 {
+		t.Fatalf("proven stop did not allow fenced retry: %+v, %v", replacement, err)
+	}
+	if err := store.FinishAttempt(ctx, failed, true, strings.Repeat("f", 64)); !errors.Is(err, workflow.ErrFenced) {
+		t.Fatalf("stale failed owner published: %v", err)
+	}
+
 	uncertain := reserve("uncertain-written")
 	ax = &fakeAX{write: true, applyErr: errors.New("lost acknowledgement")}
 	bridge = makeBridge(uncertain, ax)

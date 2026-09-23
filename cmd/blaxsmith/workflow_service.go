@@ -168,6 +168,39 @@ func (s *workflowService) EventsAfter(ctx context.Context, req *connect.Request[
 	return connect.NewResponse(response), nil
 }
 
+func (s *workflowService) ListCommandExits(ctx context.Context, req *connect.Request[api.ListCommandExitsRequest]) (*connect.Response[api.ListCommandExitsResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.store.GetRun(ctx, caller.OrganizationID, req.Msg.RunId); err != nil {
+		return nil, workflowError(err)
+	}
+	limit := req.Msg.Limit
+	if limit == 0 {
+		limit = 50
+	}
+	if req.Msg.AfterEventId < 0 || limit < 1 || limit > 100 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid command exit cursor or limit"))
+	}
+	observations, err := s.store.ListCommandExits(ctx, caller.OrganizationID, req.Msg.RunId, req.Msg.AfterEventId, int(limit))
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	response := &api.ListCommandExitsResponse{NextAfterEventId: req.Msg.AfterEventId}
+	for _, observation := range observations {
+		response.Observations = append(response.Observations, &api.CommandExitObservation{
+			EventId: observation.EventID, TaskId: observation.TaskID, AttemptId: observation.AttemptID,
+			ActorUid: observation.ActorUID, SignerId: observation.SignerID, ReceiptSha256: observation.ReceiptSHA256,
+			ExitCode: int32(observation.ExitCode), Signal: int32(observation.Signal),
+			Interrupted: observation.Interrupted, ObservedAtUnixNanos: observation.ObservedAt,
+			ReceivedAt: observation.ReceivedAt.UTC().Format(time.RFC3339Nano),
+		})
+		response.NextAfterEventId = observation.EventID
+	}
+	return connect.NewResponse(response), nil
+}
+
 func (s *workflowService) GetCurrentReview(ctx context.Context, req *connect.Request[api.GetCurrentReviewRequest]) (*connect.Response[api.GetCurrentReviewResponse], error) {
 	caller, err := s.guard.Caller(ctx, req.Header(), false)
 	if err != nil {

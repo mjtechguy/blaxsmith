@@ -238,9 +238,10 @@ func (b *Bridge) uncertain(a workflow.Attempt, cause error) error {
 	return errors.Join(cause, b.Workflow.MarkUnknown(ctx, a))
 }
 
-// StopKnown is safe only for an acknowledged attempt. A timed-out AX upsert
-// can arrive after a delete, so reconciling attempts remain fenced until AX
-// gains a server-side tombstone/compare-and-delete contract.
+// StopKnown is safe only for an acknowledged attempt. A failed command can use
+// this proof before retry, and cancellation uses the same path. A timed-out
+// AX upsert can arrive after a delete, so reconciling attempts remain fenced
+// until AX gains a server-side tombstone/compare-and-delete contract.
 func (b *Bridge) StopKnown(ctx context.Context, a workflow.Attempt) error {
 	if b.Workflow == nil {
 		return workflow.ErrInvalid
@@ -259,7 +260,7 @@ func (b *Bridge) stopKnown(ctx context.Context, a workflow.Attempt) error {
 	if err != nil {
 		return err
 	}
-	if run != "cancel_requested" || state != "running" {
+	if (run != "active" && run != "cancel_requested") || state != "running" {
 		return workflow.ErrFenced
 	}
 	if b.RevokeOwner == nil {

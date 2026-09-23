@@ -46,6 +46,18 @@ alone never calls `FinishAttempt` or verifies artifacts. A guest file, AX
 status, or `ax ssh` observation also cannot mark a task complete.
 The runner reports one stable observation time, so repeating the same readback
 replays the same signed receipt instead of generating a conflicting one.
+The tenant-scoped `ListCommandExits` Connect API pages these immutable receipts
+by their committed run event ID. It exposes the actor UID, connector signer ID, exit code, signal,
+interruption flag, receipt digest, runner-reported time, and database receipt
+time, but not the activation nonce or signature. A zero-exit receipt is a
+necessary condition for a runtime-bound `FinishAttempt(..., true)`, never
+sufficient proof of a result: a trusted verifier must still inspect the actual
+artifact bytes and required checks before publishing the result digest. A
+missing, nonzero, or interrupted receipt cannot mark that attempt successful.
+A runtime-bound failed result also cannot release a live actor for retry.
+`StopKnown` revokes its owner, deletes the AX task, and proves actor absence
+before `ConfirmStopped` makes a replacement eligible. A failed exit remains
+visible throughout; this read API does not perform the stop transition.
 
 The command-exit route overlay, nonce binding, and connector are covered by
 focused tests but have not been deployed or proven together on the node. The
