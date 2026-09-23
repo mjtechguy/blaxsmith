@@ -78,7 +78,7 @@ func (g gitSource) read(ctx context.Context, name string) ([]byte, error) {
 
 func (g gitSource) run(ctx context.Context, args ...string) ([]byte, error) {
 	base := []string{"--no-replace-objects", "--literal-pathspecs", "-C", g.repo}
-	cmd := exec.CommandContext(ctx, "git", append(base, args...)...)
+	cmd := exec.CommandContext(ctx, "git", append(base, args...)...) // #nosec G204 -- fixed executable and separate argv; no shell
 	// The explicit repository is authoritative even when called from a Git hook.
 	for _, entry := range os.Environ() {
 		if !strings.HasPrefix(entry, "GIT_") {

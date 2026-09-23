@@ -18,7 +18,7 @@ approved scope choices, not claims of guide conformance.
 |---|---|
 | `db.Migrate` uses pgx directly instead of goose | The small runner embeds SQL, serializes startup, checks applied file hashes, and rejects newer unknown versions. It has no down/out-of-order migration support. Before P1 acceptance, either adopt goose with a tested history transition or explicitly approve this narrower runner and update the plan. |
 | Secret versions use AES-256-GCM with organization/connection/version AAD instead of age | This has only synthetic probe evidence. Before real credentials, review the custody threat model and key recovery, then migrate to the guide's age baseline or document and approve the alternative. |
-| CI currently runs Go, real PostgreSQL, Node 24 builds, and generated-contract checks | Add history-aware secret scanning, vulnerability/static checks, and production browser journeys before release. |
+| CI runs Go, real PostgreSQL, Node 24, generated-contract, and guide security scans | Production browser journeys and AX contract/upgrade gates remain release work. Gosec excludes generated code and synthetic dev probes; full Git history is secret-scanned. |
 
 The preview now serves public catalog metadata through generated Connect
 Go/TypeScript clients. Account, project, and credential APIs remain closed until

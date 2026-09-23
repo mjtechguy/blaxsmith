@@ -91,7 +91,7 @@ func signingKeyID(public ed25519.PublicKey) string {
 // LoadSessionSigner reads a 32-byte seed from a platform-mounted file. It
 // permits group read for Kubernetes Secret mounts but never world access.
 func LoadSessionSigner(path string) (ed25519.PrivateKey, error) {
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- path is trusted platform configuration; opened file is mode-checked
 	if err != nil {
 		return nil, fmt.Errorf("open session signer: %w", err)
 	}
