@@ -1,5 +1,6 @@
 # Unified-diff context includes a leading space before tabs and blank lines.
 # integrations/ax/build.sh checks the applied source with --whitespace=error-all.
 integrations/ax/*.patch -whitespace
+integrations/substrate/*.patch -whitespace
 gen/go/** linguist-generated=true
 frontend/src/gen/** linguist-generated=true whitespace=-blank-at-eof

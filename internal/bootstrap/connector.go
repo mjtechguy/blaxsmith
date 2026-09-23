@@ -176,6 +176,9 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 		if err != nil {
 			return err
 		}
+		if err := c.Ledger.BindActivation(sendCtx, tx, redeemed, current); err != nil {
+			return err
+		}
 		if c.Delivered != nil {
 			return c.Delivered(sendCtx, tx, redeemed)
 		}

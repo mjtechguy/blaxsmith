@@ -1,0 +1,150 @@
+diff --git a/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go b/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go
+index 08951ef..bbc9b22 100644
+--- a/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go
++++ b/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go
+@@ -85,6 +85,17 @@ func TestBootstrapRouteRequiresConnectorAndStripsToken(t *testing.T) {
+ 			t.Fatal("router did not pin actor UID for atunnel")
+ 		}
+ 	}
++	for _, auth := range []string{"", "Bearer bad"} {
++		if _, err := request("/blaxsmith/command-exit", auth, "uid-1"); err == nil {
++			t.Fatal("command exit route accepted an unauthenticated caller")
++		}
++	}
++	if _, err := request("/blaxsmith/command-exit", "Bearer good", "old-uid"); err == nil {
++		t.Fatal("command exit route accepted a stale actor UID")
++	}
++	if _, err := request("/blaxsmith/command-exit", "Bearer good", "uid-1"); err != nil {
++		t.Fatalf("current actor command exit route: %v", err)
++	}
+ 	h.RequireBootstrapAuth(func(context.Context, string) (bool, error) { return false, errors.New("apiserver unavailable") })
+ 	if _, err := request("/blaxsmith/bootstrap/challenge", "Bearer good", "uid-1"); err == nil {
+ 		t.Fatal("TokenReview outage allowed bootstrap")
+diff --git a/cmd/atenet/internal/router/ingress/ingress.go b/cmd/atenet/internal/router/ingress/ingress.go
+index 6cc552e..903f3e8 100644
+--- a/cmd/atenet/internal/router/ingress/ingress.go
++++ b/cmd/atenet/internal/router/ingress/ingress.go
+@@ -89,15 +89,16 @@ func (h *Handler) RequireBootstrapAuth(authorize func(context.Context, string) (
+ 
+ func (h *Handler) HandleRequestHeaders(ctx context.Context, md *extproc.RequestMetadata) (extproc.Result, error) {
+ 	slog.InfoContext(ctx, "Request", slog.String("host", md.Host))
+-	bootstrap, err := isBootstrapPath(md.Path)
++	connectorRoute, err := isConnectorPath(md.Path)
+ 	if err != nil {
+ 		return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_BadRequest, "invalid request path")
+ 	}
+-	if bootstrap {
++	if connectorRoute {
+ 		if md.Attribute("connection.tls_version") == "" {
+ 			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_UpgradeRequired, "bootstrap requires TLS")
+ 		}
+-		if md.Method != http.MethodGet && md.Method != http.MethodPost {
++		if (md.Method != http.MethodGet && md.Method != http.MethodPost) ||
++			path.Clean(md.Path) == "/blaxsmith/command-exit" && md.Method != http.MethodGet {
+ 			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_MethodNotAllowed, "bootstrap method denied")
+ 		}
+ 		scheme, token, ok := strings.Cut(md.Header("authorization"), " ")
+@@ -162,7 +163,7 @@ func (h *Handler) HandleRequestHeaders(ctx context.Context, md *extproc.RequestM
+ 	if err != nil {
+ 		return extproc.Result{Resume: string(resumeOutcome)}, mapResumeError(actorRef, err)
+ 	}
+-	if bootstrap && actor.GetMetadata().GetUid() != md.Header(bootstrapActorUIDHeader) {
++	if connectorRoute && actor.GetMetadata().GetUid() != md.Header(bootstrapActorUIDHeader) {
+ 		return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_Conflict, "bootstrap actor changed")
+ 	}
+ 
+@@ -207,7 +208,7 @@ func (h *Handler) HandleRequestHeaders(ctx context.Context, md *extproc.RequestM
+ 	// Overwrite the routing header so a client-provided value cannot select a
+ 	// different actor after this request has been resolved.
+ 	mutation := &extprocv3.HeaderMutation{}
+-	if bootstrap {
++	if connectorRoute {
+ 		mutation.RemoveHeaders = []string{"authorization"}
+ 		mutation.SetHeaders = append(mutation.SetHeaders, &corev3.HeaderValueOption{
+ 			Header:       &corev3.HeaderValue{Key: bootstrapActorUIDHeader, RawValue: []byte(actor.GetMetadata().GetUid())},
+@@ -232,7 +233,7 @@ func (h *Handler) HandleRequestHeaders(ctx context.Context, md *extproc.RequestM
+ 	return res, nil
+ }
+ 
+-func isBootstrapPath(raw string) (bool, error) {
++func isConnectorPath(raw string) (bool, error) {
+ 	if raw == "" { // CONNECT authority is not a request path.
+ 		return false, nil
+ 	}
+@@ -240,7 +241,8 @@ func isBootstrapPath(raw string) (bool, error) {
+ 	if err != nil {
+ 		return false, err
+ 	}
+-	return strings.HasPrefix(path.Clean(u.Path), "/blaxsmith/bootstrap/"), nil
++	clean := path.Clean(u.Path)
++	return strings.HasPrefix(clean, "/blaxsmith/bootstrap/") || clean == "/blaxsmith/command-exit", nil
+ }
+ 
+ func routingValue(md *extproc.RequestMetadata, header, attribute string) string {
+diff --git a/internal/atunnel/bootstrap_test.go b/internal/atunnel/bootstrap_test.go
+index 6dfd310..7a821a8 100644
+--- a/internal/atunnel/bootstrap_test.go
++++ b/internal/atunnel/bootstrap_test.go
+@@ -84,7 +84,7 @@ func TestBootstrapProofRoutesOnlyCurrentActor(t *testing.T) {
+ 	}
+ }
+ 
+-func TestBootstrapReleaseRequiresCurrentActorUID(t *testing.T) {
++func TestBootstrapReleaseAndExitRequireCurrentActorUID(t *testing.T) {
+ 	forwarded := 0
+ 	guest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+ 		forwarded++
+@@ -97,21 +97,26 @@ func TestBootstrapReleaseRequiresCurrentActorUID(t *testing.T) {
+ 		t.Fatal(err)
+ 	}
+ 	defer s.Deactivate(context.Background())
+-	for _, uid := range []string{"", "old-uid", "uid-1"} {
+-		r := httptest.NewRequest(http.MethodPost, "https://worker/blaxsmith/bootstrap/release", nil)
+-		r.Header.Set(atenet.TargetActorHeader, "team-a/actor-1")
+-		r.Header.Set(BootstrapActorUIDHeader, uid)
+-		w := httptest.NewRecorder()
+-		s.ServeHTTP(w, r)
+-		if uid == "uid-1" && w.Code != http.StatusNoContent {
+-			t.Fatalf("current actor release status = %d", w.Code)
+-		}
+-		if uid != "uid-1" && w.Code != http.StatusMisdirectedRequest {
+-			t.Fatalf("stale actor release status = %d", w.Code)
++	for _, route := range []struct{ method, path string }{
++		{http.MethodPost, "/blaxsmith/bootstrap/release"},
++		{http.MethodGet, "/blaxsmith/command-exit"},
++	} {
++		for _, uid := range []string{"", "old-uid", "uid-1"} {
++			r := httptest.NewRequest(route.method, "https://worker"+route.path, nil)
++			r.Header.Set(atenet.TargetActorHeader, "team-a/actor-1")
++			r.Header.Set(BootstrapActorUIDHeader, uid)
++			w := httptest.NewRecorder()
++			s.ServeHTTP(w, r)
++			if uid == "uid-1" && w.Code != http.StatusNoContent {
++				t.Fatalf("current actor %s status = %d", route.path, w.Code)
++			}
++			if uid != "uid-1" && w.Code != http.StatusMisdirectedRequest {
++				t.Fatalf("stale actor %s status = %d", route.path, w.Code)
++			}
+ 		}
+ 	}
+-	if forwarded != 1 {
+-		t.Fatalf("forwarded %d release requests", forwarded)
++	if forwarded != 2 {
++		t.Fatalf("forwarded %d requests", forwarded)
+ 	}
+ }
+ 
+diff --git a/internal/atunnel/ingress.go b/internal/atunnel/ingress.go
+index e0e76e3..d0b1a5e 100644
+--- a/internal/atunnel/ingress.go
++++ b/internal/atunnel/ingress.go
+@@ -498,7 +498,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+ 		return
+ 	}
+ 	defer release()
+-	if strings.HasPrefix(path.Clean(r.URL.Path), "/blaxsmith/bootstrap/") {
++	clean := path.Clean(r.URL.Path)
++	if strings.HasPrefix(clean, "/blaxsmith/bootstrap/") || clean == "/blaxsmith/command-exit" {
+ 		if active.attestor == nil {
+ 			s.reject(w)
+ 			return

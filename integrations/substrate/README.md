@@ -6,13 +6,15 @@ Upstream: `github.com/agent-substrate/substrate`, commit
 `actor-attestation.patch` extends the gVisor worker's `atunnel` and its tests.
 `bootstrap-router-auth.patch` restricts bootstrap ingress to the connector.
 `bootstrap-actor-fence.patch` pins bootstrap routing to the actor UID.
+`command-exit-router-auth.patch` applies the same connector authentication and
+current-actor UID fence to the read-only command-exit route.
 The reference checkout stays untouched. Rebuild with:
 
 ```sh
 bash integrations/substrate/build.sh ../reference/substrate /tmp/blaxsmith-substrate-build
 ```
 
-The build exports the pinned commit, applies all four patches, runs focused tests
+The build exports the pinned commit, applies all five patches, runs focused tests
 and `go vet`, builds Linux/AMD64 `atenet` and `ateom-gvisor`, and records
 source/patch/binary hashes.
 On the prepared development node, `deploy/dev/publish-atenet.sh` adds that binary
@@ -59,6 +61,12 @@ Linux/AMD64 binary. This is a route fence, not a grant: the connector must get
 the UID from the current scheduler assignment and keep that assignment fenced
 through delivery. CONNECT tunnels and other ingress paths still need separate
 security review before sensitive access.
+
+The command-exit route overlay has focused router and atunnel tests for
+connector-only access and stale actor UID rejection. It has not yet been
+deployed or tested end-to-end on the node. The platform additionally checks
+the released activation nonce and the AX/Substrate runtime before signing a
+workflow receipt; the route itself does not make guest output trustworthy.
 
 The standalone proof verifier is side-effect-free; the
 [ledger](../../docs/bootstrap-ledger.md) now stores and consumes an

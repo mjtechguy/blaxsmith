@@ -212,11 +212,12 @@ func (l *Ledger) Redeem(ctx context.Context, scope Scope, id string, nonce [32]b
 	if err != nil {
 		return Redeemed{}, ErrDenied
 	}
+	activationHash := sha256.Sum256([]byte(challenge.Nonce))
 	var redeemed Redeemed
-	err = tx.QueryRow(ctx, `UPDATE bootstrap_challenges SET consumed_at=clock_timestamp()
+	err = tx.QueryRow(ctx, `UPDATE bootstrap_challenges SET consumed_at=clock_timestamp(), activation_nonce_sha256=$3
 		WHERE id=$1 AND cancelled_at IS NULL AND consumed_at IS NULL
 		AND expires_at > clock_timestamp() AND $2::timestamptz > clock_timestamp()
-		RETURNING consumed_at`, id, time.Unix(challenge.ExpiresAt, 0)).Scan(&redeemed.ConsumedAt)
+		RETURNING consumed_at`, id, time.Unix(challenge.ExpiresAt, 0), activationHash[:]).Scan(&redeemed.ConsumedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Redeemed{}, ErrDenied
 	}
@@ -336,6 +337,72 @@ func (l *Ledger) Release(ctx context.Context, redeemed Redeemed,
 		return time.Time{}, fmt.Errorf("commit bootstrap release: %w", err)
 	}
 	return released, nil
+}
+
+// BindActivation pins the runtime that received the acknowledged runner
+// release. Call it in Release's send transaction after the release HTTP 204.
+func (l *Ledger) BindActivation(ctx context.Context, tx pgx.Tx, redeemed Redeemed, runtime Runtime) error {
+	if tx == nil || !validScope(redeemed.Scope) || redeemed.ID == "" ||
+		runtime.Actor != (Actor{redeemed.ActorAtespace, redeemed.ActorName, redeemed.ActorUID}) ||
+		runtime.TemplateUID == "" || runtime.Image == "" || runtime.WorkerPool == "" {
+		return ErrDenied
+	}
+	result, err := tx.Exec(ctx, `UPDATE bootstrap_challenges
+		SET activation_template_uid=$8, activation_image=$9, activation_worker_pool=$10
+		WHERE id=$1 AND cluster_id=$2 AND attempt_id=$3 AND owner_generation=$4
+		AND actor_atespace=$5 AND actor_name=$6 AND actor_uid=$7
+		AND consumed_at IS NOT NULL AND activation_nonce_sha256 IS NOT NULL
+		AND release_attempted_at IS NOT NULL AND released_at IS NULL
+		AND cancelled_at IS NULL AND superseded_at IS NULL
+		AND activation_template_uid IS NULL`, redeemed.ID, redeemed.Scope.ClusterID,
+		redeemed.Scope.AttemptID, redeemed.Scope.OwnerGeneration,
+		redeemed.ActorAtespace, redeemed.ActorName, redeemed.ActorUID,
+		runtime.TemplateUID, runtime.Image, runtime.WorkerPool)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() != 1 {
+		return ErrDenied
+	}
+	return nil
+}
+
+// VerifyActivation accepts only the latest released nonce for the current
+// owner and its exact actor/template/image/pool. Old unbound releases deny.
+func (l *Ledger) VerifyActivation(ctx context.Context, scope Scope, runtime Runtime, nonce string) error {
+	decoded, err := base64.RawURLEncoding.DecodeString(nonce)
+	if l == nil || !validScope(scope) || runtime.Actor.Atespace == "" ||
+		runtime.Actor.Name == "" || runtime.Actor.UID == "" || runtime.TemplateUID == "" ||
+		runtime.Image == "" || runtime.WorkerPool == "" || err != nil || len(decoded) != 32 ||
+		base64.RawURLEncoding.EncodeToString(decoded) != nonce {
+		return ErrDenied
+	}
+	var storedHash []byte
+	var actorUID, templateUID, image, workerPool string
+	err = l.db.QueryRow(ctx, `SELECT c.activation_nonce_sha256,c.actor_uid,
+		COALESCE(c.activation_template_uid,''),COALESCE(c.activation_image,''),COALESCE(c.activation_worker_pool,'')
+		FROM bootstrap_owners o JOIN bootstrap_challenges c
+		ON c.cluster_id=o.cluster_id AND c.attempt_id=o.attempt_id
+		WHERE o.cluster_id=$1 AND o.attempt_id=$2 AND o.owner_generation=$3 AND o.active
+		AND o.actor_atespace=$4 AND o.actor_name=$5 AND o.actor_uid=$6
+		AND c.owner_generation=o.owner_generation AND c.actor_atespace=o.actor_atespace
+		AND c.actor_name=o.actor_name AND c.actor_uid=o.actor_uid
+		AND c.released_at IS NOT NULL AND c.cancelled_at IS NULL AND c.superseded_at IS NULL
+		ORDER BY c.released_at DESC,c.id DESC LIMIT 1`, scope.ClusterID, scope.AttemptID,
+		scope.OwnerGeneration, runtime.Actor.Atespace, runtime.Actor.Name, runtime.Actor.UID).
+		Scan(&storedHash, &actorUID, &templateUID, &image, &workerPool)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrDenied
+	}
+	if err != nil {
+		return err
+	}
+	hash := sha256.Sum256([]byte(nonce))
+	if subtle.ConstantTimeCompare(storedHash, hash[:]) != 1 || actorUID != runtime.Actor.UID ||
+		templateUID != runtime.TemplateUID || image != runtime.Image || workerPool != runtime.WorkerPool {
+		return ErrDenied
+	}
+	return nil
 }
 
 func validScope(scope Scope) bool {

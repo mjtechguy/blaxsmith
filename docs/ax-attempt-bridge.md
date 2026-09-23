@@ -36,16 +36,20 @@ listed no `axbridge_%` schema. No credential or model work ran.
 The pinned AX `Running` phase is a workload lifecycle status, **not** a
 supervised command-exit result. During the first live run it reported `Running`
 while `WorkspaceReady=False` and the bootstrap gate still blocked the command.
-The pinned runner now exposes a small command-exit readback after `Wait`, and
-`internal/runnerexit` defines the platform-signed report. The workflow
-collector verifies its signature and pinned runtime, command, worker pool, and
-current owner before storing an immutable receipt. The receipt never calls
-`FinishAttempt`: an exit code does not prove the work or independently verify
-artifacts. A guest file, AX status, or `ax ssh` observation also cannot mark a
-task complete. The live connector still needs an authenticated current-actor
-readback route and durable activation-nonce binding before it can sign and
-record a report. The runner and child share a guest security boundary, so this
-is a synthetic observation rather than a trusted result for hostile code.
-Bootstrap owner revocation wiring, product grants, independently collected
-evidence, and mixed-tool execution also remain open. Only synthetic tasks are
-enabled here.
+The gated runner now exposes a read-only command exit after `Wait`.
+`CommandExitConnector` checks the exact AX task and live Substrate actor twice,
+reads that endpoint through the connector-only route, verifies its activation
+nonce against the latest durable bootstrap release for the current owner and
+runtime, then signs an attempt-bound receipt. The workflow collector checks
+the current attempt and immutable runtime binding before storing it. Exit code
+alone never calls `FinishAttempt` or verifies artifacts. A guest file, AX
+status, or `ax ssh` observation also cannot mark a task complete.
+
+The command-exit route overlay, nonce binding, and connector are covered by
+focused tests but have not been deployed or proven together on the node. The
+runner and child share one container security boundary, so hostile same-UID
+code could tamper with readback. Bootstrap owner assignment/revocation is not
+yet atomic with workflow ownership, and a crash after receipt commit may
+require replaying the exact signed report; a durable connector outbox remains
+open. Product grants, independently collected evidence, and mixed-tool
+execution remain open. Only synthetic tasks are enabled here.

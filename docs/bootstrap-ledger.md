@@ -38,6 +38,11 @@ the send transaction and a later release sees revocation. The synthetic dev
 callback at that stage checked only runtime properties. A failed or uncertain send cannot retry the same redemption; a new
 challenge is required. The connector sends the ledger actor UID through the
 authenticated HTTPS router, which fences the receiving `atunnel` activation.
+The ledger stores a SHA-256 verifier for the runner activation nonce at redeem,
+then pins the actor template UID, image, and worker pool in the release
+transaction after HTTP 204. Command-exit readback accepts only the latest
+released nonce under the current active owner and exact runtime. Earlier
+released rows without this binding fail closed.
 The [live synthetic probe](bootstrap-ledger-release-probe.json) passed initial
 and data-snapshot-resume releases, replay rejection, and owner deactivation.
 PostgreSQL recorded two consumed/release-attempted/released challenges and an

@@ -115,9 +115,33 @@ func TestLedgerPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("durable redeem from another connection: %v", err)
 	}
+	runtime := Runtime{Actor: actor, TemplateUID: "template-a", Image: "image-a", WorkerPool: "pool-a"}
+	if err := ledger.VerifyActivation(ctx, owner, runtime, redeemed.Challenge.Nonce); !errors.Is(err, ErrDenied) {
+		t.Fatalf("unreleased activation accepted: %v", err)
+	}
 	sent := 0
-	if _, err := ledger.Release(ctx, redeemed, nil, func(context.Context, pgx.Tx) error { sent++; return nil }); err != nil {
+	if _, err := ledger.Release(ctx, redeemed, nil, func(sendCtx context.Context, tx pgx.Tx) error {
+		sent++
+		return ledger.BindActivation(sendCtx, tx, redeemed, runtime)
+	}); err != nil {
 		t.Fatalf("release under owner fence: %v", err)
+	}
+	if err := NewLedger(otherPool).VerifyActivation(ctx, owner, runtime, redeemed.Challenge.Nonce); err != nil {
+		t.Fatalf("released activation rejected: %v", err)
+	}
+	for _, changed := range []Runtime{{Actor: Actor{Atespace: actor.Atespace, Name: actor.Name, UID: "old-uid"}, TemplateUID: runtime.TemplateUID, Image: runtime.Image, WorkerPool: runtime.WorkerPool},
+		{Actor: actor, TemplateUID: "old-template", Image: runtime.Image, WorkerPool: runtime.WorkerPool},
+		{Actor: actor, TemplateUID: runtime.TemplateUID, Image: "old-image", WorkerPool: runtime.WorkerPool},
+		{Actor: actor, TemplateUID: runtime.TemplateUID, Image: runtime.Image, WorkerPool: "old-pool"}} {
+		if err := ledger.VerifyActivation(ctx, owner, changed, redeemed.Challenge.Nonce); !errors.Is(err, ErrDenied) {
+			t.Fatalf("changed runtime accepted: %+v, %v", changed, err)
+		}
+	}
+	if err := ledger.VerifyActivation(ctx, owner, runtime, base64.RawURLEncoding.EncodeToString(make([]byte, 32))); !errors.Is(err, ErrDenied) {
+		t.Fatalf("wrong activation nonce accepted: %v", err)
+	}
+	if err := ledger.VerifyActivation(ctx, Scope{ClusterID: owner.ClusterID, AttemptID: owner.AttemptID, OwnerGeneration: 2}, runtime, redeemed.Challenge.Nonce); !errors.Is(err, ErrDenied) {
+		t.Fatalf("stale generation accepted: %v", err)
 	}
 	if _, err := ledger.Release(ctx, redeemed, nil, func(context.Context, pgx.Tx) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
 		t.Fatalf("replayed release: %v, sends=%d", err, sent)
@@ -166,6 +190,9 @@ func TestLedgerPostgres(t *testing.T) {
 	}
 	if err := <-completedSend; err != nil {
 		t.Fatalf("release under policy row fence: %v", err)
+	}
+	if err := ledger.VerifyActivation(ctx, owner, runtime, redeemed.Challenge.Nonce); !errors.Is(err, ErrDenied) {
+		t.Fatalf("older activation accepted after newer unbound release: %v", err)
 	}
 	if _, err := otherPool.Exec(ctx, `UPDATE policy_fence SET active=false WHERE id=1`); err != nil {
 		t.Fatal(err)
@@ -273,6 +300,9 @@ func TestLedgerPostgres(t *testing.T) {
 		Actor{Atespace: actor.Atespace, Name: actor.Name, UID: "uid-b"})
 	if err != nil || newOwner.OwnerGeneration != 2 {
 		t.Fatalf("replacement owner: %+v, %v", newOwner, err)
+	}
+	if err := ledger.VerifyActivation(ctx, owner, runtime, redeemed.Challenge.Nonce); !errors.Is(err, ErrDenied) {
+		t.Fatalf("replaced owner activation accepted: %v", err)
 	}
 	if _, err := ledger.Release(ctx, staleRedeemed, nil, func(context.Context, pgx.Tx) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
 		t.Fatalf("stale owner released: %v, sends=%d", err, sent)
