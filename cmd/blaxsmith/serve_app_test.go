@@ -143,6 +143,16 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
+	staticDir := filepath.Join(dir, "web")
+	if err := os.MkdirAll(filepath.Join(staticDir, "assets"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staticDir, "index.html"), []byte("<title>Blaxsmith</title>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staticDir, "assets", "app.js"), []byte("export const ready = true;"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	certFile, keyFile, roots := writeAppTestCertificate(t, dir)
 	signerFile := filepath.Join(dir, "signer.seed")
 	seed := make([]byte, 32)
@@ -161,6 +171,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	origin := "https://" + address
 	appArgs := []string{"--listen", address, "--origin", origin,
 		"--tls-cert-file", certFile, "--tls-key-file", keyFile, "--signer-file", signerFile,
+		"--static-dir", staticDir,
 		"--allow-insecure-local-database"}
 	if _, err := pool.Exec(ctx, `INSERT INTO blaxsmith_schema_migrations(version,sha256) VALUES ('future','invalid')`); err != nil {
 		t.Fatal(err)
@@ -239,6 +250,18 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if real != 1 || spoofed != 0 {
 		t.Fatalf("forwarded IP affected login limits: real=%d spoofed=%d", real, spoofed)
 	}
+	for path, want := range map[string]int{"/": http.StatusOK, "/tools": http.StatusOK,
+		"/assets/app.js": http.StatusOK, "/assets/missing.js": http.StatusNotFound,
+		"/api/missing": http.StatusNotFound} {
+		response, err := client.Get(origin + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != want {
+			t.Fatalf("%s: HTTP %d, want %d", path, response.StatusCode, want)
+		}
+	}
 	catalogResponse, err := client.Get(origin + "/api" + apiv1connect.CatalogServiceListToolsProcedure)
 	if err != nil {
 		t.Fatal(err)
@@ -260,7 +283,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := newAppHandler(pool, manager, origin)
+	handler, err := newAppHandler(pool, manager, origin, staticDir)
 	if err != nil {
 		t.Fatal(err)
 	}

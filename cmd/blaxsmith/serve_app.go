@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,8 +25,8 @@ import (
 )
 
 type appConfig struct {
-	listen, origin, certFile, keyFile, signerFile, databaseURL string
-	allowLocalDatabase                                         bool
+	listen, origin, certFile, keyFile, signerFile, databaseURL, staticDir string
+	allowLocalDatabase                                                    bool
 }
 
 func serveApp(args []string) error {
@@ -83,7 +84,7 @@ func serveAppContext(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	handler, err := newAppHandler(pool, manager, config.origin)
+	handler, err := newAppHandler(pool, manager, config.origin, config.staticDir)
 	if err != nil {
 		return err
 	}
@@ -147,6 +148,7 @@ func parseAppConfig(args []string) (appConfig, error) {
 	flags.StringVar(&c.certFile, "tls-cert-file", "", "HTTPS certificate file")
 	flags.StringVar(&c.keyFile, "tls-key-file", "", "HTTPS private-key file")
 	flags.StringVar(&c.signerFile, "signer-file", "", "platform-mounted 32-byte Ed25519 seed file")
+	flags.StringVar(&c.staticDir, "static-dir", "", "built frontend directory containing index.html")
 	flags.BoolVar(&c.allowLocalDatabase, "allow-insecure-local-database", false, "allow plaintext PostgreSQL only over a literal loopback address or Unix socket")
 	if err := flags.Parse(args); err != nil {
 		return c, err
@@ -188,7 +190,7 @@ func validateDatabaseTransport(config *pgxpool.Config, allowLocal bool) error {
 	return nil
 }
 
-func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin string) (http.Handler, error) {
+func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin, staticDir string) (http.Handler, error) {
 	authPath, authHandler, err := identity.NewBrowserHandler(manager, origin)
 	if err != nil {
 		return nil, err
@@ -197,6 +199,8 @@ func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin 
 	mux.Handle("/api"+authPath, http.StripPrefix("/api", authHandler))
 	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(&catalogService{client: &http.Client{Timeout: 30 * time.Second}})
 	mux.Handle("/api"+catalogPath, http.StripPrefix("/api", catalogHandler))
+	mux.HandleFunc("/api", http.NotFound)
+	mux.HandleFunc("/api/", http.NotFound)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -214,5 +218,24 @@ func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin 
 			_, _ = w.Write([]byte("ok\n"))
 		}
 	})
+	if staticDir != "" {
+		index := filepath.Join(staticDir, "index.html")
+		if info, err := os.Stat(index); err != nil || !info.Mode().IsRegular() {
+			return nil, errors.New("static directory must contain a regular index.html")
+		}
+		files := http.FileServer(http.Dir(staticDir))
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet && r.Method != http.MethodHead {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			if r.URL.Path == "/" || (filepath.Ext(r.URL.Path) == "" && !strings.HasPrefix(r.URL.Path, "/assets/")) {
+				http.ServeFile(w, r, index)
+				return
+			}
+			files.ServeHTTP(w, r)
+		})
+	}
 	return mux, nil
 }

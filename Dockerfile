@@ -31,3 +31,8 @@ COPY --from=web-build /src/frontend/dist /srv
 ENV XDG_CONFIG_HOME=/tmp/caddy-config XDG_DATA_HOME=/tmp/caddy-data
 USER 65532:65532
 EXPOSE 8080
+
+FROM api AS app
+COPY --from=web-build /src/frontend/dist /srv
+EXPOSE 8443
+CMD ["serve-app"]

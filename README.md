@@ -119,14 +119,19 @@ HTTPS `--origin`, explicit `--listen`, `--tls-cert-file`, `--tls-key-file`,
 platform-mounted 32-byte Ed25519 seed; its permissions and the TLS private
 key's permissions must deny world access. PostgreSQL must use verified TLS;
 `--allow-insecure-local-database` permits a literal loopback address or Unix
-socket for local development only. For example, after supplying a trusted
+socket for local development only. `--static-dir` serves a built Vite frontend
+from the same HTTPS origin, including direct links to workspace routes. The
+`app` Dockerfile target bundles those assets with the API; mounting TLS,
+signer, and database configuration remains an installation responsibility.
+For example, after supplying a trusted
 certificate and seed outside this repository:
 
 ```sh
 go run ./cmd/blaxsmith serve-app --listen 127.0.0.1:8443 \
   --origin https://127.0.0.1:8443 \
   --tls-cert-file /secure/tls.crt --tls-key-file /secure/tls.key \
-  --signer-file /secure/session.seed --allow-insecure-local-database
+  --signer-file /secure/session.seed --static-dir frontend/dist \
+  --allow-insecure-local-database
 ```
 
 `serve-app` accepts the direct TLS peer as the client address and ignores
