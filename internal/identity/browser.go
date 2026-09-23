@@ -31,22 +31,59 @@ type browserService struct {
 	origin  string
 }
 
-func NewBrowserHandler(manager *SessionManager, origin string) (string, http.Handler, error) {
+type BrowserGuard struct {
+	manager *SessionManager
+	origin  string
+	host    string
+}
+
+func NewBrowserGuard(manager *SessionManager, origin string) (*BrowserGuard, error) {
 	u, err := url.Parse(origin)
 	if manager == nil || manager.db == nil || manager.limits == nil || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil ||
 		u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.String() != origin {
-		return "", nil, errors.New("browser authentication requires an exact HTTPS origin")
+		return nil, errors.New("browser authentication requires an exact HTTPS origin")
 	}
-	path, handler := apiv1connect.NewAuthServiceHandler(&browserService{manager: manager, origin: origin},
-		connect.WithReadMaxBytes(4096))
-	return path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return &BrowserGuard{manager: manager, origin: origin, host: u.Host}, nil
+}
+
+func (g *BrowserGuard) Wrap(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		if r.TLS == nil || !strings.EqualFold(r.Host, u.Host) {
+		if r.TLS == nil || !strings.EqualFold(r.Host, g.host) {
 			http.Error(w, "secure origin required", http.StatusForbidden)
 			return
 		}
 		handler.ServeHTTP(w, r)
-	}), nil
+	})
+}
+
+// Caller requires a live membership at the time of each browser request.
+func (g *BrowserGuard) Caller(ctx context.Context, header http.Header, mutation bool) (Caller, error) {
+	s := browserService{manager: g.manager, origin: g.origin}
+	var err error
+	if mutation {
+		err = s.checkCSRF(header)
+	} else {
+		err = s.checkOrigin(header)
+	}
+	if err != nil {
+		return Caller{}, err
+	}
+	caller, err := g.manager.ValidateAccess(ctx, cookieValue(header, accessCookie))
+	if err != nil {
+		return Caller{}, browserAuthError(err)
+	}
+	return caller, nil
+}
+
+func NewBrowserHandler(manager *SessionManager, origin string) (string, http.Handler, error) {
+	guard, err := NewBrowserGuard(manager, origin)
+	if err != nil {
+		return "", nil, err
+	}
+	path, handler := apiv1connect.NewAuthServiceHandler(&browserService{manager: manager, origin: origin},
+		connect.WithReadMaxBytes(4096))
+	return path, guard.Wrap(handler), nil
 }
 
 func (s *browserService) GetCsrf(_ context.Context, req *connect.Request[api.GetCsrfRequest]) (*connect.Response[api.GetCsrfResponse], error) {

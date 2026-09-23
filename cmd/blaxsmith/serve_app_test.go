@@ -32,6 +32,7 @@ import (
 	api "github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1"
 	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
 func TestServeAppConfig(t *testing.T) {
@@ -275,6 +276,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if real != 1 || spoofed != 0 {
 		t.Fatalf("forwarded IP affected login limits: real=%d spoofed=%d", real, spoofed)
 	}
+	testWorkflowBrowserAPI(t, ctx, pool, client, origin, csrf.Msg.Token, owner, password, seed)
 	for path, want := range map[string]int{"/": http.StatusOK, "/tools": http.StatusOK,
 		"/assets/app.js": http.StatusOK, "/assets/missing.js": http.StatusNotFound,
 		"/api/missing": http.StatusNotFound} {
@@ -322,6 +324,123 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	handler.ServeHTTP(live, httptest.NewRequest(http.MethodGet, origin+"/livez", nil))
 	if live.Code != http.StatusOK {
 		t.Fatalf("liveness incorrectly depends on database: %d", live.Code)
+	}
+}
+
+func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, client *http.Client,
+	origin, csrf string, owner identity.FirstOwner, password, seed []byte) {
+	t.Helper()
+	w := apiv1connect.NewWorkflowServiceClient(client, origin+"/api")
+	create := func(slug string) *api.Project {
+		t.Helper()
+		req := connect.NewRequest(&api.CreateProjectRequest{Slug: slug, Name: slug})
+		req.Header().Set("Origin", origin)
+		req.Header().Set("X-Blaxsmith-CSRF", csrf)
+		got, err := w.CreateProject(ctx, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got.Msg.Project
+	}
+	denied := connect.NewRequest(&api.CreateProjectRequest{Slug: "denied", Name: "Denied"})
+	denied.Header().Set("Origin", origin)
+	if _, err := w.CreateProject(ctx, denied); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("mutation without CSRF allowed: %v", err)
+	}
+	denied.Header().Set("Origin", "https://outside.example")
+	denied.Header().Set("X-Blaxsmith-CSRF", csrf)
+	if _, err := w.CreateProject(ctx, denied); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("mutation from another origin allowed: %v", err)
+	}
+	first, second := create("first-project"), create("second-project")
+	page := connect.NewRequest(&api.ListProjectsRequest{PageSize: 1})
+	page.Header().Set("Origin", origin)
+	pageOne, err := w.ListProjects(ctx, page)
+	if err != nil || len(pageOne.Msg.Projects) != 1 || pageOne.Msg.Projects[0].Id != second.Id || pageOne.Msg.NextPageToken == "" {
+		t.Fatalf("first project page: %+v, %v", pageOne, err)
+	}
+	page.Msg.PageToken = pageOne.Msg.NextPageToken
+	pageTwo, err := w.ListProjects(ctx, page)
+	if err != nil || len(pageTwo.Msg.Projects) != 1 || pageTwo.Msg.Projects[0].Id != first.Id {
+		t.Fatalf("second project page: %+v, %v", pageTwo, err)
+	}
+	store, err := workflow.New(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := store.CreateRun(ctx, workflow.RunInput{OrganizationID: owner.OrganizationID, ProjectID: first.Id,
+		LaunchKey: "api-read", SourceCommit: strings.Repeat("a", 40), BundleSHA256: strings.Repeat("b", 64), VerificationSHA256: strings.Repeat("c", 64)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	getRun := connect.NewRequest(&api.GetRunRequest{RunId: run.ID})
+	getRun.Header().Set("Origin", origin)
+	if got, err := w.GetRun(ctx, getRun); err != nil || got.Msg.Run.Id != run.ID {
+		t.Fatalf("own run lookup: %+v, %v", got, err)
+	}
+	listRuns := connect.NewRequest(&api.ListRunsRequest{ProjectId: first.Id})
+	listRuns.Header().Set("Origin", origin)
+	if got, err := w.ListRuns(ctx, listRuns); err != nil || len(got.Msg.Runs) != 1 || got.Msg.Runs[0].Id != run.ID {
+		t.Fatalf("own run list: %+v, %v", got, err)
+	}
+	events := connect.NewRequest(&api.EventsAfterRequest{RunId: run.ID})
+	events.Header().Set("Origin", origin)
+	if got, err := w.EventsAfter(ctx, events); err != nil || len(got.Msg.Events) != 1 || got.Msg.Events[0].Kind != "run.created" {
+		t.Fatalf("own events: %+v, %v", got, err)
+	}
+	var otherOrg string
+	if err := pool.QueryRow(ctx, `INSERT INTO identity_organizations (id,slug,name)
+		VALUES (gen_random_uuid(),'another-org','Another') RETURNING id`).Scan(&otherOrg); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO identity_memberships (organization_id,principal_id,role)
+		VALUES ($1,$2,'owner')`, otherOrg, owner.PrincipalID); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := identity.NewSessionManager(pool, origin, ed25519.NewKeyFromSeed(seed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherTokens, err := manager.LoginLocal(ctx, "another-org", "alice", password, netip.MustParseAddr("192.0.2.55"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := apiv1connect.NewWorkflowServiceClient(&http.Client{Timeout: 3 * time.Second, Transport: client.Transport}, origin+"/api")
+	cookie := "__Host-blaxsmith_access=" + otherTokens.Access
+	otherProjects := connect.NewRequest(&api.ListProjectsRequest{})
+	otherProjects.Header().Set("Origin", origin)
+	otherProjects.Header().Set("Cookie", cookie)
+	if got, err := other.ListProjects(ctx, otherProjects); err != nil || len(got.Msg.Projects) != 0 {
+		t.Fatalf("cross-tenant project list: %+v, %v", got, err)
+	}
+	getRun.Header().Set("Cookie", cookie)
+	if _, err := other.GetRun(ctx, getRun); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("cross-tenant run lookup: %v", err)
+	}
+	listRuns.Header().Set("Cookie", cookie)
+	if _, err := other.ListRuns(ctx, listRuns); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("cross-tenant run list: %v", err)
+	}
+	events.Header().Set("Cookie", cookie)
+	if _, err := other.EventsAfter(ctx, events); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("cross-tenant events: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE identity_memberships SET role='viewer'
+		WHERE organization_id=$1 AND principal_id=$2`, owner.OrganizationID, owner.PrincipalID); err != nil {
+		t.Fatal(err)
+	}
+	refresh := connect.NewRequest(&api.RefreshSessionRequest{})
+	refresh.Header().Set("Origin", origin)
+	refresh.Header().Set("X-Blaxsmith-CSRF", csrf)
+	auth := apiv1connect.NewAuthServiceClient(client, origin+"/api")
+	if got, err := auth.RefreshSession(ctx, refresh); err != nil || got.Msg.Session.Role != "viewer" {
+		t.Fatalf("viewer refresh: %+v, %v", got, err)
+	}
+	viewerCreate := connect.NewRequest(&api.CreateProjectRequest{Slug: "viewer-denied", Name: "Denied"})
+	viewerCreate.Header().Set("Origin", origin)
+	viewerCreate.Header().Set("X-Blaxsmith-CSRF", csrf)
+	if _, err := w.CreateProject(ctx, viewerCreate); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("viewer created project: %v", err)
 	}
 }
 

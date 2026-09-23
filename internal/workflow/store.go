@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -55,6 +56,15 @@ type Run struct {
 	BundleSHA256       string
 	VerificationSHA256 string
 	State              string
+	CreatedAt          time.Time
+}
+
+type Project struct {
+	ID             string
+	OrganizationID string
+	Slug           string
+	Name           string
+	CreatedAt      time.Time
 }
 
 type Attempt struct {
@@ -68,11 +78,12 @@ type Attempt struct {
 }
 
 type Event struct {
-	ID        int64
-	RunID     string
-	TaskID    *string
-	AttemptID *string
-	Kind      string
+	ID         int64
+	RunID      string
+	TaskID     *string
+	AttemptID  *string
+	Kind       string
+	OccurredAt time.Time
 }
 
 // CreateProject creates a tenant-owned project; slug conflicts are explicit.
@@ -87,6 +98,72 @@ func (s *Store) CreateProject(ctx context.Context, orgID, slug, name string) (st
 		return "", fmt.Errorf("create project: %w", err)
 	}
 	return id, nil
+}
+
+func (s *Store) GetProject(ctx context.Context, orgID, projectID string) (Project, error) {
+	if !ids(orgID, projectID) {
+		return Project{}, ErrInvalid
+	}
+	var p Project
+	err := s.pool.QueryRow(ctx, `SELECT id,organization_id,slug,name,created_at FROM workflow_projects
+		WHERE organization_id=$1 AND id=$2`, orgID, projectID).
+		Scan(&p.ID, &p.OrganizationID, &p.Slug, &p.Name, &p.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Project{}, ErrNotFound
+	}
+	return p, err
+}
+
+// ListProjects and ListRuns use keyset pagination so newly inserted rows do
+// not shift pages while a workspace is browsing an organization.
+func (s *Store) ListProjects(ctx context.Context, orgID string, before time.Time, beforeID string, limit int) ([]Project, error) {
+	if !uuidPattern.MatchString(orgID) || !validPage(before, beforeID, limit) {
+		return nil, ErrInvalid
+	}
+	rows, err := s.pool.Query(ctx, `SELECT id,organization_id,slug,name,created_at FROM workflow_projects
+		WHERE organization_id=$1 AND (created_at,id)<($2,$3::uuid)
+		ORDER BY created_at DESC,id DESC LIMIT $4`, orgID, before, beforeID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	projects := []Project{}
+	for rows.Next() {
+		var p Project
+		if err := rows.Scan(&p.ID, &p.OrganizationID, &p.Slug, &p.Name, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		projects = append(projects, p)
+	}
+	return projects, rows.Err()
+}
+
+func (s *Store) ListRuns(ctx context.Context, orgID, projectID string, before time.Time, beforeID string, limit int) ([]Run, error) {
+	if !ids(orgID, projectID) || !validPage(before, beforeID, limit) {
+		return nil, ErrInvalid
+	}
+	rows, err := s.pool.Query(ctx, `SELECT id,organization_id,project_id,launch_key,source_commit,
+		bundle_sha256,verification_sha256,state,created_at FROM workflow_runs
+		WHERE organization_id=$1 AND project_id=$2 AND (created_at,id)<($3,$4::uuid)
+		ORDER BY created_at DESC,id DESC LIMIT $5`, orgID, projectID, before, beforeID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	runs := []Run{}
+	for rows.Next() {
+		var r Run
+		if err := rows.Scan(&r.ID, &r.OrganizationID, &r.ProjectID, &r.LaunchKey, &r.SourceCommit,
+			&r.BundleSHA256, &r.VerificationSHA256, &r.State, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		runs = append(runs, r)
+	}
+	return runs, rows.Err()
+}
+
+func validPage(before time.Time, beforeID string, limit int) bool {
+	return !before.IsZero() && uuidPattern.MatchString(beforeID) && limit >= 1 && limit <= 101
 }
 
 // CreateRun treats the project-scoped launch key as an idempotency key. A
@@ -133,10 +210,10 @@ func (s *Store) CreateRun(ctx context.Context, in RunInput) (Run, error) {
 func getRun(ctx context.Context, tx pgx.Tx, orgID, projectID, key string) (Run, error) {
 	var r Run
 	err := tx.QueryRow(ctx, `SELECT id, organization_id, project_id, launch_key, source_commit,
-		bundle_sha256, verification_sha256, state FROM workflow_runs
+		bundle_sha256, verification_sha256, state, created_at FROM workflow_runs
 		WHERE organization_id=$1 AND project_id=$2 AND launch_key=$3`, orgID, projectID, key).
 		Scan(&r.ID, &r.OrganizationID, &r.ProjectID, &r.LaunchKey, &r.SourceCommit,
-			&r.BundleSHA256, &r.VerificationSHA256, &r.State)
+			&r.BundleSHA256, &r.VerificationSHA256, &r.State, &r.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Run{}, ErrNotFound
 	}
@@ -150,10 +227,10 @@ func (s *Store) GetRun(ctx context.Context, orgID, runID string) (Run, error) {
 	}
 	var r Run
 	err := s.pool.QueryRow(ctx, `SELECT id, organization_id, project_id, launch_key, source_commit,
-		bundle_sha256, verification_sha256, state FROM workflow_runs
+		bundle_sha256, verification_sha256, state, created_at FROM workflow_runs
 		WHERE organization_id=$1 AND id=$2`, orgID, runID).
 		Scan(&r.ID, &r.OrganizationID, &r.ProjectID, &r.LaunchKey, &r.SourceCommit,
-			&r.BundleSHA256, &r.VerificationSHA256, &r.State)
+			&r.BundleSHA256, &r.VerificationSHA256, &r.State, &r.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Run{}, ErrNotFound
 	}
@@ -173,13 +250,14 @@ func (s *Store) AddTask(ctx context.Context, orgID, runID, taskKey, inputSHA256 
 	}
 	defer tx.Rollback(ctx)
 	var state string
-	if err := tx.QueryRow(ctx, `SELECT state FROM workflow_runs WHERE organization_id=$1 AND id=$2 FOR UPDATE`, orgID, runID).Scan(&state); err != nil {
+	var graphSealed bool
+	if err := tx.QueryRow(ctx, `SELECT state,graph_sealed FROM workflow_runs WHERE organization_id=$1 AND id=$2 FOR UPDATE`, orgID, runID).Scan(&state, &graphSealed); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", ErrNotFound
 		}
 		return "", err
 	}
-	if state != "queued" {
+	if state != "queued" || graphSealed {
 		return "", ErrConflict
 	}
 	var id string
@@ -223,13 +301,14 @@ func (s *Store) ReserveAttempt(ctx context.Context, orgID, runID, taskID string)
 	}
 	defer tx.Rollback(ctx)
 	var runState string
-	if err := tx.QueryRow(ctx, `SELECT state FROM workflow_runs WHERE organization_id=$1 AND id=$2 FOR UPDATE`, orgID, runID).Scan(&runState); err != nil {
+	var graphSealed bool
+	if err := tx.QueryRow(ctx, `SELECT state,graph_sealed FROM workflow_runs WHERE organization_id=$1 AND id=$2 FOR UPDATE`, orgID, runID).Scan(&runState, &graphSealed); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Attempt{}, ErrNotFound
 		}
 		return Attempt{}, err
 	}
-	if runState != "queued" && runState != "active" {
+	if (runState != "queued" && runState != "active") || !graphSealed {
 		return Attempt{}, ErrConflict
 	}
 	var taskState string
@@ -245,6 +324,18 @@ func (s *Store) ReserveAttempt(ctx context.Context, orgID, runID, taskID string)
 		return Attempt{}, err
 	}
 	if taskState != "pending" || generation >= int64(max) {
+		return Attempt{}, ErrConflict
+	}
+	var blocked bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM workflow_task_dependencies d
+		JOIN workflow_tasks parent ON parent.organization_id=d.organization_id
+			AND parent.run_id=d.run_id AND parent.id=d.depends_on_task_id
+		WHERE d.organization_id=$1 AND d.run_id=$2 AND d.task_id=$3
+			AND parent.state<>'succeeded')`, orgID, runID, taskID).Scan(&blocked); err != nil {
+		return Attempt{}, err
+	}
+	if blocked {
 		return Attempt{}, ErrConflict
 	}
 	var a Attempt
@@ -603,7 +694,7 @@ func (s *Store) EventsAfter(ctx context.Context, orgID, runID string, after int6
 	if !ids(orgID, runID) || after < 0 || limit < 1 || limit > 500 {
 		return nil, ErrInvalid
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id,run_id,task_id::text,attempt_id::text,kind
+	rows, err := s.pool.Query(ctx, `SELECT id,run_id,task_id::text,attempt_id::text,kind,occurred_at
 		FROM workflow_events WHERE organization_id=$1 AND run_id=$2 AND id>$3
 		ORDER BY id LIMIT $4`, orgID, runID, after, limit)
 	if err != nil {
@@ -613,7 +704,7 @@ func (s *Store) EventsAfter(ctx context.Context, orgID, runID string, after int6
 	events := []Event{}
 	for rows.Next() {
 		var e Event
-		if err := rows.Scan(&e.ID, &e.RunID, &e.TaskID, &e.AttemptID, &e.Kind); err != nil {
+		if err := rows.Scan(&e.ID, &e.RunID, &e.TaskID, &e.AttemptID, &e.Kind, &e.OccurredAt); err != nil {
 			return nil, err
 		}
 		events = append(events, e)

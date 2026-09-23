@@ -84,6 +84,15 @@ func TestWorkflowPostgres(t *testing.T) {
 	if _, err := store.AddTask(ctx, org, run.ID, "implement", in.BundleSHA256, 3); !errors.Is(err, ErrConflict) {
 		t.Fatalf("changed task budget accepted: %v", err)
 	}
+	if _, err := store.ReserveAttempt(ctx, org, run.ID, task); !errors.Is(err, ErrConflict) {
+		t.Fatalf("unsealed graph dispatched: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, org, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddTask(ctx, org, run.ID, "late", in.BundleSHA256, 1); !errors.Is(err, ErrConflict) {
+		t.Fatalf("sealed graph changed: %v", err)
+	}
 
 	var wg sync.WaitGroup
 	results := make(chan struct {
@@ -234,6 +243,9 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, org, run.ID); err != nil {
+		t.Fatal(err)
+	}
 	a, err := store.ReserveAttempt(ctx, org, run.ID, task)
 	if err != nil {
 		t.Fatal(err)
@@ -279,6 +291,9 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, org, activeRun.ID); err != nil {
+		t.Fatal(err)
+	}
 	owner, err := store.ReserveAttempt(ctx, org, activeRun.ID, activeTask)
 	if err != nil {
 		t.Fatal(err)
@@ -312,6 +327,9 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	}
 	raceTask, err := store.AddTask(ctx, org, raceRun.ID, "review", in.BundleSHA256, 1)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, org, raceRun.ID); err != nil {
 		t.Fatal(err)
 	}
 	raceOwner, err := store.ReserveAttempt(ctx, org, raceRun.ID, raceTask)
@@ -349,6 +367,53 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	}
 	if finalErr == nil && actual.State != "succeeded" || cancelErr == nil && actual.State != "cancel_requested" {
 		t.Fatalf("race produced inconsistent state: %q", actual.State)
+	}
+}
+
+func TestDependencyReservationGatePostgres(t *testing.T) {
+	pool := testPool(t)
+	store, _ := New(pool)
+	ctx := t.Context()
+	org := organization(t, pool, "dependency")
+	project, err := store.CreateProject(ctx, org, "project-dependency", "Dependency")
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := RunInput{org, project, "dependency-run", strings.Repeat("a", 40), strings.Repeat("b", 64), strings.Repeat("c", 64)}
+	run, err := store.CreateRun(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := store.AddTask(ctx, org, run.ID, "plan", in.BundleSHA256, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	build, err := store.AddTask(ctx, org, run.ID, "build", in.BundleSHA256, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workflow_task_dependencies
+		(organization_id,run_id,task_id,depends_on_task_id) VALUES ($1,$2,$3,$4)`, org, run.ID, build, plan); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, org, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReserveAttempt(ctx, org, run.ID, build); !errors.Is(err, ErrConflict) {
+		t.Fatalf("dependent task dispatched before parent completion: %v", err)
+	}
+	a, err := store.ReserveAttempt(ctx, org, run.ID, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ConfirmStarted(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.FinishAttempt(ctx, a, true, in.BundleSHA256); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReserveAttempt(ctx, org, run.ID, build); err != nil {
+		t.Fatalf("dependent task remained blocked after parent success: %v", err)
 	}
 }
 

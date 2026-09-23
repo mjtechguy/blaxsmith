@@ -19,10 +19,12 @@ import (
 	"syscall"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
 type appConfig struct {
@@ -205,8 +207,18 @@ func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin,
 	if err != nil {
 		return nil, err
 	}
+	guard, err := identity.NewBrowserGuard(manager, origin)
+	if err != nil {
+		return nil, err
+	}
+	store, err := workflow.New(pool)
+	if err != nil {
+		return nil, err
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/api"+authPath, http.StripPrefix("/api", authHandler))
+	workflowPath, workflowHandler := apiv1connect.NewWorkflowServiceHandler(&workflowService{guard: guard, store: store}, connect.WithReadMaxBytes(4096))
+	mux.Handle("/api"+workflowPath, http.StripPrefix("/api", guard.Wrap(workflowHandler)))
 	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(&catalogService{client: &http.Client{Timeout: 30 * time.Second}})
 	mux.Handle("/api"+catalogPath, http.StripPrefix("/api", catalogHandler))
 	mux.HandleFunc("/api", http.NotFound)
