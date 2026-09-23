@@ -11,4 +11,4 @@ b2f016c942e8f89953ac420aa60b1b46885ad3c6:integrations/ax/provenance-encrypted-gi
 # SHA-256 of the reviewed AX platform-key patch in the Redis compatibility build provenance.
 307a1a9ce97899c2755e8da86e69b4f5c3f960a6:integrations/ax/provenance-redis-ha.json:generic-api-key:6
 # SHA-256 of the reviewed AX platform-key patch in the consumer-recovery build provenance.
-cde896874b9e8d84b582b66b1abc001162891e3f:integrations/ax/provenance-consumer-recovery.json:generic-api-key:6
+b09287ab8c8c43006ff07c380389135aa1cdd1c4:integrations/ax/provenance-consumer-recovery.json:generic-api-key:6

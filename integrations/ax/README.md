@@ -59,8 +59,8 @@ the patch intentionally and repeat the runtime probes when adopting a new AX pin
 The [initial provenance](provenance.json), [egress follow-up
 provenance](provenance-egress.json), [bootstrap-gate provenance](provenance-bootstrap.json),
 [platform-key provenance](provenance-platform-key.json), [encrypted-Git
-provenance](provenance-encrypted-git.json), and [task-tombstone
-provenance](provenance-task-tombstones.json), and [Redis connection
+provenance](provenance-encrypted-git.json), [task-tombstone
+provenance](provenance-task-tombstones.json), [Redis connection
 provenance](provenance-redis-ha.json), and [consumer-recovery
 provenance](provenance-consumer-recovery.json) are evidence of tested Linux builds, not
 signatures.

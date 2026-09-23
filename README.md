@@ -186,7 +186,7 @@ The private repository is [mjtechguy/blaxsmith](https://github.com/mjtechguy/bla
 - **Local development:** React/Vite and Go run locally, Compose supplies supporting services, and agent work runs on a real AX/Substrate execution cluster.
 - **Cluster enrollment:** an authorized administrator registers a pool, installs the connector and validated runtime prerequisites, and completes scoped enrollment before it becomes eligible for work.
 
-There is no custom Blaxsmith operator or Compose-based agent runtime in the initial scope. A [preview Helm chart](deploy/charts/blaxsmith-preview/README.md) packages only the read-only catalog UI/API. The [direct-TLS application chart](deploy/charts/blaxsmith-app/README.md) stages the authenticated API and built UI with existing TLS, signer, and database Secrets; it has no external ingress or AX connector yet. The recipe CLI, public catalog API, and local web preview described above are runnable now.
+There is no custom Blaxsmith operator or Compose-based agent runtime in the initial scope. A [preview Helm chart](deploy/charts/blaxsmith-preview/README.md) packages only the read-only catalog UI/API. The [direct-TLS application chart](deploy/charts/blaxsmith-app/README.md) stages the authenticated API and built UI with existing TLS, signer, and database Secrets; it has no external ingress or AX connector yet. An [optional CNPG/Barman data profile](deploy/charts/blaxsmith-cnpg/README.md) is available for qualification on a multi-node cluster, with a separate [PITR drill](deploy/ha/cnpg/README.md); it has not been certified as production HA. The recipe CLI, public catalog API, and local web preview described above are runnable now.
 
 ## Beginning implementation
 
