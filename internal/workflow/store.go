@@ -472,6 +472,55 @@ func (s *Store) ConfirmStopped(ctx context.Context, a Attempt) error {
 	return tx.Commit(ctx)
 }
 
+// FinalizeRun closes an executed task graph once every task has a result.
+// Succeeded means engineering tasks finished; human approval is separate.
+// All task mutations lock the run first, so cancellation cannot race this gate.
+func (s *Store) FinalizeRun(ctx context.Context, orgID, runID string) (string, error) {
+	if !ids(orgID, runID) {
+		return "", ErrInvalid
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+	var state string
+	if err := tx.QueryRow(ctx, `SELECT state FROM workflow_runs WHERE organization_id=$1 AND id=$2 FOR UPDATE`, orgID, runID).Scan(&state); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", err
+	}
+	if state == "succeeded" || state == "failed" {
+		return state, tx.Commit(ctx)
+	}
+	if state != "active" {
+		return "", ErrConflict
+	}
+	var total, incomplete, blocked int
+	if err := tx.QueryRow(ctx, `SELECT count(*),
+		count(*) FILTER (WHERE state NOT IN ('succeeded','blocked')),
+		count(*) FILTER (WHERE state='blocked')
+		FROM workflow_tasks WHERE organization_id=$1 AND run_id=$2`, orgID, runID).
+		Scan(&total, &incomplete, &blocked); err != nil {
+		return "", err
+	}
+	if total == 0 || incomplete != 0 {
+		return "", ErrConflict
+	}
+	final := "succeeded"
+	if blocked > 0 {
+		final = "failed"
+	}
+	if _, err := tx.Exec(ctx, `UPDATE workflow_runs SET state=$3 WHERE organization_id=$1 AND id=$2`, orgID, runID, final); err != nil {
+		return "", err
+	}
+	if err := event(ctx, tx, orgID, runID, "", "", "run."+final); err != nil {
+		return "", err
+	}
+	return final, tx.Commit(ctx)
+}
+
 // RequestCancel prevents new dispatch and owner result publication. Existing
 // workloads still need connector stop/reconciliation before final cancellation.
 func (s *Store) RequestCancel(ctx context.Context, orgID, runID string) error {
@@ -493,7 +542,7 @@ func (s *Store) RequestCancel(ctx context.Context, orgID, runID string) error {
 	if state == "cancel_requested" {
 		return tx.Commit(ctx)
 	}
-	if state == "cancelled" {
+	if state != "queued" && state != "active" {
 		return ErrConflict
 	}
 	if _, err := tx.Exec(ctx, `UPDATE workflow_runs SET state='cancel_requested' WHERE organization_id=$1 AND id=$2`, orgID, runID); err != nil {

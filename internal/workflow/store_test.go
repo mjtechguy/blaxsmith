@@ -48,6 +48,21 @@ func TestWorkflowPostgres(t *testing.T) {
 	if _, err := store.GetRun(ctx, other, run.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("tenant escaped run lookup: %v", err)
 	}
+	if _, err := store.FinalizeRun(ctx, other, run.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("tenant escaped finalization: %v", err)
+	}
+	emptyInput := in
+	emptyInput.LaunchKey = "empty-graph"
+	empty, err := store.CreateRun(ctx, emptyInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET state='active' WHERE organization_id=$1 AND id=$2`, org, empty.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.FinalizeRun(ctx, org, empty.ID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("empty graph finalized: %v", err)
+	}
 	if _, err := store.AddTask(ctx, other, run.ID, "implement", in.BundleSHA256, 2); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("tenant escaped task creation: %v", err)
 	}
@@ -115,6 +130,9 @@ func TestWorkflowPostgres(t *testing.T) {
 	if err := store.MarkUnknown(ctx, first); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := store.FinalizeRun(ctx, org, run.ID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("unfinished task graph finalized: %v", err)
+	}
 	if err := store.FinishAttempt(ctx, first, true, in.BundleSHA256); !errors.Is(err, ErrConflict) {
 		t.Fatalf("uncertain result accepted: %v", err)
 	}
@@ -160,13 +178,22 @@ func TestWorkflowPostgres(t *testing.T) {
 	if _, err := store.ReserveAttempt(ctx, org, run.ID, task); !errors.Is(err, ErrConflict) {
 		t.Fatalf("completed task restarted: %v", err)
 	}
+	if state, err := store.FinalizeRun(ctx, org, run.ID); err != nil || state != "succeeded" {
+		t.Fatalf("successful run finalization: %q, %v", state, err)
+	}
+	if state, err := store.FinalizeRun(ctx, org, run.ID); err != nil || state != "succeeded" {
+		t.Fatalf("duplicate run finalization: %q, %v", state, err)
+	}
+	if err := store.RequestCancel(ctx, org, run.ID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("terminal run cancelled: %v", err)
+	}
 
 	oneShot, err := store.AddTask(ctx, org, run.ID, "late", in.BundleSHA256, 1)
 	if !errors.Is(err, ErrConflict) || oneShot != "" {
 		t.Fatalf("active graph mutation: %q, %v", oneShot, err)
 	}
 	events, err := store.EventsAfter(ctx, org, run.ID, 0, 100)
-	if err != nil || len(events) != 9 {
+	if err != nil || len(events) != 10 {
 		t.Fatalf("events: %d, %v", len(events), err)
 	}
 	for i, e := range events {
@@ -203,6 +230,10 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	remaining, err := store.AddTask(ctx, org, run.ID, "document", in.BundleSHA256, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	a, err := store.ReserveAttempt(ctx, org, run.ID, task)
 	if err != nil {
 		t.Fatal(err)
@@ -216,17 +247,27 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	if _, err := store.ReserveAttempt(ctx, org, run.ID, task); !errors.Is(err, ErrConflict) {
 		t.Fatalf("budget exhausted but retried: %v", err)
 	}
-	if err := store.RequestCancel(ctx, org, run.ID); err != nil {
+	if _, err := store.FinalizeRun(ctx, org, run.ID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("pending sibling ignored: %v", err)
+	}
+	remainingAttempt, err := store.ReserveAttempt(ctx, org, run.ID, remaining)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RequestCancel(ctx, org, run.ID); err != nil {
-		t.Fatalf("duplicate cancel: %v", err)
-	}
-	if err := store.FinalizeCancel(ctx, org, run.ID); err != nil {
+	if err := store.ConfirmStarted(ctx, remainingAttempt); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.FinalizeCancel(ctx, org, run.ID); err != nil {
-		t.Fatalf("duplicate finalization: %v", err)
+	if err := store.FinishAttempt(ctx, remainingAttempt, true, in.BundleSHA256); err != nil {
+		t.Fatal(err)
+	}
+	if state, err := store.FinalizeRun(ctx, org, run.ID); err != nil || state != "failed" {
+		t.Fatalf("blocked run finalization: %q, %v", state, err)
+	}
+	if state, err := store.FinalizeRun(ctx, org, run.ID); err != nil || state != "failed" {
+		t.Fatalf("duplicate failed finalization: %q, %v", state, err)
+	}
+	if err := store.RequestCancel(ctx, org, run.ID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("failed run cancelled: %v", err)
 	}
 	active := in
 	active.LaunchKey = "request-3"
@@ -248,6 +289,9 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	if err := store.RequestCancel(ctx, org, activeRun.ID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := store.FinalizeRun(ctx, org, activeRun.ID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("cancellation raced finalization: %v", err)
+	}
 	if err := store.FinalizeCancel(ctx, org, activeRun.ID); !errors.Is(err, ErrConflict) {
 		t.Fatalf("active work cancelled without termination: %v", err)
 	}
@@ -259,6 +303,52 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	}
 	if err := store.FinalizeCancel(ctx, org, activeRun.ID); err != nil {
 		t.Fatal(err)
+	}
+	raceInput := in
+	raceInput.LaunchKey = "request-race"
+	raceRun, err := store.CreateRun(ctx, raceInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raceTask, err := store.AddTask(ctx, org, raceRun.ID, "review", in.BundleSHA256, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raceOwner, err := store.ReserveAttempt(ctx, org, raceRun.ID, raceTask)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ConfirmStarted(ctx, raceOwner); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.FinishAttempt(ctx, raceOwner, true, in.BundleSHA256); err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	final := make(chan error, 1)
+	cancel := make(chan error, 1)
+	go func() {
+		<-start
+		_, err := store.FinalizeRun(ctx, org, raceRun.ID)
+		final <- err
+	}()
+	go func() {
+		<-start
+		cancel <- store.RequestCancel(ctx, org, raceRun.ID)
+	}()
+	close(start)
+	finalErr, cancelErr := <-final, <-cancel
+	if (finalErr == nil) == (cancelErr == nil) ||
+		(finalErr != nil && !errors.Is(finalErr, ErrConflict)) ||
+		(cancelErr != nil && !errors.Is(cancelErr, ErrConflict)) {
+		t.Fatalf("finalize/cancel race: final=%v cancel=%v", finalErr, cancelErr)
+	}
+	actual, err := store.GetRun(ctx, org, raceRun.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if finalErr == nil && actual.State != "succeeded" || cancelErr == nil && actual.State != "cancel_requested" {
+		t.Fatalf("race produced inconsistent state: %q", actual.State)
 	}
 }
 
