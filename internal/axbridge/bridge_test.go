@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
+	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -139,6 +140,12 @@ func TestAttemptDispatchAndUncertainReadBack(t *testing.T) {
 	}
 	if _, state, _, err := store.CurrentAttempt(ctx, first); err != nil || state != "running" {
 		t.Fatalf("normal launch: %q %v", state, err)
+	}
+	var actorUID, commandSHA string
+	if err := pool.QueryRow(ctx, `SELECT actor_uid,command_sha256 FROM workflow_attempt_runtime
+		WHERE organization_id=$1 AND attempt_id=$2`, org, first.ID).Scan(&actorUID, &commandSHA); err != nil ||
+		actorUID != "actor-uid" || commandSHA != runnerexit.CommandSHA256(syntheticCommand) {
+		t.Fatalf("runtime not pinned before launch acknowledgement: %q %q %v", actorUID, commandSHA, err)
 	}
 	if err := store.RequestCancel(ctx, org, first.RunID); err != nil {
 		t.Fatal(err)

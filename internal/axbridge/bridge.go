@@ -1,6 +1,6 @@
 // Package axbridge dispatches a fenced workflow attempt to the pinned AX API.
-// This first bridge deliberately runs synthetic commands only; AX does not yet
-// provide trusted command-exit evidence for accepting a task result.
+// This first bridge deliberately runs synthetic commands only. A runner exit
+// observation does not independently verify the task result.
 package axbridge
 
 import (
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
+	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -19,6 +20,10 @@ var (
 	ErrPending  = errors.New("AX launch outcome is not yet proven")
 	ErrMismatch = errors.New("AX task or runtime differs from frozen attempt")
 )
+
+const syntheticShellCommand = "printf 'blaxsmith-ax-smoke-ok\\n' > /workspace/result.txt"
+
+var syntheticCommand = []string{"/bin/sh", "-c", syntheticShellCommand}
 
 // Task contains only fields used for deterministic synthetic dispatch.
 type Task struct {
@@ -80,7 +85,7 @@ func (b *Bridge) task(a workflow.Attempt) (Task, error) {
 		Metadata: TaskMetadata{Name: name, Atespace: space},
 		Spec: map[string]any{
 			"image":   b.Image,
-			"command": []any{"/bin/sh", "-c", "printf 'blaxsmith-ax-smoke-ok\\n' > /workspace/result.txt"},
+			"command": []any{syntheticCommand[0], syntheticCommand[1], syntheticCommand[2]},
 			"debug":   true,
 		},
 	}, nil
@@ -185,6 +190,16 @@ func (b *Bridge) confirm(ctx context.Context, a workflow.Attempt, want Task, rec
 				run, state, sealed, fenceErr := b.Workflow.CurrentAttempt(ctx, a)
 				if fenceErr != nil || !sealed || run != "active" || (recovered && state != "reconciling") || (!recovered && state != "reserved") {
 					return bootstrap.Runtime{}, workflow.ErrFenced
+				}
+				binding := workflow.RuntimeBinding{AXAtespace: want.Metadata.Atespace,
+					AXTask: want.Metadata.Name, ActorUID: runtime.Actor.UID,
+					TemplateUID: runtime.TemplateUID, Image: runtime.Image,
+					WorkerPool: runtime.WorkerPool, CommandSHA256: runnerexit.CommandSHA256(syntheticCommand)}
+				if err := b.Workflow.BindRuntime(ctx, a, binding); err != nil {
+					if errors.Is(err, workflow.ErrFenced) || recovered {
+						return bootstrap.Runtime{}, err
+					}
+					return bootstrap.Runtime{}, b.uncertain(a, err)
 				}
 				if recovered {
 					err = b.Workflow.ConfirmRecovered(ctx, a)

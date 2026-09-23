@@ -2,13 +2,20 @@ package workflow
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
 )
 
 func TestFrozenLaunchPostgres(t *testing.T) {
@@ -93,6 +100,61 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 	binding.ActorUID = "different-actor"
 	if err := store.BindRuntime(t.Context(), attempt, binding); !errors.Is(err, ErrConflict) {
 		t.Fatalf("runtime identity changed: %v", err)
+	}
+	binding.ActorUID = "actor-one"
+	if err := store.ConfirmStarted(t.Context(), attempt); err != nil {
+		t.Fatal(err)
+	}
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector := CommandExitCollector{Store: store, SignerID: "pool-one/connector", PublicKey: public, WorkerPool: "pool-one"}
+	var nonce [32]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		t.Fatal(err)
+	}
+	empty := sha256.Sum256(nil)
+	report := runnerexit.ExitReport{Schema: runnerexit.Schema, OrganizationID: org,
+		RunID: run.ID, TaskID: firstTask, AttemptID: attempt.ID, OwnerGeneration: attempt.OwnerGeneration,
+		AXAtespace: binding.AXAtespace, AXTask: binding.AXTask, ActorUID: binding.ActorUID,
+		TemplateUID: binding.TemplateUID, ActivationNonce: base64.RawURLEncoding.EncodeToString(nonce[:]),
+		CommandSHA256: binding.CommandSHA256, ExitCode: 0, Sequence: 1,
+		EvidenceSHA256: hex.EncodeToString(empty[:]), ObservedAt: time.Now().UnixNano()}
+	signed, err := runnerexit.Sign(report, private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrong := signed
+	wrong.Report.ActorUID = "other-actor"
+	if err := collector.Record(t.Context(), wrong); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("altered signed report accepted: %v", err)
+	}
+	wrong, err = runnerexit.Sign(wrong.Report, private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := collector.Record(t.Context(), wrong); !errors.Is(err, ErrFenced) {
+		t.Fatalf("wrong actor accepted: %v", err)
+	}
+	if err := collector.Record(t.Context(), signed); err != nil {
+		t.Fatal(err)
+	}
+	if err := collector.Record(t.Context(), signed); err != nil {
+		t.Fatalf("same signed receipt was not idempotent: %v", err)
+	}
+	report.ExitCode = 1
+	wrong, err = runnerexit.Sign(report, private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := collector.Record(t.Context(), wrong); !errors.Is(err, ErrConflict) {
+		t.Fatalf("changed receipt replaced first report: %v", err)
+	}
+	var state string
+	if err := pool.QueryRow(t.Context(), `SELECT state FROM workflow_tasks WHERE organization_id=$1 AND id=$2`,
+		org, firstTask).Scan(&state); err != nil || state != "running" {
+		t.Fatalf("command exit implied task success: %q %v", state, err)
 	}
 }
 
