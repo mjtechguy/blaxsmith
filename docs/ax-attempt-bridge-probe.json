@@ -1,0 +1,24 @@
+{
+  "recorded_at_utc": "2026-09-23",
+  "cluster": "authorized single-node k3s development cluster",
+  "attempt_id": "979f2927-ab46-4b14-9dc9-93dbebe29adc",
+  "owner_generation": 1,
+  "run_id": "47ccb5b2-9eeb-4d14-b4bc-ad3262b5ce69",
+  "ax_atespace": "blaxsmith-0a565b0383f541128ab05dd38cf9ec8d",
+  "ax_task": "attempt-979f2927ab464b149dc993dbebe29adc",
+  "actor_uid": "32830828-74cb-48c4-ab9d-fe7813866a40",
+  "template_uid": "12a25238-73e1-43f9-8323-fbbcefada450",
+  "runner_image": "127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:32e908293a10e176a4b69f3e12d1a7789418dcda57ac9d732f2c1f7de3d60e81",
+  "worker_pool": "blaxsmith-smoke",
+  "checks": [
+    "durable attempt reserved before AX write",
+    "deterministic AX Task exact spec read-back",
+    "Substrate actor and template UID, image, pool, gVisor and data snapshots matched",
+    "workflow cancellation fenced result publication",
+    "AX Task and Substrate actor NotFound after teardown",
+    "temporary database schema absent after cleanup"
+  ],
+  "result": "passed",
+  "command_exit_accepted": false,
+  "credentials_used": false
+}

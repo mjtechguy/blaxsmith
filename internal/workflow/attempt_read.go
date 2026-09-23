@@ -1,0 +1,40 @@
+package workflow
+
+import (
+	"context"
+	"errors"
+
+	"github.com/jackc/pgx/v5"
+)
+
+// CurrentAttempt checks the persisted owner before any external dispatch or
+// recovery operation. It does not authorize the caller or prove AX state.
+func (s *Store) CurrentAttempt(ctx context.Context, a Attempt) (runState, attemptState string, graphSealed bool, err error) {
+	if !validAttempt(a) {
+		return "", "", false, ErrInvalid
+	}
+	var taskState, activeID, token string
+	var generation int64
+	err = s.pool.QueryRow(ctx, `SELECT r.state,r.graph_sealed,t.state,t.active_attempt_id,a.state,a.fence_token,a.generation
+		FROM workflow_runs r JOIN workflow_tasks t ON (t.organization_id=r.organization_id AND t.run_id=r.id)
+		JOIN workflow_attempts a ON (a.organization_id=t.organization_id AND a.task_id=t.id)
+		WHERE r.organization_id=$1 AND r.id=$2 AND t.id=$3 AND a.id=$4`,
+		a.OrganizationID, a.RunID, a.TaskID, a.ID).
+		Scan(&runState, &graphSealed, &taskState, &activeID, &attemptState, &token, &generation)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", false, ErrFenced
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	if activeID != a.ID || token != a.FenceToken || generation != a.OwnerGeneration || taskState != attemptState {
+		return "", "", false, ErrFenced
+	}
+	return runState, attemptState, graphSealed, nil
+}
+
+// ConfirmRecovered is separate from normal acknowledgement: only an AX task
+// whose exact spec and live actor have been checked may leave reconciliation.
+func (s *Store) ConfirmRecovered(ctx context.Context, a Attempt) error {
+	return s.transition(ctx, a, "reconciling", "running", "attempt.started")
+}
