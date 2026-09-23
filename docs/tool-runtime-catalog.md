@@ -26,7 +26,19 @@ shows both names and versions without collapsing them.
 
 The reader is read-only. It does not approve, download, verify, install, or
 run any version; the npm integrity field is metadata until actual bytes are
-checked. The CLI always fetches live metadata. The web preview coalesces
+checked. `internal/catalog.DownloadVerified` now provides a trusted-builder
+primitive: it accepts only an exact allowlisted npm tarball URL and SHA-512 SRI,
+streams at most 200 MiB into an owner-only temporary file, and returns its
+SHA-256 only after integrity succeeds. A live opt-in probe verified the latest
+root tarballs for all three tools on 2026-09-23 UTC. This does **not** verify
+an installable runtime: those root packages are small launchers and declare
+platform-native optional dependencies. The [Codex release builder](https://github.com/openai/codex/blob/main/codex-cli/scripts/build_npm_package.py)
+shows the separate Linux packages. A runtime image must resolve and verify the
+selected Linux/architecture dependency, ensure it was actually installed,
+disable or constrain updates, and smoke-test the exact executable before
+promotion; an npm exit code or verified root tarball alone is insufficient.
+
+The CLI always fetches live metadata. The web preview coalesces
 concurrent requests, caches success for 15 minutes, and serves the last success
 for at most 24 hours during an upstream failure with a visible stale label and
 one-minute retry backoff. It does not yet use conditional requests or a durable
