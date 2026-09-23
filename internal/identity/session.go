@@ -13,6 +13,7 @@ import (
 	"net/netip"
 	"os"
 	"time"
+	"unicode/utf8"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
@@ -129,6 +130,9 @@ func (m *SessionManager) LoginLocal(ctx context.Context, slug, username string, 
 	}
 	if err := m.limits.Allow(ctx, slug, username, source); err != nil {
 		return Tokens{}, err
+	}
+	if len(password) < passwordMin || !utf8.Valid(password) {
+		return Tokens{}, ErrUnauthenticated
 	}
 	select {
 	case m.passwordSlots <- struct{}{}:

@@ -33,11 +33,12 @@ type browserService struct {
 
 func NewBrowserHandler(manager *SessionManager, origin string) (string, http.Handler, error) {
 	u, err := url.Parse(origin)
-	if manager == nil || manager.db == nil || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil ||
+	if manager == nil || manager.db == nil || manager.limits == nil || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil ||
 		u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.String() != origin {
 		return "", nil, errors.New("browser authentication requires an exact HTTPS origin")
 	}
-	path, handler := apiv1connect.NewAuthServiceHandler(&browserService{manager: manager, origin: origin})
+	path, handler := apiv1connect.NewAuthServiceHandler(&browserService{manager: manager, origin: origin},
+		connect.WithReadMaxBytes(4096))
 	return path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if r.TLS == nil || !strings.EqualFold(r.Host, u.Host) {

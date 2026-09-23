@@ -87,6 +87,12 @@ func TestBrowserSessionPostgres(t *testing.T) {
 	if _, err := apiClient.LoginLocal(ctx, login); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("missing csrf accepted: %v", err)
 	}
+	oversized := connect.NewRequest(&api.LoginLocalRequest{OrganizationSlug: "engineering", Username: "alice", Password: strings.Repeat("x", 5000)})
+	oversized.Header().Set("Origin", origin)
+	oversized.Header().Set("X-Blaxsmith-CSRF", csrf.Msg.Token)
+	if _, err := apiClient.LoginLocal(ctx, oversized); connect.CodeOf(err) != connect.CodeResourceExhausted {
+		t.Fatalf("oversized login accepted: %v", err)
+	}
 	login.Header().Set("X-Blaxsmith-CSRF", csrf.Msg.Token)
 	response, err := apiClient.LoginLocal(ctx, login)
 	if err != nil || response.Msg.Session.OrganizationId != owner.OrganizationID || response.Msg.Session.Role != "owner" {
