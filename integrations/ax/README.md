@@ -4,7 +4,7 @@ Upstream: `github.com/google/ax`, commit
 `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`, Apache-2.0 (see LICENSE).
 `fail-closed.patch`, `egress-policy.patch`, `bootstrap-gate.patch`,
 `platform-bootstrap-key.patch`, `encrypted-git-bootstrap.patch`,
-`command-exit-readback.patch`, and `task-tombstones.patch` change the files named in their
+`command-exit-readback.patch`, `task-tombstones.patch`, and `redis-ha.patch` change the files named in their
 diffs; the reference checkout stays untouched. This is a temporary integration overlay, not a claim that AX
 has accepted these changes or that secure bootstrap is finished.
 
@@ -34,6 +34,8 @@ The patch closes observed launch failures at their source:
 - [Task-name tombstones](../../docs/ax-task-tombstones.md) stop a timed-out
   `UpdateTask` from recreating a deleted attempt, including when `DeleteTask`
   reaches AX before the first upsert.
+- [Redis connection overlay](../../docs/ax-redis-ha.md) adds authenticated TLS
+  and Sentinel master discovery to both AX API and controller processes.
 
 ## Rebuild and verify
 
@@ -46,7 +48,7 @@ it ran on the Linux development node.
 bash integrations/ax/build.sh ../reference/ax /tmp/blaxsmith-ax-build
 ```
 
-The script exports committed source into a temporary directory, applies all seven
+The script exports committed source into a temporary directory, applies all eight
 patches without changing the checkout, runs the full AX test suite and `go vet`,
 and builds the server, controller and runner. It records source/patch/binary hashes in
 `provenance.json`. Changing the upstream revision fails before building; update
@@ -55,7 +57,8 @@ The [initial provenance](provenance.json), [egress follow-up
 provenance](provenance-egress.json), [bootstrap-gate provenance](provenance-bootstrap.json),
 [platform-key provenance](provenance-platform-key.json), [encrypted-Git
 provenance](provenance-encrypted-git.json), and [task-tombstone
-provenance](provenance-task-tombstones.json) are evidence of tested Linux builds, not
+provenance](provenance-task-tombstones.json), and [Redis connection
+provenance](provenance-redis-ha.json) are evidence of tested Linux builds, not
 signatures.
 
 ## Synthetic bootstrap gate

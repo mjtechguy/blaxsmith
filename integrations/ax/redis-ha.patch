@@ -1,0 +1,444 @@
+diff --git a/cmd/ax-controller/main.go b/cmd/ax-controller/main.go
+index 258842e..bf3b3fb 100644
+--- a/cmd/ax-controller/main.go
++++ b/cmd/ax-controller/main.go
+@@ -27,9 +27,9 @@ import (
+ 	"syscall"
+ 
+ 	"github.com/google/ax/internal/controller"
++	"github.com/google/ax/internal/redisconn"
+ 	"github.com/google/ax/internal/store/redis"
+ 	"github.com/google/ax/internal/substrate"
+-	goredis "github.com/redis/go-redis/v9"
+ )
+ 
+ func main() {
+@@ -113,10 +113,11 @@ func main() {
+ 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+ 	defer cancel()
+ 
+-	rClient := goredis.NewClient(&goredis.Options{
+-		Addr:     redisAddr,
+-		Password: redisPassword,
+-	})
++	rClient, err := redisconn.NewClient(redisAddr, redisPassword)
++	if err != nil {
++		slog.Error("invalid Redis configuration", "error", err)
++		os.Exit(1)
++	}
+ 	defer rClient.Close()
+ 
+ 	rStore := redis.NewStore(rClient, redis.Options{})
+diff --git a/cmd/ax-server/main.go b/cmd/ax-server/main.go
+index 8e1a98e..1b68006 100644
+--- a/cmd/ax-server/main.go
++++ b/cmd/ax-server/main.go
+@@ -24,9 +24,9 @@ import (
+ 	"syscall"
+ 	"time"
+ 
++	"github.com/google/ax/internal/redisconn"
+ 	"github.com/google/ax/internal/server"
+ 	"github.com/google/ax/internal/store/redis"
+-	goredis "github.com/redis/go-redis/v9"
+ )
+ 
+ func main() {
+@@ -56,10 +56,11 @@ func main() {
+ 
+ 	slog.Info("starting ax-server", "listenAddr", listenAddr, "redisAddr", redisAddr)
+ 
+-	rClient := goredis.NewClient(&goredis.Options{
+-		Addr:     redisAddr,
+-		Password: redisPassword,
+-	})
++	rClient, err := redisconn.NewClient(redisAddr, redisPassword)
++	if err != nil {
++		slog.Error("invalid Redis configuration", "error", err)
++		os.Exit(1)
++	}
+ 	defer rClient.Close()
+ 
+ 	rStore := redis.NewStore(rClient, redis.Options{})
+diff --git a/internal/redisconn/client.go b/internal/redisconn/client.go
+new file mode 100644
+index 0000000..4be286f
+--- /dev/null
++++ b/internal/redisconn/client.go
+@@ -0,0 +1,112 @@
++// Copyright 2026 Google LLC
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++// Package redisconn configures the Redis connection shared by AX API and worker.
++package redisconn
++
++import (
++	"crypto/tls"
++	"crypto/x509"
++	"fmt"
++	"net"
++	"os"
++	"strconv"
++	"strings"
++
++	"github.com/redis/go-redis/v9"
++)
++
++// NewClient keeps the single-address path for local AX and enables Sentinel
++// discovery only when both REDIS_SENTINEL_MASTER and REDIS_SENTINEL_ADDRS are set.
++func NewClient(addr, password string) (*redis.Client, error) {
++	tlsConfig, err := redisTLS()
++	if err != nil {
++		return nil, err
++	}
++	master := os.Getenv("REDIS_SENTINEL_MASTER")
++	addresses := os.Getenv("REDIS_SENTINEL_ADDRS")
++	if (master == "") != (addresses == "") {
++		return nil, fmt.Errorf("REDIS_SENTINEL_MASTER and REDIS_SENTINEL_ADDRS must be set together")
++	}
++	if master == "" {
++		if os.Getenv("REDIS_SENTINEL_USERNAME") != "" || os.Getenv("REDIS_SENTINEL_PASSWORD") != "" {
++			return nil, fmt.Errorf("Sentinel credentials require Sentinel discovery")
++		}
++		return redis.NewClient(&redis.Options{
++			Addr: addr, Username: os.Getenv("REDIS_USERNAME"), Password: password, TLSConfig: tlsConfig,
++		}), nil
++	}
++	var sentinelAddrs []string
++	for _, address := range strings.Split(addresses, ",") {
++		address = strings.TrimSpace(address)
++		if _, _, err := net.SplitHostPort(address); err != nil {
++			return nil, fmt.Errorf("invalid Sentinel address %q: %w", address, err)
++		}
++		sentinelAddrs = append(sentinelAddrs, address)
++	}
++	return redis.NewFailoverClient(&redis.FailoverOptions{
++		MasterName: master, SentinelAddrs: sentinelAddrs,
++		Username: os.Getenv("REDIS_USERNAME"), Password: password,
++		SentinelUsername: os.Getenv("REDIS_SENTINEL_USERNAME"), SentinelPassword: os.Getenv("REDIS_SENTINEL_PASSWORD"),
++		TLSConfig: tlsConfig,
++	}), nil
++}
++
++func redisTLS() (*tls.Config, error) {
++	enabled := os.Getenv("REDIS_TLS")
++	if enabled == "" {
++		enabled = "false"
++	}
++	useTLS, err := strconv.ParseBool(enabled)
++	if err != nil {
++		return nil, fmt.Errorf("invalid REDIS_TLS: %w", err)
++	}
++	caFile, certFile, keyFile := os.Getenv("REDIS_TLS_CA_FILE"), os.Getenv("REDIS_TLS_CERT_FILE"), os.Getenv("REDIS_TLS_KEY_FILE")
++	serverName := os.Getenv("REDIS_TLS_SERVER_NAME")
++	if !useTLS {
++		if caFile != "" || certFile != "" || keyFile != "" || serverName != "" {
++			return nil, fmt.Errorf("REDIS_TLS must be true when Redis TLS settings are provided")
++		}
++		return nil, nil
++	}
++	if (certFile == "") != (keyFile == "") {
++		return nil, fmt.Errorf("REDIS_TLS_CERT_FILE and REDIS_TLS_KEY_FILE must be set together")
++	}
++	config := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: serverName}
++	if caFile != "" {
++		roots, err := x509.SystemCertPool()
++		if err != nil {
++			return nil, fmt.Errorf("loading system CAs: %w", err)
++		}
++		if roots == nil {
++			roots = x509.NewCertPool()
++		}
++		pem, err := os.ReadFile(caFile)
++		if err != nil {
++			return nil, fmt.Errorf("reading REDIS_TLS_CA_FILE: %w", err)
++		}
++		if !roots.AppendCertsFromPEM(pem) {
++			return nil, fmt.Errorf("REDIS_TLS_CA_FILE contains no certificates")
++		}
++		config.RootCAs = roots
++	}
++	if certFile != "" {
++		certificate, err := tls.LoadX509KeyPair(certFile, keyFile)
++		if err != nil {
++			return nil, fmt.Errorf("loading Redis client certificate: %w", err)
++		}
++		config.Certificates = []tls.Certificate{certificate}
++	}
++	return config, nil
++}
+diff --git a/internal/redisconn/client_test.go b/internal/redisconn/client_test.go
+new file mode 100644
+index 0000000..aa3beda
+--- /dev/null
++++ b/internal/redisconn/client_test.go
+@@ -0,0 +1,258 @@
++// Copyright 2026 Google LLC
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++package redisconn
++
++import (
++	"crypto/ed25519"
++	"crypto/rand"
++	"crypto/x509"
++	"crypto/x509/pkix"
++	"encoding/pem"
++	"errors"
++	"fmt"
++	"math/big"
++	"net"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"strconv"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/google/ax/internal/store"
++	redisstore "github.com/google/ax/internal/store/redis"
++	"github.com/google/ax/pkg/apis/v1alpha1"
++	"github.com/redis/go-redis/v9"
++)
++
++func TestSentinelPromotionPreservesTaskTombstone(t *testing.T) {
++	redisPath, err := exec.LookPath("redis-server")
++	if err != nil {
++		t.Skip("redis-server is required for Sentinel failover test")
++	}
++	ctx := t.Context()
++	dir := t.TempDir()
++	masterPort, replicaPort, sentinelPort := freePort(t), freePort(t), freePort(t)
++	masterAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(masterPort))
++	replicaAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(replicaPort))
++	sentinelAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(sentinelPort))
++	const redisPassword, sentinelPassword, masterName = "test-redis-password", "test-sentinel-password", "test-master"
++	startRedis(t, redisPath, dir, "master", fmt.Sprintf("port %d\nrequirepass %s\n", masterPort, redisPassword))
++	master := redis.NewClient(&redis.Options{Addr: masterAddr, Password: redisPassword})
++	defer master.Close()
++	waitFor(t, func() bool { return master.Ping(ctx).Err() == nil })
++	startRedis(t, redisPath, dir, "replica", fmt.Sprintf("port %d\nreplicaof 127.0.0.1 %d\nmasterauth %s\nrequirepass %s\n", replicaPort, masterPort, redisPassword, redisPassword))
++	replica := redis.NewClient(&redis.Options{Addr: replicaAddr, Password: redisPassword})
++	defer replica.Close()
++	waitFor(t, func() bool { return strings.Contains(replica.Info(ctx, "replication").Val(), "master_link_status:up") })
++	startRedis(t, redisPath, dir, "sentinel", fmt.Sprintf("port %d\nrequirepass %s\nsentinel monitor %s 127.0.0.1 %d 1\nsentinel auth-pass %s %s\nsentinel down-after-milliseconds %s 1000\nsentinel failover-timeout %s 5000\n", sentinelPort, sentinelPassword, masterName, masterPort, masterName, redisPassword, masterName, masterName))
++	sentinel := redis.NewSentinelClient(&redis.Options{Addr: sentinelAddr, Password: sentinelPassword})
++	defer sentinel.Close()
++	waitFor(t, func() bool { return sentinel.Ping(ctx).Err() == nil })
++
++	t.Setenv("REDIS_SENTINEL_MASTER", masterName)
++	t.Setenv("REDIS_SENTINEL_ADDRS", sentinelAddr)
++	t.Setenv("REDIS_SENTINEL_PASSWORD", sentinelPassword)
++	t.Setenv("REDIS_SENTINEL_USERNAME", "")
++	t.Setenv("REDIS_USERNAME", "")
++	t.Setenv("REDIS_TLS", "")
++	t.Setenv("REDIS_TLS_CA_FILE", "")
++	t.Setenv("REDIS_TLS_CERT_FILE", "")
++	t.Setenv("REDIS_TLS_KEY_FILE", "")
++	t.Setenv("REDIS_TLS_SERVER_NAME", "")
++	client, err := NewClient("127.0.0.1:1", redisPassword)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer client.Close()
++	waitFor(t, func() bool { return client.Ping(ctx).Err() == nil })
++	taskStore := redisstore.NewStore(client, redisstore.Options{})
++	if err := taskStore.MarkTaskDeleting(ctx, "default", "attempt-fenced"); !errors.Is(err, store.ErrNotFound) {
++		t.Fatalf("deleting absent task: %v", err)
++	}
++	const marker = "ax:task-deleted:default:attempt-fenced"
++	waitFor(t, func() bool { return replica.Get(ctx, marker).Val() == "1" })
++	if err := sentinel.Failover(ctx, masterName).Err(); err != nil {
++		t.Fatalf("requesting promotion: %v", err)
++	}
++	waitFor(t, func() bool {
++		addresses, err := sentinel.GetMasterAddrByName(ctx, masterName).Result()
++		return err == nil && len(addresses) == 2 && net.JoinHostPort(addresses[0], addresses[1]) == replicaAddr && client.Ping(ctx).Err() == nil
++	})
++	if got, err := client.Get(ctx, marker).Result(); err != nil || got != "1" {
++		t.Fatalf("tombstone after promotion: %q, %v", got, err)
++	}
++	if err := taskStore.SaveTask(ctx, &v1alpha1.Task{Metadata: &v1alpha1.ObjectMeta{Name: "attempt-fenced"}, Spec: &v1alpha1.TaskSpec{Image: "alpine"}}); !errors.Is(err, store.ErrTaskDeleted) {
++		t.Fatalf("late upsert after promotion: %v", err)
++	}
++	badPassword, err := NewClient("127.0.0.1:1", "wrong-password")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer badPassword.Close()
++	if err := badPassword.Ping(ctx).Err(); err == nil {
++		t.Fatal("Redis accepted wrong password")
++	}
++	t.Setenv("REDIS_SENTINEL_PASSWORD", "wrong-password")
++	badSentinel, err := NewClient("127.0.0.1:1", redisPassword)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer badSentinel.Close()
++	if err := badSentinel.Ping(ctx).Err(); err == nil {
++		t.Fatal("Sentinel accepted wrong password")
++	}
++}
++
++func TestRedisTLSVerifiesServer(t *testing.T) {
++	redisPath, err := exec.LookPath("redis-server")
++	if err != nil {
++		t.Skip("redis-server is required for TLS test")
++	}
++	dir := t.TempDir()
++	certFile, keyFile := testCertificate(t, dir)
++	port := freePort(t)
++	const password = "test-redis-password"
++	startRedis(t, redisPath, dir, "tls", fmt.Sprintf("port 0\ntls-port %d\ntls-cert-file %s\ntls-key-file %s\ntls-ca-cert-file %s\ntls-auth-clients no\nrequirepass %s\n", port, certFile, keyFile, certFile, password))
++	t.Setenv("REDIS_SENTINEL_MASTER", "")
++	t.Setenv("REDIS_SENTINEL_ADDRS", "")
++	t.Setenv("REDIS_SENTINEL_USERNAME", "")
++	t.Setenv("REDIS_SENTINEL_PASSWORD", "")
++	t.Setenv("REDIS_TLS", "true")
++	t.Setenv("REDIS_TLS_CA_FILE", certFile)
++	t.Setenv("REDIS_TLS_CERT_FILE", "")
++	t.Setenv("REDIS_TLS_KEY_FILE", "")
++	t.Setenv("REDIS_TLS_SERVER_NAME", "")
++	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
++	client, err := NewClient(addr, password)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer client.Close()
++	waitFor(t, func() bool { return client.Ping(t.Context()).Err() == nil })
++	if err := client.Set(t.Context(), "tls-probe", "ok", 0).Err(); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("REDIS_TLS_SERVER_NAME", "wrong.example")
++	wrongName, err := NewClient(addr, password)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer wrongName.Close()
++	if err := wrongName.Ping(t.Context()).Err(); err == nil {
++		t.Fatal("TLS accepted wrong server name")
++	}
++}
++
++func TestRedisTLSConfigurationFailsClosed(t *testing.T) {
++	t.Setenv("REDIS_SENTINEL_MASTER", "")
++	t.Setenv("REDIS_SENTINEL_ADDRS", "")
++	t.Setenv("REDIS_SENTINEL_USERNAME", "")
++	t.Setenv("REDIS_SENTINEL_PASSWORD", "")
++	t.Setenv("REDIS_TLS", "false")
++	t.Setenv("REDIS_TLS_CA_FILE", "/missing/ca.pem")
++	if _, err := NewClient("localhost:6379", ""); err == nil {
++		t.Fatal("ignored TLS CA configuration")
++	}
++	t.Setenv("REDIS_TLS", "true")
++	if _, err := NewClient("localhost:6379", ""); err == nil {
++		t.Fatal("accepted unreadable TLS CA")
++	}
++	t.Setenv("REDIS_TLS_CA_FILE", "")
++	config, err := redisTLS()
++	if err != nil || config == nil || config.InsecureSkipVerify || config.MinVersion < 0x0303 {
++		t.Fatalf("TLS verification disabled: %+v, %v", config, err)
++	}
++	t.Setenv("REDIS_SENTINEL_MASTER", "only-master")
++	if _, err := NewClient("localhost:6379", ""); err == nil {
++		t.Fatal("accepted incomplete Sentinel discovery")
++	}
++}
++
++func freePort(t *testing.T) int {
++	t.Helper()
++	listener, err := net.Listen("tcp", "127.0.0.1:0")
++	if err != nil {
++		t.Fatal(err)
++	}
++	port := listener.Addr().(*net.TCPAddr).Port
++	_ = listener.Close()
++	return port
++}
++
++func testCertificate(t *testing.T, dir string) (string, string) {
++	t.Helper()
++	_, key, err := ed25519.GenerateKey(rand.Reader)
++	if err != nil {
++		t.Fatal(err)
++	}
++	template := &x509.Certificate{
++		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Redis test"},
++		NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour),
++		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
++		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
++		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
++		IsCA:        true, BasicConstraintsValid: true,
++	}
++	der, err := x509.CreateCertificate(rand.Reader, template, template, key.Public(), key)
++	if err != nil {
++		t.Fatal(err)
++	}
++	keyBytes, err := x509.MarshalPKCS8PrivateKey(key)
++	if err != nil {
++		t.Fatal(err)
++	}
++	certFile, keyFile := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
++	if err := os.WriteFile(certFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyBytes}), 0600); err != nil {
++		t.Fatal(err)
++	}
++	return certFile, keyFile
++}
++
++func startRedis(t *testing.T, binary, dir, name, extra string) {
++	t.Helper()
++	config := filepath.Join(dir, name+".conf")
++	logfile := filepath.Join(dir, name+".log")
++	contents := fmt.Sprintf("bind 127.0.0.1\nprotected-mode no\nsave \"\"\nappendonly no\ndir %s\nlogfile %s\n%s", dir, logfile, extra)
++	if err := os.WriteFile(config, []byte(contents), 0600); err != nil {
++		t.Fatal(err)
++	}
++	args := []string{config}
++	if name == "sentinel" {
++		args = append(args, "--sentinel")
++	}
++	cmd := exec.Command(binary, args...)
++	cmd.Env = append(os.Environ(), "LC_ALL=C")
++	if err := cmd.Start(); err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
++}
++
++func waitFor(t *testing.T, ready func() bool) {
++	t.Helper()
++	deadline := time.Now().Add(15 * time.Second)
++	for time.Now().Before(deadline) {
++		if ready() {
++			return
++		}
++		time.Sleep(100 * time.Millisecond)
++	}
++	t.Fatal("Redis/Sentinel did not reach the expected state")
++}
