@@ -46,7 +46,7 @@ page header and state components, and a TanStack Table v9 catalog. It follows
 the reference's 240/64 px sidebar, 56 px topbar, 1800 px page width, and
 interaction rules without importing AGPL source. The workspace route honestly
 shows an empty state; the `+ Add runtime` action is disabled until verified
-installation exists. There is no placeholder login or configuration drawer.
+installation exists. There is no configuration drawer.
 
 `blaxsmith serve` exposes only public tool-release metadata on loopback through
 the generated Connect contract in `proto/blaxsmith/api/v1/catalog.proto`. The
@@ -59,7 +59,32 @@ not an approved or installed runtime.
 Validation on 2026-09-22: `make check`, a Node 24 production build/typecheck,
 direct API fetch, and browser checks of desktop light/dark, mobile navigation,
 table filter/search/empty state, and direct `/tools` reload. This is a frontend
-foundation, not the P0-10 or P1 frontend acceptance: authenticated scope and
-RBAC, forms, installed-tool actions, login, routes for real work, visual
+foundation, not the P0-10 or P1 frontend acceptance: complete RBAC, forms,
+installed-tool actions, account recovery, routes for real work, visual
 baselines, and production deployment still need implementation. Decide whether
 to accept Astronomer's AGPL obligations before any direct source port.
+
+## Authenticated browser slice
+
+The original split-panel login page now uses the generated AuthService on
+same-origin `/api`. Protected routes check `CurrentSession`, attempt one
+`RefreshSession` after an unauthenticated response, and otherwise show local
+login. Mutations fetch a fresh CSRF token. Session and refresh cookies remain
+HttpOnly; the frontend stores neither token. Missing or unhealthy auth service
+shows an explicit unavailable page. Sign-out and identity changes cancel and
+remove workspace queries, while a same-browser session-change message clears
+other tabs. A bounded Web Lock serializes cookie rotation across tabs and
+rechecks access after waiting; browsers without Web Locks or BroadcastChannel
+fail closed.
+
+This is a local-account slice, not a complete login-policy UI. AuthService does
+not yet expose which methods an organization permits, so OIDC-only and MFA
+method selection cannot be rendered accurately. First-owner setup, recovery,
+and OIDC are separate work. The current public preview chart also lacks the
+authenticated app endpoint; route protection correctly shows unavailable
+there until the same-origin app deployment is wired.
+
+Validation: Node 24 production build/typecheck, an auth concurrency check,
+and browser checks of missing-endpoint, direct protected-route redirect,
+local sign-in, failed sign-in, sign-out, two-tab sign-out propagation, and
+mobile login/navigation against a temporary mock API.

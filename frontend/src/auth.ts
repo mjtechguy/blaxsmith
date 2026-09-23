@@ -1,0 +1,109 @@
+import { Code, ConnectError, createClient } from "@connectrpc/connect";
+import { createConnectTransport } from "@connectrpc/connect-web";
+import type { QueryClient } from "@tanstack/react-query";
+import { AuthService, type SessionIdentity } from "./gen/blaxsmith/api/v1/auth_pb";
+
+export const sessionQueryKey = ["browser-session"] as const;
+const workspaceQuery = (query: { queryKey: readonly unknown[] }) => query.queryKey[0] !== sessionQueryKey[0];
+let sessionChannel: BroadcastChannel | undefined;
+
+function channel(): BroadcastChannel {
+  if (typeof BroadcastChannel === "undefined") throw new Error("Secure session coordination is unavailable");
+  return sessionChannel ??= new BroadcastChannel("blaxsmith-session");
+}
+
+export function onOtherTabSessionChange(callback: () => void): () => void {
+  if (typeof BroadcastChannel === "undefined") return () => {};
+  const listener = () => callback();
+  channel().addEventListener("message", listener);
+  return () => channel().removeEventListener("message", listener);
+}
+
+export function announceSessionChange(): void {
+  channel().postMessage("changed");
+}
+
+export async function clearWorkspaceCache(queryClient: QueryClient): Promise<void> {
+  await queryClient.cancelQueries({ predicate: workspaceQuery });
+  queryClient.removeQueries({ predicate: workspaceQuery });
+}
+
+const client = createClient(AuthService, createConnectTransport({
+  baseUrl: `${window.location.origin}/api`,
+  fetch: (input, init) => fetch(input, { ...init, credentials: "same-origin" }),
+}));
+
+// Shared cookie rotation must be serialized across tabs. A later tab checks
+// the new access cookie before it tries to use the old refresh cookie.
+function withSessionLock<T>(action: (signal: AbortSignal) => Promise<T>, upstream?: AbortSignal): Promise<T> {
+  if (!navigator.locks || typeof BroadcastChannel === "undefined") throw new Error("Secure session coordination is unavailable");
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  upstream?.addEventListener("abort", abort, { once: true });
+  if (upstream?.aborted) abort();
+  const timer = window.setTimeout(abort, 20_000);
+  return navigator.locks.request("blaxsmith-session", { mode: "exclusive", signal: controller.signal },
+    () => action(controller.signal)).finally(() => {
+      window.clearTimeout(timer);
+      upstream?.removeEventListener("abort", abort);
+    });
+}
+
+function identity(session?: SessionIdentity): SessionIdentity {
+  if (!session?.organizationId || !session.principalId || !session.accessExpiresAt) {
+    throw new Error("Session response is incomplete");
+  }
+  return session;
+}
+
+async function csrf(signal?: AbortSignal): Promise<string> {
+  const response = await client.getCsrf({}, { signal });
+  if (!response.token) throw new Error("CSRF response is incomplete");
+  return response.token;
+}
+
+export async function currentSession(signal?: AbortSignal): Promise<SessionIdentity | null> {
+  if (!navigator.locks || typeof BroadcastChannel === "undefined") throw new Error("Secure session coordination is unavailable");
+  try {
+    return identity((await client.currentSession({}, { signal, timeoutMs: 10_000 })).session);
+  } catch (error) {
+    if (ConnectError.from(error).code !== Code.Unauthenticated) throw error;
+  }
+  return withSessionLock(async (lockSignal) => {
+    try {
+      return identity((await client.currentSession({}, { signal: lockSignal })).session);
+    } catch (error) {
+      if (ConnectError.from(error).code !== Code.Unauthenticated) throw error;
+    }
+    const token = await csrf(lockSignal);
+    try {
+      return identity((await client.refreshSession({}, { signal: lockSignal, headers: { "X-Blaxsmith-CSRF": token } })).session);
+    } catch (error) {
+      if (ConnectError.from(error).code === Code.Unauthenticated) return null;
+      throw error;
+    }
+  }, signal);
+}
+
+export async function loginLocal(organizationSlug: string, username: string, password: string): Promise<SessionIdentity> {
+  return withSessionLock(async (signal) => {
+    const token = await csrf(signal);
+    return identity((await client.loginLocal({ organizationSlug, username, password },
+      { signal, headers: { "X-Blaxsmith-CSRF": token } })).session);
+  });
+}
+
+export async function logout(): Promise<void> {
+  await withSessionLock(async (signal) => {
+    const token = await csrf(signal);
+    await client.logout({}, { signal, headers: { "X-Blaxsmith-CSRF": token } });
+  });
+}
+
+export function loginError(error: unknown): string {
+  switch (ConnectError.from(error).code) {
+    case Code.Unauthenticated: return "Those sign-in details were not accepted.";
+    case Code.ResourceExhausted: return "Too many attempts. Please try again later.";
+    default: return "Sign-in is unavailable. Please try again.";
+  }
+}

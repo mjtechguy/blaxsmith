@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useLocation } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Hammer, LayoutDashboard, Menu, Moon, Sun, Wrench, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { ChevronLeft, ChevronRight, Hammer, LayoutDashboard, LogOut, Menu, Moon, Sun, Wrench, X } from "lucide-react";
+import { announceSessionChange, clearWorkspaceCache, logout, sessionQueryKey } from "./auth";
+import type { SessionIdentity } from "./gen/blaxsmith/api/v1/auth_pb";
 
 type Theme = "light" | "dark" | "system";
 
@@ -9,10 +12,14 @@ function applyTheme(theme: Theme) {
     (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches));
 }
 
-export function Shell({ children }: { children: ReactNode }) {
+export function Shell({ children, session }: { children: ReactNode; session: SessionIdentity }) {
   const pathname = useLocation({ select: (location) => location.pathname });
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("blaxsmith-theme") as Theme) || "system");
   const menuButton = useRef<HTMLButtonElement>(null);
 
@@ -41,9 +48,26 @@ export function Shell({ children }: { children: ReactNode }) {
   const pageName = pathname === "/tools" ? "Tools & runtimes" : "Workspace";
   const nextTheme: Theme = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
 
+  async function signOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignOutError(false);
+    try {
+      await logout();
+      await queryClient.cancelQueries();
+      await clearWorkspaceCache(queryClient);
+      queryClient.setQueryData(sessionQueryKey, null);
+      announceSessionChange();
+      await navigate({ to: "/login", search: { next: "/" }, replace: true });
+    } catch {
+      setSignOutError(true);
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
   return <div className={`app-frame ${collapsed ? "is-collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
     <a className="skip-link" href="#main-content">Skip to content</a>
-    {mobileOpen ? <button className="mobile-backdrop" type="button" aria-label="Close navigation" onClick={() => { setMobileOpen(false); menuButton.current?.focus(); }} /> : null}
     <aside className="sidebar" aria-label="Primary navigation">
       <div className="sidebar-brand">
         <Link to="/" className="brand-link" aria-label="Blaxsmith home">
@@ -77,8 +101,11 @@ export function Shell({ children }: { children: ReactNode }) {
           <button type="button" className="icon-button theme-button" onClick={() => setTheme(nextTheme)} aria-label={`Theme: ${theme}. Switch to ${nextTheme}`} title={`Theme: ${theme}`}>
             {theme === "dark" ? <Moon size={17} /> : <Sun size={17} />}
           </button>
+          <span className="account-role" title={`Signed in as ${session.role}`}>{session.role}</span>
+          <button type="button" className="secondary-button sign-out" onClick={() => void signOut()} disabled={signingOut}><LogOut size={15} aria-hidden="true" />{signingOut ? "Signing out…" : "Sign out"}</button>
         </div>
       </header>
+      {signOutError ? <div className="account-error" role="alert">Sign-out could not be completed. Please try again.</div> : null}
       <main id="main-content" className="main-content" tabIndex={-1}>{children}</main>
     </div>
   </div>;
