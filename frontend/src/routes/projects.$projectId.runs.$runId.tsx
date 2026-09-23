@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
-import { ArrowLeft, Check, GitCommitHorizontal, RefreshCw } from "lucide-react";
+import { ArrowLeft, Check, GitCommitHorizontal, RefreshCw, Terminal } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
 import { PageHeader, PageShell } from "../page";
-import { appendRunEvent, decideReview, eventsAfter, getCurrentReview, getRun, liveEventsUrl, parseLiveEvent, recoverRunEventBatch, type RunEventPages } from "../workflow";
+import { appendRunEvent, decideReview, eventsAfter, getCurrentReview, getRun, listCommandExits, liveEventsUrl, parseLiveEvent, recoverRunEventBatch, type RunEventPages } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId/runs/$runId")({ component: RunDetail });
 
@@ -17,12 +17,19 @@ function RunDetail() {
   const runKey = ["run", scope, runId];
   const eventKey = ["run-events", scope, runId];
   const reviewKey = ["run-review", scope, runId];
+  const exitKey = ["run-command-exits", scope, runId];
   const run = useQuery({ queryKey: runKey, queryFn: ({ signal }) => getRun(runId, signal), enabled: !!scope });
   const activity = useInfiniteQuery({
     queryKey: eventKey, enabled: !!scope && run.data?.run?.projectId === projectId, initialPageParam: 0n,
     queryFn: ({ pageParam, signal }) => eventsAfter(runId, pageParam, signal),
     getNextPageParam: (page) => page.events.length === 100 ? page.nextAfterId : undefined,
   });
+  const commandExits = useInfiniteQuery({
+    queryKey: exitKey, enabled: !!scope && run.data?.run?.projectId === projectId, initialPageParam: 0n,
+    queryFn: ({ pageParam, signal }) => listCommandExits(runId, pageParam, signal),
+    getNextPageParam: (page) => page.observations.length === 50 ? page.nextAfterEventId : undefined,
+  });
+  const observations = useMemo(() => commandExits.data?.pages.flatMap((page) => page.observations) || [], [commandExits.data]);
   const events = useMemo(() => activity.data?.pages.flatMap((page) => page.events) || [], [activity.data]);
   const latestDelivered = useRef(0n);
   const recoverRef = useRef<(() => Promise<void>) | null>(null);
@@ -70,6 +77,7 @@ function RunDetail() {
         if (gap) void recover();
         if (event.kind.startsWith("run.")) void queryClient.invalidateQueries({ queryKey: ["run", scope, runId] });
         if (event.kind.startsWith("review.")) void queryClient.invalidateQueries({ queryKey: ["run-review", scope, runId] });
+        if (event.kind === "attempt.command_exited") void queryClient.invalidateQueries({ queryKey: ["run-command-exits", scope, runId] });
       } catch { void recover(); }
     };
     source.onerror = () => {
@@ -90,7 +98,7 @@ function RunDetail() {
 
   return <PageShell>
     <PageHeader eyebrow="Project / Run" title={run.data?.run?.launchKey || "Run"} description="Execution record and durable event history."
-      actions={<button type="button" className="secondary-button" onClick={() => { void run.refetch(); void activity.refetch(); void queryClient.invalidateQueries({ queryKey: reviewKey }); }}><RefreshCw size={15} aria-hidden="true" /> Refresh</button>} />
+      actions={<button type="button" className="secondary-button" onClick={() => { void run.refetch(); void activity.refetch(); void commandExits.refetch(); void queryClient.invalidateQueries({ queryKey: reviewKey }); }}><RefreshCw size={15} aria-hidden="true" /> Refresh</button>} />
     <Link to="/projects/$projectId" params={{ projectId }} className="text-action"><ArrowLeft size={15} aria-hidden="true" /> Project runs</Link>
     {run.isPending ? <div className="state-panel" role="status"><RefreshCw className="spin" size={22} aria-hidden="true" /><h2>Loading run</h2></div> : null}
     {run.isError ? <div className="state-panel" role="alert"><h2>Run unavailable</h2><p>This run could not be loaded.</p><button type="button" className="secondary-button" onClick={() => void run.refetch()}>Try again</button></div> : null}
@@ -100,6 +108,26 @@ function RunDetail() {
       <section className="summary-card"><span className="summary-label">Created</span><strong className="summary-value"><time dateTime={run.data.run.createdAt}>{new Date(run.data.run.createdAt).toLocaleDateString()}</time></strong><span className="summary-meta">{new Date(run.data.run.createdAt).toLocaleTimeString()}</span></section>
     </div> : null}
     {run.data?.run ? <FinalReview runId={runId} scope={scope} state={run.data.run.state} /> : null}
+    {run.data?.run ? <section className="table-section" aria-labelledby="command-exits-heading">
+      <div className="table-heading"><div><h2 id="command-exits-heading">Command observations</h2><p>Connector-signed exits are unverified. A zero exit does not verify artifacts or complete a task.</p></div><span className="fetched-time">{observations.length} observed</span></div>
+      {commandExits.isPending ? <div className="table-empty" role="status">Loading command observations…</div> : null}
+      {commandExits.isError ? <div className="table-empty" role="alert">Command observations are unavailable. <button type="button" className="text-action" onClick={() => void commandExits.refetch()}>Try again</button></div> : null}
+      {commandExits.data && observations.length === 0 ? <div className="table-empty">No signed command exit has been recorded.</div> : null}
+      {observations.length > 0 ? <ol className="event-list">{observations.map((observation) => <li key={observation.eventId.toString()}>
+        <span className="event-mark"><Terminal size={15} aria-hidden="true" /></span>
+        <div><strong>{observation.interrupted ? "Interrupted" : `Exited ${observation.exitCode}`}</strong>
+          <small>Task {observation.taskId.slice(0, 8)} · Attempt {observation.attemptId.slice(0, 8)} · Unverified</small>
+          <details className="observation-provenance"><summary>Receipt provenance</summary><dl>
+            <div><dt>Signer</dt><dd>{observation.signerId}</dd></div>
+            <div><dt>Actor UID</dt><dd><code>{observation.actorUid}</code></dd></div>
+            <div><dt>Receipt SHA-256</dt><dd><code>{observation.receiptSha256}</code></dd></div>
+            {observation.signal ? <div><dt>Signal</dt><dd>{observation.signal}</dd></div> : null}
+          </dl></details>
+        </div>
+        <time dateTime={observation.receivedAt}>{new Date(observation.receivedAt).toLocaleString()}</time>
+      </li>)}</ol> : null}
+      {commandExits.hasNextPage ? <div className="table-footer"><span>More observations may be available</span><button type="button" className="secondary-button" disabled={commandExits.isFetchingNextPage} onClick={() => void commandExits.fetchNextPage()}>{commandExits.isFetchingNextPage ? "Loading…" : "Load more"}</button></div> : null}
+    </section> : null}
     <section className="table-section" aria-labelledby="activity-heading">
       <div className="table-heading"><div><h2 id="activity-heading">Activity</h2><p>Committed events update live and replay after reconnecting.</p></div><span className="fetched-time">{events.length} events</span></div>
       {run.data?.run && activity.isPending ? <div className="table-empty" role="status">Loading activity…</div> : null}

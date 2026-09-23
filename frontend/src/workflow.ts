@@ -34,6 +34,10 @@ export async function eventsAfter(runId: string, afterId = 0n, signal?: AbortSig
   return client.eventsAfter({ runId, afterId, limit: 100 }, { signal });
 }
 
+export async function listCommandExits(runId: string, afterEventId = 0n, signal?: AbortSignal) {
+  return client.listCommandExits({ runId, afterEventId, limit: 50 }, { signal });
+}
+
 export type RunEventPages = InfiniteData<EventsAfterResponse, bigint>;
 
 export function parseLiveEvent(raw: string, runId: string): WorkflowEvent {

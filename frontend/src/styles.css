@@ -240,6 +240,12 @@ a { color: inherit; text-decoration: none; }
 .event-list strong { font-size: 12px; text-transform: capitalize; }
 .event-list small, .event-list time { color: var(--muted); font-size: 11px; }
 .event-list time { white-space: nowrap; }
+.observation-provenance { margin-top: 6px; color: var(--muted); font-size: 11px; }
+.observation-provenance summary { width: fit-content; cursor: pointer; color: var(--primary); }
+.observation-provenance dl { display: grid; gap: 6px; margin: 9px 0 0; }
+.observation-provenance dl div { display: flex; flex-wrap: wrap; gap: 6px; }
+.observation-provenance dt { font-weight: 650; }
+.observation-provenance dd { margin: 0; overflow-wrap: anywhere; }
 
 .review-card { padding: 23px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--card-shadow); }
 .review-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
