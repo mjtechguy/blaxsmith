@@ -27,8 +27,10 @@ reads the secret, and marks that lease attempted and delivered only after the
 guest acknowledges release. If the send outcome or commit is uncertain, the
 reservation and bootstrap challenge's durable attempted state remain for
 reconciliation; the same challenge cannot be retried. Resume gets a new
-challenge and lease. `RevokeGrant` blocks later decisions and marks recorded
-leases revoked. **Lease expiry or revocation does not invalidate a raw bearer
+challenge and lease. `RevokeGrant` and `RevokeConnection` block later decisions
+and mark their recorded leases revoked under the same database transaction;
+revocation waits for an in-progress release holding the relevant row locks.
+**Lease expiry or revocation does not invalidate a raw bearer
 token already copied into a sandbox or at its provider.**
 
 `access.AuthorizeGitRead` is the first read-side decision. A trusted caller
@@ -61,7 +63,8 @@ rotation blocked by an active credential read, expiry, disabled connections,
 tampering, and caller-side clearing. It uses synthetic values only.
 The [lease test](../internal/access/lease_test.go) covers actor binding,
 duplicate reservation, delivery state, rollback after a possible send, and
-grant revocation. The [live report](bootstrap-private-git-probe.json) confirms
+grant and connection revocation, including a connection update blocked by a
+live authority-read transaction. The [live report](bootstrap-private-git-probe.json) confirms
 two distinct delivered lease records with the current actor and owner
 generations across data-snapshot resume.
 

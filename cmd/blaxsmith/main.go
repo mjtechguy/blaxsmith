@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
+	"github.com/mjtechguy/blaxsmith/internal/catalog"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 )
 
@@ -20,8 +22,14 @@ func main() {
 }
 
 func run() error {
-	if len(os.Args) < 2 || (os.Args[1] != "check" && os.Args[1] != "freeze") {
-		return fmt.Errorf("usage: blaxsmith <check|freeze> --recipe PATH --spec PATH --transcript PATH [--repo .] [--ref HEAD] [--scope .]")
+	if len(os.Args) < 2 {
+		return fmt.Errorf("usage: blaxsmith <check|freeze|tools> [flags]")
+	}
+	if os.Args[1] == "tools" {
+		return listTools(os.Args[2:])
+	}
+	if os.Args[1] != "check" && os.Args[1] != "freeze" {
+		return fmt.Errorf("usage: blaxsmith <check|freeze|tools> [flags]")
 	}
 	var in recipe.Input
 	flags := flag.NewFlagSet(os.Args[1], flag.ContinueOnError)
@@ -52,4 +60,36 @@ func run() error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(bundle)
+}
+
+func listTools(args []string) error {
+	flags := flag.NewFlagSet("tools", flag.ContinueOnError)
+	tool := flags.String("tool", "all", "codex, claude-code, opencode, or all")
+	limit := flags.Int("limit", 20, "number of recent stable versions, 1–100")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("tools accepts flags only")
+	}
+	names := []string{"codex", "claude-code", "opencode"}
+	if *tool != "all" {
+		names = []string{*tool}
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	client := &http.Client{Timeout: 30 * time.Second}
+	results := make([]catalog.Result, 0, len(names))
+	for _, name := range names {
+		result, err := catalog.Fetch(ctx, client, name, *limit)
+		if err != nil {
+			return err
+		}
+		results = append(results, result)
+	}
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(results)
 }

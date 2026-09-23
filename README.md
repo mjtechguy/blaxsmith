@@ -53,8 +53,10 @@ also blocks Task-supplied signers and unapproved runner images before launch.
 
 Recipes now accept Claude Code, Codex, and OpenCode profiles. The updated plan
 includes a recent tool-version catalog with latest stable selected for new
-installations and exact runtime pins afterward. The catalog UI and launch
-adapters are not implemented yet.
+installations and exact runtime pins afterward. The first [read-only catalog
+command](docs/tool-runtime-catalog.md) now lists recent publisher-backed CLI
+versions and their exact package integrity metadata with `blaxsmith tools`.
+The catalog UI, verified installation, and launch adapters are not implemented yet.
 
 ## Workspace layout
 

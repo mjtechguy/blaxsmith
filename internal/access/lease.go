@@ -135,3 +135,36 @@ func RevokeGrant(ctx context.Context, db *pgxpool.Pool, organizationID, grantID 
 	}
 	return nil
 }
+
+// RevokeConnection prevents new decisions and marks every recorded delivery
+// from that connection revoked. Provider-side bearer credentials still require
+// provider revocation or rotation to become unusable outside this platform.
+func RevokeConnection(ctx context.Context, db *pgxpool.Pool, organizationID, connectionID string) error {
+	if db == nil || organizationID == "" || connectionID == "" {
+		return ErrDenied
+	}
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin connection revocation: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	var id string
+	err = tx.QueryRow(ctx, `UPDATE access_connections SET state='revoked'
+		WHERE organization_id=$1 AND id=$2 AND state<>'revoked' RETURNING id`,
+		organizationID, connectionID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrDenied
+	}
+	if err != nil {
+		return fmt.Errorf("revoke connection: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE access_leases SET revoked_at=clock_timestamp()
+		WHERE organization_id=$1 AND connection_id=$2 AND revoked_at IS NULL`,
+		organizationID, connectionID); err != nil {
+		return fmt.Errorf("revoke connection leases: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit connection revocation: %w", err)
+	}
+	return nil
+}
