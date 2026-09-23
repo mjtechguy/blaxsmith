@@ -1,0 +1,5 @@
+apiVersion: v2
+name: blaxsmith-cnpg
+description: Optional, separately operated PostgreSQL data profile for Blaxsmith
+type: application
+version: 0.1.0

@@ -23,6 +23,15 @@ grep -F -q 'readOnlyRootFilesystem: true' "$rendered"
 grep -F -q 'scheme: HTTPS' "$rendered"
 grep -F -q 'name: BLAXSMITH_DATABASE_URL' "$rendered"
 grep -F -q 'defaultMode: 288' "$rendered"
+if grep -F -q 'name: database-ca' "$rendered"; then
+  echo 'database CA unexpectedly mounted by default' >&2
+  exit 1
+fi
+helm template app "$chart" "$@" --set-string databaseCASecretName=pg-ca > "$rendered"
+grep -F -q 'name: database-ca' "$rendered"
+grep -F -q 'secretName: "pg-ca"' "$rendered"
+grep -F -q 'mountPath: /run/blaxsmith/database-ca' "$rendered"
+grep -F -q 'key: ca.crt' "$rendered"
 helm template app "$chart" "$@" --set-string previousSignerPublicSecretName=prior-key > "$rendered"
 grep -F -q -- '--previous-signer-public-file' "$rendered"
 grep -F -q 'secretName: "prior-key"' "$rendered"

@@ -1,0 +1,17 @@
+# Deliberately no deployable defaults. Verify operator/plugin/image compatibility first.
+postgresImage: "" # Immutable PostgreSQL image reference, repository@sha256:digest.
+storageClass: "" # CSI class with durable volumes and tested node replacement.
+storageSize: "" # Size from measured workload and restore-time budget.
+topologyKey: kubernetes.io/hostname # Use zone only after validating zone labels and capacity.
+appSecretName: "" # Existing kubernetes.io/basic-auth Secret: username=blaxsmith, password.
+serverTLSSecretName: "" # Existing kubernetes.io/tls Secret, SAN includes <release>-rw.<namespace>.svc.
+serverCASecretName: "" # Existing Secret with ca.crt matching serverTLSSecretName.
+backup:
+  destinationPath: "" # Independent S3 bucket/prefix, e.g. s3://bucket/blaxsmith/production.
+  credentialsSecretName: "" # Existing Secret with ACCESS_KEY_ID and ACCESS_SECRET_KEY.
+  endpointURL: "" # Optional HTTPS S3-compatible endpoint; never HTTP.
+  endpointCASecretName: "" # Optional existing Secret with ca.crt for private object-store CA.
+  retentionPolicy: "" # Explicit recovery window, e.g. 30d.
+  schedule: "" # Six-field cron (seconds first), e.g. 0 0 2 * * *.
+monitoring:
+  podMonitor: false # Requires Prometheus Operator CRD and an authorized scrape path.

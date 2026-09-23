@@ -1,0 +1,39 @@
+{{- if not (regexMatch "^.+@sha256:[a-f0-9]{64}$" .Values.postgresImage) -}}
+{{- fail "postgresImage must be an immutable repository@sha256:<64 hex> reference" -}}
+{{- end -}}
+{{- range $name := list "storageClass" "storageSize" "topologyKey" "appSecretName" "serverTLSSecretName" "serverCASecretName" -}}
+{{- if not (index $.Values $name) -}}
+{{- fail (printf "%s is required" $name) -}}
+{{- end -}}
+{{- end -}}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  instances: 3
+  imageName: {{ .Values.postgresImage | quote }}
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: {{ .Values.topologyKey | quote }}
+    podAntiAffinityType: required
+  bootstrap:
+    initdb:
+      database: blaxsmith
+      owner: blaxsmith
+      secret:
+        name: {{ .Values.appSecretName | quote }}
+  certificates:
+    serverTLSSecret: {{ .Values.serverTLSSecretName | quote }}
+    serverCASecret: {{ .Values.serverCASecretName | quote }}
+  monitoring:
+    tls:
+      enabled: true
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: {{ .Release.Name }}-archive
+  storage:
+    storageClass: {{ .Values.storageClass | quote }}
+    size: {{ .Values.storageSize | quote }}

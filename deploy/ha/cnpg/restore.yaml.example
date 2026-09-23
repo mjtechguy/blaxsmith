@@ -1,0 +1,39 @@
+# Replace every REPLACE_WITH_* value. Apply only in an isolated rehearsal namespace.
+# The source ObjectStore uses separately provisioned READ-ONLY object-store credentials.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: blaxsmith-restore-source
+spec:
+  configuration:
+    destinationPath: REPLACE_WITH_SOURCE_S3_BUCKET_AND_PREFIX
+    s3Credentials:
+      accessKeyId:
+        name: blaxsmith-restore-readonly
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: blaxsmith-restore-readonly
+        key: ACCESS_SECRET_KEY
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: blaxsmith-restore
+spec:
+  instances: 1
+  imageName: REPLACE_WITH_SOURCE_POSTGRES_IMAGE_DIGEST
+  bootstrap:
+    recovery:
+      source: source
+      recoveryTarget:
+        targetTime: REPLACE_WITH_RFC3339_UTC_TARGET
+  externalClusters:
+    - name: source
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: blaxsmith-restore-source
+          serverName: REPLACE_WITH_SOURCE_CLUSTER_NAME
+  storage:
+    storageClass: REPLACE_WITH_REHEARSAL_STORAGE_CLASS
+    size: REPLACE_WITH_REHEARSAL_STORAGE_SIZE

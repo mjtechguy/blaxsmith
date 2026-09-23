@@ -13,6 +13,12 @@ database Secret with a PostgreSQL URL under `url`. The certificate must match
 the exact `origin` value. PostgreSQL requires verified TLS by default. The
 chart projects TLS and signer material as group-readable, non-world-readable
 files for UID/GID 65532; it does not create, log, or rotate those secrets.
+For a PostgreSQL server certificate signed by a private CA, set
+`databaseCASecretName` to an existing namespace Secret containing `ca.crt`, and
+put `sslmode=verify-full&sslrootcert=/run/blaxsmith/database-ca/ca.crt` in the
+database URL Secret. The URL host must match the PostgreSQL server certificate
+(for CNPG, typically `<cluster>-rw.<namespace>.svc`). A missing CA key blocks
+pod startup; an untrusted or mismatched certificate blocks database readiness.
 For a planned signing-key rotation, set `previousSignerPublicSecretName` to an
 existing Secret containing a raw 32-byte key under `public`. Pre-stage the new
 public key while the old signer is active, roll to the new signer while trusting

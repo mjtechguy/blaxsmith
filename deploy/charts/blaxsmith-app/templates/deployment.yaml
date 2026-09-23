@@ -127,6 +127,11 @@ spec:
             - name: signer
               mountPath: /run/blaxsmith/signer
               readOnly: true
+            {{- if .Values.databaseCASecretName }}
+            - name: database-ca
+              mountPath: /run/blaxsmith/database-ca
+              readOnly: true
+            {{- end }}
             {{- if .Values.previousSignerPublicSecretName }}
             - name: previous-signer
               mountPath: /run/blaxsmith/previous-signer
@@ -141,6 +146,15 @@ spec:
           secret:
             secretName: {{ .Values.signerSecretName | quote }}
             defaultMode: 288
+        {{- if .Values.databaseCASecretName }}
+        - name: database-ca
+          secret:
+            secretName: {{ .Values.databaseCASecretName | quote }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+            defaultMode: 288
+        {{- end }}
         {{- if .Values.previousSignerPublicSecretName }}
         - name: previous-signer
           secret:

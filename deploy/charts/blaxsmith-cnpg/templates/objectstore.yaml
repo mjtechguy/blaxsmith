@@ -1,0 +1,39 @@
+{{- if not (regexMatch "^s3://[^/]+/.+" .Values.backup.destinationPath) -}}
+{{- fail "backup.destinationPath must be an isolated s3://bucket/nonempty-prefix" -}}
+{{- end -}}
+{{- range $name := list "credentialsSecretName" "retentionPolicy" "schedule" -}}
+{{- if not (index $.Values.backup $name) -}}
+{{- fail (printf "backup.%s is required" $name) -}}
+{{- end -}}
+{{- end -}}
+{{- if and .Values.backup.endpointURL (not (hasPrefix "https://" .Values.backup.endpointURL)) -}}
+{{- fail "backup.endpointURL must use HTTPS" -}}
+{{- end -}}
+{{- if and .Values.backup.endpointCASecretName (not .Values.backup.endpointURL) -}}
+{{- fail "backup.endpointCASecretName requires backup.endpointURL" -}}
+{{- end -}}
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: {{ .Release.Name }}-archive
+spec:
+  retentionPolicy: {{ .Values.backup.retentionPolicy | quote }}
+  configuration:
+    destinationPath: {{ .Values.backup.destinationPath | quote }}
+    {{- if .Values.backup.endpointURL }}
+    endpointURL: {{ .Values.backup.endpointURL | quote }}
+    {{- end }}
+    {{- if .Values.backup.endpointCASecretName }}
+    endpointCA:
+      name: {{ .Values.backup.endpointCASecretName | quote }}
+      key: ca.crt
+    {{- end }}
+    s3Credentials:
+      accessKeyId:
+        name: {{ .Values.backup.credentialsSecretName | quote }}
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: {{ .Values.backup.credentialsSecretName | quote }}
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
