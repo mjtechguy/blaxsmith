@@ -69,6 +69,10 @@ spec:
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - serve-app
+            {{- if .Values.ha.enabled }}
+            - --migrations
+            - verify
+            {{- end }}
             - --listen
             - 0.0.0.0:8443
             - --origin

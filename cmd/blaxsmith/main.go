@@ -77,8 +77,13 @@ func run() error {
 }
 
 func migrateDatabase(args []string) error {
-	if len(args) != 0 {
-		return fmt.Errorf("migrate accepts no arguments; set BLAXSMITH_DATABASE_URL")
+	flags := flag.NewFlagSet("migrate", flag.ContinueOnError)
+	verifiedTLS := flags.Bool("require-verified-database", false, "require verified PostgreSQL TLS")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("migrate accepts flags only; set BLAXSMITH_DATABASE_URL")
 	}
 	dsn := os.Getenv("BLAXSMITH_DATABASE_URL")
 	if dsn == "" {
@@ -88,7 +93,16 @@ func migrateDatabase(args []string) error {
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
+	config, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return fmt.Errorf("configure database: %w", err)
+	}
+	if *verifiedTLS {
+		if err := validateDatabaseTransport(config, false); err != nil {
+			return err
+		}
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return fmt.Errorf("configure database: %w", err)
 	}

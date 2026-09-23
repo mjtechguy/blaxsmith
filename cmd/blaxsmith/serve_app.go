@@ -28,8 +28,8 @@ import (
 )
 
 type appConfig struct {
-	listen, origin, certFile, keyFile, signerFile, previousSignerFile, databaseURL, staticDir string
-	allowLocalDatabase                                                                        bool
+	listen, origin, certFile, keyFile, signerFile, previousSignerFile, databaseURL, staticDir, migrations string
+	allowLocalDatabase                                                                                    bool
 }
 
 func serveApp(args []string) error {
@@ -88,8 +88,14 @@ func serveAppContext(ctx context.Context, args []string) error {
 	if err := pool.Ping(startupCtx); err != nil {
 		return fmt.Errorf("connect database: %w", err)
 	}
-	if _, err := db.Migrate(startupCtx, pool); err != nil {
-		return fmt.Errorf("verify database migrations: %w", err)
+	var migrationErr error
+	if config.migrations == "verify" {
+		migrationErr = db.Verify(startupCtx, pool)
+	} else {
+		_, migrationErr = db.Migrate(startupCtx, pool)
+	}
+	if migrationErr != nil {
+		return fmt.Errorf("verify database migrations: %w", migrationErr)
 	}
 	manager, err := identity.NewSessionManager(pool, config.origin, signer, previous...)
 	if err != nil {
@@ -172,13 +178,14 @@ func parseAppConfig(args []string) (appConfig, error) {
 	flags.StringVar(&c.signerFile, "signer-file", "", "platform-mounted 32-byte Ed25519 seed file")
 	flags.StringVar(&c.previousSignerFile, "previous-signer-public-file", "", "optional prior 32-byte Ed25519 public key for access-token rotation overlap")
 	flags.StringVar(&c.staticDir, "static-dir", "", "built frontend directory containing index.html")
+	flags.StringVar(&c.migrations, "migrations", "apply", "apply or verify embedded database migrations before serving")
 	flags.BoolVar(&c.allowLocalDatabase, "allow-insecure-local-database", false, "allow plaintext PostgreSQL only over a literal loopback address or Unix socket")
 	if err := flags.Parse(args); err != nil {
 		return c, err
 	}
 	c.databaseURL = os.Getenv("BLAXSMITH_DATABASE_URL")
 	u, err := url.Parse(c.origin)
-	if flags.NArg() != 0 || c.listen == "" || c.certFile == "" || c.keyFile == "" || c.signerFile == "" || c.databaseURL == "" ||
+	if flags.NArg() != 0 || (c.migrations != "apply" && c.migrations != "verify") || c.listen == "" || c.certFile == "" || c.keyFile == "" || c.signerFile == "" || c.databaseURL == "" ||
 		err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.String() != c.origin {
 		return c, errors.New("serve-app requires --listen, exact HTTPS --origin, --tls-cert-file, --tls-key-file, --signer-file, and BLAXSMITH_DATABASE_URL")
 	}

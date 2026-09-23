@@ -1,0 +1,61 @@
+{{- if .Values.migrationJob.name }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.migrationJob.name | quote }}
+  labels:
+    app.kubernetes.io/name: blaxsmith-migration
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: {{ .Values.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args: [migrate, --require-verified-database]
+          env:
+            - name: BLAXSMITH_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.databaseSecretName | quote }}
+                  key: url
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          {{- if .Values.databaseCASecretName }}
+          volumeMounts:
+            - name: database-ca
+              mountPath: /run/blaxsmith/database-ca
+              readOnly: true
+          {{- end }}
+      {{- if .Values.databaseCASecretName }}
+      volumes:
+        - name: database-ca
+          secret:
+            secretName: {{ .Values.databaseCASecretName | quote }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+            defaultMode: 288
+      {{- end }}
+{{- end }}

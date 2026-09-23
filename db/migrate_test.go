@@ -51,6 +51,9 @@ func TestMigratePostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
+	if err := Verify(ctx, pool); err == nil {
+		t.Fatal("verify accepted a database without a migration ledger")
+	}
 	var wg sync.WaitGroup
 	counts := make(chan int, 2)
 	errors := make(chan error, 2)
@@ -82,11 +85,30 @@ func TestMigratePostgres(t *testing.T) {
 	if count, err := Migrate(ctx, pool); err != nil || count != 0 {
 		t.Fatalf("repeat migration: %d, %v", count, err)
 	}
+	if err := Verify(ctx, pool); err != nil {
+		t.Fatalf("verify migrated database: %v", err)
+	}
+	var firstDigest string
+	if err := pool.QueryRow(ctx, `SELECT sha256 FROM blaxsmith_schema_migrations WHERE version='0001_bootstrap'`).Scan(&firstDigest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM blaxsmith_schema_migrations WHERE version='0001_bootstrap'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(ctx, pool); err == nil || !strings.Contains(err.Error(), "is not applied") {
+		t.Fatalf("verify accepted missing migration: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO blaxsmith_schema_migrations(version,sha256) VALUES ('0001_bootstrap',$1)`, firstDigest); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pool.Exec(ctx, `UPDATE blaxsmith_schema_migrations SET sha256='changed' WHERE version='0001_bootstrap'`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Migrate(ctx, pool); err == nil || !strings.Contains(err.Error(), "checksum changed") {
 		t.Fatalf("edited migration was accepted: %v", err)
+	}
+	if err := Verify(ctx, pool); err == nil || !strings.Contains(err.Error(), "checksum changed") {
+		t.Fatalf("verify accepted edited migration: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO blaxsmith_schema_migrations (version,sha256) VALUES ('9999_future','future')`); err != nil {
 		t.Fatal(err)

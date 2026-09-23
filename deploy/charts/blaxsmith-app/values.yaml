@@ -1,6 +1,8 @@
 replicaCount: 1
 ha:
   enabled: false # Requires at least two replicas and Kubernetes 1.30+.
+migrationJob:
+  name: "" # Only set when rendering a one-off Job after quiescing all app pods.
 image: "" # Immutable Dockerfile app target, repository@sha256:digest.
 imagePullPolicy: IfNotPresent
 imagePullSecrets: []

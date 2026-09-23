@@ -18,8 +18,18 @@ import (
 var migrations embed.FS
 
 // Migrate applies each embedded migration once and rejects edited migrations.
-// A transaction-scoped advisory lock serializes concurrent application starts.
+// A transaction-scoped advisory lock serializes migration and verification calls.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) (int, error) {
+	return runMigrations(ctx, pool, true)
+}
+
+// Verify rejects a missing, unknown, or edited migration without changing the schema.
+func Verify(ctx context.Context, pool *pgxpool.Pool) error {
+	_, err := runMigrations(ctx, pool, false)
+	return err
+}
+
+func runMigrations(ctx context.Context, pool *pgxpool.Pool, apply bool) (int, error) {
 	if pool == nil {
 		return 0, errors.New("database pool is required")
 	}
@@ -31,12 +41,14 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) (int, error) {
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('blaxsmith'), hashtext('schema'))`); err != nil {
 		return 0, fmt.Errorf("lock migrations: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS blaxsmith_schema_migrations (
+	if apply {
+		if _, err := tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS blaxsmith_schema_migrations (
 		version text PRIMARY KEY,
 		sha256 text NOT NULL,
 		applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
 	)`); err != nil {
-		return 0, fmt.Errorf("create migration ledger: %w", err)
+			return 0, fmt.Errorf("create migration ledger: %w", err)
+		}
 	}
 	names, err := fs.Glob(migrations, "migrations/*.sql")
 	if err != nil {
@@ -84,6 +96,9 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) (int, error) {
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return 0, fmt.Errorf("read migration %s: %w", version, err)
+		}
+		if !apply {
+			return 0, fmt.Errorf("database migration %s is not applied", version)
 		}
 		if _, err := tx.Exec(ctx, string(body)); err != nil {
 			return 0, fmt.Errorf("apply migration %s: %w", version, err)

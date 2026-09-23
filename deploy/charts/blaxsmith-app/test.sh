@@ -13,6 +13,10 @@ trap 'rm "$rendered"' EXIT
 helm template app "$chart" "$@" > "$rendered"
 grep -F -q 'replicas: 1' "$rendered"
 grep -F -q 'type: Recreate' "$rendered"
+if grep -F -q -- '--migrations' "$rendered" || grep -F -q 'kind: Job' "$rendered"; then
+  echo 'single-node defaults unexpectedly enable explicit migrations' >&2
+  exit 1
+fi
 if grep -E -q 'kind: PodDisruptionBudget|topologySpreadConstraints:|minReadySeconds:' "$rendered"; then
   echo 'single-node defaults unexpectedly enable HA placement' >&2
   exit 1
@@ -43,6 +47,8 @@ grep -F -q 'maxUnavailable: 1' "$rendered"
 grep -F -q 'replicas: 3' "$rendered"
 grep -F -q 'minReadySeconds: 5' "$rendered"
 grep -F -q 'type: Recreate' "$rendered"
+grep -F -q -- '--migrations' "$rendered"
+grep -F -q -- '- verify' "$rendered"
 grep -F -q 'minDomains: 2' "$rendered"
 grep -F -q 'topologyKey: kubernetes.io/hostname' "$rendered"
 grep -F -q 'whenUnsatisfiable: DoNotSchedule' "$rendered"
@@ -50,6 +56,19 @@ helm template app "$chart" "$@" --set ha.enabled=true --set replicaCount=2 \
   --kube-version 1.30.0 > "$rendered"
 grep -F -q 'replicas: 2' "$rendered"
 grep -F -q 'kind: PodDisruptionBudget' "$rendered"
+helm template app "$chart" "$@" --set ha.enabled=true --set replicaCount=3 \
+  --set-string databaseCASecretName=pg-ca --set-string migrationJob.name=app-migrate-123 \
+  --kube-version 1.30.0 --show-only templates/migration-job.yaml > "$rendered"
+grep -F -q 'kind: Job' "$rendered"
+grep -F -q 'name: "app-migrate-123"' "$rendered"
+grep -F -q 'args: [migrate, --require-verified-database]' "$rendered"
+grep -F -q 'secretName: "pg-ca"' "$rendered"
+grep -F -q 'automountServiceAccountToken: false' "$rendered"
+grep -F -q 'backoffLimit: 0' "$rendered"
+if helm template app "$chart" "$@" --set-string migrationJob.name='BAD_NAME' >/dev/null 2>&1; then
+  echo 'invalid migration job name accepted' >&2
+  exit 1
+fi
 for invalid in '--set replicaCount=0' '--set replicaCount=1.5' \
   '--set replicaCount=2' '--set ha.enabled=true --set replicaCount=1' \
   '--set-string ha.enabled=true'; do

@@ -9,7 +9,13 @@
       "required": ["enabled"],
       "additionalProperties": false
     },
-    "databaseCASecretName": { "type": "string" }
+    "databaseCASecretName": { "type": "string" },
+    "migrationJob": {
+      "type": "object",
+      "properties": { "name": { "type": "string", "maxLength": 63, "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" } },
+      "required": ["name"],
+      "additionalProperties": false
+    }
   },
-  "required": ["replicaCount", "ha"]
+  "required": ["replicaCount", "ha", "migrationJob"]
 }

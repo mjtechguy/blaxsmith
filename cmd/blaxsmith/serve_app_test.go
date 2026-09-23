@@ -43,6 +43,9 @@ import (
 
 func TestServeAppConfig(t *testing.T) {
 	t.Setenv("BLAXSMITH_DATABASE_URL", "postgres://user:password@db.example/blaxsmith?sslmode=disable")
+	if err := migrateDatabase([]string{"--require-verified-database"}); err == nil || !strings.Contains(err.Error(), "verified TLS") {
+		t.Fatalf("migration accepted unverified database transport: %v", err)
+	}
 	args := []string{"--listen", "127.0.0.1:8443", "--origin", "https://example.com", "--tls-cert-file", "cert", "--tls-key-file", "key", "--signer-file", "seed"}
 	if _, err := parseAppConfig(nil); err == nil {
 		t.Fatal("missing HTTPS configuration accepted")
@@ -56,6 +59,12 @@ func TestServeAppConfig(t *testing.T) {
 	}
 	if _, err := parseAppConfig(args); err != nil {
 		t.Fatal(err)
+	}
+	if config, err := parseAppConfig(append(args, "--migrations", "verify")); err != nil || config.migrations != "verify" {
+		t.Fatalf("verify-only configuration rejected: %+v, %v", config, err)
+	}
+	if _, err := parseAppConfig(append(args, "--migrations", "ignore")); err == nil {
+		t.Fatal("invalid migration mode accepted")
 	}
 	for _, test := range []struct {
 		dsn, allowLocal string
@@ -197,6 +206,19 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 		t.Fatalf("unknown database migration did not block startup: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `DELETE FROM blaxsmith_schema_migrations WHERE version='future'`); err != nil {
+		t.Fatal(err)
+	}
+	var missingVersion, missingDigest string
+	if err := pool.QueryRow(ctx, `SELECT version,sha256 FROM blaxsmith_schema_migrations ORDER BY version DESC LIMIT 1`).Scan(&missingVersion, &missingDigest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM blaxsmith_schema_migrations WHERE version=$1`, missingVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err := serveAppContext(ctx, append(appArgs, "--migrations", "verify")); err == nil || !strings.Contains(err.Error(), "is not applied") {
+		t.Fatalf("verify-only app accepted missing migration: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO blaxsmith_schema_migrations(version,sha256) VALUES ($1,$2)`, missingVersion, missingDigest); err != nil {
 		t.Fatal(err)
 	}
 	appCtx, stop := context.WithCancel(ctx)
