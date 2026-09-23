@@ -2,12 +2,43 @@ package bootstrap
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
 )
+
+func TestConnectorRequiresCompleteCredentialDelivery(t *testing.T) {
+	_, signer, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := Runtime{Actor: Actor{Atespace: "space", Name: "worker", UID: "uid"},
+		TemplateUID: "template", Image: "image", SandboxClass: "gvisor",
+		BootstrapPublicKey: base64.StdEncoding.EncodeToString(signer.Public().(ed25519.PublicKey)),
+		WorkerPod:          "pod", WorkerPodUID: "pod-uid", WorkerPool: "pool",
+		SnapshotOnPause: "SNAPSHOT_CONTENT_SCOPE_DATA", SnapshotOnCommit: "SNAPSHOT_CONTENT_SCOPE_DATA",
+		ResumeFromData: "RESUME_SOURCE_GOLDEN", SnapshotStorage: "store"}
+	connector := Connector{Ledger: &Ledger{}, Client: http.DefaultClient, RouterURL: "https://router.example",
+		Token: func(context.Context) (string, error) { return "token", nil }, Roots: x509.NewCertPool(), Signer: signer,
+		Current:   func(context.Context) (Runtime, error) { return expected, nil },
+		Authorize: func(context.Context, pgx.Tx, Runtime) error { return nil }}
+	connector.GitSetup = func(context.Context, pgx.Tx, Runtime) (GitSetup, error) { return GitSetup{}, nil }
+	if err := connector.Open(t.Context(), Scope{}, expected); !errors.Is(err, ErrDenied) {
+		t.Fatalf("credential delivery without lease reservation accepted: %v", err)
+	}
+	connector.Reserve = func(context.Context, pgx.Tx, Redeemed) error { return nil }
+	if err := connector.Open(t.Context(), Scope{}, expected); !errors.Is(err, ErrDenied) {
+		t.Fatalf("credential delivery without lease acknowledgement accepted: %v", err)
+	}
+}
 
 func TestConnectorDoesNotFollowRedirectWithToken(t *testing.T) {
 	forwarded := false

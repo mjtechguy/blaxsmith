@@ -83,6 +83,8 @@ func validGitCommit(commit string) bool {
 func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) error {
 	if c.Ledger == nil || c.Client == nil || c.Token == nil || c.Roots == nil ||
 		len(c.Signer) != ed25519.PrivateKeySize || c.Current == nil || c.Authorize == nil ||
+		(c.GitSetup != nil && (c.Reserve == nil || c.Delivered == nil)) ||
+		(c.GitSetup == nil && (c.Reserve != nil || c.Delivered != nil)) ||
 		expected.Actor.Atespace == "" || expected.Actor.Name == "" || expected.Actor.UID == "" ||
 		expected.TemplateUID == "" || expected.Image == "" || expected.SandboxClass == "" || expected.BootstrapPublicKey == "" ||
 		expected.WorkerPod == "" || expected.WorkerPodUID == "" || expected.WorkerPool == "" || !expected.DataOnlySnapshots() {
