@@ -30,7 +30,7 @@ function Workspace() {
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
   const [sorting, setSorting] = useState<SortingState>([{ id: "created", desc: true }]);
-  useEffect(() => { const timer = window.setTimeout(() => setSubmittedSearch(search), 250); return () => window.clearTimeout(timer); }, [search]);
+  useEffect(() => { const timer = window.setTimeout(() => setSubmittedSearch(search.trim()), 250); return () => window.clearTimeout(timer); }, [search]);
   const sortBy = sorting[0]?.id === "name" ? "name" : "created_at";
   const sortDirection = sorting[0]?.desc ? "desc" : "asc";
   const projects = useInfiniteQuery({

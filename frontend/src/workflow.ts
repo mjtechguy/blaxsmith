@@ -10,7 +10,7 @@ export const projectQueries = (organizationId: string, search = "", sortBy = "cr
 export const runQueries = (organizationId: string, projectId: string, search = "", sortBy = "created_at", sortDirection = "desc") => ["runs", organizationId, projectId, search, sortBy, sortDirection] as const;
 
 export async function listProjects(pageToken = "", search = "", sortBy = "created_at", sortDirection = "desc", signal?: AbortSignal) {
-  return client.listProjects({ pageSize: 50, pageToken, search, sortBy, sortDirection }, { signal });
+  return client.listProjects({ pageSize: 20, pageToken, search, sortBy, sortDirection }, { signal });
 }
 
 export async function getProject(projectId: string, signal?: AbortSignal) {
@@ -23,7 +23,7 @@ export async function createProject(slug: string, name: string) {
 }
 
 export async function listRuns(projectId: string, pageToken = "", search = "", sortBy = "created_at", sortDirection = "desc", signal?: AbortSignal) {
-  return client.listRuns({ projectId, pageSize: 50, pageToken, search, sortBy, sortDirection }, { signal });
+  return client.listRuns({ projectId, pageSize: 20, pageToken, search, sortBy, sortDirection }, { signal });
 }
 
 export async function getRun(runId: string, signal?: AbortSignal) {
