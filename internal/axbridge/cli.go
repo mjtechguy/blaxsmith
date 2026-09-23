@@ -33,7 +33,7 @@ func (c CLI) ax(ctx context.Context, input []byte, args ...string) ([]byte, erro
 	if ip == nil || !ip.IsLoopback() || c.AXPath == "" {
 		return nil, errors.New("AX requires a loopback tunnel URL and pinned CLI")
 	}
-	cmd := exec.CommandContext(ctx, c.AXPath, append([]string{"--server", c.Server}, args...)...)
+	cmd := exec.CommandContext(ctx, c.AXPath, append([]string{"--server", c.Server}, args...)...) // #nosec G204 -- pinned AX executable with separate argv; no shell
 	cmd.Stdin = bytes.NewReader(input)
 	out, err := cmd.Output()
 	if err != nil {
@@ -84,7 +84,7 @@ func (c CLI) Current(ctx context.Context, space, name string) (bootstrap.Runtime
 		if c.AtePath == "" {
 			return nil, errors.New("Substrate CLI is not configured")
 		}
-		out, err := exec.CommandContext(ctx, c.AtePath, args...).Output()
+		out, err := exec.CommandContext(ctx, c.AtePath, args...).Output() // #nosec G204 -- pinned Substrate executable with separate argv; no shell
 		if err != nil {
 			return nil, fmt.Errorf("Substrate read: %w", err)
 		}
@@ -163,7 +163,7 @@ func (c CLI) Gone(ctx context.Context, space, name string) (bool, error) {
 	if c.AtePath == "" {
 		return false, errors.New("Substrate CLI is not configured")
 	}
-	out, err := exec.CommandContext(ctx, c.AtePath, "get", "actor", name, "-a", space, "-o", "json").Output()
+	out, err := exec.CommandContext(ctx, c.AtePath, "get", "actor", name, "-a", space, "-o", "json").Output() // #nosec G204 -- pinned Substrate executable with separate argv; no shell
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && strings.Contains(string(exit.Stderr), "code = NotFound") {
