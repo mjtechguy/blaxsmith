@@ -34,7 +34,7 @@ same PostgreSQL transaction used through the send. A caller can lock current
 grant, binding, and connection rows there so revocation serializes with
 release; the focused PostgreSQL test proves a policy-row update waits for
 the send transaction and a later release sees revocation. The synthetic dev
-callback still checks only runtime properties. A failed or uncertain send cannot retry the same redemption; a new
+callback at that stage checked only runtime properties. A failed or uncertain send cannot retry the same redemption; a new
 challenge is required. The connector sends the ledger actor UID through the
 authenticated HTTPS router, which fences the receiving `atunnel` activation.
 The [live synthetic probe](bootstrap-ledger-release-probe.json) passed initial
@@ -53,20 +53,24 @@ rejects a template unless pause and commit use data-only snapshots, resume
 starts from the golden image, and the dev storage location matches the
 configured snapshot bucket. The [live rerun](bootstrap-private-git-probe.json)
 also observed data-only external snapshots after both suspensions. A [bounded
-surface scan](bootstrap-private-git-secret-scan.json) found no token in 153 AX Redis
-keys, eight runtime container logs, the dev bootstrap database, fixture logs,
+surface scan](bootstrap-private-git-secret-scan.json) found no token in 161 AX Redis
+keys, eight runtime container logs, the dev platform database, fixture logs,
 or nine probe evidence files. The owner ended inactive at generation 3.
 
-The dev CLI's authorization callback checks only synthetic runtime properties.
+The latest synthetic probe seeds provider, connection, project policy, grant,
+and binding records before task launch, encrypts the fixture token in a
+versioned database row, and reads it only after a row-locked Git-read decision
+in the release transaction. The key remains in an owner-only file outside the
+database. This tests the access path but does not provide authenticated
+onboarding, a real provider credential, or an access lease.
 The product scheduler must still own `Assign`/`Deactivate`, authenticate the
-connector, enforce current grant/binding/policy and measured effective
-isolation/egress, and issue and revoke short-lived Git access from an authorized
-Connection/Grant/Binding/Lease. The synthetic connector now supplies a pinned
+connector, enforce real membership/RBAC and measured effective
+isolation/egress, and issue and revoke short-lived Git access with leases. The synthetic connector supplies a pinned
 Git commit inside the encrypted release; the runner rejects a fetch that does
 not resolve to that commit before checkout, and the live fixture matched it.
 The product must derive that pin from an authorized frozen input bundle. The
-probe's image-owned private CA and root-only synthetic token are not product
-credential custody. The resume marker is inside the workspace and checked for
+probe's image-owned private CA, fixture token, and dev key are not production
+provider integration or key management. The resume marker is inside the workspace and checked for
 the expected repository URL and commit, but is not a signed provenance record. Full
 snapshot and memory/alternate-egress/recovery-generation tests remain open.
 Restored database state must not resurrect old authority.

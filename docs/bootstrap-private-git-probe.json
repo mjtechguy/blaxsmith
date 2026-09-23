@@ -1,5 +1,5 @@
 {
-  "atespace": "blaxsmith-gate-edcc3ecf94",
+  "atespace": "blaxsmith-gate-5c75a089fc",
   "image": "127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:32e908293a10e176a4b69f3e12d1a7789418dcda57ac9d732f2c1f7de3d60e81",
   "checks": [
     "task-signer-override blocked before actor launch",
@@ -16,26 +16,34 @@
   "git_commit": "76575d1fa33498e68db4468dcc9b0c292699552e",
   "ledger_releases": [
     {
-      "actor_uid": "b326b2d4-9cb0-420e-8496-d4a4f71e0106",
-      "attempt_id": "blaxsmith-gate-edcc3ecf94/gated-runner",
+      "access_connection": "blaxsmith-gate-5c75a089fc/private-git",
+      "actor_uid": "0855642a-38de-4c26-955c-09fa8c9d40f2",
+      "attempt_id": "blaxsmith-gate-5c75a089fc/gated-runner",
       "cluster_id": "dev-cluster",
       "opened": true,
       "owner_generation": 1,
       "snapshot_scope": "SNAPSHOT_CONTENT_SCOPE_DATA",
-      "template_uid": "8155c826-167b-4b73-8f78-ed1860c41571",
+      "template_uid": "03f51899-35a8-449b-a80c-d02c64bd4549",
       "worker_pool": "blaxsmith-smoke"
     },
     {
-      "actor_uid": "b326b2d4-9cb0-420e-8496-d4a4f71e0106",
-      "attempt_id": "blaxsmith-gate-edcc3ecf94/gated-runner",
+      "access_connection": "blaxsmith-gate-5c75a089fc/private-git",
+      "actor_uid": "0855642a-38de-4c26-955c-09fa8c9d40f2",
+      "attempt_id": "blaxsmith-gate-5c75a089fc/gated-runner",
       "cluster_id": "dev-cluster",
       "opened": true,
       "owner_generation": 2,
       "snapshot_scope": "SNAPSHOT_CONTENT_SCOPE_DATA",
-      "template_uid": "8155c826-167b-4b73-8f78-ed1860c41571",
+      "template_uid": "03f51899-35a8-449b-a80c-d02c64bd4549",
       "worker_pool": "blaxsmith-smoke"
     }
   ],
+  "access_seed": {
+    "binding_id": "blaxsmith-gate-5c75a089fc/gated-runner/git-read",
+    "organization_id": "synthetic-org",
+    "project_id": "blaxsmith-gate-5c75a089fc",
+    "secret_version": 1
+  },
   "final_phase": "Suspended",
   "owner_cleanup": {
     "deactivated": true,

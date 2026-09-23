@@ -407,6 +407,9 @@ export BLAXSMITH_DEV_LEDGER=1
 export BLAXSMITH_DEV_GIT_REPO=https://10.42.0.1:8443/private.git
 export BLAXSMITH_DEV_GIT_COMMIT="$(git -C "$fixture/source" rev-parse HEAD)"
 export BLAXSMITH_DEV_GIT_TOKEN_FILE="$fixture/token"
+secret_key=/opt/blaxsmith-dev/platform-secret-key
+if test ! -e "$secret_key"; then (umask 077; head -c 32 /dev/urandom > "$secret_key"); fi
+export BLAXSMITH_DEV_SECRET_KEY_FILE="$secret_key"
 evidence=/opt/blaxsmith-dev/private-git-probe-$(date +%s)
 python3 deploy/dev/probe-bootstrap.py "$(cat "$built/ax-task-runner.image")" \
   10.43.36.216 "$evidence"
@@ -414,6 +417,12 @@ python3 deploy/dev/scan-private-git.py "$fixture/token" "$evidence" \
   > "$evidence/secret-scan.json"
 systemctl stop "$unit"
 ```
+
+The probe seeds synthetic provider, connection, project policy, grant, and
+attempt binding rows before task launch, then encrypts the fixture token in a
+versioned database row. The connector checks the live rows and reads the
+current secret under the same release transaction; it does not reread the
+fixture token file. The separate owner-only key file is not stored in PostgreSQL.
 
 The [passing live report](../../docs/bootstrap-private-git-probe.json) and
 [bounded secret scan](../../docs/bootstrap-private-git-secret-scan.json) used
@@ -430,7 +439,7 @@ Redis, inspected logs and control-plane objects, Git config, task environment,
 or evidence files. The first resume attempt exposed a missing `/ax` marker;
 the revised runner writes a URL-and-commit-bound marker to the snapshotted workspace and
 rejects an existing `.git` without it or with a changed remote. This is a
-synthetic proof only: there is no product Grant/Binding/Lease or real provider
+synthetic proof only: there is no authenticated product grant/binding/lease or real provider
 credential, and full-snapshot memory/complete egress/revocation remain open.
 
 ## Original baseline task

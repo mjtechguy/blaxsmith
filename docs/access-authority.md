@@ -28,7 +28,9 @@ Git provider at the repository origin, an active connection, matching project
 and grantee, an unrevoked/unexpired grant, unchanged grant and policy versions,
 and a delivery mode allowed by both provider and project. It returns only
 non-secret account metadata. The bootstrap connector's authorization callback
-can call it using the transaction held through release delivery.
+now calls it for the synthetic private-Git probe using the transaction held
+through release delivery. `GitSetup` reads the current encrypted secret under
+that same transaction; the runner receives it only in its signed envelope.
 
 The [real PostgreSQL test](../internal/access/policy_test.go) covers a valid
 decision, cross-tenant references, wrong project/attempt/grantee/repository/
@@ -36,7 +38,11 @@ commit, changed policy or grant versions, disabled Git use and delivery modes,
 provider origin/state, grant expiry/revocation, and disabled connection. The
 [bootstrap concurrency test](../internal/bootstrap/ledger_test.go) separately
 proves a policy row locked in the release transaction cannot be updated until
-that send completes.
+that send completes. The [live synthetic probe](bootstrap-private-git-probe.json)
+checked out the exact private commit before command launch and after a fresh
+resume release, using the seeded binding and encrypted database token. Its
+[bounded scan](bootstrap-private-git-secret-scan.json) found no plaintext in
+the inspected database, AX state, logs, or evidence files.
 The [secret-store test](../internal/access/secret_test.go) verifies ciphertext
 at rest, tenant isolation, copied-ciphertext rejection, key-version reads, stale and concurrent rotations,
 rotation blocked by an active credential read, expiry, disabled connections,
@@ -45,6 +51,7 @@ tampering, and caller-side clearing. It uses synthetic values only.
 This is **not yet a usable account system**. There are no authenticated write
 APIs, membership/RBAC checks for creating these rows, deployment key loading
 and recovery, provider credential issuance, access leases, provider refresh or
-revocation workers, or product scheduler wiring. The synthetic dev connector
-still reads its root-owned fixture token. Those pieces must precede real
+revocation workers, or product scheduler wiring. The dev seed command reads a
+root-owned fixture token once; the release connector reads only ciphertext
+through `SecretStore`. Those pieces must precede real
 credentials.

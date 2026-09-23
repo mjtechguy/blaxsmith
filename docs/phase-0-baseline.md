@@ -144,9 +144,14 @@ fetched revision before checkout. A wrong revision failed the focused AX test,
 and the [live rerun](bootstrap-private-git-probe.json) checked the fixture's
 exact SHA before command execution and again after data-snapshot resume.
 The resumed task required a new proof and kept the private checkout. The
+[latest synthetic rerun](bootstrap-private-git-probe.json) seeded an exact
+provider/connection/project/grant/binding chain and stored the fixture token
+as encrypted database ciphertext. The connector checked current rows and read
+the secret under the release transaction for both initial setup and resume.
+The
 [surface scan](bootstrap-private-git-secret-scan.json) found no token in the
 listed persisted/logged surfaces. This does not prove full-snapshot memory
-exclusion, effective egress on every path, real grant/revocation, or trusted
+exclusion, effective egress on every path, authenticated grant/revocation, or trusted
 binding from a frozen input bundle to that SHA; P0-04/05 remain open.
 
 ## Guild adoption map

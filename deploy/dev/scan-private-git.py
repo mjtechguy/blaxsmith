@@ -47,7 +47,7 @@ for item in pod_list["items"]:
 surfaces["runtime_logs"] = {"checked": containers, "token_found": logs_found}
 
 database = run("pg_dump", "-d", "blaxsmith_dev", "--data-only")
-surfaces["bootstrap_database"] = {"checked": 1, "token_found": token in database}
+surfaces["platform_database"] = {"checked": 1, "token_found": token in database}
 fixture_logs = run("journalctl", "-u", "blaxsmith-private-git-fixture", "--since", "30 minutes ago", "--no-pager")
 surfaces["git_fixture_logs"] = {"checked": 1, "token_found": token in fixture_logs}
 

@@ -30,8 +30,11 @@ ledger_mode = os.environ.get("BLAXSMITH_DEV_LEDGER") == "1"
 git_repo = os.environ.get("BLAXSMITH_DEV_GIT_REPO", "")
 git_commit = os.environ.get("BLAXSMITH_DEV_GIT_COMMIT", "")
 git_token_file = os.environ.get("BLAXSMITH_DEV_GIT_TOKEN_FILE", "")
+secret_key_file = os.environ.get("BLAXSMITH_DEV_SECRET_KEY_FILE", "")
 if (git_repo == "") != (git_token_file == "") or (git_repo == "") != (git_commit == "") or (git_repo and not ledger_mode):
     sys.exit("private Git probe requires BLAXSMITH_DEV_LEDGER=1 and repository, commit, and token inputs")
+if git_repo and not secret_key_file:
+    sys.exit("private Git probe requires BLAXSMITH_DEV_SECRET_KEY_FILE")
 if git_commit:
     report["git_commit"] = git_commit
 
@@ -187,7 +190,8 @@ def release(challenge, previous_generation):
         "-signer", os.environ["BLAXSMITH_DEV_SIGNING_KEY_FILE"],
         "-previous-generation", str(previous_generation)]
     if git_repo:
-        args += ["-git-repo", git_repo, "-git-commit", git_commit, "-git-token-file", git_token_file]
+        args += ["-git-repo", git_repo, "-git-commit", git_commit,
+                 "-git-binding", report["access_seed"]["binding_id"], "-secret-key-file", secret_key_file]
     result = subprocess.run(args, input=connector_token, text=True, capture_output=True, timeout=90)
     if result.returncode:
         raise RuntimeError(f"ledger connector: {result.stderr.strip()}")
@@ -240,6 +244,13 @@ def denied_task(name, spec, reason):
 
 try:
     if git_repo:
+        seed = subprocess.run(["go", "run", "./deploy/dev/seed-access",
+            "-space", space, "-task", task, "-repo", git_repo, "-commit", git_commit,
+            "-token-file", git_token_file, "-key-file", secret_key_file],
+            text=True, capture_output=True, timeout=45)
+        if seed.returncode:
+            raise RuntimeError(f"synthetic access seed: {seed.stderr.strip()}")
+        report["access_seed"] = json.loads(seed.stdout)
         ax("apply", "-f", str(output / "workspace.json"))
         ax("apply", "-f", str(output / "gateway.json"))
     denied_task("task-signer-override", {"image": image,

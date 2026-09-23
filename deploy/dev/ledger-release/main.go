@@ -21,11 +21,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
 )
 
 func main() {
-	var space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit, gitTokenFile string
+	var space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit, gitBinding, secretKeyFile string
 	var generation int64
 	var finish bool
 	flag.StringVar(&space, "space", "", "AX atespace")
@@ -39,7 +40,8 @@ func main() {
 	flag.StringVar(&database, "database", "host=/var/run/postgresql user=root dbname=blaxsmith_dev sslmode=disable", "dev PostgreSQL connection")
 	flag.StringVar(&gitRepo, "git-repo", "", "synthetic private HTTPS Git repository")
 	flag.StringVar(&gitCommit, "git-commit", "", "expected immutable Git commit")
-	flag.StringVar(&gitTokenFile, "git-token-file", "", "owner-only synthetic Git token file")
+	flag.StringVar(&gitBinding, "git-binding", "", "frozen synthetic Git-read binding")
+	flag.StringVar(&secretKeyFile, "secret-key-file", "", "owner-only database encryption key")
 	flag.Int64Var(&generation, "previous-generation", 0, "prior scheduler owner generation")
 	flag.BoolVar(&finish, "finish", false, "deactivate the current synthetic owner")
 	flag.Parse()
@@ -50,7 +52,7 @@ func main() {
 		}
 		return
 	}
-	if err := run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit, gitTokenFile, generation); err != nil {
+	if err := run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit, gitBinding, secretKeyFile, generation); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -74,10 +76,10 @@ func deactivate(space, task, database string, generation int64) error {
 		"fenced_generation": scope.OwnerGeneration})
 }
 
-func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit, gitTokenFile string, generation int64) error {
+func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit, gitBinding, secretKeyFile string, generation int64) error {
 	if space == "" || task == "" || !strings.Contains(image, "@sha256:") || pool == "" ||
 		net.ParseIP(routerIP) == nil || routerCA == "" || actorCA == "" || signerFile == "" ||
-		(gitRepo == "") != (gitTokenFile == "") || (gitRepo == "") != (gitCommit == "") {
+		(gitRepo == "") != (gitBinding == "") || (gitRepo == "") != (gitCommit == "") || (gitRepo == "") != (secretKeyFile == "") {
 		return errors.New("incomplete synthetic connector inputs")
 	}
 	keyInfo, err := os.Stat(signerFile)
@@ -120,6 +122,22 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 		return err
 	}
 	defer poolDB.Close()
+	var secretStore *access.SecretStore
+	if gitRepo != "" {
+		info, err := os.Lstat(secretKeyFile)
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+			return access.ErrDenied
+		}
+		key, err := os.ReadFile(secretKeyFile)
+		if err != nil || len(key) != 32 {
+			return access.ErrDenied
+		}
+		secretStore, err = access.NewSecretStore(poolDB, "dev-key-1", map[string][]byte{"dev-key-1": key})
+		clear(key)
+		if err != nil {
+			return err
+		}
+	}
 	current := func(ctx context.Context) (bootstrap.Runtime, error) {
 		return observe(ctx, space, task)
 	}
@@ -149,27 +167,42 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 			return dialer.DialContext(ctx, "tcp", net.JoinHostPort(routerIP, "443"))
 		}}
 	defer transport.CloseIdleConnections()
+	var decision access.Decision
 	connector := &bootstrap.Connector{Ledger: ledger, Client: &http.Client{Transport: transport, Timeout: 20 * time.Second},
 		RouterURL: "https://atenet-router.ate-system.svc", Roots: actorRoots, Signer: signer,
 		Token: func(context.Context) (string, error) { return token, nil }, Current: current,
-		Authorize: func(_ context.Context, _ pgx.Tx, runtime bootstrap.Runtime) error {
+		Authorize: func(ctx context.Context, tx pgx.Tx, runtime bootstrap.Runtime) error {
 			if runtime.Image != image || runtime.WorkerPool != pool || runtime.SandboxClass != "SANDBOX_CLASS_GVISOR" || !dataSnapshots(runtime) {
 				return bootstrap.ErrDenied
 			}
-			return nil // Synthetic gate only: no credential or repository is issued.
+			if gitRepo == "" {
+				return nil
+			}
+			checked, err := access.AuthorizeGitRead(ctx, tx, access.GitRead{
+				OrganizationID: "synthetic-org", ProjectID: space, AttemptID: space + "/" + task,
+				BindingID: gitBinding, GranteeKind: "user", GranteeID: "synthetic-operator",
+				RepoURL: gitRepo, Commit: gitCommit, PolicyVersion: 1,
+			})
+			if err != nil {
+				return err
+			}
+			if checked.DeliveryMode != "native_raw" {
+				return access.ErrDenied
+			}
+			decision = checked
+			return nil
 		},
 	}
 	if gitRepo != "" {
-		connector.GitSetup = func(context.Context, pgx.Tx, bootstrap.Runtime) (bootstrap.GitSetup, error) {
-			info, err := os.Stat(gitTokenFile)
-			if err != nil || info.Mode().Perm()&0077 != 0 {
-				return bootstrap.GitSetup{}, bootstrap.ErrDenied
+		connector.GitSetup = func(ctx context.Context, tx pgx.Tx, _ bootstrap.Runtime) (bootstrap.GitSetup, error) {
+			if decision.ConnectionID == "" {
+				return bootstrap.GitSetup{}, access.ErrDenied
 			}
-			token, err := os.ReadFile(gitTokenFile)
-			if err != nil || len(token) == 0 || len(token) > 8192 {
-				return bootstrap.GitSetup{}, bootstrap.ErrDenied
+			secret, err := secretStore.ReadCurrent(ctx, tx, "synthetic-org", decision.ConnectionID)
+			if err != nil {
+				return bootstrap.GitSetup{}, err
 			}
-			return bootstrap.GitSetup{RepoURL: gitRepo, Commit: gitCommit, Username: "blaxsmith-probe", Token: token}, nil
+			return bootstrap.GitSetup{RepoURL: gitRepo, Commit: gitCommit, Username: "blaxsmith-probe", Token: secret.Bytes}, nil
 		}
 	}
 	if err := connector.Open(ctx, scope, expected); err != nil {
@@ -179,8 +212,9 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 		"cluster_id": scope.ClusterID, "attempt_id": scope.AttemptID,
 		"owner_generation": scope.OwnerGeneration, "actor_uid": expected.Actor.UID,
 		"template_uid": expected.TemplateUID, "worker_pool": expected.WorkerPool,
-		"snapshot_scope": expected.SnapshotOnPause,
-		"opened":         true,
+		"snapshot_scope":    expected.SnapshotOnPause,
+		"access_connection": decision.ConnectionID,
+		"opened":            true,
 	}); err != nil {
 		return err
 	}
