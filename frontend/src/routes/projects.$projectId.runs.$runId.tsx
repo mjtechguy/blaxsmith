@@ -115,6 +115,7 @@ type ReviewAction = "approve" | "request_changes";
 
 function FinalReview({ runId, scope, state }: { runId: string; scope: string; state: string }) {
   const queryClient = useQueryClient();
+  const dialog = useRef<HTMLDialogElement>(null);
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const review = useQuery({ queryKey: ["run-review", scope, runId], queryFn: ({ signal }) => getCurrentReview(runId, signal) });
   const [confirmation, setConfirmation] = useState<{ action: ReviewAction; packageId: string } | null>(null);
@@ -144,6 +145,11 @@ function FinalReview({ runId, scope, state }: { runId: string; scope: string; st
   const confirmCurrent = confirmation?.packageId === current?.id;
   const feedbackLength = Array.from(feedback.trim()).length;
 
+  useEffect(() => {
+    if (confirmation) dialog.current?.showModal();
+    else dialog.current?.close();
+  }, [confirmation]);
+
   return <section className="review-card" aria-labelledby="review-heading">
     <div className="review-heading"><div><p className="eyebrow">Final gate</p><h2 id="review-heading">Human review</h2><p>A person makes the final decision on the current, verified package.</p></div>
       {current ? <span className={`state-badge ${current.decision?.action === "approve" ? "state-succeeded" : current.decision ? "state-failed" : "state-active"}`}>
@@ -166,8 +172,15 @@ function FinalReview({ runId, scope, state }: { runId: string; scope: string; st
       </div> : null}
       {!current.decision && mayDecide ? <div className="review-actions">
         {error ? <p className="auth-alert" role="alert">{error}</p> : null}
-        {confirmation ? <div className="review-confirm" role="group" aria-label="Confirm final review decision">
-          <p>{confirmCurrent ? `Confirm ${confirmation.action === "approve" ? "approval" : "request for changes"} for revision ${current.revision.toString()}?` : "The review package changed. Choose an action for the current revision."}</p>
+        <button type="button" className="secondary-button" disabled={decide.isPending} onClick={() => { setError(""); setFeedback(""); setConfirmation({ action: "request_changes", packageId: current.id }); }}>Request changes</button>
+        <button type="button" className="primary-button" disabled={decide.isPending} onClick={() => { setError(""); setFeedback(""); setConfirmation({ action: "approve", packageId: current.id }); }}>Approve package</button>
+      </div> : null}
+      <dialog ref={dialog} className="review-confirm" aria-labelledby={`review-confirm-title-${runId}`}
+        onCancel={(event) => { if (decide.isPending) event.preventDefault(); }}
+        onClose={() => { setConfirmation(null); setFeedback(""); }}>
+        {confirmation ? <>
+          <h3 id={`review-confirm-title-${runId}`}>{confirmation.action === "approve" ? "Approve package" : "Request changes"}</h3>
+          <p>{confirmCurrent && current ? `Confirm ${confirmation.action === "approve" ? "approval" : "request for changes"} for revision ${current.revision.toString()}?` : "The review package changed. Choose an action for the current revision."}</p>
           {confirmation.action === "request_changes" && confirmCurrent ? <div className="review-feedback-input">
             <label htmlFor={`review-feedback-${runId}`}>What needs to change?</label>
             <textarea id={`review-feedback-${runId}`} value={feedback} maxLength={4000} rows={4} onChange={(event) => setFeedback(event.target.value)} placeholder="Give the team specific corrections to make." />
@@ -177,9 +190,8 @@ function FinalReview({ runId, scope, state }: { runId: string; scope: string; st
             <button type="button" className="secondary-button" disabled={decide.isPending} onClick={() => { setConfirmation(null); setFeedback(""); }}>Cancel</button>
             <button type="button" className="primary-button" disabled={!confirmCurrent || decide.isPending || (confirmation.action === "request_changes" && feedbackLength < 10)} onClick={() => { setError(""); decide.mutate(confirmation); }}>{decide.isPending ? "Saving…" : "Confirm decision"}</button>
           </div>
-        </div>
-          : <><button type="button" className="secondary-button" onClick={() => { setError(""); setFeedback(""); setConfirmation({ action: "request_changes", packageId: current.id }); }}>Request changes</button><button type="button" className="primary-button" onClick={() => { setError(""); setFeedback(""); setConfirmation({ action: "approve", packageId: current.id }); }}>Approve package</button></>}
-      </div> : null}
+        </> : null}
+      </dialog>
       {!current.decision && !mayDecide && session.data ? <p className="review-message">Only organization owners and admins can make the final decision.</p> : null}
     </> : null}
   </section>;
