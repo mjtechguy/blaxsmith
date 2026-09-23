@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
@@ -31,6 +30,7 @@ type exitReadback struct {
 	Signal          int    `json:"signal"`
 	Interrupted     bool   `json:"interrupted"`
 	Sequence        int64  `json:"sequence"`
+	ObservedAt      int64  `json:"observed_at"`
 }
 
 // CommandExitReader reaches the pinned runner through the connector-only
@@ -149,7 +149,7 @@ func (c *CommandExitConnector) Collect(ctx context.Context, a workflow.Attempt) 
 	if observation.Schema != exitReadbackSchema || observation.AXAtespace != want.Metadata.Atespace ||
 		observation.AXTask != want.Metadata.Name || observation.CommandSHA256 != runnerexit.CommandSHA256(syntheticCommand) ||
 		observation.Sequence != 1 || observation.ExitCode < -1 || observation.ExitCode > 255 ||
-		observation.Signal < 0 || observation.Signal > 64 ||
+		observation.Signal < 0 || observation.Signal > 64 || observation.ObservedAt < 1 ||
 		(observation.ExitCode == -1) != (observation.Signal != 0) {
 		return ErrMismatch
 	}
@@ -169,7 +169,7 @@ func (c *CommandExitConnector) Collect(ctx context.Context, a workflow.Attempt) 
 		ActorUID: runtime.Actor.UID, TemplateUID: runtime.TemplateUID,
 		ActivationNonce: observation.ActivationNonce, CommandSHA256: observation.CommandSHA256,
 		ExitCode: observation.ExitCode, Signal: observation.Signal, Interrupted: observation.Interrupted,
-		Sequence: observation.Sequence, EvidenceSHA256: hex.EncodeToString(empty[:]), ObservedAt: time.Now().UnixNano()}
+		Sequence: observation.Sequence, EvidenceSHA256: hex.EncodeToString(empty[:]), ObservedAt: observation.ObservedAt}
 	signed, err := runnerexit.Sign(report, c.Signer)
 	if err != nil {
 		return err

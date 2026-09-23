@@ -25,7 +25,7 @@ new file mode 100644
 index 0000000..75085fe
 --- /dev/null
 +++ b/runner/command_exit.go
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,87 @@
 +package runner
 +
 +import (
@@ -36,6 +36,7 @@ index 0000000..75085fe
 +	"os/exec"
 +	"sync"
 +	"syscall"
++	"time"
 +)
 +
 +const commandExitSchema = "blaxsmith.command-exit/v1alpha1"
@@ -53,6 +54,7 @@ index 0000000..75085fe
 +	Signal          int    `json:"signal"`
 +	Interrupted     bool   `json:"interrupted"`
 +	Sequence        int64  `json:"sequence"`
++	ObservedAt      int64  `json:"observed_at"`
 +}
 +
 +type commandExitObserver struct {
@@ -82,7 +84,8 @@ index 0000000..75085fe
 +	}
 +	report := commandExitReadback{Schema: commandExitSchema, ActivationNonce: o.gate.nonce,
 +		AXAtespace: o.gate.atespace, AXTask: o.gate.task, CommandSHA256: o.command,
-+		ExitCode: cmd.ProcessState.ExitCode(), Interrupted: interrupted, Sequence: 1}
++		ExitCode: cmd.ProcessState.ExitCode(), Interrupted: interrupted, Sequence: 1,
++		ObservedAt: time.Now().UnixNano()}
 +	o.gate.mu.Unlock()
 +	if state, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok && state.Signaled() {
 +		report.Signal = int(state.Signal())
@@ -115,7 +118,7 @@ new file mode 100644
 index 0000000..a4daf9b
 --- /dev/null
 +++ b/runner/command_exit_test.go
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,70 @@
 +package runner_test
 +
 +import (
@@ -173,6 +176,7 @@ index 0000000..a4daf9b
 +		Signal          int    `json:"signal"`
 +		Interrupted     bool   `json:"interrupted"`
 +		Sequence        int64  `json:"sequence"`
++		ObservedAt      int64  `json:"observed_at"`
 +	}
 +	if err := json.NewDecoder(response.Body).Decode(&report); err != nil {
 +		t.Fatal(err)
@@ -181,7 +185,7 @@ index 0000000..a4daf9b
 +	if report.Schema != "blaxsmith.command-exit/v1alpha1" || report.ActivationNonce != challenge.Nonce ||
 +		report.AXAtespace != challenge.Atespace || report.AXTask != challenge.Task ||
 +		report.CommandSHA256 != hex.EncodeToString(command[:]) || report.ExitCode != 7 ||
-+		report.Signal != 0 || report.Interrupted || report.Sequence != 1 {
++		report.Signal != 0 || report.Interrupted || report.Sequence != 1 || report.ObservedAt < 1 {
 +		t.Fatalf("invalid command exit readback: %+v", report)
 +	}
 +}

@@ -146,7 +146,9 @@ Phase 0 bootstrap/credential gates stay open. Only synthetic tasks run here.
 The pinned gated runner now serves `GET /blaxsmith/command-exit`. It returns
 HTTP 202 before the child command exits and a small JSON record after `Wait`:
 activation nonce, AX atespace/task, SHA-256 of JSON-encoded `spec.command`, exit
-code, signal, interrupted flag, and sequence 1. It is absent without the
+code, signal, interrupted flag, sequence 1, and the one-time observation time.
+The stable time makes an exact signed receipt replayable after an uncertain
+connector response. It is absent without the
 platform bootstrap gate. A setup or command-start error produces no exit
 record. The runner stays available for readback after the child exits.
 

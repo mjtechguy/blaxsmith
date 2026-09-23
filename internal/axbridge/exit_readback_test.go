@@ -124,7 +124,7 @@ func TestCommandExitConnectorRecordsOnlyBoundObservation(t *testing.T) {
 	nonce := base64.RawURLEncoding.EncodeToString(nonceBytes[:])
 	observation := exitReadback{Schema: exitReadbackSchema, ActivationNonce: nonce,
 		AXAtespace: space, AXTask: name, CommandSHA256: runnerexit.CommandSHA256(syntheticCommand),
-		ExitCode: 7, Sequence: 1}
+		ExitCode: 7, Sequence: 1, ObservedAt: 123}
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(observation)
@@ -165,6 +165,9 @@ func TestCommandExitConnectorRecordsOnlyBoundObservation(t *testing.T) {
 	}}
 	if err := connector.Collect(t.Context(), attempt); err != nil {
 		t.Fatal(err)
+	}
+	if err := connector.Collect(t.Context(), attempt); err != nil {
+		t.Fatalf("same readback was not idempotent: %v", err)
 	}
 	var count int
 	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM workflow_command_exits WHERE organization_id=$1 AND attempt_id=$2`, org, attempt.ID).Scan(&count); err != nil || count != 1 {

@@ -44,6 +44,8 @@ runtime, then signs an attempt-bound receipt. The workflow collector checks
 the current attempt and immutable runtime binding before storing it. Exit code
 alone never calls `FinishAttempt` or verifies artifacts. A guest file, AX
 status, or `ax ssh` observation also cannot mark a task complete.
+The runner reports one stable observation time, so repeating the same readback
+replays the same signed receipt instead of generating a conflicting one.
 
 The command-exit route overlay, nonce binding, and connector are covered by
 focused tests but have not been deployed or proven together on the node. The
