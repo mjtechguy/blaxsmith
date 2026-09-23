@@ -29,10 +29,11 @@ export async function clearWorkspaceCache(queryClient: QueryClient): Promise<voi
   queryClient.removeQueries({ predicate: workspaceQuery });
 }
 
-const client = createClient(AuthService, createConnectTransport({
+export const browserTransport = createConnectTransport({
   baseUrl: `${window.location.origin}/api`,
   fetch: (input, init) => fetch(input, { ...init, credentials: "same-origin" }),
-}));
+});
+const client = createClient(AuthService, browserTransport);
 
 // Shared cookie rotation must be serialized across tabs. A later tab checks
 // the new access cookie before it tries to use the old refresh cookie.
@@ -62,6 +63,8 @@ async function csrf(signal?: AbortSignal): Promise<string> {
   if (!response.token) throw new Error("CSRF response is incomplete");
   return response.token;
 }
+
+export const csrfToken = csrf;
 
 export async function currentSession(signal?: AbortSignal): Promise<SessionIdentity | null> {
   if (!navigator.locks || typeof BroadcastChannel === "undefined") throw new Error("Secure session coordination is unavailable");

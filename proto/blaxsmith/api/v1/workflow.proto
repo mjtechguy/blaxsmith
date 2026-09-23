@@ -35,6 +35,9 @@ message CreateProjectRequest {
 }
 message CreateProjectResponse { Project project = 1; }
 
+message GetProjectRequest { string project_id = 1; }
+message GetProjectResponse { Project project = 1; }
+
 message ListProjectsRequest {
   int32 page_size = 1; // 1-100; zero selects 50.
   string page_token = 2;
@@ -70,6 +73,7 @@ message EventsAfterResponse {
 // Browser requests derive their organization exclusively from a live session.
 service WorkflowService {
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
+  rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);

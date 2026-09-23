@@ -36,6 +36,9 @@ const (
 	// WorkflowServiceCreateProjectProcedure is the fully-qualified name of the WorkflowService's
 	// CreateProject RPC.
 	WorkflowServiceCreateProjectProcedure = "/blaxsmith.api.v1.WorkflowService/CreateProject"
+	// WorkflowServiceGetProjectProcedure is the fully-qualified name of the WorkflowService's
+	// GetProject RPC.
+	WorkflowServiceGetProjectProcedure = "/blaxsmith.api.v1.WorkflowService/GetProject"
 	// WorkflowServiceListProjectsProcedure is the fully-qualified name of the WorkflowService's
 	// ListProjects RPC.
 	WorkflowServiceListProjectsProcedure = "/blaxsmith.api.v1.WorkflowService/ListProjects"
@@ -52,6 +55,7 @@ const (
 // WorkflowServiceClient is a client for the blaxsmith.api.v1.WorkflowService service.
 type WorkflowServiceClient interface {
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
+	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	ListRuns(context.Context, *connect.Request[v1.ListRunsRequest]) (*connect.Response[v1.ListRunsResponse], error)
@@ -73,6 +77,12 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			httpClient,
 			baseURL+WorkflowServiceCreateProjectProcedure,
 			connect.WithSchema(workflowServiceMethods.ByName("CreateProject")),
+			connect.WithClientOptions(opts...),
+		),
+		getProject: connect.NewClient[v1.GetProjectRequest, v1.GetProjectResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetProjectProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetProject")),
 			connect.WithClientOptions(opts...),
 		),
 		listProjects: connect.NewClient[v1.ListProjectsRequest, v1.ListProjectsResponse](
@@ -105,6 +115,7 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 // workflowServiceClient implements WorkflowServiceClient.
 type workflowServiceClient struct {
 	createProject *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
+	getProject    *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
 	listProjects  *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
 	getRun        *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
 	listRuns      *connect.Client[v1.ListRunsRequest, v1.ListRunsResponse]
@@ -114,6 +125,11 @@ type workflowServiceClient struct {
 // CreateProject calls blaxsmith.api.v1.WorkflowService.CreateProject.
 func (c *workflowServiceClient) CreateProject(ctx context.Context, req *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error) {
 	return c.createProject.CallUnary(ctx, req)
+}
+
+// GetProject calls blaxsmith.api.v1.WorkflowService.GetProject.
+func (c *workflowServiceClient) GetProject(ctx context.Context, req *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error) {
+	return c.getProject.CallUnary(ctx, req)
 }
 
 // ListProjects calls blaxsmith.api.v1.WorkflowService.ListProjects.
@@ -139,6 +155,7 @@ func (c *workflowServiceClient) EventsAfter(ctx context.Context, req *connect.Re
 // WorkflowServiceHandler is an implementation of the blaxsmith.api.v1.WorkflowService service.
 type WorkflowServiceHandler interface {
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
+	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	ListRuns(context.Context, *connect.Request[v1.ListRunsRequest]) (*connect.Response[v1.ListRunsResponse], error)
@@ -156,6 +173,12 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		WorkflowServiceCreateProjectProcedure,
 		svc.CreateProject,
 		connect.WithSchema(workflowServiceMethods.ByName("CreateProject")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceGetProjectHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetProjectProcedure,
+		svc.GetProject,
+		connect.WithSchema(workflowServiceMethods.ByName("GetProject")),
 		connect.WithHandlerOptions(opts...),
 	)
 	workflowServiceListProjectsHandler := connect.NewUnaryHandler(
@@ -186,6 +209,8 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		switch r.URL.Path {
 		case WorkflowServiceCreateProjectProcedure:
 			workflowServiceCreateProjectHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetProjectProcedure:
+			workflowServiceGetProjectHandler.ServeHTTP(w, r)
 		case WorkflowServiceListProjectsProcedure:
 			workflowServiceListProjectsHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetRunProcedure:
@@ -205,6 +230,10 @@ type UnimplementedWorkflowServiceHandler struct{}
 
 func (UnimplementedWorkflowServiceHandler) CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.CreateProject is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetProject is not implemented"))
 }
 
 func (UnimplementedWorkflowServiceHandler) ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error) {

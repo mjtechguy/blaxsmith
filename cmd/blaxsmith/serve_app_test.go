@@ -353,6 +353,11 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 		t.Fatalf("mutation from another origin allowed: %v", err)
 	}
 	first, second := create("first-project"), create("second-project")
+	getProject := connect.NewRequest(&api.GetProjectRequest{ProjectId: first.Id})
+	getProject.Header().Set("Origin", origin)
+	if got, err := w.GetProject(ctx, getProject); err != nil || got.Msg.Project.Id != first.Id {
+		t.Fatalf("own project lookup: %+v, %v", got, err)
+	}
 	page := connect.NewRequest(&api.ListProjectsRequest{PageSize: 1})
 	page.Header().Set("Origin", origin)
 	pageOne, err := w.ListProjects(ctx, page)
@@ -412,6 +417,10 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	otherProjects.Header().Set("Cookie", cookie)
 	if got, err := other.ListProjects(ctx, otherProjects); err != nil || len(got.Msg.Projects) != 0 {
 		t.Fatalf("cross-tenant project list: %+v, %v", got, err)
+	}
+	getProject.Header().Set("Cookie", cookie)
+	if _, err := other.GetProject(ctx, getProject); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("cross-tenant project lookup: %v", err)
 	}
 	getRun.Header().Set("Cookie", cookie)
 	if _, err := other.GetRun(ctx, getRun); connect.CodeOf(err) != connect.CodeNotFound {

@@ -50,6 +50,18 @@ func (s *workflowService) CreateProject(ctx context.Context, req *connect.Reques
 	return connect.NewResponse(&api.CreateProjectResponse{Project: projectMessage(project)}), nil
 }
 
+func (s *workflowService) GetProject(ctx context.Context, req *connect.Request[api.GetProjectRequest]) (*connect.Response[api.GetProjectResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	project, err := s.store.GetProject(ctx, caller.OrganizationID, req.Msg.ProjectId)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.GetProjectResponse{Project: projectMessage(project)}), nil
+}
+
 func (s *workflowService) ListProjects(ctx context.Context, req *connect.Request[api.ListProjectsRequest]) (*connect.Response[api.ListProjectsResponse], error) {
 	caller, err := s.guard.Caller(ctx, req.Header(), false)
 	if err != nil {
