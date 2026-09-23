@@ -37,10 +37,13 @@ login limits apply across replicas before bounded password hashing; a second
 identity read under lock prevents policy or password changes from racing session
 creation. A generated Connect browser handler verifies HTTPS/host/origin and
 CSRF, uses `__Host-` `HttpOnly`, `Secure`, `SameSite=Lax` cookies, and never
-returns bearer tokens in response bodies. It is currently unwired: deployment
-key custody, rotation orchestration, trusted ingress client-address handling,
-scheduled limit-key pruning, and frontend/session integration remain open. No
-login/session endpoint is exposed by `serve`. The cookie and CSRF design follows
+returns bearer tokens in response bodies. `serve-app` now mounts it with the
+catalog on a direct TLS listener, loads a restricted platform signer file,
+requires verified PostgreSQL TLS by default, and checks database readiness and
+prunes limit keys. Deployment key custody and rotation orchestration, trusted
+proxy client-address handling, and frontend/session integration remain open.
+The loopback development `serve` still exposes no login/session endpoint. The
+cookie and CSRF design follows
 the [OWASP session](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
 and [CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
 guides.

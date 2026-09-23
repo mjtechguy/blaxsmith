@@ -110,11 +110,31 @@ session service now verifies local credentials, issues ten-minute signed access
 tokens, rotates hashed refresh tokens, checks current membership/policy on each
 request, and revokes on refresh replay. Login attempts are counted in PostgreSQL
 across replicas before bounded password hashing; identity state is rechecked
-under a lock before a session is issued. A generated Connect browser handler
-now tests HTTPS, exact origin, CSRF, secure HttpOnly cookies, refresh, and logout;
-it is not mounted by the development API or deployed. MFA, key custody, account
-management, trusted client-address handling behind ingress, and scheduled
-pruning of old login-limit keys remain release work. The
+under a lock before a session is issued. `serve-app` mounts the generated auth
+and public catalog APIs over direct TLS, applies/verifies migrations before
+binding, checks PostgreSQL on `/healthz`, and prunes expired login-limit keys
+at startup and hourly. It requires an exact
+HTTPS `--origin`, explicit `--listen`, `--tls-cert-file`, `--tls-key-file`,
+`--signer-file`, and `BLAXSMITH_DATABASE_URL`. The signer file is a stable,
+platform-mounted 32-byte Ed25519 seed; its permissions and the TLS private
+key's permissions must deny world access. PostgreSQL must use verified TLS;
+`--allow-insecure-local-database` permits a literal loopback address or Unix
+socket for local development only. For example, after supplying a trusted
+certificate and seed outside this repository:
+
+```sh
+go run ./cmd/blaxsmith serve-app --listen 127.0.0.1:8443 \
+  --origin https://127.0.0.1:8443 \
+  --tls-cert-file /secure/tls.crt --tls-key-file /secure/tls.key \
+  --signer-file /secure/session.seed --allow-insecure-local-database
+```
+
+`serve-app` accepts the direct TLS peer as the client address and ignores
+forwarding headers. An ingress may be used only when it preserves end-to-end
+TLS and the real client IP; trusted proxy support is pending. The loopback
+`serve` preview remains public-catalog-only. MFA, deployment key custody and
+rotation, account management, frontend session integration, and resource
+authorization remain release work. The
 [guide adoption record](docs/adr/0001-technology-guide.md)
 tracks exact baseline choices and current deviations.
 
