@@ -1,8 +1,29 @@
+diff --git a/cmd/ax-controller/main.go b/cmd/ax-controller/main.go
+index bf3b3fb..77679e1 100644
+--- a/cmd/ax-controller/main.go
++++ b/cmd/ax-controller/main.go
+@@ -53,7 +53,7 @@ func main() {
+ 	flag.StringVar(&redisAddr, "redis-addr", "localhost:6379", "Redis server address (e.g. localhost:6379)")
+ 	flag.StringVar(&redisPassword, "redis-password", "", "Redis password")
+ 	flag.StringVar(&redisGroup, "redis-group", "ax-controllers", "Redis stream consumer group")
+-	flag.StringVar(&redisConsumer, "redis-consumer", "", "Redis stream consumer ID (defaults to hostname)")
++	flag.StringVar(&redisConsumer, "redis-consumer", "", "Redis stream consumer name prefix (defaults to hostname; random suffix added)")
+ 	flag.StringVar(&substrateEndpoint, "substrate-endpoint", "api.ate-system.svc.cluster.local:443", "Agent Substrate Control API endpoint")
+ 	flag.StringVar(&substrateAuthority, "substrate-authority", "api.ate-system.svc", "Authority / TLS ServerName for Substrate endpoint")
+ 	flag.StringVar(&substrateTokenFile, "substrate-token-file", "", "Path to bearer token file for Substrate auth")
 diff --git a/internal/controller/worker.go b/internal/controller/worker.go
-index 5f3d1e2..ea4de1f 100644
+index 5f3d1e2..9f16592 100644
 --- a/internal/controller/worker.go
 +++ b/internal/controller/worker.go
-@@ -31,6 +31,8 @@ const (
+@@ -16,6 +16,7 @@ package controller
+ 
+ import (
+ 	"context"
++	"crypto/rand"
+ 	"errors"
+ 	"fmt"
+ 	"log/slog"
+@@ -31,6 +32,8 @@ const (
  	// readRetryDelay is how long the worker waits after a transient error from the
  	// event queue before trying again.
  	readRetryDelay = time.Second
@@ -11,7 +32,28 @@ index 5f3d1e2..ea4de1f 100644
  )
  
  // Worker consumes task events from the store's event queue and reconciles each
-@@ -89,7 +91,40 @@ func (w *Worker) Run(ctx context.Context) error {
+@@ -43,16 +46,17 @@ type Worker struct {
+ 	consumer   string
+ }
+ 
+-// NewWorker creates a worker that joins group as consumer. An empty group uses the
+-// default controller group; an empty consumer derives a unique name from the host.
++// NewWorker creates a worker that joins group with a process-unique consumer
++// name. An empty group uses the default controller group.
+ func NewWorker(s store.Store, reconciler *TaskReconciler, group, consumer string) *Worker {
+ 	if group == "" {
+ 		group = defaultWorkerGroup
+ 	}
+ 	if consumer == "" {
+ 		hostname, _ := os.Hostname()
+-		consumer = fmt.Sprintf("%s-%d", hostname, time.Now().UnixNano()%10000)
++		consumer = hostname
+ 	}
++	consumer += "-" + rand.Text()
+ 	return &Worker{
+ 		store:      s,
+ 		reconciler: reconciler,
+@@ -89,7 +93,40 @@ func (w *Worker) Run(ctx context.Context) error {
  			continue
  		}
  
@@ -53,6 +95,26 @@ index 5f3d1e2..ea4de1f 100644
  			slog.Error("error processing task event",
  				"id", ev.ID,
  				"atespace", ev.Atespace,
+diff --git a/internal/controller/worker_identity_test.go b/internal/controller/worker_identity_test.go
+new file mode 100644
+index 0000000..6b9956a
+--- /dev/null
++++ b/internal/controller/worker_identity_test.go
+@@ -0,0 +1,14 @@
++package controller
++
++import (
++	"strings"
++	"testing"
++)
++
++func TestWorkerConsumerNamesAreUnique(t *testing.T) {
++	first := NewWorker(nil, nil, "group", "controller").consumer
++	second := NewWorker(nil, nil, "group", "controller").consumer
++	if first == second || !strings.HasPrefix(first, "controller-") || !strings.HasPrefix(second, "controller-") {
++		t.Fatalf("worker consumer names are not process-unique: %q, %q", first, second)
++	}
++}
 diff --git a/internal/redisconn/client_test.go b/internal/redisconn/client_test.go
 index aa3beda..a5a9055 100644
 --- a/internal/redisconn/client_test.go

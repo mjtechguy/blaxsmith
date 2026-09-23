@@ -8,13 +8,13 @@
   "command_exit_patch_sha256": "7e62be52ce0910d6011a8db6bc682574477605281365a2f829831b71f76c0907",
   "task_tombstones_patch_sha256": "319f4a7ac03d5df79fa1a6409534c535846e29330c9ca2f54c810da63c224ef1",
   "redis_ha_patch_sha256": "cb7f6d2c4f03c7ad4cb24e559921779da6b6167f467cd2405314135a8c095da7",
-  "consumer_recovery_patch_sha256": "318f1d3cfda64aec7e40896729c5a673951c4dc98c2ae62ed3ea3ea71e322e23",
+  "consumer_recovery_patch_sha256": "f945ddffcc4b06dfa6f96d7fa4e831c4ebddb77ddf45accc7890f5f5952dc8f9",
   "askpass_sha256": "3c5b14494a6a80147507a3d802ca3a4c29714b4b330e63ae27350cda32f2237e",
   "go_version": "go version go1.27.1 darwin/arm64",
   "platform": "linux/amd64",
   "binaries": {
     "ax-server": "d732ad75e881033b2b5ad26a1ac39495977aeb4acd10ae28c6e47653b16d423f",
-    "ax-controller": "79f4d88727499249c3cf8e63603a63f3c110227674d698cf5da95c5d724e26a5",
+    "ax-controller": "ab7ad2d2cda921be0211f80c22c84c97d7276dba98c0bba2aa76b1835025b021",
     "ax-task-runner": "34ec87813800146a6ed8c68060490554316e3bbddb902892a3ca2e7f7245abba"
   }
 }

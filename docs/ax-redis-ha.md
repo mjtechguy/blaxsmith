@@ -36,7 +36,9 @@ records the overlay hash in provenance.
 The [consumer-recovery overlay](../integrations/ax/consumer-recovery.patch)
 adds `XAUTOCLAIM` after one minute of pending idle time. The controller reads
 one event at a time and renews its ownership every ten seconds while it
-reconciles. Renewal failure cancels reconciliation and leaves the entry pending.
+reconciles. Every controller process gets a random consumer-ID suffix, including
+when `--redis-consumer` supplies a readable prefix. Renewal failure cancels
+reconciliation and leaves the entry pending.
 Acknowledgement checks ownership atomically, so a former consumer cannot erase
 an entry another controller claimed. A real Redis restart test verifies the
 pending entry survives, is claimed by a replacement, and rejects the old
