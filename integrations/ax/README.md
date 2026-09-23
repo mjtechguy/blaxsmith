@@ -86,9 +86,10 @@ signing. Its authorizer still has no product grant or measured egress decision.
 The [encrypted-Git overlay](encrypted-git-bootstrap.patch) now accepts a
 synthetic setup credential only inside an envelope for the challenge's fresh
 guest X25519 key. Its signature covers the ciphertext hash. The runner uses
-Git askpass only during the exact HTTPS fetch, clears the credential before
+Git askpass only during the exact HTTPS fetch, verifies the fetched commit
+against the encrypted release before checkout, clears the credential before
 starting the command, and rejects a pre-existing `.git` without the
-workspace-volume marker or with a changed remote. The pinned runner image
+workspace-volume marker or with a changed remote or expected commit. The pinned runner image
 uses `alpine/git@sha256:8c843da8f112867e5d713f3bce85fbe815ec5582bd76bddb2e9121f8c7af9e8f`;
 the synthetic private CA was included in the exact [tested image](../../docs/bootstrap-private-git-probe.json).
 The [live private-Git probe](../../docs/bootstrap-private-git-probe.json) and
@@ -123,8 +124,8 @@ check. Complete network bypass, existing-tunnel revocation, and credential
 boundaries remain open before sensitive or untrusted work.
 
 The combined overlays and connector now authenticate the synthetic worker and
-fence a private checkout. They do not implement product Connection → Grant →
-Binding → Lease authority, pin an exact source revision, fence late results,
+fence a private checkout to the supplied commit. They do not implement product Connection → Grant →
+Binding → Lease authority, bind that commit to an authorized frozen bundle, fence late results,
 or revoke provider credentials. Readiness/initialization markers are not
 authority. The product connector still needs current policy and effective
 egress verification; the dev callback checks only image/pool/gVisor. The

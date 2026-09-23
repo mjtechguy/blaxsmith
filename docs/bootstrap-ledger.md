@@ -48,18 +48,21 @@ rejects a template unless pause and commit use data-only snapshots, resume
 starts from the golden image, and the dev storage location matches the
 configured snapshot bucket. The [live rerun](bootstrap-private-git-probe.json)
 also observed data-only external snapshots after both suspensions. A [bounded
-surface scan](bootstrap-private-git-secret-scan.json) found no token in 129 AX Redis
+surface scan](bootstrap-private-git-secret-scan.json) found no token in 145 AX Redis
 keys, eight runtime container logs, the dev bootstrap database, fixture logs,
 or nine probe evidence files. The owner ended inactive at generation 3.
 
 The dev CLI's authorization callback checks only synthetic runtime properties.
 The product scheduler must still own `Assign`/`Deactivate`, authenticate the
 connector, enforce current grant/binding/policy and measured effective
-isolation/egress, issue and revoke short-lived Git access from an authorized
-Connection/Grant/Binding/Lease, and verify exact repository revision. The
+isolation/egress, and issue and revoke short-lived Git access from an authorized
+Connection/Grant/Binding/Lease. The synthetic connector now supplies a pinned
+Git commit inside the encrypted release; the runner rejects a fetch that does
+not resolve to that commit before checkout, and the live fixture matched it.
+The product must derive that pin from an authorized frozen input bundle. The
 probe's image-owned private CA and root-only synthetic token are not product
 credential custody. The resume marker is inside the workspace and checked for
-the expected repository URL, but is not a signed provenance record. Full
+the expected repository URL and commit, but is not a signed provenance record. Full
 snapshot and memory/alternate-egress/recovery-generation tests remain open.
 Restored database state must not resurrect old authority.
 

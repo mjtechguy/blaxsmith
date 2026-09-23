@@ -55,3 +55,15 @@ func TestRuntimeDataOnlySnapshots(t *testing.T) {
 		})
 	}
 }
+
+func TestGitCommitMustBeCanonicalHash(t *testing.T) {
+	valid := "0123456789abcdef0123456789abcdef01234567"
+	if !validGitCommit(valid) {
+		t.Fatal("Git SHA-1 rejected")
+	}
+	for _, bad := range []string{"main", valid[:39], "g" + valid[1:], "A" + valid[1:]} {
+		if validGitCommit(bad) {
+			t.Fatalf("invalid Git commit accepted: %q", bad)
+		}
+	}
+}

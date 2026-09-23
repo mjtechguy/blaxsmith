@@ -132,18 +132,22 @@ The [private-Git probe](bootstrap-private-git-probe.json) then delivered a
 synthetic token in an X25519/AES-GCM envelope bound to the actor-signed guest
 key and the one-use release. A pinned Git-capable runner fetched an authenticated
 HTTPS fixture before the task command. A missing `/ax` marker on data-snapshot
-resume initially blocked the checkout; the runner now places a URL-bound marker
+resume initially blocked the checkout; the runner now places a URL-and-commit-bound marker
 on the snapshotted workspace volume and rejects an existing `.git` without it.
 The connector now reads the live template's pause/commit/resume snapshot
 settings before each release and denies settings other than data-only pause
 and commit with golden-image resume. The dev policy pins the snapshot bucket.
 The [rerun](bootstrap-private-git-probe.json) observed data-only external
 snapshots after both suspensions and passed private checkout and replay checks.
+The encrypted Git setup now carries an expected commit; the runner checks the
+fetched revision before checkout. A wrong revision failed the focused AX test,
+and the [live rerun](bootstrap-private-git-probe.json) checked the fixture's
+exact SHA before command execution and again after data-snapshot resume.
 The resumed task required a new proof and kept the private checkout. The
 [surface scan](bootstrap-private-git-secret-scan.json) found no token in the
 listed persisted/logged surfaces. This does not prove full-snapshot memory
-exclusion, effective egress on every path, real grant/revocation, or exact
-repository revision; P0-04/05 remain open.
+exclusion, effective egress on every path, real grant/revocation, or trusted
+binding from a frozen input bundle to that SHA; P0-04/05 remain open.
 
 ## Guild adoption map
 

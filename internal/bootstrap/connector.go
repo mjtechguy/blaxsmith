@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -58,8 +59,17 @@ type Connector struct {
 
 type GitSetup struct {
 	RepoURL  string
+	Commit   string
 	Username string
 	Token    []byte
+}
+
+func validGitCommit(commit string) bool {
+	if len(commit) != 40 && len(commit) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(commit)
+	return err == nil && commit == strings.ToLower(commit)
 }
 
 func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) error {
@@ -115,14 +125,15 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 			}
 			defer clear(setup.Token)
 			u, err := url.Parse(setup.RepoURL)
-			if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.Path == "" || u.Path == "/" || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || setup.Username == "" || len(setup.Username) > 128 || len(setup.Token) == 0 || len(setup.Token) > 8192 || strings.ContainsAny(setup.RepoURL+setup.Username+string(setup.Token), "\r\n\x00") {
+			if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.Path == "" || u.Path == "/" || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || !validGitCommit(setup.Commit) || setup.Username == "" || len(setup.Username) > 128 || len(setup.Token) == 0 || len(setup.Token) > 8192 || strings.ContainsAny(setup.RepoURL+setup.Username+string(setup.Token), "\r\n\x00") {
 				return ErrDenied
 			}
 			payload, err := json.Marshal(struct {
 				RepoURL  string `json:"repo_url"`
+				Commit   string `json:"commit"`
 				Username string `json:"username"`
 				Token    string `json:"token"`
-			}{setup.RepoURL, setup.Username, string(setup.Token)})
+			}{setup.RepoURL, setup.Commit, setup.Username, string(setup.Token)})
 			if err != nil {
 				return err
 			}

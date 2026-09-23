@@ -402,6 +402,7 @@ python3 deploy/dev/enable-platform-bootstrap.py "$built" \
 export BLAXSMITH_DEV_SIGNING_KEY_FILE=/opt/blaxsmith-dev/platform-bootstrap-signing.key
 export BLAXSMITH_DEV_LEDGER=1
 export BLAXSMITH_DEV_GIT_REPO=https://10.42.0.1:8443/private.git
+export BLAXSMITH_DEV_GIT_COMMIT="$(git -C "$fixture/source" rev-parse HEAD)"
 export BLAXSMITH_DEV_GIT_TOKEN_FILE="$fixture/token"
 evidence=/opt/blaxsmith-dev/private-git-probe-$(date +%s)
 python3 deploy/dev/probe-bootstrap.py "$(cat "$built/ax-task-runner.image")" \
@@ -413,16 +414,18 @@ systemctl stop "$unit"
 
 The [passing live report](../../docs/bootstrap-private-git-probe.json) and
 [bounded secret scan](../../docs/bootstrap-private-git-secret-scan.json) used
-runner image `sha256:1fa9e93b2d63088c2a0ba673743ad568cceb17a799199e488512d50dbc8608b6`.
+runner image `sha256:32e908293a10e176a4b69f3e12d1a7789418dcda57ac9d732f2c1f7de3d60e81`.
 The current rerun checks the trusted template's data-only pause/commit and
 golden-image resume settings before release, pins the dev snapshot bucket,
-and confirms the suspended actor's external snapshot is data-only.
+and confirms the suspended actor's external snapshot is data-only. The
+encrypted Git setup names the exact fixture commit; the runner rejects a
+different fetched SHA before checkout, and the probe checks the live checkout.
 The [Linux build provenance](../../integrations/ax/provenance-encrypted-git.json)
 records the tested source and binary hashes. PostgreSQL recorded two completed
 releases and an inactive generation-3 owner. The test found no token in AX
 Redis, inspected logs and control-plane objects, Git config, task environment,
 or evidence files. The first resume attempt exposed a missing `/ax` marker;
-the revised runner writes a URL-bound marker to the snapshotted workspace and
+the revised runner writes a URL-and-commit-bound marker to the snapshotted workspace and
 rejects an existing `.git` without it or with a changed remote. This is a
 synthetic proof only: there is no product Grant/Binding/Lease or real provider
 credential, and full-snapshot memory/complete egress/revocation remain open.

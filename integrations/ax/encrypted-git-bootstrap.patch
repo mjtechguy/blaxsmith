@@ -1,9 +1,9 @@
 diff --git a/internal/workspace/git_credential_test.go b/internal/workspace/git_credential_test.go
 new file mode 100644
-index 0000000..d882242
+index 0000000..60542f2
 --- /dev/null
 +++ b/internal/workspace/git_credential_test.go
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,153 @@
 +package workspace
 +
 +import (
@@ -15,6 +15,7 @@ index 0000000..d882242
 +	"os"
 +	"os/exec"
 +	"path/filepath"
++	"strings"
 +	"sync/atomic"
 +	"testing"
 +
@@ -46,6 +47,12 @@ index 0000000..d882242
 +	}
 +	run(source, "add", "README.md")
 +	run(source, "commit", "-m", "initial")
++	revision := exec.Command("git", "-C", source, "rev-parse", "HEAD")
++	commitBytes, err := revision.Output()
++	if err != nil {
++		t.Fatal(err)
++	}
++	commit := strings.TrimSpace(string(commitBytes))
 +	run(root, "clone", "--bare", source, bare)
 +	run(root, "--git-dir", bare, "update-server-info")
 +	var seen atomic.Bool
@@ -78,7 +85,7 @@ index 0000000..d882242
 +	previousCA := GitCAFilePath
 +	GitCAFilePath = caPath
 +	defer func() { GitCAFilePath = previousCA }()
-+	credential := &GitCredential{RepoURL: server.URL + "/private.git", Username: "test-user", Token: []byte(token)}
++	credential := &GitCredential{RepoURL: server.URL + "/private.git", Commit: commit, Username: "test-user", Token: []byte(token)}
 +	dir := filepath.Join(root, "checkout")
 +	if err := os.Mkdir(dir, 0o700); err != nil {
 +		t.Fatal(err)
@@ -97,6 +104,18 @@ index 0000000..d882242
 +	}
 +	if bytes.Contains(config, []byte(token)) || bytes.Contains(output, []byte(token)) {
 +		t.Fatal("token persisted in Git config or diagnostic")
++	}
++	wrongRevision := *credential
++	wrongRevision.Commit = strings.Repeat("0", len(commit))
++	wrongDir := filepath.Join(root, "wrong-revision")
++	if err := os.Mkdir(wrongDir, 0o700); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := fetchRepo(context.Background(), wrongDir, credential.RepoURL, "main", 0, &wrongRevision); err == nil {
++		t.Fatal("credentialed fetch accepted a moved or wrong revision")
++	}
++	if _, err := os.Stat(filepath.Join(wrongDir, "README.md")); !os.IsNotExist(err) {
++		t.Fatal("wrong revision reached checkout")
 +	}
 +	seen.Store(false)
 +	withoutCredential := filepath.Join(root, "without-credential")
@@ -120,6 +139,11 @@ index 0000000..d882242
 +	if err != nil || resumed.IsMaidenRun {
 +		t.Fatalf("data-snapshot resume repeated checkout: %+v, %v", resumed, err)
 +	}
++	wrongResume := *credential
++	wrongResume.Commit = strings.Repeat("0", len(commit))
++	if _, err := SetupWorkspaceWithGitCredential(context.Background(), ws, workspacePath, "", &wrongResume); err == nil {
++		t.Fatal("resumed workspace accepted a different authorized revision")
++	}
 +	resumedConfig := filepath.Join(workspacePath, "private", ".git", "config")
 +	run(root, "config", "-f", resumedConfig, "remote.origin.url", "https://example.invalid/other.git")
 +	if _, err := SetupWorkspaceWithGitCredential(context.Background(), ws, workspacePath, "", credential); err == nil {
@@ -134,7 +158,7 @@ index 0000000..d882242
 +	}
 +}
 diff --git a/internal/workspace/setup.go b/internal/workspace/setup.go
-index a40fe0e..510d212 100644
+index a40fe0e..3912581 100644
 --- a/internal/workspace/setup.go
 +++ b/internal/workspace/setup.go
 @@ -15,7 +15,9 @@
@@ -157,7 +181,7 @@ index a40fe0e..510d212 100644
  // AXDir is the directory inside the container used for AX system state and logs.
  // Tests override it to keep state out of the workspace.
  var AXDir = DefaultAXDir
-@@ -81,6 +86,24 @@ type SetupResult struct {
+@@ -81,6 +86,29 @@ type SetupResult struct {
  // Required Git, skills, bootstrap, and marker failures abort setup. No success
  // marker is written until every required step succeeds.
  func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath string, goal string) (*SetupResult, error) {
@@ -168,8 +192,13 @@ index a40fe0e..510d212 100644
 +// It is never stored in the workspace or passed to checkout hooks/filters.
 +type GitCredential struct {
 +	RepoURL  string
++	Commit   string
 +	Username string
 +	Token    []byte
++}
++
++func (c *GitCredential) marker() string {
++	return fmt.Sprintf("repo_sha256: %x\ncommit: %s\n", sha256.Sum256([]byte(c.RepoURL)), c.Commit)
 +}
 +
 +func (c *GitCredential) Clear() {
@@ -182,7 +211,7 @@ index a40fe0e..510d212 100644
  	if targetPath == "" {
  		targetPath = defaultWorkspacePath
  	}
-@@ -99,10 +122,44 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
+@@ -99,10 +127,44 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
  	}
  
  	markerPath := filepath.Join(AXDir, MarkerName(targetPath))
@@ -195,7 +224,7 @@ index a40fe0e..510d212 100644
  		}
 +		if credential != nil {
 +			marker, err := os.ReadFile(markerPath)
-+			if err != nil || string(marker) != fmt.Sprintf("repo_sha256: %x\n", sha256.Sum256([]byte(credential.RepoURL))) {
++			if err != nil || string(marker) != credential.marker() {
 +				return nil, fmt.Errorf("credentialed workspace marker mismatch")
 +			}
 +			found := false
@@ -227,7 +256,7 @@ index a40fe0e..510d212 100644
  		slog.Info("workspace already initialized; skipping maiden run setup", "path", targetPath)
  		return res, nil
  	} else if !errors.Is(err, os.ErrNotExist) {
-@@ -114,7 +171,7 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
+@@ -114,7 +176,7 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
  
  	if ws != nil && ws.Spec != nil {
  		var gitOK bool
@@ -236,20 +265,20 @@ index a40fe0e..510d212 100644
  		if !gitOK {
  			return res, fmt.Errorf("required Git checkout failed")
  		}
-@@ -135,7 +192,11 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
+@@ -135,7 +197,11 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
  	if err := ctx.Err(); err != nil {
  		return res, err
  	}
 -	if err := writeMarker(markerPath, ws); err != nil {
 +	if credential != nil {
-+		if err := os.WriteFile(markerPath, []byte(fmt.Sprintf("repo_sha256: %x\n", sha256.Sum256([]byte(credential.RepoURL)))), 0o600); err != nil {
++		if err := os.WriteFile(markerPath, []byte(credential.marker()), 0o600); err != nil {
 +			return res, fmt.Errorf("recording credentialed workspace initialization: %w", err)
 +		}
 +	} else if err := writeMarker(markerPath, ws); err != nil {
  		return res, fmt.Errorf("recording workspace initialization: %w", err)
  	}
  	slog.Info("maiden run workspace setup completed successfully", "path", targetPath)
-@@ -144,7 +205,7 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
+@@ -144,7 +210,7 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
  
  // cloneRepos fetches each declared repository into the workspace. It returns the
  // repositories that succeeded and whether every clone succeeded.
@@ -258,7 +287,7 @@ index a40fe0e..510d212 100644
  	var cloned []string
  	ok := true
  	for _, repo := range repos {
-@@ -164,8 +225,15 @@ func cloneRepos(ctx context.Context, repos []*v1alpha1.GitRepo, targetPath strin
+@@ -164,8 +230,15 @@ func cloneRepos(ctx context.Context, repos []*v1alpha1.GitRepo, targetPath strin
  		}
  
  		slog.Info("initializing and fetching git repo", "repo", repo.Repo, "branch", branch, "dir", dest, "depth", repo.Depth)
@@ -275,7 +304,7 @@ index a40fe0e..510d212 100644
  		})
  		if err != nil {
  			ok = false
-@@ -213,15 +281,26 @@ func cloneDestination(repo *v1alpha1.GitRepo, targetPath string) string {
+@@ -213,15 +286,26 @@ func cloneDestination(repo *v1alpha1.GitRepo, targetPath string) string {
  // and checks it out. If depth > 0, it performs a shallow fetch. It is idempotent so it
  // can be retried against a partially initialized directory. Arguments are passed
  // directly to git, never through a shell.
@@ -305,7 +334,21 @@ index a40fe0e..510d212 100644
  		}
  		return nil
  	}
-@@ -249,6 +328,20 @@ func fetchRepo(ctx context.Context, dir, repoURL, branch string, depth int32) ([
+@@ -243,12 +327,34 @@ func fetchRepo(ctx context.Context, dir, repoURL, branch string, depth int32) ([
+ 	if err := run(fetchArgs...); err != nil {
+ 		return combined, err
+ 	}
++	if credential != nil && credential.RepoURL == repoURL {
++		cmd := exec.CommandContext(ctx, "/usr/bin/git", "rev-parse", "--verify", "FETCH_HEAD^{commit}")
++		cmd.Dir, cmd.Env = dir, gitProcessEnv()
++		actual, err := cmd.Output()
++		if err != nil || strings.TrimSpace(string(actual)) != credential.Commit {
++			return combined, fmt.Errorf("fetched Git commit does not match authorized revision")
++		}
++	}
+ 	if err := run("checkout", "-f", "FETCH_HEAD"); err != nil {
+ 		return combined, err
+ 	}
  	return combined, nil
  }
  
@@ -327,10 +370,10 @@ index a40fe0e..510d212 100644
  // when ctx is done and never sleeps after the final attempt.
  func retry(ctx context.Context, attempts int, delay time.Duration, op func() ([]byte, error)) ([]byte, error) {
 diff --git a/runner/bootstrap.go b/runner/bootstrap.go
-index bc201ab..65d0a3f 100644
+index bc201ab..ac142f4 100644
 --- a/runner/bootstrap.go
 +++ b/runner/bootstrap.go
-@@ -1,18 +1,27 @@
+@@ -1,18 +1,28 @@
  package runner
  
  import (
@@ -343,6 +386,7 @@ index bc201ab..65d0a3f 100644
  	"crypto/rand"
 +	"crypto/sha256"
  	"encoding/base64"
++	"encoding/hex"
  	"encoding/json"
  	"fmt"
  	"io"
@@ -358,7 +402,7 @@ index bc201ab..65d0a3f 100644
  	"github.com/google/ax/pkg/apis/v1alpha1"
  )
  
-@@ -22,14 +31,16 @@ const challengeTTL = 2 * time.Minute
+@@ -22,14 +32,16 @@ const challengeTTL = 2 * time.Minute
  // bootstrapGate only releases startup. It never accepts or stores credentials.
  // The signer must independently verify the live actor before signing a release.
  type bootstrapGate struct {
@@ -383,7 +427,7 @@ index bc201ab..65d0a3f 100644
  }
  
  func newBootstrapGate(task *v1alpha1.Task) (*bootstrapGate, error) {
-@@ -86,15 +97,24 @@ func (g *bootstrapGate) challenge(w http.ResponseWriter) {
+@@ -86,15 +98,24 @@ func (g *bootstrapGate) challenge(w http.ResponseWriter) {
  			http.Error(w, "challenge unavailable", http.StatusServiceUnavailable)
  			return
  		}
@@ -413,7 +457,7 @@ index bc201ab..65d0a3f 100644
  	g.mu.Unlock()
  	w.Header().Set("Content-Type", "application/json")
  	_ = json.NewEncoder(w).Encode(response)
-@@ -102,11 +122,12 @@ func (g *bootstrapGate) challenge(w http.ResponseWriter) {
+@@ -102,11 +123,12 @@ func (g *bootstrapGate) challenge(w http.ResponseWriter) {
  
  func (g *bootstrapGate) release(w http.ResponseWriter, r *http.Request) {
  	var request struct {
@@ -430,7 +474,7 @@ index bc201ab..65d0a3f 100644
  	decoder.DisallowUnknownFields()
  	if err := decoder.Decode(&request); err != nil {
  		http.Error(w, "invalid release", http.StatusBadRequest)
-@@ -123,15 +144,117 @@ func (g *bootstrapGate) release(w http.ResponseWriter, r *http.Request) {
+@@ -123,15 +145,121 @@ func (g *bootstrapGate) release(w http.ResponseWriter, r *http.Request) {
  	}
  	g.mu.Lock()
  	message := []byte("blaxsmith/bootstrap/release/v1\n" + request.Nonce + "\n" + strconv.FormatInt(request.ExpiresAt, 10) + "\n" + g.atespace + "\n" + g.task + "\n")
@@ -519,6 +563,7 @@ index bc201ab..65d0a3f 100644
 +func decodeGitPayload(payload []byte, workspaces []*v1alpha1.Workspace) (*workspace.GitCredential, error) {
 +	var setup struct {
 +		RepoURL  string `json:"repo_url"`
++		Commit   string `json:"commit"`
 +		Username string `json:"username"`
 +		Token    string `json:"token"`
 +	}
@@ -531,8 +576,11 @@ index bc201ab..65d0a3f 100644
 +		return nil, fmt.Errorf("invalid trailing payload")
 +	}
 +	u, err := url.Parse(setup.RepoURL)
-+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.Path == "" || u.Path == "/" || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || len(setup.Username) == 0 || len(setup.Username) > 128 || len(setup.Token) == 0 || len(setup.Token) > 8192 || strings.ContainsAny(setup.RepoURL+setup.Username+setup.Token, "\r\n\x00") {
++	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.Path == "" || u.Path == "/" || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || len(setup.Commit) != 40 && len(setup.Commit) != 64 || setup.Commit != strings.ToLower(setup.Commit) || len(setup.Username) == 0 || len(setup.Username) > 128 || len(setup.Token) == 0 || len(setup.Token) > 8192 || strings.ContainsAny(setup.RepoURL+setup.Username+setup.Token, "\r\n\x00") {
 +		return nil, fmt.Errorf("invalid Git credential")
++	}
++	if _, err := hex.DecodeString(setup.Commit); err != nil {
++		return nil, fmt.Errorf("invalid Git commit")
 +	}
 +	for _, ws := range workspaces {
 +		if ws == nil || ws.Spec == nil {
@@ -540,7 +588,7 @@ index bc201ab..65d0a3f 100644
 +		}
 +		for _, repo := range ws.Spec.Git {
 +			if repo != nil && repo.Repo == setup.RepoURL {
-+				return &workspace.GitCredential{RepoURL: setup.RepoURL, Username: setup.Username, Token: []byte(setup.Token)}, nil
++				return &workspace.GitCredential{RepoURL: setup.RepoURL, Commit: setup.Commit, Username: setup.Username, Token: []byte(setup.Token)}, nil
 +			}
 +		}
 +	}

@@ -28,9 +28,12 @@ signer = Ed25519PrivateKey.from_private_bytes(pathlib.Path(os.environ["BLAXSMITH
 report = {"atespace": space, "image": image, "checks": []}
 ledger_mode = os.environ.get("BLAXSMITH_DEV_LEDGER") == "1"
 git_repo = os.environ.get("BLAXSMITH_DEV_GIT_REPO", "")
+git_commit = os.environ.get("BLAXSMITH_DEV_GIT_COMMIT", "")
 git_token_file = os.environ.get("BLAXSMITH_DEV_GIT_TOKEN_FILE", "")
-if (git_repo == "") != (git_token_file == "") or (git_repo and not ledger_mode):
-    sys.exit("private Git probe requires BLAXSMITH_DEV_LEDGER=1 and both Git inputs")
+if (git_repo == "") != (git_token_file == "") or (git_repo == "") != (git_commit == "") or (git_repo and not ledger_mode):
+    sys.exit("private Git probe requires BLAXSMITH_DEV_LEDGER=1 and repository, commit, and token inputs")
+if git_commit:
+    report["git_commit"] = git_commit
 
 
 def kubectl(*args):
@@ -184,7 +187,7 @@ def release(challenge, previous_generation):
         "-signer", os.environ["BLAXSMITH_DEV_SIGNING_KEY_FILE"],
         "-previous-generation", str(previous_generation)]
     if git_repo:
-        args += ["-git-repo", git_repo, "-git-token-file", git_token_file]
+        args += ["-git-repo", git_repo, "-git-commit", git_commit, "-git-token-file", git_token_file]
     result = subprocess.run(args, input=connector_token, text=True, capture_output=True, timeout=90)
     if result.returncode:
         raise RuntimeError(f"ledger connector: {result.stderr.strip()}")
@@ -268,6 +271,9 @@ try:
     if git_repo:
         config = ax("ssh", task, "--", "/bin/sh", "-c",
             "test -f /workspace/private/README.md && test -f /workspace/bootstrap-result && cat /workspace/private/.git/config; for f in /ax/git-success.log /ax/git-error.log; do test ! -f \"$f\" || cat \"$f\"; done")
+        checked_out = ax("ssh", task, "--", "/usr/bin/git", "-C", "/workspace/private", "rev-parse", "HEAD").strip()
+        if checked_out != git_commit:
+            raise RuntimeError("private checkout differs from pinned commit")
         token = pathlib.Path(git_token_file).read_text()
         if token in config or token in ax("ssh", task, "--", "/usr/bin/env"):
             raise RuntimeError("Git token entered workspace config or command environment")
@@ -280,7 +286,7 @@ try:
                      json.dumps(actor_data), json.dumps(template_data)):
             if token in body:
                 raise RuntimeError("Git token entered control-plane object")
-        report["checks"].append("private Git checkout succeeded without token in Git config or command environment")
+        report["checks"].append("private Git checkout matched pinned commit without token in Git config or command environment")
 
     ax("suspend", "task", task)
     assert_data_snapshot(wait_actor_state("ACTOR_STATE_SUSPENDED"))
@@ -314,9 +320,12 @@ try:
             time.sleep(2)
         if resumed is None:
             raise RuntimeError("resumed private workspace could not be inspected")
+        resumed_commit = ax("ssh", task, "--", "/usr/bin/git", "-C", "/workspace/private", "rev-parse", "HEAD").strip()
+        if resumed_commit != git_commit:
+            raise RuntimeError("resumed checkout differs from pinned commit")
         if pathlib.Path(git_token_file).read_text() in resumed:
             raise RuntimeError("Git token appeared in resumed workspace")
-        report["checks"].append("private checkout survived data-snapshot resume without token in Git config")
+        report["checks"].append("pinned private checkout survived data-snapshot resume without token in Git config")
     print("PASS bootstrap gate and resume replay probe", flush=True)
 finally:
     try:

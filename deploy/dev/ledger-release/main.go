@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-	var space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitTokenFile string
+	var space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit, gitTokenFile string
 	var generation int64
 	var finish bool
 	flag.StringVar(&space, "space", "", "AX atespace")
@@ -37,6 +37,7 @@ func main() {
 	flag.StringVar(&signerFile, "signer", "", "root-owned synthetic Ed25519 seed file")
 	flag.StringVar(&database, "database", "host=/var/run/postgresql user=root dbname=blaxsmith_dev sslmode=disable", "dev PostgreSQL connection")
 	flag.StringVar(&gitRepo, "git-repo", "", "synthetic private HTTPS Git repository")
+	flag.StringVar(&gitCommit, "git-commit", "", "expected immutable Git commit")
 	flag.StringVar(&gitTokenFile, "git-token-file", "", "owner-only synthetic Git token file")
 	flag.Int64Var(&generation, "previous-generation", 0, "prior scheduler owner generation")
 	flag.BoolVar(&finish, "finish", false, "deactivate the current synthetic owner")
@@ -48,7 +49,7 @@ func main() {
 		}
 		return
 	}
-	if err := run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitTokenFile, generation); err != nil {
+	if err := run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit, gitTokenFile, generation); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -72,9 +73,10 @@ func deactivate(space, task, database string, generation int64) error {
 		"fenced_generation": scope.OwnerGeneration})
 }
 
-func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitTokenFile string, generation int64) error {
+func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit, gitTokenFile string, generation int64) error {
 	if space == "" || task == "" || !strings.Contains(image, "@sha256:") || pool == "" ||
-		net.ParseIP(routerIP) == nil || routerCA == "" || actorCA == "" || signerFile == "" || (gitRepo == "") != (gitTokenFile == "") {
+		net.ParseIP(routerIP) == nil || routerCA == "" || actorCA == "" || signerFile == "" ||
+		(gitRepo == "") != (gitTokenFile == "") || (gitRepo == "") != (gitCommit == "") {
 		return errors.New("incomplete synthetic connector inputs")
 	}
 	keyInfo, err := os.Stat(signerFile)
@@ -166,7 +168,7 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 			if err != nil || len(token) == 0 || len(token) > 8192 {
 				return bootstrap.GitSetup{}, bootstrap.ErrDenied
 			}
-			return bootstrap.GitSetup{RepoURL: gitRepo, Username: "blaxsmith-probe", Token: token}, nil
+			return bootstrap.GitSetup{RepoURL: gitRepo, Commit: gitCommit, Username: "blaxsmith-probe", Token: token}, nil
 		}
 	}
 	if err := connector.Open(ctx, scope, expected); err != nil {
