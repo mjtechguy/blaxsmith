@@ -9,7 +9,7 @@ RUN test "$(uname -m)" = x86_64 \
 
 FROM deps AS install
 COPY deploy/runtime-proof/verify.mjs ./
-RUN node verify.mjs --packages-only \
+RUN --network=none node verify.mjs --packages-only \
     && ./node_modules/@opencode/cli-linux-x64/bin/opencode --version \
     && node node_modules/@anthropic-ai/claude-code/install.cjs \
     && npm_config_offline=true node node_modules/@opencode/cli/postinstall.mjs \

@@ -14,8 +14,9 @@ pinned Node 24.21.0 Debian/glibc image, `npm ci` includes optional packages
 with all lifecycle scripts suppressed. The verifier rejects a missing or
 mismatched native package before running any CLI. The trusted build then runs
 only Claude Code's pinned `install.cjs` and OpenCode's pinned `postinstall.mjs`
-to stage their binaries. OpenCode's postinstall is forced offline so its npm
-fallback cannot fetch a package outside the lockfile. Build and final-image
+to stage their binaries in a `RUN --network=none` step. OpenCode's postinstall
+is also forced into npm offline mode; its fallback cannot fetch a package
+outside the lockfile. Build and final-image
 smokes check all three exact version outputs. The image defaults to UID/GID
 10001 and contains no model, Git, registry, or cluster credential.
 
@@ -37,11 +38,22 @@ container ran as UID 10001 and repeated all three `--version` checks. In a
 separate disposable container, deleting the OpenCode native package made
 `verify.mjs` fail with `@opencode/cli-linux-x64@2.0.14 missing or mismatched`.
 
+The pinned Claude `install.cjs` reads its package metadata, selects the Linux
+x64 glibc optional package, and hardlinks or copies that package's `claude`
+binary to the wrapper's `bin/claude.exe`; it has no HTTP, fetch, or npm
+download path. The extracted installer SHA-256 was
+`5cbab1670597f492cd4eeb946f3c344ebcb1fbd43c623ba192c9b33744461b85`.
+On this build, source and staged binaries shared an inode and SHA-256
+`1e08503dbdf3c2cb0d706d32f3408277388d1c76ef108673e8fe42c1b322925b`.
+A fresh dependency layer also ran both installers and all version checks under
+`buildah run --network none`; the final Dockerfile now enforces the same
+offline staging step.
+
 | Evidence | SHA-256 |
 |---|---|
 | `package-lock.json` | `0676d33b5e2029e38db0bdd162f393488ca816c0b028c5967db2172ca2e1551c` |
-| OCI image manifest | `b709ae909f9e162d240463bff0fa171ac5b6afaf9b7345cfd19fbc07f1870e86` |
-| OCI archive | `d88627c70179d78d23691fb48cfe9768b5bfc3e47132dd632a8732d0fa339b59` |
+| OCI image manifest | `dce4ceb7315d9cb176f6cdd14e5a635194d21e51cad948ccf05a89cee0058976` |
+| OCI archive | `010ce00be2b29820d17c3df250600efceaa675098a39dbfb86a051ddf0bd35f2` |
 
 The 706 MiB archive is retained on the development node at
 `/root/blaxsmith-runtime-proof/runtime-proof-linux-amd64.oci.tar`; it is not
