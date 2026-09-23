@@ -4,6 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { AuthService, type SessionIdentity } from "./gen/blaxsmith/api/v1/auth_pb";
 
 export const sessionQueryKey = ["browser-session"] as const;
+export const isPublicCatalogRoute = (pathname: string): boolean => pathname === "/tools";
 const workspaceQuery = (query: { queryKey: readonly unknown[] }) => query.queryKey[0] !== sessionQueryKey[0];
 let sessionChannel: BroadcastChannel | undefined;
 

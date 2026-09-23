@@ -71,7 +71,9 @@ same-origin `/api`. Protected routes check `CurrentSession`, attempt one
 `RefreshSession` after an unauthenticated response, and otherwise show local
 login. Mutations fetch a fresh CSRF token. Session and refresh cookies remain
 HttpOnly; the frontend stores neither token. Missing or unhealthy auth service
-shows an explicit unavailable page. Sign-out and identity changes cancel and
+shows an explicit unavailable page on protected routes. The exact `/tools`
+route remains a public, read-only catalog with guest navigation and no account
+controls; it does not open the workspace. Sign-out and identity changes cancel and
 remove workspace queries, while a same-browser session-change message clears
 other tabs. A bounded Web Lock serializes cookie rotation across tabs and
 rechecks access after waiting; browsers without Web Locks or BroadcastChannel
@@ -80,11 +82,12 @@ fail closed.
 This is a local-account slice, not a complete login-policy UI. AuthService does
 not yet expose which methods an organization permits, so OIDC-only and MFA
 method selection cannot be rendered accurately. First-owner setup, recovery,
-and OIDC are separate work. The current public preview chart also lacks the
-authenticated app endpoint; route protection correctly shows unavailable
-there until the same-origin app deployment is wired.
+and OIDC are separate work. The current public preview chart lacks the
+authenticated app endpoint, so only its existing catalog remains usable until
+the same-origin app deployment is wired.
 
 Validation: Node 24 production build/typecheck, an auth concurrency check,
-and browser checks of missing-endpoint, direct protected-route redirect,
-local sign-in, failed sign-in, sign-out, two-tab sign-out propagation, and
-mobile login/navigation against a temporary mock API.
+the real public `blaxsmith serve` catalog on `/tools` without AuthService, and
+browser checks of blocked workspace, direct protected-route redirect, local
+sign-in, failed sign-in, sign-out, two-tab sign-out propagation, and mobile
+login/navigation against a temporary mock API.

@@ -12,7 +12,7 @@ function applyTheme(theme: Theme) {
     (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches));
 }
 
-export function Shell({ children, session }: { children: ReactNode; session: SessionIdentity }) {
+export function Shell({ children, session }: { children: ReactNode; session?: SessionIdentity }) {
   const pathname = useLocation({ select: (location) => location.pathname });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -42,7 +42,7 @@ export function Shell({ children, session }: { children: ReactNode; session: Ses
   }, [mobileOpen]);
 
   const nav = [
-    { to: "/" as const, label: "Workspace", icon: LayoutDashboard },
+    ...(session ? [{ to: "/" as const, label: "Workspace", icon: LayoutDashboard }] : []),
     { to: "/tools" as const, label: "Tools & runtimes", icon: Wrench },
   ];
   const pageName = pathname === "/tools" ? "Tools & runtimes" : "Workspace";
@@ -70,7 +70,7 @@ export function Shell({ children, session }: { children: ReactNode; session: Ses
     <a className="skip-link" href="#main-content">Skip to content</a>
     <aside className="sidebar" aria-label="Primary navigation">
       <div className="sidebar-brand">
-        <Link to="/" className="brand-link" aria-label="Blaxsmith home">
+        <Link to={session ? "/" : "/tools"} className="brand-link" aria-label="Blaxsmith home">
           <span className="brand-mark"><Hammer size={16} strokeWidth={2.3} aria-hidden="true" /></span>
           <span className="brand-copy"><strong>Blaxsmith</strong><small>Engineering workspace</small></span>
         </Link>
@@ -101,8 +101,8 @@ export function Shell({ children, session }: { children: ReactNode; session: Ses
           <button type="button" className="icon-button theme-button" onClick={() => setTheme(nextTheme)} aria-label={`Theme: ${theme}. Switch to ${nextTheme}`} title={`Theme: ${theme}`}>
             {theme === "dark" ? <Moon size={17} /> : <Sun size={17} />}
           </button>
-          <span className="account-role" title={`Signed in as ${session.role}`}>{session.role}</span>
-          <button type="button" className="secondary-button sign-out" onClick={() => void signOut()} disabled={signingOut}><LogOut size={15} aria-hidden="true" />{signingOut ? "Signing out…" : "Sign out"}</button>
+          {session ? <><span className="account-role" title={`Signed in as ${session.role}`}>{session.role}</span>
+            <button type="button" className="secondary-button sign-out" onClick={() => void signOut()} disabled={signingOut}><LogOut size={15} aria-hidden="true" />{signingOut ? "Signing out…" : "Sign out"}</button></> : null}
         </div>
       </header>
       {signOutError ? <div className="account-error" role="alert">Sign-out could not be completed. Please try again.</div> : null}

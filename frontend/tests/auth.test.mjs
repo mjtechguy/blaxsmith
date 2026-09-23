@@ -39,7 +39,9 @@ test("concurrent tabs recheck the access cookie before rotating refresh", async 
   };
 
   try {
-    const { currentSession } = await server.ssrLoadModule("/src/auth.ts");
+    const { currentSession, isPublicCatalogRoute } = await server.ssrLoadModule("/src/auth.ts");
+    assert.equal(isPublicCatalogRoute("/tools"), true);
+    for (const path of ["/", "/login", "/tools/other", "//tools"]) assert.equal(isPublicCatalogRoute(path), false);
     const [first, second] = await Promise.all([currentSession(), currentSession()]);
     assert.equal(first.principalId, "user");
     assert.equal(second.principalId, "user");
