@@ -46,3 +46,4 @@ jobs:
           echo "$RUNNER_TEMP/linux-amd64" >> "$GITHUB_PATH"
       - run: deploy/charts/blaxsmith-preview/test.sh
       - run: deploy/charts/blaxsmith-preview/smoke.sh
+      - run: docker build --target app -t blaxsmith-app:ci .
