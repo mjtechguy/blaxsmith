@@ -37,3 +37,27 @@ real product data and authorization rather than importing cluster fixtures.
 This is the P0-10 source and dependency inventory, not P0-10 acceptance. The
 route/component implementation, exact license path, product screenshots,
 browser journeys, and measured performance still need proof.
+
+## First original implementation
+
+The `frontend/` preview now uses the pinned React/Vite/Tailwind/TanStack stack
+with an original shared shell, light/dark/system theme, responsive navigation,
+page header and state components, and a TanStack Table v9 catalog. It follows
+the reference's 240/64 px sidebar, 56 px topbar, 1800 px page width, and
+interaction rules without importing AGPL source. The workspace route honestly
+shows an empty state; the `+ Add runtime` action is disabled until verified
+installation exists. There is no placeholder login or configuration drawer.
+
+`blaxsmith serve` exposes only public tool-release metadata on loopback. The
+catalog fetches up to 20 non-prerelease versions per tool, shows publisher
+stable tags and package integrity, and supports search, tool filter, date and
+numeric-version sorting, and pagination. A version shown here is discoverable,
+not an approved or installed runtime.
+
+Validation on 2026-09-22: `make check`, a Node 24 production build/typecheck,
+direct API fetch, and browser checks of desktop light/dark, mobile navigation,
+table filter/search/empty state, and direct `/tools` reload. This is a frontend
+foundation, not the P0-10 or P1 frontend acceptance: authenticated scope and
+RBAC, forms, installed-tool actions, login, routes for real work, visual
+baselines, and production deployment still need implementation. Decide whether
+to accept Astronomer's AGPL obligations before any direct source port.

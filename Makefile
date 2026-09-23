@@ -1,4 +1,4 @@
-.PHONY: test check build example
+.PHONY: test check build example web-check
 
 test:
 	go test ./...
@@ -11,3 +11,6 @@ build:
 
 example:
 	go run ./cmd/blaxsmith check --recipe examples/guild/recipe.json --spec examples/guild/spec.md --transcript examples/guild/transcript.md --scope examples/guild
+
+web-check:
+	cd frontend && npm ci && npm run build

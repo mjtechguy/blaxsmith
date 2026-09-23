@@ -2,7 +2,7 @@
 
 An enterprise web workspace for composable AI engineering teams, built on AX.
 
-**Status:** implementation started. The first working slice compiles Git-backed engineering recipes into immutable input bundles and runs Guild's pinned Forge validator. The web workspace, scheduler, and tool adapters are not implemented yet. The [main implementation plan](agent-factory-plan.md) contains the agreed architecture, phased tasks, and acceptance criteria.
+**Status:** implementation started. Git-backed recipes compile into immutable input bundles and run Guild's pinned Forge validator. A read-only web preview lists current Codex, Claude Code, and OpenCode publisher releases. Identity, the scheduler, and tool execution adapters are still being built. The [main implementation plan](agent-factory-plan.md) contains the agreed architecture, phased tasks, and acceptance criteria.
 
 ## Run the first slice
 
@@ -56,7 +56,23 @@ includes a recent tool-version catalog with latest stable selected for new
 installations and exact runtime pins afterward. The first [read-only catalog
 command](docs/tool-runtime-catalog.md) now lists recent publisher-backed CLI
 versions and their exact package integrity metadata with `blaxsmith tools`.
-The catalog UI, verified installation, and launch adapters are not implemented yet.
+The [catalog web preview](docs/frontend-adoption.md) lists these releases but cannot approve or install them. Verified installation and launch adapters are not implemented yet.
+
+## Run the web preview
+
+Requires Go 1.27.1 and Node 24.21+ (before Node 25). In separate terminals:
+
+```sh
+go run ./cmd/blaxsmith serve
+```
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+Open `http://127.0.0.1:3000/tools`. The API binds only to `127.0.0.1:8001`; Vite proxies `/api` in development. `make web-check` builds the frontend and checks its types. This preview contains public release metadata only and has no login or access to product records.
 
 ## Workspace layout
 
@@ -74,7 +90,7 @@ The private repository is [mjtechguy/blaxsmith](https://github.com/mjtechguy/bla
 - **Local development:** React/Vite and Go run locally, Compose supplies supporting services, and agent work runs on a real AX/Substrate execution cluster.
 - **Cluster enrollment:** an authorized administrator registers a pool, installs the connector and validated runtime prerequisites, and completes scoped enrollment before it becomes eligible for work.
 
-There is no custom Blaxsmith operator or Compose-based agent runtime in the initial scope. Product Helm charts, Compose files, and web/API commands will be added during implementation; they do not exist yet. The recipe CLI and development runtime inputs described above are runnable now.
+There is no custom Blaxsmith operator or Compose-based agent runtime in the initial scope. Product Helm charts and Compose files are still planned. The recipe CLI, public catalog API, and local web preview described above are runnable now.
 
 ## Beginning implementation
 

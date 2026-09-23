@@ -23,13 +23,16 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: blaxsmith <check|freeze|tools> [flags]")
+		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve> [flags]")
 	}
 	if os.Args[1] == "tools" {
 		return listTools(os.Args[2:])
 	}
+	if os.Args[1] == "serve" {
+		return serve(os.Args[2:])
+	}
 	if os.Args[1] != "check" && os.Args[1] != "freeze" {
-		return fmt.Errorf("usage: blaxsmith <check|freeze|tools> [flags]")
+		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve> [flags]")
 	}
 	var in recipe.Input
 	flags := flag.NewFlagSet(os.Args[1], flag.ContinueOnError)
