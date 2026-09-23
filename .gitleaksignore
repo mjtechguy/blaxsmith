@@ -6,3 +6,5 @@ b2f016c942e8f89953ac420aa60b1b46885ad3c6:integrations/ax/provenance-encrypted-gi
 5fa879e1481041a0b28f4cb6a3dd73371c161ace:integrations/ax/provenance-platform-key.json:generic-api-key:6
 1662c23d7168d07cd19af9ff3eff6d99c3e8967d:integrations/substrate/provenance-actor-fence.json:generic-api-key:5
 96a586ed455e65f3b50246ec332e3ba2ad3789b7:integrations/substrate/provenance-router-auth.json:generic-api-key:5
+# SHA-256 of the reviewed AX platform-key patch in the tombstone build provenance.
+13d5f12ab6dd60a2e0bacdd069b5efc063034159:integrations/ax/provenance-task-tombstones.json:generic-api-key:6
