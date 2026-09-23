@@ -88,6 +88,13 @@ def wait_actor_state(state, seconds=90):
     raise RuntimeError(f"actor did not reach {state}")
 
 
+def assert_data_snapshot(actor):
+    snapshot = actor.get("status", {}).get("externalSnapshot", {})
+    if snapshot.get("contentScope") != "SNAPSHOT_CONTENT_SCOPE_DATA" or not snapshot.get("snapshotUri"):
+        raise RuntimeError("suspended actor lacks a data-only external snapshot")
+    report["checks"].append("suspended actor persisted a data-only external snapshot")
+
+
 def wait_template_ready():
     deadline = time.monotonic() + 240
     while time.monotonic() < deadline:
@@ -276,7 +283,7 @@ try:
         report["checks"].append("private Git checkout succeeded without token in Git config or command environment")
 
     ax("suspend", "task", task)
-    wait_actor_state("ACTOR_STATE_SUSPENDED")
+    assert_data_snapshot(wait_actor_state("ACTOR_STATE_SUSPENDED"))
     wait_template_ready()
     ax("resume", "task", task)
     wait_actor_state("ACTOR_STATE_RUNNING")
@@ -314,7 +321,7 @@ try:
 finally:
     try:
         ax("suspend", "task", task)
-        wait_actor_state("ACTOR_STATE_SUSPENDED")
+        assert_data_snapshot(wait_actor_state("ACTOR_STATE_SUSPENDED"))
         report["final_phase"] = "Suspended"
     except Exception as error:
         report["cleanup_error"] = str(error)

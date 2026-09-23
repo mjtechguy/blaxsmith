@@ -414,6 +414,9 @@ systemctl stop "$unit"
 The [passing live report](../../docs/bootstrap-private-git-probe.json) and
 [bounded secret scan](../../docs/bootstrap-private-git-secret-scan.json) used
 runner image `sha256:1fa9e93b2d63088c2a0ba673743ad568cceb17a799199e488512d50dbc8608b6`.
+The current rerun checks the trusted template's data-only pause/commit and
+golden-image resume settings before release, pins the dev snapshot bucket,
+and confirms the suspended actor's external snapshot is data-only.
 The [Linux build provenance](../../integrations/ax/provenance-encrypted-git.json)
 records the tested source and binary hashes. PostgreSQL recorded two completed
 releases and an inactive generation-3 owner. The test found no token in AX

@@ -27,6 +27,16 @@ type Runtime struct {
 	WorkerPod          string
 	WorkerPodUID       string
 	WorkerPool         string
+	SnapshotOnPause    string
+	SnapshotOnCommit   string
+	ResumeFromData     string
+	SnapshotStorage    string
+}
+
+func (r Runtime) DataOnlySnapshots() bool {
+	return r.SnapshotOnPause == "SNAPSHOT_CONTENT_SCOPE_DATA" &&
+		r.SnapshotOnCommit == "SNAPSHOT_CONTENT_SCOPE_DATA" &&
+		r.ResumeFromData == "RESUME_SOURCE_GOLDEN" && r.SnapshotStorage != ""
 }
 
 // Connector opens the pre-workspace gate and can deliver one authorized Git
@@ -57,7 +67,7 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 		len(c.Signer) != ed25519.PrivateKeySize || c.Current == nil || c.Authorize == nil ||
 		expected.Actor.Atespace == "" || expected.Actor.Name == "" || expected.Actor.UID == "" ||
 		expected.TemplateUID == "" || expected.Image == "" || expected.SandboxClass == "" || expected.BootstrapPublicKey == "" ||
-		expected.WorkerPod == "" || expected.WorkerPodUID == "" || expected.WorkerPool == "" {
+		expected.WorkerPod == "" || expected.WorkerPodUID == "" || expected.WorkerPool == "" || !expected.DataOnlySnapshots() {
 		return ErrDenied
 	}
 	if expected.BootstrapPublicKey != base64.StdEncoding.EncodeToString(c.Signer.Public().(ed25519.PublicKey)) {

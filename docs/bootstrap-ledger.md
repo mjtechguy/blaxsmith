@@ -43,8 +43,12 @@ the connector encrypted a synthetic token for that key with AES-GCM and signed
 the ciphertext hash into the one-use release. The runner handed the token only
 to Git's askpass during the matching HTTPS fetch; it was absent from the Task,
 Workspace, ActorTemplate, Git config, command environment, and inspected logs.
-The private checkout and data-snapshot resume passed. A [bounded surface
-scan](bootstrap-private-git-secret-scan.json) found no token in 121 AX Redis
+The private checkout and data-snapshot resume passed. The connector now
+rejects a template unless pause and commit use data-only snapshots, resume
+starts from the golden image, and the dev storage location matches the
+configured snapshot bucket. The [live rerun](bootstrap-private-git-probe.json)
+also observed data-only external snapshots after both suspensions. A [bounded
+surface scan](bootstrap-private-git-secret-scan.json) found no token in 129 AX Redis
 keys, eight runtime container logs, the dev bootstrap database, fixture logs,
 or nine probe evidence files. The owner ended inactive at generation 3.
 

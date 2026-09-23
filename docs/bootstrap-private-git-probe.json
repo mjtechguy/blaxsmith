@@ -1,5 +1,5 @@
 {
-  "atespace": "blaxsmith-gate-4c38012af8",
+  "atespace": "blaxsmith-gate-8611e80488",
   "image": "127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:1fa9e93b2d63088c2a0ba673743ad568cceb17a799199e488512d50dbc8608b6",
   "checks": [
     "task-signer-override blocked before actor launch",
@@ -8,26 +8,30 @@
     "workspace blocked before release",
     "signed release starts workspace",
     "private Git checkout succeeded without token in Git config or command environment",
+    "suspended actor persisted a data-only external snapshot",
     "data-snapshot resume requires fresh release; replay denied",
-    "private checkout survived data-snapshot resume without token in Git config"
+    "private checkout survived data-snapshot resume without token in Git config",
+    "suspended actor persisted a data-only external snapshot"
   ],
   "ledger_releases": [
     {
-      "actor_uid": "584181c2-07dd-4876-b61c-fcd5cf74b647",
-      "attempt_id": "blaxsmith-gate-4c38012af8/gated-runner",
+      "actor_uid": "736c8f72-450f-4393-aafd-ca752701b9be",
+      "attempt_id": "blaxsmith-gate-8611e80488/gated-runner",
       "cluster_id": "dev-cluster",
       "opened": true,
       "owner_generation": 1,
-      "template_uid": "28af3813-d499-4938-8cd7-9326a2790226",
+      "snapshot_scope": "SNAPSHOT_CONTENT_SCOPE_DATA",
+      "template_uid": "87b57607-fb3d-4a9a-ade1-03eb41ab0934",
       "worker_pool": "blaxsmith-smoke"
     },
     {
-      "actor_uid": "584181c2-07dd-4876-b61c-fcd5cf74b647",
-      "attempt_id": "blaxsmith-gate-4c38012af8/gated-runner",
+      "actor_uid": "736c8f72-450f-4393-aafd-ca752701b9be",
+      "attempt_id": "blaxsmith-gate-8611e80488/gated-runner",
       "cluster_id": "dev-cluster",
       "opened": true,
       "owner_generation": 2,
-      "template_uid": "28af3813-d499-4938-8cd7-9326a2790226",
+      "snapshot_scope": "SNAPSHOT_CONTENT_SCOPE_DATA",
+      "template_uid": "87b57607-fb3d-4a9a-ade1-03eb41ab0934",
       "worker_pool": "blaxsmith-smoke"
     }
   ],

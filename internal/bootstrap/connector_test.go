@@ -33,3 +33,25 @@ func TestConnectorDoesNotFollowRedirectWithToken(t *testing.T) {
 		t.Fatalf("redirect was followed or accepted: err=%v, forwarded=%t", err, forwarded)
 	}
 }
+
+func TestRuntimeDataOnlySnapshots(t *testing.T) {
+	valid := Runtime{SnapshotOnPause: "SNAPSHOT_CONTENT_SCOPE_DATA", SnapshotOnCommit: "SNAPSHOT_CONTENT_SCOPE_DATA",
+		ResumeFromData: "RESUME_SOURCE_GOLDEN", SnapshotStorage: "gs://test/"}
+	if !valid.DataOnlySnapshots() {
+		t.Fatal("data-only snapshot policy rejected")
+	}
+	for name, change := range map[string]func(*Runtime){
+		"pause memory":  func(r *Runtime) { r.SnapshotOnPause = "SNAPSHOT_CONTENT_SCOPE_ALL" },
+		"commit memory": func(r *Runtime) { r.SnapshotOnCommit = "SNAPSHOT_CONTENT_SCOPE_ALL" },
+		"resume memory": func(r *Runtime) { r.ResumeFromData = "RESUME_SOURCE_SNAPSHOT" },
+		"unknown store": func(r *Runtime) { r.SnapshotStorage = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			change(&candidate)
+			if candidate.DataOnlySnapshots() {
+				t.Fatal("unsafe snapshot policy accepted")
+			}
+		})
+	}
+}

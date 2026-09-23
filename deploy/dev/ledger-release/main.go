@@ -124,7 +124,7 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 	if err != nil {
 		return err
 	}
-	if expected.Image != image || expected.WorkerPool != pool || expected.SandboxClass != "SANDBOX_CLASS_GVISOR" {
+	if expected.Image != image || expected.WorkerPool != pool || expected.SandboxClass != "SANDBOX_CLASS_GVISOR" || !dataSnapshots(expected) {
 		return bootstrap.ErrDenied
 	}
 	ledger := bootstrap.NewLedger(poolDB)
@@ -150,7 +150,7 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 		RouterURL: "https://atenet-router.ate-system.svc", Roots: actorRoots, Signer: signer,
 		Token: func(context.Context) (string, error) { return token, nil }, Current: current,
 		Authorize: func(_ context.Context, runtime bootstrap.Runtime) error {
-			if runtime.Image != image || runtime.WorkerPool != pool || runtime.SandboxClass != "SANDBOX_CLASS_GVISOR" {
+			if runtime.Image != image || runtime.WorkerPool != pool || runtime.SandboxClass != "SANDBOX_CLASS_GVISOR" || !dataSnapshots(runtime) {
 				return bootstrap.ErrDenied
 			}
 			return nil // Synthetic gate only: no credential or repository is issued.
@@ -176,12 +176,17 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 		"cluster_id": scope.ClusterID, "attempt_id": scope.AttemptID,
 		"owner_generation": scope.OwnerGeneration, "actor_uid": expected.Actor.UID,
 		"template_uid": expected.TemplateUID, "worker_pool": expected.WorkerPool,
-		"opened": true,
+		"snapshot_scope": expected.SnapshotOnPause,
+		"opened":         true,
 	}); err != nil {
 		return err
 	}
 	completed = true
 	return nil
+}
+
+func dataSnapshots(runtime bootstrap.Runtime) bool {
+	return runtime.DataOnlySnapshots() && runtime.SnapshotStorage == "gs://ate-snapshots/blaxsmith/"
 }
 
 func observe(ctx context.Context, space, task string) (bootstrap.Runtime, error) {
@@ -226,7 +231,11 @@ func observe(ctx context.Context, space, task string) (bootstrap.Runtime, error)
 				Command []string
 				Env     []struct{ Name, Value string }
 			}
-			SandboxConfig struct{ SandboxClass string }
+			SandboxConfig   struct{ SandboxClass string }
+			SnapshotsConfig struct {
+				OnPause, OnCommit, StorageLocation string
+				OnResume                           struct{ FromData string }
+			}
 		}
 	}
 	if err := json.Unmarshal(templateJSON, &templates); err != nil || len(templates.ActorTemplates) != 1 {
@@ -250,5 +259,7 @@ func observe(ctx context.Context, space, task string) (bootstrap.Runtime, error)
 		TemplateUID: tmpl.Metadata.UID, Image: tmpl.Containers[0].Image,
 		SandboxClass: tmpl.SandboxConfig.SandboxClass, BootstrapPublicKey: publicKey,
 		WorkerPod: a.Status.WorkerAssignment.WorkerPod, WorkerPodUID: a.Status.WorkerAssignment.WorkerPodUID,
-		WorkerPool: a.Status.WorkerAssignment.WorkerPool}, nil
+		WorkerPool:      a.Status.WorkerAssignment.WorkerPool,
+		SnapshotOnPause: tmpl.SnapshotsConfig.OnPause, SnapshotOnCommit: tmpl.SnapshotsConfig.OnCommit,
+		ResumeFromData: tmpl.SnapshotsConfig.OnResume.FromData, SnapshotStorage: tmpl.SnapshotsConfig.StorageLocation}, nil
 }
