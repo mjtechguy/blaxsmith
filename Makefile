@@ -13,6 +13,7 @@ example:
 	go run ./cmd/blaxsmith check --recipe examples/guild/recipe.json --spec examples/guild/spec.md --transcript examples/guild/transcript.md --scope examples/guild
 
 web-check:
+	cd frontend && npm run check:ui
 	cd frontend && npm ci && npm run build
 	cd frontend && npm run test:auth
 	cd frontend && npm run test:workflow
