@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file blaxsmith/api/v1/workflow.proto.
  */
 export const file_blaxsmith_api_v1_workflow: GenFile = /*@__PURE__*/
-  fileDesc("Ch9ibGF4c21pdGgvYXBpL3YxL3dvcmtmbG93LnByb3RvEhBibGF4c21pdGguYXBpLnYxIkUKB1Byb2plY3QSCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEhIKCmNyZWF0ZWRfYXQYBCABKAkipwEKA1J1bhIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhIKCmxhdW5jaF9rZXkYAyABKAkSFQoNc291cmNlX2NvbW1pdBgEIAEoCRIVCg1idW5kbGVfc2hhMjU2GAUgASgJEhsKE3ZlcmlmaWNhdGlvbl9zaGEyNTYYBiABKAkSDQoFc3RhdGUYByABKAkSEgoKY3JlYXRlZF9hdBgIIAEoCSJzCg1Xb3JrZmxvd0V2ZW50EgoKAmlkGAEgASgDEg4KBnJ1bl9pZBgCIAEoCRIPCgd0YXNrX2lkGAMgASgJEhIKCmF0dGVtcHRfaWQYBCABKAkSDAoEa2luZBgFIAEoCRITCgtvY2N1cnJlZF9hdBgGIAEoCSIyChRDcmVhdGVQcm9qZWN0UmVxdWVzdBIMCgRzbHVnGAEgASgJEgwKBG5hbWUYAiABKAkiQwoVQ3JlYXRlUHJvamVjdFJlc3BvbnNlEioKB3Byb2plY3QYASABKAsyGS5ibGF4c21pdGguYXBpLnYxLlByb2plY3QiJwoRR2V0UHJvamVjdFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCSJAChJHZXRQcm9qZWN0UmVzcG9uc2USKgoHcHJvamVjdBgBIAEoCzIZLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdCI8ChNMaXN0UHJvamVjdHNSZXF1ZXN0EhEKCXBhZ2Vfc2l6ZRgBIAEoBRISCgpwYWdlX3Rva2VuGAIgASgJIlwKFExpc3RQcm9qZWN0c1Jlc3BvbnNlEisKCHByb2plY3RzGAEgAygLMhkuYmxheHNtaXRoLmFwaS52MS5Qcm9qZWN0EhcKD25leHRfcGFnZV90b2tlbhgCIAEoCSIfCg1HZXRSdW5SZXF1ZXN0Eg4KBnJ1bl9pZBgBIAEoCSI0Cg5HZXRSdW5SZXNwb25zZRIiCgNydW4YASABKAsyFS5ibGF4c21pdGguYXBpLnYxLlJ1biJMCg9MaXN0UnVuc1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIRCglwYWdlX3NpemUYAiABKAUSEgoKcGFnZV90b2tlbhgDIAEoCSJQChBMaXN0UnVuc1Jlc3BvbnNlEiMKBHJ1bnMYASADKAsyFS5ibGF4c21pdGguYXBpLnYxLlJ1bhIXCg9uZXh0X3BhZ2VfdG9rZW4YAiABKAkiRQoSRXZlbnRzQWZ0ZXJSZXF1ZXN0Eg4KBnJ1bl9pZBgBIAEoCRIQCghhZnRlcl9pZBgCIAEoAxINCgVsaW1pdBgDIAEoBSJdChNFdmVudHNBZnRlclJlc3BvbnNlEi8KBmV2ZW50cxgBIAMoCzIfLmJsYXhzbWl0aC5hcGkudjEuV29ya2Zsb3dFdmVudBIVCg1uZXh0X2FmdGVyX2lkGAIgASgDMqcECg9Xb3JrZmxvd1NlcnZpY2USYAoNQ3JlYXRlUHJvamVjdBImLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlUHJvamVjdFJlcXVlc3QaJy5ibGF4c21pdGguYXBpLnYxLkNyZWF0ZVByb2plY3RSZXNwb25zZRJXCgpHZXRQcm9qZWN0EiMuYmxheHNtaXRoLmFwaS52MS5HZXRQcm9qZWN0UmVxdWVzdBokLmJsYXhzbWl0aC5hcGkudjEuR2V0UHJvamVjdFJlc3BvbnNlEl0KDExpc3RQcm9qZWN0cxIlLmJsYXhzbWl0aC5hcGkudjEuTGlzdFByb2plY3RzUmVxdWVzdBomLmJsYXhzbWl0aC5hcGkudjEuTGlzdFByb2plY3RzUmVzcG9uc2USSwoGR2V0UnVuEh8uYmxheHNtaXRoLmFwaS52MS5HZXRSdW5SZXF1ZXN0GiAuYmxheHNtaXRoLmFwaS52MS5HZXRSdW5SZXNwb25zZRJRCghMaXN0UnVucxIhLmJsYXhzbWl0aC5hcGkudjEuTGlzdFJ1bnNSZXF1ZXN0GiIuYmxheHNtaXRoLmFwaS52MS5MaXN0UnVuc1Jlc3BvbnNlEloKC0V2ZW50c0FmdGVyEiQuYmxheHNtaXRoLmFwaS52MS5FdmVudHNBZnRlclJlcXVlc3QaJS5ibGF4c21pdGguYXBpLnYxLkV2ZW50c0FmdGVyUmVzcG9uc2VCxQEKFGNvbS5ibGF4c21pdGguYXBpLnYxQg1Xb3JrZmxvd1Byb3RvUAFaPGdpdGh1Yi5jb20vbWp0ZWNoZ3V5L2JsYXhzbWl0aC9nZW4vZ28vYmxheHNtaXRoL2FwaS92MTthcGl2MaICA0JBWKoCEEJsYXhzbWl0aC5BcGkuVjHKAhBCbGF4c21pdGhcQXBpXFYx4gIcQmxheHNtaXRoXEFwaVxWMVxHUEJNZXRhZGF0YeoCEkJsYXhzbWl0aDo6QXBpOjpWMWIGcHJvdG8z");
+  fileDesc("Ch9ibGF4c21pdGgvYXBpL3YxL3dvcmtmbG93LnByb3RvEhBibGF4c21pdGguYXBpLnYxIkUKB1Byb2plY3QSCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEhIKCmNyZWF0ZWRfYXQYBCABKAkipwEKA1J1bhIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhIKCmxhdW5jaF9rZXkYAyABKAkSFQoNc291cmNlX2NvbW1pdBgEIAEoCRIVCg1idW5kbGVfc2hhMjU2GAUgASgJEhsKE3ZlcmlmaWNhdGlvbl9zaGEyNTYYBiABKAkSDQoFc3RhdGUYByABKAkSEgoKY3JlYXRlZF9hdBgIIAEoCSJzCg1Xb3JrZmxvd0V2ZW50EgoKAmlkGAEgASgDEg4KBnJ1bl9pZBgCIAEoCRIPCgd0YXNrX2lkGAMgASgJEhIKCmF0dGVtcHRfaWQYBCABKAkSDAoEa2luZBgFIAEoCRITCgtvY2N1cnJlZF9hdBgGIAEoCSIyChRDcmVhdGVQcm9qZWN0UmVxdWVzdBIMCgRzbHVnGAEgASgJEgwKBG5hbWUYAiABKAkiQwoVQ3JlYXRlUHJvamVjdFJlc3BvbnNlEioKB3Byb2plY3QYASABKAsyGS5ibGF4c21pdGguYXBpLnYxLlByb2plY3QiJwoRR2V0UHJvamVjdFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCSJAChJHZXRQcm9qZWN0UmVzcG9uc2USKgoHcHJvamVjdBgBIAEoCzIZLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdCI8ChNMaXN0UHJvamVjdHNSZXF1ZXN0EhEKCXBhZ2Vfc2l6ZRgBIAEoBRISCgpwYWdlX3Rva2VuGAIgASgJIlwKFExpc3RQcm9qZWN0c1Jlc3BvbnNlEisKCHByb2plY3RzGAEgAygLMhkuYmxheHNtaXRoLmFwaS52MS5Qcm9qZWN0EhcKD25leHRfcGFnZV90b2tlbhgCIAEoCSIfCg1HZXRSdW5SZXF1ZXN0Eg4KBnJ1bl9pZBgBIAEoCSI0Cg5HZXRSdW5SZXNwb25zZRIiCgNydW4YASABKAsyFS5ibGF4c21pdGguYXBpLnYxLlJ1biJMCg9MaXN0UnVuc1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIRCglwYWdlX3NpemUYAiABKAUSEgoKcGFnZV90b2tlbhgDIAEoCSJQChBMaXN0UnVuc1Jlc3BvbnNlEiMKBHJ1bnMYASADKAsyFS5ibGF4c21pdGguYXBpLnYxLlJ1bhIXCg9uZXh0X3BhZ2VfdG9rZW4YAiABKAkiRQoSRXZlbnRzQWZ0ZXJSZXF1ZXN0Eg4KBnJ1bl9pZBgBIAEoCRIQCghhZnRlcl9pZBgCIAEoAxINCgVsaW1pdBgDIAEoBSJdChNFdmVudHNBZnRlclJlc3BvbnNlEi8KBmV2ZW50cxgBIAMoCzIfLmJsYXhzbWl0aC5hcGkudjEuV29ya2Zsb3dFdmVudBIVCg1uZXh0X2FmdGVyX2lkGAIgASgDImoKDlJldmlld0RlY2lzaW9uEgoKAmlkGAEgASgJEhIKCnBhY2thZ2VfaWQYAiABKAkSFAoMcHJpbmNpcGFsX2lkGAMgASgJEg4KBmFjdGlvbhgEIAEoCRISCgpkZWNpZGVkX2F0GAUgASgJIoYCCg1SZXZpZXdQYWNrYWdlEgoKAmlkGAEgASgJEg4KBnJ1bl9pZBgCIAEoCRIQCghyZXZpc2lvbhgDIAEoAxIVCg1zb3VyY2VfY29tbWl0GAQgASgJEhUKDWJ1bmRsZV9zaGEyNTYYBSABKAkSGwoTdmVyaWZpY2F0aW9uX3NoYTI1NhgGIAEoCRIZChFpbnRlZ3JhdGVkX2NvbW1pdBgHIAEoCRIXCg9ldmlkZW5jZV9zaGEyNTYYCCABKAkSFAoMcHJlc2VudGVkX2F0GAkgASgJEjIKCGRlY2lzaW9uGAogASgLMiAuYmxheHNtaXRoLmFwaS52MS5SZXZpZXdEZWNpc2lvbiIpChdHZXRDdXJyZW50UmV2aWV3UmVxdWVzdBIOCgZydW5faWQYASABKAkiTAoYR2V0Q3VycmVudFJldmlld1Jlc3BvbnNlEjAKB3BhY2thZ2UYASABKAsyHy5ibGF4c21pdGguYXBpLnYxLlJldmlld1BhY2thZ2UiYgoTRGVjaWRlUmV2aWV3UmVxdWVzdBIOCgZydW5faWQYASABKAkSEgoKcGFja2FnZV9pZBgCIAEoCRIXCg9pZGVtcG90ZW5jeV9rZXkYAyABKAkSDgoGYWN0aW9uGAQgASgJIkoKFERlY2lkZVJldmlld1Jlc3BvbnNlEjIKCGRlY2lzaW9uGAEgASgLMiAuYmxheHNtaXRoLmFwaS52MS5SZXZpZXdEZWNpc2lvbjLxBQoPV29ya2Zsb3dTZXJ2aWNlEmAKDUNyZWF0ZVByb2plY3QSJi5ibGF4c21pdGguYXBpLnYxLkNyZWF0ZVByb2plY3RSZXF1ZXN0GicuYmxheHNtaXRoLmFwaS52MS5DcmVhdGVQcm9qZWN0UmVzcG9uc2USVwoKR2V0UHJvamVjdBIjLmJsYXhzbWl0aC5hcGkudjEuR2V0UHJvamVjdFJlcXVlc3QaJC5ibGF4c21pdGguYXBpLnYxLkdldFByb2plY3RSZXNwb25zZRJdCgxMaXN0UHJvamVjdHMSJS5ibGF4c21pdGguYXBpLnYxLkxpc3RQcm9qZWN0c1JlcXVlc3QaJi5ibGF4c21pdGguYXBpLnYxLkxpc3RQcm9qZWN0c1Jlc3BvbnNlEksKBkdldFJ1bhIfLmJsYXhzbWl0aC5hcGkudjEuR2V0UnVuUmVxdWVzdBogLmJsYXhzbWl0aC5hcGkudjEuR2V0UnVuUmVzcG9uc2USUQoITGlzdFJ1bnMSIS5ibGF4c21pdGguYXBpLnYxLkxpc3RSdW5zUmVxdWVzdBoiLmJsYXhzbWl0aC5hcGkudjEuTGlzdFJ1bnNSZXNwb25zZRJaCgtFdmVudHNBZnRlchIkLmJsYXhzbWl0aC5hcGkudjEuRXZlbnRzQWZ0ZXJSZXF1ZXN0GiUuYmxheHNtaXRoLmFwaS52MS5FdmVudHNBZnRlclJlc3BvbnNlEmkKEEdldEN1cnJlbnRSZXZpZXcSKS5ibGF4c21pdGguYXBpLnYxLkdldEN1cnJlbnRSZXZpZXdSZXF1ZXN0GiouYmxheHNtaXRoLmFwaS52MS5HZXRDdXJyZW50UmV2aWV3UmVzcG9uc2USXQoMRGVjaWRlUmV2aWV3EiUuYmxheHNtaXRoLmFwaS52MS5EZWNpZGVSZXZpZXdSZXF1ZXN0GiYuYmxheHNtaXRoLmFwaS52MS5EZWNpZGVSZXZpZXdSZXNwb25zZULFAQoUY29tLmJsYXhzbWl0aC5hcGkudjFCDVdvcmtmbG93UHJvdG9QAVo8Z2l0aHViLmNvbS9tanRlY2hndXkvYmxheHNtaXRoL2dlbi9nby9ibGF4c21pdGgvYXBpL3YxO2FwaXYxogIDQkFYqgIQQmxheHNtaXRoLkFwaS5WMcoCEEJsYXhzbWl0aFxBcGlcVjHiAhxCbGF4c21pdGhcQXBpXFYxXEdQQk1ldGFkYXRh6gISQmxheHNtaXRoOjpBcGk6OlYxYgZwcm90bzM");
 
 /**
  * @generated from message blaxsmith.api.v1.Project
@@ -400,6 +400,196 @@ export const EventsAfterResponseSchema: GenMessage<EventsAfterResponse> = /*@__P
   messageDesc(file_blaxsmith_api_v1_workflow, 14);
 
 /**
+ * @generated from message blaxsmith.api.v1.ReviewDecision
+ */
+export type ReviewDecision = Message<"blaxsmith.api.v1.ReviewDecision"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string package_id = 2;
+   */
+  packageId: string;
+
+  /**
+   * @generated from field: string principal_id = 3;
+   */
+  principalId: string;
+
+  /**
+   * approve or request_changes.
+   *
+   * @generated from field: string action = 4;
+   */
+  action: string;
+
+  /**
+   * RFC 3339.
+   *
+   * @generated from field: string decided_at = 5;
+   */
+  decidedAt: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ReviewDecision.
+ * Use `create(ReviewDecisionSchema)` to create a new message.
+ */
+export const ReviewDecisionSchema: GenMessage<ReviewDecision> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 15);
+
+/**
+ * @generated from message blaxsmith.api.v1.ReviewPackage
+ */
+export type ReviewPackage = Message<"blaxsmith.api.v1.ReviewPackage"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string run_id = 2;
+   */
+  runId: string;
+
+  /**
+   * @generated from field: int64 revision = 3;
+   */
+  revision: bigint;
+
+  /**
+   * @generated from field: string source_commit = 4;
+   */
+  sourceCommit: string;
+
+  /**
+   * @generated from field: string bundle_sha256 = 5;
+   */
+  bundleSha256: string;
+
+  /**
+   * @generated from field: string verification_sha256 = 6;
+   */
+  verificationSha256: string;
+
+  /**
+   * @generated from field: string integrated_commit = 7;
+   */
+  integratedCommit: string;
+
+  /**
+   * @generated from field: string evidence_sha256 = 8;
+   */
+  evidenceSha256: string;
+
+  /**
+   * RFC 3339.
+   *
+   * @generated from field: string presented_at = 9;
+   */
+  presentedAt: string;
+
+  /**
+   * @generated from field: blaxsmith.api.v1.ReviewDecision decision = 10;
+   */
+  decision?: ReviewDecision | undefined;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ReviewPackage.
+ * Use `create(ReviewPackageSchema)` to create a new message.
+ */
+export const ReviewPackageSchema: GenMessage<ReviewPackage> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 16);
+
+/**
+ * @generated from message blaxsmith.api.v1.GetCurrentReviewRequest
+ */
+export type GetCurrentReviewRequest = Message<"blaxsmith.api.v1.GetCurrentReviewRequest"> & {
+  /**
+   * @generated from field: string run_id = 1;
+   */
+  runId: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.GetCurrentReviewRequest.
+ * Use `create(GetCurrentReviewRequestSchema)` to create a new message.
+ */
+export const GetCurrentReviewRequestSchema: GenMessage<GetCurrentReviewRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 17);
+
+/**
+ * @generated from message blaxsmith.api.v1.GetCurrentReviewResponse
+ */
+export type GetCurrentReviewResponse = Message<"blaxsmith.api.v1.GetCurrentReviewResponse"> & {
+  /**
+   * @generated from field: blaxsmith.api.v1.ReviewPackage package = 1;
+   */
+  package?: ReviewPackage | undefined;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.GetCurrentReviewResponse.
+ * Use `create(GetCurrentReviewResponseSchema)` to create a new message.
+ */
+export const GetCurrentReviewResponseSchema: GenMessage<GetCurrentReviewResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 18);
+
+/**
+ * @generated from message blaxsmith.api.v1.DecideReviewRequest
+ */
+export type DecideReviewRequest = Message<"blaxsmith.api.v1.DecideReviewRequest"> & {
+  /**
+   * @generated from field: string run_id = 1;
+   */
+  runId: string;
+
+  /**
+   * @generated from field: string package_id = 2;
+   */
+  packageId: string;
+
+  /**
+   * @generated from field: string idempotency_key = 3;
+   */
+  idempotencyKey: string;
+
+  /**
+   * approve or request_changes.
+   *
+   * @generated from field: string action = 4;
+   */
+  action: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.DecideReviewRequest.
+ * Use `create(DecideReviewRequestSchema)` to create a new message.
+ */
+export const DecideReviewRequestSchema: GenMessage<DecideReviewRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 19);
+
+/**
+ * @generated from message blaxsmith.api.v1.DecideReviewResponse
+ */
+export type DecideReviewResponse = Message<"blaxsmith.api.v1.DecideReviewResponse"> & {
+  /**
+   * @generated from field: blaxsmith.api.v1.ReviewDecision decision = 1;
+   */
+  decision?: ReviewDecision | undefined;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.DecideReviewResponse.
+ * Use `create(DecideReviewResponseSchema)` to create a new message.
+ */
+export const DecideReviewResponseSchema: GenMessage<DecideReviewResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 20);
+
+/**
  * Browser requests derive their organization exclusively from a live session.
  *
  * @generated from service blaxsmith.api.v1.WorkflowService
@@ -452,6 +642,22 @@ export const WorkflowService: GenService<{
     methodKind: "unary";
     input: typeof EventsAfterRequestSchema;
     output: typeof EventsAfterResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.WorkflowService.GetCurrentReview
+   */
+  getCurrentReview: {
+    methodKind: "unary";
+    input: typeof GetCurrentReviewRequestSchema;
+    output: typeof GetCurrentReviewResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.WorkflowService.DecideReview
+   */
+  decideReview: {
+    methodKind: "unary";
+    input: typeof DecideReviewRequestSchema;
+    output: typeof DecideReviewResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_blaxsmith_api_v1_workflow, 0);

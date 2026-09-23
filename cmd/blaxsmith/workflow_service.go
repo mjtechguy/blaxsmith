@@ -168,6 +168,47 @@ func (s *workflowService) EventsAfter(ctx context.Context, req *connect.Request[
 	return connect.NewResponse(response), nil
 }
 
+func (s *workflowService) GetCurrentReview(ctx context.Context, req *connect.Request[api.GetCurrentReviewRequest]) (*connect.Response[api.GetCurrentReviewResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	current, err := s.store.GetCurrentReview(ctx, caller.OrganizationID, req.Msg.RunId)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.GetCurrentReviewResponse{Package: reviewPackageMessage(current)}), nil
+}
+
+func (s *workflowService) DecideReview(ctx context.Context, req *connect.Request[api.DecideReviewRequest]) (*connect.Response[api.DecideReviewResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	decision, err := s.store.DecideReview(ctx, caller, req.Msg.RunId, req.Msg.PackageId, req.Msg.IdempotencyKey, req.Msg.Action)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.DecideReviewResponse{Decision: reviewDecisionMessage(decision)}), nil
+}
+
+func reviewPackageMessage(current workflow.ReviewPackage) *api.ReviewPackage {
+	message := &api.ReviewPackage{Id: current.ID, RunId: current.RunID, Revision: current.Revision,
+		SourceCommit: current.SourceCommit, BundleSha256: current.BundleSHA256,
+		VerificationSha256: current.VerificationSHA256, IntegratedCommit: current.IntegratedCommit,
+		EvidenceSha256: current.EvidenceSHA256, PresentedAt: current.PresentedAt.UTC().Format(time.RFC3339Nano)}
+	if current.Decision != nil {
+		message.Decision = reviewDecisionMessage(*current.Decision)
+	}
+	return message
+}
+
+func reviewDecisionMessage(decision workflow.ReviewDecision) *api.ReviewDecision {
+	return &api.ReviewDecision{Id: decision.ID, PackageId: decision.PackageID,
+		PrincipalId: decision.PrincipalID, Action: decision.Action,
+		DecidedAt: decision.DecidedAt.UTC().Format(time.RFC3339Nano)}
+}
+
 func projectMessage(project workflow.Project) *api.Project {
 	return &api.Project{Id: project.ID, Slug: project.Slug, Name: project.Name,
 		CreatedAt: project.CreatedAt.UTC().Format(time.RFC3339Nano)}
@@ -223,6 +264,8 @@ func workflowError(err error) error {
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("workflow state conflict"))
 	case errors.Is(err, workflow.ErrProjectDenied):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("project creation denied"))
+	case errors.Is(err, workflow.ErrReviewDenied):
+		return connect.NewError(connect.CodePermissionDenied, errors.New("human review denied"))
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("workflow unavailable"))
 	}

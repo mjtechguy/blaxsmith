@@ -1,4 +1,4 @@
-import { createClient } from "@connectrpc/connect";
+import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { browserTransport, csrfToken } from "./auth";
 import { WorkflowService } from "./gen/blaxsmith/api/v1/workflow_pb";
 
@@ -30,4 +30,19 @@ export async function getRun(runId: string, signal?: AbortSignal) {
 
 export async function eventsAfter(runId: string, afterId = 0n, signal?: AbortSignal) {
   return client.eventsAfter({ runId, afterId, limit: 100 }, { signal });
+}
+
+export async function getCurrentReview(runId: string, signal?: AbortSignal) {
+  try {
+    return (await client.getCurrentReview({ runId }, { signal })).package ?? null;
+  } catch (error) {
+    if (ConnectError.from(error).code === Code.NotFound) return null;
+    throw error;
+  }
+}
+
+export async function decideReview(runId: string, packageId: string, action: "approve" | "request_changes") {
+  const token = await csrfToken();
+  return client.decideReview({ runId, packageId, action, idempotencyKey: crypto.randomUUID() },
+    { headers: { "X-Blaxsmith-CSRF": token } });
 }

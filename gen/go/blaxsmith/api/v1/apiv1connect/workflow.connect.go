@@ -50,6 +50,12 @@ const (
 	// WorkflowServiceEventsAfterProcedure is the fully-qualified name of the WorkflowService's
 	// EventsAfter RPC.
 	WorkflowServiceEventsAfterProcedure = "/blaxsmith.api.v1.WorkflowService/EventsAfter"
+	// WorkflowServiceGetCurrentReviewProcedure is the fully-qualified name of the WorkflowService's
+	// GetCurrentReview RPC.
+	WorkflowServiceGetCurrentReviewProcedure = "/blaxsmith.api.v1.WorkflowService/GetCurrentReview"
+	// WorkflowServiceDecideReviewProcedure is the fully-qualified name of the WorkflowService's
+	// DecideReview RPC.
+	WorkflowServiceDecideReviewProcedure = "/blaxsmith.api.v1.WorkflowService/DecideReview"
 )
 
 // WorkflowServiceClient is a client for the blaxsmith.api.v1.WorkflowService service.
@@ -60,6 +66,8 @@ type WorkflowServiceClient interface {
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	ListRuns(context.Context, *connect.Request[v1.ListRunsRequest]) (*connect.Response[v1.ListRunsResponse], error)
 	EventsAfter(context.Context, *connect.Request[v1.EventsAfterRequest]) (*connect.Response[v1.EventsAfterResponse], error)
+	GetCurrentReview(context.Context, *connect.Request[v1.GetCurrentReviewRequest]) (*connect.Response[v1.GetCurrentReviewResponse], error)
+	DecideReview(context.Context, *connect.Request[v1.DecideReviewRequest]) (*connect.Response[v1.DecideReviewResponse], error)
 }
 
 // NewWorkflowServiceClient constructs a client for the blaxsmith.api.v1.WorkflowService service. By
@@ -109,17 +117,31 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(workflowServiceMethods.ByName("EventsAfter")),
 			connect.WithClientOptions(opts...),
 		),
+		getCurrentReview: connect.NewClient[v1.GetCurrentReviewRequest, v1.GetCurrentReviewResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetCurrentReviewProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetCurrentReview")),
+			connect.WithClientOptions(opts...),
+		),
+		decideReview: connect.NewClient[v1.DecideReviewRequest, v1.DecideReviewResponse](
+			httpClient,
+			baseURL+WorkflowServiceDecideReviewProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("DecideReview")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // workflowServiceClient implements WorkflowServiceClient.
 type workflowServiceClient struct {
-	createProject *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
-	getProject    *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
-	listProjects  *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
-	getRun        *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
-	listRuns      *connect.Client[v1.ListRunsRequest, v1.ListRunsResponse]
-	eventsAfter   *connect.Client[v1.EventsAfterRequest, v1.EventsAfterResponse]
+	createProject    *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
+	getProject       *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
+	listProjects     *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
+	getRun           *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
+	listRuns         *connect.Client[v1.ListRunsRequest, v1.ListRunsResponse]
+	eventsAfter      *connect.Client[v1.EventsAfterRequest, v1.EventsAfterResponse]
+	getCurrentReview *connect.Client[v1.GetCurrentReviewRequest, v1.GetCurrentReviewResponse]
+	decideReview     *connect.Client[v1.DecideReviewRequest, v1.DecideReviewResponse]
 }
 
 // CreateProject calls blaxsmith.api.v1.WorkflowService.CreateProject.
@@ -152,6 +174,16 @@ func (c *workflowServiceClient) EventsAfter(ctx context.Context, req *connect.Re
 	return c.eventsAfter.CallUnary(ctx, req)
 }
 
+// GetCurrentReview calls blaxsmith.api.v1.WorkflowService.GetCurrentReview.
+func (c *workflowServiceClient) GetCurrentReview(ctx context.Context, req *connect.Request[v1.GetCurrentReviewRequest]) (*connect.Response[v1.GetCurrentReviewResponse], error) {
+	return c.getCurrentReview.CallUnary(ctx, req)
+}
+
+// DecideReview calls blaxsmith.api.v1.WorkflowService.DecideReview.
+func (c *workflowServiceClient) DecideReview(ctx context.Context, req *connect.Request[v1.DecideReviewRequest]) (*connect.Response[v1.DecideReviewResponse], error) {
+	return c.decideReview.CallUnary(ctx, req)
+}
+
 // WorkflowServiceHandler is an implementation of the blaxsmith.api.v1.WorkflowService service.
 type WorkflowServiceHandler interface {
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
@@ -160,6 +192,8 @@ type WorkflowServiceHandler interface {
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	ListRuns(context.Context, *connect.Request[v1.ListRunsRequest]) (*connect.Response[v1.ListRunsResponse], error)
 	EventsAfter(context.Context, *connect.Request[v1.EventsAfterRequest]) (*connect.Response[v1.EventsAfterResponse], error)
+	GetCurrentReview(context.Context, *connect.Request[v1.GetCurrentReviewRequest]) (*connect.Response[v1.GetCurrentReviewResponse], error)
+	DecideReview(context.Context, *connect.Request[v1.DecideReviewRequest]) (*connect.Response[v1.DecideReviewResponse], error)
 }
 
 // NewWorkflowServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -205,6 +239,18 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		connect.WithSchema(workflowServiceMethods.ByName("EventsAfter")),
 		connect.WithHandlerOptions(opts...),
 	)
+	workflowServiceGetCurrentReviewHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetCurrentReviewProcedure,
+		svc.GetCurrentReview,
+		connect.WithSchema(workflowServiceMethods.ByName("GetCurrentReview")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceDecideReviewHandler := connect.NewUnaryHandler(
+		WorkflowServiceDecideReviewProcedure,
+		svc.DecideReview,
+		connect.WithSchema(workflowServiceMethods.ByName("DecideReview")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blaxsmith.api.v1.WorkflowService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case WorkflowServiceCreateProjectProcedure:
@@ -219,6 +265,10 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 			workflowServiceListRunsHandler.ServeHTTP(w, r)
 		case WorkflowServiceEventsAfterProcedure:
 			workflowServiceEventsAfterHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetCurrentReviewProcedure:
+			workflowServiceGetCurrentReviewHandler.ServeHTTP(w, r)
+		case WorkflowServiceDecideReviewProcedure:
+			workflowServiceDecideReviewHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -250,4 +300,12 @@ func (UnimplementedWorkflowServiceHandler) ListRuns(context.Context, *connect.Re
 
 func (UnimplementedWorkflowServiceHandler) EventsAfter(context.Context, *connect.Request[v1.EventsAfterRequest]) (*connect.Response[v1.EventsAfterResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.EventsAfter is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetCurrentReview(context.Context, *connect.Request[v1.GetCurrentReviewRequest]) (*connect.Response[v1.GetCurrentReviewResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetCurrentReview is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) DecideReview(context.Context, *connect.Request[v1.DecideReviewRequest]) (*connect.Response[v1.DecideReviewResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.DecideReview is not implemented"))
 }

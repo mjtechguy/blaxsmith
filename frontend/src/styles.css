@@ -209,6 +209,22 @@ tbody tr:hover { background: var(--canvas); }
 .event-list small, .event-list time { color: var(--muted); font-size: 11px; }
 .event-list time { white-space: nowrap; }
 
+.review-card { padding: 23px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--card-shadow); }
+.review-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.review-heading h2 { margin: 0; font-size: 17px; letter-spacing: -.02em; }
+.review-heading p:last-child, .review-message { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.review-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 30px; margin: 23px 0 0; padding-top: 20px; border-top: 1px solid var(--line); }
+.review-facts div { min-width: 0; }
+.review-facts dt { margin-bottom: 5px; color: var(--muted); font-size: 11px; font-weight: 650; }
+.review-facts dd { margin: 0; font-size: 12px; }
+.review-facts code { overflow-wrap: anywhere; font-size: 11px; }
+.review-decision { display: flex; align-items: center; gap: 7px; margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12px; }
+.review-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.review-actions .auth-alert { flex: 1 0 100%; }
+.review-confirm { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; }
+.review-confirm p { margin: 0; font-size: 12px; font-weight: 600; }
+.review-confirm > div { display: flex; flex: none; gap: 8px; }
+
 @media (max-width: 800px) {
   .app-frame { display: grid; grid-template-rows: 56px auto auto 1fr; }
   .main-column { display: contents; }
@@ -229,6 +245,9 @@ tbody tr:hover { background: var(--canvas); }
   .editor-layout { grid-template-columns: 1fr; }
   .event-list li { flex-wrap: wrap; }
   .event-list time { margin-left: 41px; }
+  .review-facts { grid-template-columns: 1fr; }
+  .review-confirm { flex-direction: column; align-items: stretch; }
+  .review-confirm > div { justify-content: flex-end; }
 }
 
 @media (max-width: 500px) {

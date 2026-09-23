@@ -399,6 +399,78 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if got, err := w.EventsAfter(ctx, events); err != nil || len(got.Msg.Events) != 1 || got.Msg.Events[0].Kind != "run.created" {
 		t.Fatalf("own events: %+v, %v", got, err)
 	}
+	getReview := connect.NewRequest(&api.GetCurrentReviewRequest{RunId: run.ID})
+	getReview.Header().Set("Origin", origin)
+	if _, err := w.GetCurrentReview(ctx, getReview); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("empty review should not be presented: %v", err)
+	}
+	task, err := store.AddTask(ctx, owner.OrganizationID, run.ID, "implement", run.BundleSHA256, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, owner.OrganizationID, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	attempt, err := store.ReserveAttempt(ctx, owner.OrganizationID, run.ID, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ConfirmStarted(ctx, attempt); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.FinishAttempt(ctx, attempt, true, run.BundleSHA256); err != nil {
+		t.Fatal(err)
+	}
+	if state, err := store.FinalizeRun(ctx, owner.OrganizationID, run.ID); err != nil || state != "succeeded" {
+		t.Fatalf("finish review fixture: %s, %v", state, err)
+	}
+	currentReview, err := store.PresentForReview(ctx, owner.OrganizationID, run.ID, strings.Repeat("d", 40), strings.Repeat("e", 64), run.VerificationSHA256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := w.GetCurrentReview(ctx, getReview); err != nil || got.Msg.Package.Id != currentReview.ID ||
+		got.Msg.Package.EvidenceSha256 != currentReview.EvidenceSHA256 || got.Msg.Package.Decision != nil {
+		t.Fatalf("current review package: %+v, %v", got, err)
+	}
+	decision := connect.NewRequest(&api.DecideReviewRequest{RunId: run.ID, PackageId: currentReview.ID,
+		IdempotencyKey: "browser-approve", Action: "approve"})
+	decision.Header().Set("Origin", origin)
+	if _, err := w.DecideReview(ctx, decision); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("review decision without CSRF accepted: %v", err)
+	}
+	decision.Header().Set("X-Blaxsmith-CSRF", csrf)
+	decision.Header().Set("Origin", "https://outside.example")
+	if _, err := w.DecideReview(ctx, decision); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("review decision from wrong origin accepted: %v", err)
+	}
+	decision.Header().Set("Origin", origin)
+	approved, err := w.DecideReview(ctx, decision)
+	if err != nil || approved.Msg.Decision.Action != "approve" {
+		t.Fatalf("owner review decision: %+v, %v", approved, err)
+	}
+	if got, err := w.DecideReview(ctx, decision); err != nil || got.Msg.Decision.Id != approved.Msg.Decision.Id {
+		t.Fatalf("decision replay: %+v, %v", got, err)
+	}
+	nextReview, err := store.PresentForReview(ctx, owner.OrganizationID, run.ID, strings.Repeat("f", 40), currentReview.EvidenceSHA256, run.VerificationSHA256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := w.GetCurrentReview(ctx, getReview); err != nil || got.Msg.Package.Id != nextReview.ID || got.Msg.Package.Decision != nil {
+		t.Fatalf("superseded approval stayed current: %+v, %v", got, err)
+	}
+	if _, err := w.DecideReview(ctx, decision); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("old package was approved again: %v", err)
+	}
+	changes := connect.NewRequest(&api.DecideReviewRequest{RunId: run.ID, PackageId: nextReview.ID,
+		IdempotencyKey: "browser-changes", Action: "request_changes"})
+	changes.Header().Set("Origin", origin)
+	changes.Header().Set("X-Blaxsmith-CSRF", csrf)
+	if got, err := w.DecideReview(ctx, changes); err != nil || got.Msg.Decision.Action != "request_changes" {
+		t.Fatalf("owner requested changes: %+v, %v", got, err)
+	}
+	if got, err := w.GetCurrentReview(ctx, getReview); err != nil || got.Msg.Package.Decision.Action != "request_changes" {
+		t.Fatalf("review decision not visible: %+v, %v", got, err)
+	}
 	var otherOrg string
 	if err := pool.QueryRow(ctx, `INSERT INTO identity_organizations (id,slug,name)
 		VALUES (gen_random_uuid(),'another-org','Another') RETURNING id`).Scan(&otherOrg); err != nil {
@@ -440,6 +512,16 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if _, err := other.EventsAfter(ctx, events); connect.CodeOf(err) != connect.CodeNotFound {
 		t.Fatalf("cross-tenant events: %v", err)
 	}
+	getReview.Header().Set("Cookie", cookie)
+	if _, err := other.GetCurrentReview(ctx, getReview); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("cross-tenant review lookup: %v", err)
+	}
+	decision.Msg.PackageId = nextReview.ID
+	decision.Msg.IdempotencyKey = "cross-tenant-approve"
+	decision.Header().Set("Cookie", cookie+"; __Host-blaxsmith_csrf="+csrf)
+	if _, err := other.DecideReview(ctx, decision); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("cross-tenant review decision: %v", err)
+	}
 	if _, err := pool.Exec(ctx, `UPDATE identity_memberships SET role='viewer'
 		WHERE organization_id=$1 AND principal_id=$2`, owner.OrganizationID, owner.PrincipalID); err != nil {
 		t.Fatal(err)
@@ -456,6 +538,13 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	viewerCreate.Header().Set("X-Blaxsmith-CSRF", csrf)
 	if _, err := w.CreateProject(ctx, viewerCreate); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("viewer created project: %v", err)
+	}
+	viewerDecision := connect.NewRequest(&api.DecideReviewRequest{RunId: run.ID, PackageId: nextReview.ID,
+		IdempotencyKey: "viewer-approve", Action: "approve"})
+	viewerDecision.Header().Set("Origin", origin)
+	viewerDecision.Header().Set("X-Blaxsmith-CSRF", csrf)
+	if _, err := w.DecideReview(ctx, viewerDecision); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("viewer decided final review: %v", err)
 	}
 }
 

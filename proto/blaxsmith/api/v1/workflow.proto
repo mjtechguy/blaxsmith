@@ -70,6 +70,38 @@ message EventsAfterResponse {
   int64 next_after_id = 2;
 }
 
+message ReviewDecision {
+  string id = 1;
+  string package_id = 2;
+  string principal_id = 3;
+  string action = 4; // approve or request_changes.
+  string decided_at = 5; // RFC 3339.
+}
+
+message ReviewPackage {
+  string id = 1;
+  string run_id = 2;
+  int64 revision = 3;
+  string source_commit = 4;
+  string bundle_sha256 = 5;
+  string verification_sha256 = 6;
+  string integrated_commit = 7;
+  string evidence_sha256 = 8;
+  string presented_at = 9; // RFC 3339.
+  ReviewDecision decision = 10;
+}
+
+message GetCurrentReviewRequest { string run_id = 1; }
+message GetCurrentReviewResponse { ReviewPackage package = 1; }
+
+message DecideReviewRequest {
+  string run_id = 1;
+  string package_id = 2;
+  string idempotency_key = 3;
+  string action = 4; // approve or request_changes.
+}
+message DecideReviewResponse { ReviewDecision decision = 1; }
+
 // Browser requests derive their organization exclusively from a live session.
 service WorkflowService {
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
@@ -78,4 +110,6 @@ service WorkflowService {
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
   rpc EventsAfter(EventsAfterRequest) returns (EventsAfterResponse);
+  rpc GetCurrentReview(GetCurrentReviewRequest) returns (GetCurrentReviewResponse);
+  rpc DecideReview(DecideReviewRequest) returns (DecideReviewResponse);
 }
