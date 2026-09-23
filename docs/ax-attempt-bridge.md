@@ -10,7 +10,8 @@ gRPC. A PostgreSQL transaction-scoped advisory lock serializes Launch,
 ReconcileUnknown and StopKnown for the same attempt across scheduler processes.
 The bridge reads the exact task spec back, then checks the live Substrate
 actor, template UID, image, gVisor class, worker pod/pool, bootstrap signer and
-data-only snapshot settings before marking the attempt started.
+data-only snapshot settings. It pins that runtime and command digest in the
+workflow ledger before marking the attempt started.
 
 An uncertain AX upsert moves the attempt to `reconciling`. Recovery makes no
 new AX write: it requires exact task read-back and a matching live actor.
@@ -35,13 +36,16 @@ listed no `axbridge_%` schema. No credential or model work ran.
 The pinned AX `Running` phase is a workload lifecycle status, **not** a
 supervised command-exit result. During the first live run it reported `Running`
 while `WorkspaceReady=False` and the bootstrap gate still blocked the command.
-The runner has an in-process `OnCommandExit` hook, but it does not publish a
-trusted, attempt-bound result to the control plane. A guest file, AX status,
-or an `ax ssh` observation must not call `FinishAttempt`. The minimum acceptance
-protocol needs an outside-guest supervisor or equivalent trusted sender to
-emit a signed event bound to organization/run/task/attempt IDs, owner generation,
-fence token digest, AX task identity, actor UID, template UID, command digest,
-exit code and monotonic event sequence. The scheduler must recheck the current
-owner and frozen verification policy before accepting that event. This remains
-open, as do server-side AX idempotent create/tombstones, bootstrap owner
-revocation wiring, and product grants. Only synthetic tasks are enabled here.
+The pinned runner now exposes a small command-exit readback after `Wait`, and
+`internal/runnerexit` defines the platform-signed report. The workflow
+collector verifies its signature and pinned runtime, command, worker pool, and
+current owner before storing an immutable receipt. The receipt never calls
+`FinishAttempt`: an exit code does not prove the work or independently verify
+artifacts. A guest file, AX status, or `ax ssh` observation also cannot mark a
+task complete. The live connector still needs an authenticated current-actor
+readback route and durable activation-nonce binding before it can sign and
+record a report. The runner and child share a guest security boundary, so this
+is a synthetic observation rather than a trusted result for hostile code.
+Bootstrap owner revocation wiring, product grants, independently collected
+evidence, and mixed-tool execution also remain open. Only synthetic tasks are
+enabled here.

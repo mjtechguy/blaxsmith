@@ -2,7 +2,7 @@
 
 An enterprise web workspace for composable AI engineering teams, built on AX.
 
-**Status:** implementation started. Git-backed recipes compile into immutable input bundles and run Guild's pinned Forge validator. A read-only web preview lists current Codex, Claude Code, and OpenCode publisher releases. Identity, the scheduler, and tool execution adapters are still being built. The [main implementation plan](agent-factory-plan.md) contains the agreed architecture, phased tasks, and acceptance criteria.
+**Status:** implementation in progress. Git-backed recipes compile into immutable input bundles and run Guild's pinned Forge validator. The authenticated workspace can create projects and frozen runs and record a final human review decision. A fenced workflow ledger, synthetic AX bridge, and signed command-exit receipts exist, but they are not yet a complete agent workflow. The public tool catalog lists current Codex, Claude Code, and OpenCode publisher releases; installation and tool execution adapters are still being built. The [main implementation plan](agent-factory-plan.md) contains the agreed architecture, phased tasks, and acceptance criteria.
 
 ## Run the first slice
 
@@ -154,9 +154,10 @@ startup; changing a mounted file alone does not update its verifier.
 `serve-app` accepts the direct TLS peer as the client address and ignores
 forwarding headers. An ingress may be used only when it preserves end-to-end
 TLS and the real client IP; trusted proxy support is pending. The loopback
-`serve` preview remains public-catalog-only. MFA, deployment key custody and
-rotation, account management, frontend session integration, and resource
-authorization remain release work. The
+`serve` preview remains public-catalog-only. The frontend uses the authenticated
+application session for project, run, and final-review routes. MFA, deployment
+key custody and rotation, account management, artifact inspection, and complete
+resource policy remain release work. The
 [guide adoption record](docs/adr/0001-technology-guide.md)
 tracks exact baseline choices and current deviations.
 
