@@ -51,7 +51,8 @@ The command-exit route overlay, nonce binding, and connector are covered by
 focused tests but have not been deployed or proven together on the node. The
 runner and child share one container security boundary, so hostile same-UID
 code could tamper with readback. Bootstrap owner assignment/revocation is not
-yet atomic with workflow ownership, and a crash after receipt commit may
-require replaying the exact signed report; a durable connector outbox remains
-open. Product grants, independently collected evidence, and mixed-tool
+yet atomic with workflow ownership. Exact replay works while the actor remains
+available; losing it before a durable receipt still leaves the outcome unknown
+and needs a separately proven recovery path. Product grants, independently
+collected evidence, and mixed-tool
 execution remain open. Only synthetic tasks are enabled here.
