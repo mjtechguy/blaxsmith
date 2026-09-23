@@ -18,8 +18,11 @@ approved scope choices, not claims of guide conformance.
 |---|---|
 | `db.Migrate` uses pgx directly instead of goose | The small runner embeds SQL, serializes startup, checks applied file hashes, and rejects newer unknown versions. It has no down/out-of-order migration support. Before P1 acceptance, either adopt goose with a tested history transition or explicitly approve this narrower runner and update the plan. |
 | Secret versions use AES-256-GCM with organization/connection/version AAD instead of age | This has only synthetic probe evidence. Before real credentials, review the custody threat model and key recovery, then migrate to the guide's age baseline or document and approve the alternative. |
-| The preview serves one public JSON catalog route rather than Connect-RPC | No account, project, or credential records are exposed. Product data must use generated Connect contracts and shared authorization before it reaches the browser. |
-| CI currently runs Go, real PostgreSQL, and Node 24 builds | Add history-aware secret scanning, vulnerability/static checks, and production browser journeys before release. |
+| CI currently runs Go, real PostgreSQL, Node 24 builds, and generated-contract checks | Add history-aware secret scanning, vulnerability/static checks, and production browser journeys before release. |
+
+The preview now serves public catalog metadata through generated Connect
+Go/TypeScript clients. Account, project, and credential APIs remain closed until
+shared authorization and browser-session controls are implemented.
 
 The first-owner password uses Argon2id at 64 MiB, three iterations, one lane,
 with a random salt; this exceeds the [OWASP password-storage minimum](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).

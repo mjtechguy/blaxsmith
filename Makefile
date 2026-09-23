@@ -1,4 +1,4 @@
-.PHONY: test check build example web-check
+.PHONY: test check build example web-check proto-check
 
 test:
 	go test ./...
@@ -14,3 +14,10 @@ example:
 
 web-check:
 	cd frontend && npm ci && npm run build
+
+proto-check:
+	cd frontend && npm ci
+	frontend/node_modules/.bin/buf lint
+	frontend/node_modules/.bin/buf generate
+	git diff --exit-code -- gen/go frontend/src/gen
+	test -z "$$(git ls-files --others --exclude-standard -- gen/go frontend/src/gen)"

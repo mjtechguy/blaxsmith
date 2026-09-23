@@ -72,7 +72,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000/tools`. The API binds only to `127.0.0.1:8001`; Vite proxies `/api` in development. `make web-check` builds the frontend and checks its types. This preview contains public release metadata only and has no login or access to product records.
+Open `http://127.0.0.1:3000/tools`. The API binds only to `127.0.0.1:8001`; Vite proxies `/api` in development. `make web-check` builds the frontend and checks its types. `make proto-check` lints and regenerates the pinned Connect Go/TypeScript contract and rejects drift. This preview contains public release metadata only and has no login or access to product records.
 
 ## Local PostgreSQL
 

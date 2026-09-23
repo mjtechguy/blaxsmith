@@ -48,7 +48,8 @@ interaction rules without importing AGPL source. The workspace route honestly
 shows an empty state; the `+ Add runtime` action is disabled until verified
 installation exists. There is no placeholder login or configuration drawer.
 
-`blaxsmith serve` exposes only public tool-release metadata on loopback. The
+`blaxsmith serve` exposes only public tool-release metadata on loopback through
+the generated Connect contract in `proto/blaxsmith/api/v1/catalog.proto`. The
 catalog fetches up to 20 non-prerelease versions per tool, shows publisher
 stable tags and package integrity, and supports search, tool filter, date and
 numeric-version sorting, and pagination. A version shown here is discoverable,

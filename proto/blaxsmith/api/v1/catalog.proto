@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package blaxsmith.api.v1;
+
+message ListToolsRequest {}
+
+message ToolRelease {
+  string version = 1;
+  string published_at = 2; // RFC 3339.
+  string integrity = 3;
+  string tarball = 4;
+}
+
+message ToolCatalog {
+  string tool = 1;
+  string package = 2;
+  string source = 3;
+  string fetched_at = 4; // RFC 3339.
+  string latest_stable = 5;
+  string publisher_latest = 6;
+  string publisher_stable = 7;
+  repeated ToolRelease releases = 8;
+}
+
+message ListToolsResponse {
+  repeated ToolCatalog tools = 1;
+}
+
+service CatalogService {
+  rpc ListTools(ListToolsRequest) returns (ListToolsResponse);
+}

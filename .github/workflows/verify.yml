@@ -45,3 +45,4 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: make web-check
+      - run: make proto-check

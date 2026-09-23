@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -13,11 +12,37 @@ import (
 	"syscall"
 	"time"
 
+	"connectrpc.com/connect"
+	api "github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1"
+	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
 	"github.com/mjtechguy/blaxsmith/internal/catalog"
 )
 
-// serve is a loopback-only development API for public release metadata. It
-// exposes no accounts, projects, credentials, or worker controls.
+type catalogService struct{ client *http.Client }
+
+func (s catalogService) ListTools(ctx context.Context, _ *connect.Request[api.ListToolsRequest]) (*connect.Response[api.ListToolsResponse], error) {
+	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
+	defer cancel()
+	response := &api.ListToolsResponse{Tools: make([]*api.ToolCatalog, 0, 3)}
+	for _, name := range []string{"codex", "claude-code", "opencode"} {
+		result, err := catalog.Fetch(ctx, s.client, name, 20)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, errors.New("runtime catalog unavailable"))
+		}
+		entry := &api.ToolCatalog{Tool: result.Tool, Package: result.Package, Source: result.Source,
+			FetchedAt: result.FetchedAt.Format(time.RFC3339Nano), LatestStable: result.LatestStable,
+			PublisherLatest: result.PublisherLatest, PublisherStable: result.PublisherStable}
+		for _, release := range result.Releases {
+			entry.Releases = append(entry.Releases, &api.ToolRelease{Version: release.Version,
+				PublishedAt: release.PublishedAt.Format(time.RFC3339Nano), Integrity: release.Integrity,
+				Tarball: release.Tarball})
+		}
+		response.Tools = append(response.Tools, entry)
+	}
+	return connect.NewResponse(response), nil
+}
+
+// serve is a loopback-only development API for public release metadata.
 func serve(args []string) error {
 	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
 	port := flags.Int("port", 8001, "loopback development API port")
@@ -29,24 +54,8 @@ func serve(args []string) error {
 	}
 	client := &http.Client{Timeout: 30 * time.Second}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/tools", func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 40*time.Second)
-		defer cancel()
-		results := make([]catalog.Result, 0, 3)
-		for _, name := range []string{"codex", "claude-code", "opencode"} {
-			result, err := catalog.Fetch(ctx, client, name, 20)
-			if err != nil {
-				http.Error(w, "runtime catalog unavailable", http.StatusBadGateway)
-				return
-			}
-			results = append(results, result)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "no-store")
-		if err := json.NewEncoder(w).Encode(results); err != nil {
-			fmt.Fprintln(os.Stderr, "write catalog response:", err)
-		}
-	})
+	path, handler := apiv1connect.NewCatalogServiceHandler(catalogService{client: client})
+	mux.Handle("/api"+path, http.StripPrefix("/api", handler))
 	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
 	if err != nil {
 		return err
