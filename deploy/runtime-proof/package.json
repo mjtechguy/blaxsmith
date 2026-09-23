@@ -1,0 +1,11 @@
+{
+  "name": "blaxsmith-runtime-linux-amd64-proof",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pinned, credential-free CLI packaging proof; not an approved worker runtime",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "2.1.280",
+    "@openai/codex": "0.156.1",
+    "@opencode/cli": "2.0.14"
+  }
+}

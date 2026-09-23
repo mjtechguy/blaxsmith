@@ -47,6 +47,9 @@ compatibility, disable self-updates, or bind a release to an adapter/profile.
 Those are P0-12 and P1-24 follow-ups.
 The separate [credential-free Linux probe](tool-cli-probe.md) confirms basic
 version/help entry points for one exact selection from each package.
+The [pinned Linux/amd64 image proof](../deploy/runtime-proof/README.md) now
+checks the native optional packages, lockfile integrity, and exact CLI versions
+for a later tested selection. It is not promoted to an agent runtime.
 
 In the 2026-09-23 UTC live probe, publisher metadata selected Codex `0.156.0`,
 Claude Code `2.1.280` (`stable` tag `2.1.267`), and OpenCode v2 `2.0.14`.

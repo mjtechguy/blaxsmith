@@ -29,3 +29,6 @@ This establishes packaging and basic CLI entry points only. It does not prove
 supported authentication, actual headless execution, structured event
 semantics, native delegation controls, resume/cancel, model availability,
 agent permissions, or AX integration. Those are P0-06/11 and P1 adapter gates.
+The later [pinned runtime-image proof](../deploy/runtime-proof/README.md)
+verifies a full native Linux/amd64 dependency set and lockfile for another exact
+selection; it does not change this earlier probe's scope.
