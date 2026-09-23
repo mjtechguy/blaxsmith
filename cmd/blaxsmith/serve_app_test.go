@@ -293,6 +293,11 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if unavailable.Code != http.StatusServiceUnavailable {
 		t.Fatalf("health check ignored database outage: %d", unavailable.Code)
 	}
+	live := httptest.NewRecorder()
+	handler.ServeHTTP(live, httptest.NewRequest(http.MethodGet, origin+"/livez", nil))
+	if live.Code != http.StatusOK {
+		t.Fatalf("liveness incorrectly depends on database: %d", live.Code)
+	}
 }
 
 func writeAppTestCertificate(t *testing.T, dir string) (string, string, *x509.CertPool) {

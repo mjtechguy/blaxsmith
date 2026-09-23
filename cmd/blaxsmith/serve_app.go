@@ -201,6 +201,14 @@ func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin,
 	mux.Handle("/api"+catalogPath, http.StripPrefix("/api", catalogHandler))
 	mux.HandleFunc("/api", http.NotFound)
 	mux.HandleFunc("/api/", http.NotFound)
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusOK)
+	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {

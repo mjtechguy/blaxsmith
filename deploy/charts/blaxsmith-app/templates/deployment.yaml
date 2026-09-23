@@ -1,0 +1,109 @@
+{{- if not (regexMatch "^.+@sha256:[a-f0-9]{64}$" .Values.image) -}}
+{{- fail "image must be an immutable repository@sha256:<64 hex> reference" -}}
+{{- end -}}
+{{- range $name := list "origin" "tlsSecretName" "signerSecretName" "databaseSecretName" -}}
+{{- if not (index $.Values $name) -}}
+{{- fail (printf "%s is required" $name) -}}
+{{- end -}}
+{{- end -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-app
+  labels:
+    app.kubernetes.io/name: blaxsmith-app
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blaxsmith-app
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: blaxsmith-app
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: app
+          image: {{ .Values.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args:
+            - serve-app
+            - --listen
+            - 0.0.0.0:8443
+            - --origin
+            - {{ .Values.origin | quote }}
+            - --tls-cert-file
+            - /run/blaxsmith/tls/tls.crt
+            - --tls-key-file
+            - /run/blaxsmith/tls/tls.key
+            - --signer-file
+            - /run/blaxsmith/signer/seed
+            - --static-dir
+            - /srv
+          env:
+            - name: BLAXSMITH_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.databaseSecretName | quote }}
+                  key: url
+          ports:
+            - name: https
+              containerPort: 8443
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: https
+              scheme: HTTPS
+            periodSeconds: 2
+            failureThreshold: 45
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: https
+              scheme: HTTPS
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: https
+              scheme: HTTPS
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tls
+              mountPath: /run/blaxsmith/tls
+              readOnly: true
+            - name: signer
+              mountPath: /run/blaxsmith/signer
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: {{ .Values.tlsSecretName | quote }}
+            defaultMode: 288 # 0440, readable by fsGroup; never world-readable.
+        - name: signer
+          secret:
+            secretName: {{ .Values.signerSecretName | quote }}
+            defaultMode: 288

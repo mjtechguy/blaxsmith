@@ -1,0 +1,14 @@
+replicaCount: 1
+image: "" # Immutable Dockerfile app target, repository@sha256:digest.
+imagePullPolicy: IfNotPresent
+imagePullSecrets: []
+origin: "" # Exact public HTTPS origin covered by tlsSecretName.
+tlsSecretName: "" # Existing kubernetes.io/tls Secret.
+signerSecretName: "" # Existing Secret with a 32-byte seed under key seed.
+databaseSecretName: "" # Existing Secret with PostgreSQL URL under key url; verified TLS required.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi

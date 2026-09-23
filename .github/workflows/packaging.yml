@@ -6,6 +6,7 @@ on:
       - Dockerfile
       - .dockerignore
       - deploy/charts/blaxsmith-preview/**
+      - deploy/charts/blaxsmith-app/**
       - deploy/images/**
       - frontend/**
       - cmd/**
@@ -20,6 +21,7 @@ on:
       - Dockerfile
       - .dockerignore
       - deploy/charts/blaxsmith-preview/**
+      - deploy/charts/blaxsmith-app/**
       - deploy/images/**
       - frontend/**
       - cmd/**
@@ -45,5 +47,6 @@ jobs:
           tar -xzf "$RUNNER_TEMP/helm.tar.gz" -C "$RUNNER_TEMP" linux-amd64/helm
           echo "$RUNNER_TEMP/linux-amd64" >> "$GITHUB_PATH"
       - run: deploy/charts/blaxsmith-preview/test.sh
+      - run: deploy/charts/blaxsmith-app/test.sh
       - run: deploy/charts/blaxsmith-preview/smoke.sh
       - run: docker build --target app -t blaxsmith-app:ci .
