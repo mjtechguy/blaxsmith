@@ -12,6 +12,7 @@ rendered=$(mktemp)
 trap 'rm "$rendered"' EXIT
 helm template app "$chart" "$@" > "$rendered"
 grep -F -q 'replicas: 1' "$rendered"
+grep -F -q 'type: Recreate' "$rendered"
 if grep -E -q 'kind: PodDisruptionBudget|topologySpreadConstraints:|minReadySeconds:' "$rendered"; then
   echo 'single-node defaults unexpectedly enable HA placement' >&2
   exit 1
@@ -32,7 +33,7 @@ grep -F -q 'kind: PodDisruptionBudget' "$rendered"
 grep -F -q 'maxUnavailable: 1' "$rendered"
 grep -F -q 'replicas: 3' "$rendered"
 grep -F -q 'minReadySeconds: 5' "$rendered"
-grep -F -q 'maxSurge: 1' "$rendered"
+grep -F -q 'type: Recreate' "$rendered"
 grep -F -q 'minDomains: 2' "$rendered"
 grep -F -q 'topologyKey: kubernetes.io/hostname' "$rendered"
 grep -F -q 'whenUnsatisfiable: DoNotSchedule' "$rendered"
