@@ -20,6 +20,9 @@ an acknowledged attempt requires a caller-supplied bootstrap/lease revoker,
 AX's two-phase delete, AX NotFound, and Substrate actor NotFound before
 `ConfirmStopped`. An uncertain upsert cannot use this stop path until AX has a
 server-side immutable create/tombstone or compare-and-delete contract.
+The [pinned task-tombstone patch](ax-task-tombstones.md) is a tested proposal
+for that contract; it is not deployed, and the current ephemeral AX Redis
+would lose its tombstones on restart.
 
 The dedicated node proof on 2026-09-23 used the existing dev PostgreSQL
 database with a temporary schema and the authorized k3s node. The first run

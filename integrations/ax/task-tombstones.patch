@@ -1,0 +1,408 @@
+diff --git a/internal/server/server.go b/internal/server/server.go
+index 27e89ab..fb422c9 100644
+--- a/internal/server/server.go
++++ b/internal/server/server.go
+@@ -124,6 +124,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *v1alpha1.UpdateTaskRequest
+ 		return existing.GetMetadata()
+ 	})
+ 	if err := s.store.SaveTask(ctx, task); err != nil {
++		if errors.Is(err, store.ErrTaskDeleted) {
++			return nil, status.Errorf(codes.FailedPrecondition, "task %q was deleted; use a new name", task.Metadata.Name)
++		}
+ 		return nil, status.Errorf(codes.Internal, "saving task: %v", err)
+ 	}
+ 	return task, nil
+diff --git a/internal/server/server_test.go b/internal/server/server_test.go
+index 9cb1726..0feb1fe 100644
+--- a/internal/server/server_test.go
++++ b/internal/server/server_test.go
+@@ -303,3 +303,37 @@ func TestUpdateTask_ValidatesWorkspaceBindings(t *testing.T) {
+ 		t.Fatalf("expected a valid multi-workspace task to be accepted, got %v", err)
+ 	}
+ }
++
++func TestDeletedTaskNameCannotBeReused(t *testing.T) {
++	ctx := t.Context()
++	memStore := memory.NewStore()
++	srv := server.NewServer(memStore)
++	if _, err := srv.DeleteTask(ctx, &v1alpha1.DeleteTaskRequest{Name: "attempt-unseen"}); status.Code(err) != codes.NotFound {
++		t.Fatalf("deleting an unseen attempt: %v", err)
++	}
++	if _, err := srv.UpdateTask(ctx, &v1alpha1.UpdateTaskRequest{Task: &v1alpha1.Task{
++		Metadata: &v1alpha1.ObjectMeta{Name: "attempt-unseen"}, Spec: &v1alpha1.TaskSpec{Image: "alpine"},
++	}}); status.Code(err) != codes.FailedPrecondition {
++		t.Fatalf("late initial upsert after absent delete: %v", err)
++	}
++	task := &v1alpha1.Task{Metadata: &v1alpha1.ObjectMeta{Name: "attempt-old"}, Spec: &v1alpha1.TaskSpec{Image: "alpine"}}
++	if _, err := srv.UpdateTask(ctx, &v1alpha1.UpdateTaskRequest{Task: task}); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := srv.DeleteTask(ctx, &v1alpha1.DeleteTaskRequest{Name: "attempt-old"}); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := srv.UpdateTask(ctx, &v1alpha1.UpdateTaskRequest{Task: task}); status.Code(err) != codes.FailedPrecondition {
++		t.Fatalf("update after cancellation: %v", err)
++	}
++	if err := memStore.DeleteTask(ctx, "default", "attempt-old"); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := srv.UpdateTask(ctx, &v1alpha1.UpdateTaskRequest{Task: task}); status.Code(err) != codes.FailedPrecondition {
++		t.Fatalf("late update resurrected deleted task: %v", err)
++	}
++	task.Metadata.Name = "attempt-new"
++	if _, err := srv.UpdateTask(ctx, &v1alpha1.UpdateTaskRequest{Task: task}); err != nil {
++		t.Fatalf("new attempt name rejected: %v", err)
++	}
++}
+diff --git a/internal/store/memory/store.go b/internal/store/memory/store.go
+index 8a0b13d..15b415b 100644
+--- a/internal/store/memory/store.go
++++ b/internal/store/memory/store.go
+@@ -42,6 +42,7 @@ func clone[T proto.Message](m T) T {
+ type MemoryStore struct {
+ 	mu         sync.RWMutex
+ 	tasks      map[string]*v1alpha1.Task
++	deleted    map[string]bool
+ 	gateways   map[string]*v1alpha1.Gateway
+ 	models     map[string]*v1alpha1.Model
+ 	workspaces map[string]*v1alpha1.Workspace
+@@ -53,6 +54,7 @@ type MemoryStore struct {
+ func NewStore() *MemoryStore {
+ 	return &MemoryStore{
+ 		tasks:      make(map[string]*v1alpha1.Task),
++		deleted:    make(map[string]bool),
+ 		gateways:   make(map[string]*v1alpha1.Gateway),
+ 		models:     make(map[string]*v1alpha1.Model),
+ 		workspaces: make(map[string]*v1alpha1.Workspace),
+@@ -88,6 +90,10 @@ func (s *MemoryStore) SaveTask(ctx context.Context, task *v1alpha1.Task) error {
+ 	key := taskKey(task.Metadata.Atespace, task.Metadata.Name)
+ 
+ 	s.mu.Lock()
++	if s.deleted[key] {
++		s.mu.Unlock()
++		return store.ErrTaskDeleted
++	}
+ 	cp := clone(task)
+ 	s.tasks[key] = cp
+ 
+@@ -162,6 +168,9 @@ func (s *MemoryStore) UpdateTaskStatus(ctx context.Context, atespace, name strin
+ 	if !ok {
+ 		return store.ErrNotFound
+ 	}
++	if s.deleted[key] {
++		return store.ErrTaskDeleted
++	}
+ 	t.Status = status
+ 	cp := clone(t)
+ 
+@@ -180,6 +189,7 @@ func (s *MemoryStore) MarkTaskDeleting(ctx context.Context, atespace, name strin
+ 	key := taskKey(atespace, name)
+ 
+ 	s.mu.Lock()
++	s.deleted[key] = true
+ 	t, ok := s.tasks[key]
+ 	if !ok {
+ 		s.mu.Unlock()
+@@ -215,7 +225,9 @@ func (s *MemoryStore) MarkTaskDeleting(ctx context.Context, atespace, name strin
+ func (s *MemoryStore) DeleteTask(ctx context.Context, atespace, name string) error {
+ 	s.mu.Lock()
+ 	defer s.mu.Unlock()
+-	delete(s.tasks, taskKey(atespace, name))
++	key := taskKey(atespace, name)
++	s.deleted[key] = true
++	delete(s.tasks, key)
+ 	return nil
+ }
+ 
+diff --git a/internal/store/redis/store.go b/internal/store/redis/store.go
+index 0bbf7aa..7d053e5 100644
+--- a/internal/store/redis/store.go
++++ b/internal/store/redis/store.go
+@@ -37,6 +37,45 @@ const (
+ var (
+ 	jsonMarshalOpts   = protojson.MarshalOptions{UseProtoNames: false, EmitUnpopulated: false}
+ 	jsonUnmarshalOpts = protojson.UnmarshalOptions{DiscardUnknown: true}
++	// These scripts order every task write against its permanent deletion marker.
++	// A timed-out UpdateTask cannot recreate a task after DeleteTask, even if its
++	// Redis command reaches the server after the client has given up.
++	saveTaskScript = redis.NewScript(`
++if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
++if tonumber(ARGV[2]) > 0 then
++  redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
++else
++  redis.call('SET', KEYS[1], ARGV[1])
++end
++redis.call('ZADD', KEYS[3], ARGV[3], ARGV[4])
++redis.call('ZADD', KEYS[4], ARGV[3], ARGV[5])
++redis.call('XADD', KEYS[5], '*', 'action', 'reconcile', 'atespace', ARGV[6], 'name', ARGV[5])
++redis.call('PUBLISH', KEYS[6], ARGV[1])
++return 1`)
++	statusTaskScript = redis.NewScript(`
++if redis.call('EXISTS', KEYS[2]) == 1 then return -1 end
++if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end
++redis.call('SET', KEYS[1], ARGV[1], 'KEEPTTL')
++redis.call('PUBLISH', KEYS[3], ARGV[1])
++return 1`)
++	markTaskDeletingScript = redis.NewScript(`
++redis.call('SET', KEYS[2], '1')
++local data = redis.call('GET', KEYS[1])
++if not data then return 0 end
++local task = cjson.decode(data)
++if not task.status then task.status = {} end
++task.status.phase = 'Terminating'
++data = cjson.encode(task)
++redis.call('SET', KEYS[1], data, 'KEEPTTL')
++redis.call('PUBLISH', KEYS[3], data)
++redis.call('XADD', KEYS[4], '*', 'action', 'delete', 'atespace', ARGV[1], 'name', ARGV[2])
++return 1`)
++	deleteTaskScript = redis.NewScript(`
++redis.call('SET', KEYS[2], '1')
++redis.call('DEL', KEYS[1])
++redis.call('ZREM', KEYS[3], ARGV[1])
++redis.call('ZREM', KEYS[4], ARGV[2])
++return 1`)
+ )
+ 
+ // Options contains configuration for the Redis store.
+@@ -82,6 +121,10 @@ func (s *Store) taskKey(atespace, name string) string {
+ 	return fmt.Sprintf("%s:task:%s:%s", s.opts.KeyPrefix, atespace, name)
+ }
+ 
++func (s *Store) deletedTaskKey(atespace, name string) string {
++	return fmt.Sprintf("%s:task-deleted:%s:%s", s.opts.KeyPrefix, atespace, name)
++}
++
+ func (s *Store) gwKey(atespace, name string) string {
+ 	return fmt.Sprintf("%s:gw:%s:%s", s.opts.KeyPrefix, atespace, name)
+ }
+@@ -164,24 +207,17 @@ func (s *Store) SaveTask(ctx context.Context, task *v1alpha1.Task) error {
+ 	score := float64(time.Now().UnixNano())
+ 	member := fmt.Sprintf("%s:%s", atespace, name)
+ 
+-	pipe := s.client.TxPipeline()
+-	pipe.Set(ctx, s.taskKey(atespace, name), data, s.opts.TTL)
+-	pipe.ZAdd(ctx, s.taskIndexKey(), redis.Z{Score: score, Member: member})
+-	pipe.ZAdd(ctx, s.taskAtespaceIndexKey(atespace), redis.Z{Score: score, Member: name})
+-	pipe.XAdd(ctx, &redis.XAddArgs{
+-		Stream: s.opts.StreamName,
+-		Values: map[string]interface{}{
+-			"action":   "reconcile",
+-			"atespace": atespace,
+-			"name":     name,
+-		},
+-	})
+-	pipe.Publish(ctx, s.taskPubSubChannel(atespace, name), data)
+-
+-	_, err = pipe.Exec(ctx)
++	result, err := saveTaskScript.Run(ctx, s.client,
++		[]string{s.taskKey(atespace, name), s.deletedTaskKey(atespace, name),
++			s.taskIndexKey(), s.taskAtespaceIndexKey(atespace), s.opts.StreamName,
++			s.taskPubSubChannel(atespace, name)},
++		data, s.opts.TTL.Milliseconds(), score, member, name, atespace).Int()
+ 	if err != nil {
+ 		return fmt.Errorf("saving task to redis: %w", err)
+ 	}
++	if result == 0 {
++		return store.ErrTaskDeleted
++	}
+ 	return nil
+ }
+ 
+@@ -280,49 +316,37 @@ func (s *Store) UpdateTaskStatus(ctx context.Context, atespace, name string, sta
+ 		return fmt.Errorf("marshaling task status: %w", err)
+ 	}
+ 
+-	pipe := s.client.TxPipeline()
+-	pipe.Set(ctx, s.taskKey(atespace, name), data, s.opts.TTL)
+-	pipe.Publish(ctx, s.taskPubSubChannel(atespace, name), data)
+-	_, err = pipe.Exec(ctx)
++	result, err := statusTaskScript.Run(ctx, s.client,
++		[]string{s.taskKey(atespace, name), s.deletedTaskKey(atespace, name),
++			s.taskPubSubChannel(atespace, name)}, data).Int()
+ 	if err != nil {
+ 		return fmt.Errorf("updating task status in redis: %w", err)
+ 	}
++	if result < 0 {
++		return store.ErrTaskDeleted
++	}
++	if result == 0 {
++		return store.ErrNotFound
++	}
+ 	return nil
+ }
+ 
+-// MarkTaskDeleting flips the task to the Terminating phase, notifies watchers, and
+-// publishes a delete event for the controller. The record stays until DeleteTask.
++// MarkTaskDeleting permanently fences the name before checking for a task.
++// This also covers a timed-out upsert that has not reached Redis yet.
+ func (s *Store) MarkTaskDeleting(ctx context.Context, atespace, name string) error {
+ 	if atespace == "" {
+ 		atespace = "default"
+ 	}
+-	task, err := s.GetTask(ctx, atespace, name)
+-	if err != nil {
+-		return err
+-	}
+-	if task.Status == nil {
+-		task.Status = &v1alpha1.TaskStatus{}
+-	}
+-	task.Status.Phase = v1alpha1.PhaseTerminating
+-	data, err := protojson.Marshal(task)
++	result, err := markTaskDeletingScript.Run(ctx, s.client,
++		[]string{s.taskKey(atespace, name), s.deletedTaskKey(atespace, name),
++			s.taskPubSubChannel(atespace, name), s.opts.StreamName},
++		atespace, name).Int()
+ 	if err != nil {
+-		return fmt.Errorf("marshaling task: %w", err)
+-	}
+-
+-	pipe := s.client.TxPipeline()
+-	pipe.Set(ctx, s.taskKey(atespace, name), data, s.opts.TTL)
+-	pipe.Publish(ctx, s.taskPubSubChannel(atespace, name), data)
+-	pipe.XAdd(ctx, &redis.XAddArgs{
+-		Stream: s.opts.StreamName,
+-		Values: map[string]interface{}{
+-			"action":   "delete",
+-			"atespace": atespace,
+-			"name":     name,
+-		},
+-	})
+-	if _, err := pipe.Exec(ctx); err != nil {
+ 		return fmt.Errorf("marking task deleting in redis: %w", err)
+ 	}
++	if result == 0 {
++		return store.ErrNotFound
++	}
+ 	return nil
+ }
+ 
+@@ -333,11 +357,9 @@ func (s *Store) DeleteTask(ctx context.Context, atespace, name string) error {
+ 	}
+ 	member := fmt.Sprintf("%s:%s", atespace, name)
+ 
+-	pipe := s.client.TxPipeline()
+-	pipe.Del(ctx, s.taskKey(atespace, name))
+-	pipe.ZRem(ctx, s.taskIndexKey(), member)
+-	pipe.ZRem(ctx, s.taskAtespaceIndexKey(atespace), name)
+-	if _, err := pipe.Exec(ctx); err != nil {
++	if err := deleteTaskScript.Run(ctx, s.client,
++		[]string{s.taskKey(atespace, name), s.deletedTaskKey(atespace, name),
++			s.taskIndexKey(), s.taskAtespaceIndexKey(atespace)}, member, name).Err(); err != nil {
+ 		return fmt.Errorf("deleting task from redis: %w", err)
+ 	}
+ 	return nil
+diff --git a/internal/store/redis/store_test.go b/internal/store/redis/store_test.go
+new file mode 100644
+index 0000000..f37ce4f
+--- /dev/null
++++ b/internal/store/redis/store_test.go
+@@ -0,0 +1,95 @@
++// Copyright 2026 Blaxsmith contributors
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++package redis
++
++import (
++	"errors"
++	"net"
++	"os"
++	"os/exec"
++	"strconv"
++	"testing"
++	"time"
++
++	"github.com/google/ax/internal/store"
++	"github.com/google/ax/pkg/apis/v1alpha1"
++	redisclient "github.com/redis/go-redis/v9"
++)
++
++func TestTaskDeletionTombstonesLateUpsert(t *testing.T) {
++	redisPath, err := exec.LookPath("redis-server")
++	if err != nil {
++		t.Skip("redis-server is required for atomic task deletion test")
++	}
++	listener, err := net.Listen("tcp", "127.0.0.1:0")
++	if err != nil {
++		t.Fatal(err)
++	}
++	port := listener.Addr().(*net.TCPAddr).Port
++	_ = listener.Close()
++	cmd := exec.Command(redisPath, "--bind", "127.0.0.1", "--port", strconv.Itoa(port), "--save", "", "--appendonly", "no")
++	cmd.Env = append(os.Environ(), "LC_ALL=C")
++	if err := cmd.Start(); err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
++	ctx := t.Context()
++	client := redisclient.NewClient(&redisclient.Options{Addr: net.JoinHostPort("127.0.0.1", strconv.Itoa(port))})
++	t.Cleanup(func() { _ = client.Close() })
++	deadline := time.Now().Add(3 * time.Second)
++	for client.Ping(ctx).Err() != nil {
++		if time.Now().After(deadline) {
++			t.Fatal("redis-server did not start")
++		}
++		time.Sleep(10 * time.Millisecond)
++	}
++	s := NewStore(client, Options{KeyPrefix: "test"})
++	if err := s.MarkTaskDeleting(ctx, "org", "attempt-unseen"); !errors.Is(err, store.ErrNotFound) {
++		t.Fatalf("absent task deletion: %v", err)
++	}
++	unseen := &v1alpha1.Task{Metadata: &v1alpha1.ObjectMeta{Atespace: "org", Name: "attempt-unseen"}, Spec: &v1alpha1.TaskSpec{Image: "alpine"}}
++	if err := s.SaveTask(ctx, unseen); !errors.Is(err, store.ErrTaskDeleted) {
++		t.Fatalf("late initial upsert after absent delete: %v", err)
++	}
++	task := &v1alpha1.Task{Metadata: &v1alpha1.ObjectMeta{Atespace: "org", Name: "attempt-old"}, Spec: &v1alpha1.TaskSpec{Image: "alpine"}}
++	if err := s.SaveTask(ctx, task); err != nil {
++		t.Fatal(err)
++	}
++	if err := s.MarkTaskDeleting(ctx, "org", "attempt-old"); err != nil {
++		t.Fatal(err)
++	}
++	if err := s.SaveTask(ctx, task); !errors.Is(err, store.ErrTaskDeleted) {
++		t.Fatalf("late upsert during cleanup: %v", err)
++	}
++	if err := s.UpdateTaskStatus(ctx, "org", "attempt-old", &v1alpha1.TaskStatus{Phase: "Running"}); !errors.Is(err, store.ErrTaskDeleted) {
++		t.Fatalf("stale status overwrote Terminating: %v", err)
++	}
++	if err := s.DeleteTask(ctx, "org", "attempt-old"); err != nil {
++		t.Fatal(err)
++	}
++	if err := s.SaveTask(ctx, task); !errors.Is(err, store.ErrTaskDeleted) {
++		t.Fatalf("late upsert after cleanup: %v", err)
++	}
++	if _, err := s.GetTask(ctx, "org", "attempt-old"); !errors.Is(err, store.ErrNotFound) {
++		t.Fatalf("deleted task became visible: %v", err)
++	}
++	if ttl := client.TTL(ctx, s.deletedTaskKey("org", "attempt-old")).Val(); ttl != -1 {
++		t.Fatalf("deletion marker must not expire: %v", ttl)
++	}
++	task.Metadata.Name = "attempt-new"
++	if err := s.SaveTask(ctx, task); err != nil {
++		t.Fatalf("new attempt name rejected: %v", err)
++	}
++}
+diff --git a/internal/store/store.go b/internal/store/store.go
+index 1e84a0f..7c3c266 100644
+--- a/internal/store/store.go
++++ b/internal/store/store.go
+@@ -23,7 +23,8 @@ import (
+ )
+ 
+ var (
+-	ErrNotFound = errors.New("resource not found")
++	ErrNotFound    = errors.New("resource not found")
++	ErrTaskDeleted = errors.New("task name permanently deleted")
+ )
+ 
+ // TaskEvent represents an event published to the task event stream.
