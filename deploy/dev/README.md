@@ -356,7 +356,8 @@ written to the report or repository.
 
 On the dedicated node, PostgreSQL 18 listens only on its Unix socket. The
 `blaxsmith_dev` database and limited peer-authenticated `root` role hold the
-three `db/migrations` files. This database is synthetic evidence, not product
+four `db/migrations` files. The fourth adds non-secret access-authority records;
+the database is synthetic evidence, not product
 storage. Run with a new output directory each time:
 
 ```sh
@@ -365,7 +366,7 @@ export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 export BLAXSMITH_DEV_SIGNING_KEY_FILE=/opt/blaxsmith-dev/platform-bootstrap-signing.key
 export BLAXSMITH_DEV_LEDGER=1
 python3 deploy/dev/probe-bootstrap.py \
-  "$(cat /opt/blaxsmith-dev/ax-platform-key-build-1790118073/ax-task-runner.image)" \
+  "$(cat /opt/blaxsmith-dev/ax-exact-commit-build-1790137000/ax-task-runner.image)" \
   10.43.36.216 "/opt/blaxsmith-dev/ledger-release-probe-$(date +%s)"
 ```
 
@@ -376,7 +377,8 @@ each send, rechecks the live actor, and deactivates the owner after suspension.
 The [passing report](../../docs/bootstrap-ledger-release-probe.json) has no
 token or signing key. The second release follows data-snapshot resume; the old
 release is rejected. A newer offer also supersedes an unreleased redemption in
-the local database test. The dev authorizer checks only image/pool/gVisor; no
+the local database test. The dev authorizer checks only image/pool/gVisor and
+data-only snapshot settings; no
 grant, effective egress check, credential, or private Git access is involved.
 
 ## Probe encrypted synthetic private Git setup
