@@ -42,8 +42,9 @@ policy, real connection custody, effective egress enforcement, and revocation
 remain prerequisites for sensitive work.
 The first [non-secret access-authority schema and Git-read check](docs/access-authority.md)
 now lock current provider, connection, project policy, grant, and binding rows
-through the release transaction. Account onboarding, credential custody, and
-access leases are still unimplemented.
+through the release transaction. A versioned encrypted secret store now
+passes synthetic PostgreSQL tests for rotation and custody. Account onboarding,
+provider issuance, and access leases are still unimplemented.
 The [actor-UID fence](docs/bootstrap-actor-fence-proof.json) now rejects a
 stale target at both router and worker ingress in the dev cluster.
 The [controller-owned bootstrap key](docs/bootstrap-platform-key-probe.json)

@@ -356,7 +356,8 @@ written to the report or repository.
 
 On the dedicated node, PostgreSQL 18 listens only on its Unix socket. The
 `blaxsmith_dev` database and limited peer-authenticated `root` role hold the
-four `db/migrations` files. The fourth adds non-secret access-authority records;
+five `db/migrations` files. The fourth adds non-secret access-authority records
+and the fifth adds versioned encrypted secret rows;
 the database is synthetic evidence, not product
 storage. Run with a new output directory each time:
 

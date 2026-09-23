@@ -15,48 +15,8 @@ import (
 )
 
 func TestGitReadAuthorityPostgres(t *testing.T) {
-	dsn := os.Getenv("BLAXSMITH_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set BLAXSMITH_TEST_DATABASE_URL for the PostgreSQL authority test")
-	}
 	ctx := context.Background()
-	admin, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(admin.Close)
-	var suffix [8]byte
-	if _, err := rand.Read(suffix[:]); err != nil {
-		t.Fatal(err)
-	}
-	schema := "blaxsmith_access_" + hex.EncodeToString(suffix[:])
-	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if _, err := admin.Exec(cleanupCtx, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE"); err != nil {
-			t.Error(err)
-		}
-	})
-	config, err := pgxpool.ParseConfig(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.ConnConfig.RuntimeParams["search_path"] = schema
-	pool, err := pgxpool.NewWithConfig(ctx, config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	migration, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", "0004_access_authority.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, string(migration)); err != nil {
-		t.Fatal(err)
-	}
+	pool := testPool(t)
 	const repo = "https://git.example.invalid/team/private.git"
 	const commit = "0123456789abcdef0123456789abcdef01234567"
 	if _, err := pool.Exec(ctx, `INSERT INTO access_provider_registrations
@@ -173,4 +133,53 @@ func TestGitReadAuthorityPostgres(t *testing.T) {
 		VALUES ('org-b','cross-org','attempt-a','project-a','grant-a',1,'git.read',$1,$2,1)`, repo, commit); err == nil {
 		t.Fatal("cross-organization grant reference accepted")
 	}
+}
+
+func testPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	dsn := os.Getenv("BLAXSMITH_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set BLAXSMITH_TEST_DATABASE_URL for the PostgreSQL authority test")
+	}
+	ctx := context.Background()
+	admin, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(admin.Close)
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		t.Fatal(err)
+	}
+	schema := "blaxsmith_access_" + hex.EncodeToString(suffix[:])
+	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, err := admin.Exec(cleanupCtx, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE"); err != nil {
+			t.Error(err)
+		}
+	})
+	config, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.ConnConfig.RuntimeParams["search_path"] = schema
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	for _, name := range []string{"0004_access_authority.sql", "0005_access_secrets.sql"} {
+		migration, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, string(migration)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return pool
 }
