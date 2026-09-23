@@ -3,7 +3,8 @@
 Upstream: `github.com/google/ax`, commit
 `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`, Apache-2.0 (see LICENSE).
 `fail-closed.patch`, `egress-policy.patch`, `bootstrap-gate.patch`,
-`platform-bootstrap-key.patch`, and `encrypted-git-bootstrap.patch` change the files named in their
+`platform-bootstrap-key.patch`, `encrypted-git-bootstrap.patch`, and
+`command-exit-readback.patch` change the files named in their
 diffs; the reference checkout stays untouched. This is a temporary integration overlay, not a claim that AX
 has accepted these changes or that secure bootstrap is finished.
 
@@ -135,3 +136,24 @@ raw task environment fields remain separate concerns: users must not put secrets
 in `spec.env`, task YAML, repository URLs or commands.
 
 Phase 0 bootstrap/credential gates stay open. Only synthetic tasks run here.
+
+## Command exit readback
+
+The pinned gated runner now serves `GET /blaxsmith/command-exit`. It returns
+HTTP 202 before the child command exits and a small JSON record after `Wait`:
+activation nonce, AX atespace/task, SHA-256 of JSON-encoded `spec.command`, exit
+code, signal, interrupted flag, and sequence 1. It is absent without the
+platform bootstrap gate. A setup or command-start error produces no exit
+record. The runner stays available for readback after the child exits.
+
+The product connector must read through the authenticated route for the
+*current* actor, verify the active owner, actor UID, template, image, command
+hash, and bootstrap activation, then sign an attempt-bound
+`internal/runnerexit.ExitReport` with a key held outside the guest. The signed
+report records that observation; it does not assert task success or verify
+artifacts. The platform must not finish an attempt from exit code alone.
+
+The runner and child currently share a container security boundary. In
+particular, hostile same-UID code may tamper with the runner process or its
+readback. This is suitable only for the synthetic integration path until
+process isolation or an external trusted supervisor is proved on the node.

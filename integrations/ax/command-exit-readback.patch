@@ -1,0 +1,234 @@
+diff --git a/internal/metadata/server.go b/internal/metadata/server.go
+index d41c6c5..13e080e 100644
+--- a/internal/metadata/server.go
++++ b/internal/metadata/server.go
+@@ -48,6 +48,7 @@ type ServerOptions struct {
+ 	WorkspacePath string
+ 	LogDir        string
+ 	Bootstrap     http.Handler
++	CommandExit   http.Handler
+ }
+ 
+ // NewServer creates a new metadata and guest server serving the task and its
+@@ -102,6 +103,9 @@ func NewServer(port int, task *v1alpha1.Task, workspaces []*v1alpha1.Workspace,
+ 	if opt.Bootstrap != nil {
+ 		mux.Handle("/blaxsmith/bootstrap/", opt.Bootstrap)
+ 	}
++	if opt.CommandExit != nil {
++		mux.Handle("/blaxsmith/command-exit", opt.CommandExit)
++	}
+ 
+ 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+ 		if s.grpcServer != nil && r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
+diff --git a/runner/command_exit.go b/runner/command_exit.go
+new file mode 100644
+index 0000000..75085fe
+--- /dev/null
++++ b/runner/command_exit.go
+@@ -0,0 +1,84 @@
++package runner
++
++import (
++	"crypto/sha256"
++	"encoding/hex"
++	"encoding/json"
++	"net/http"
++	"os/exec"
++	"sync"
++	"syscall"
++)
++
++const commandExitSchema = "blaxsmith.command-exit/v1alpha1"
++
++// commandExitReadback is a read-only observation from the pinned runner. The
++// platform must authenticate the live actor and bind this to its own attempt
++// before signing a durable report. The child process cannot submit a result.
++type commandExitReadback struct {
++	Schema          string `json:"schema"`
++	ActivationNonce string `json:"activation_nonce"`
++	AXAtespace      string `json:"ax_atespace"`
++	AXTask          string `json:"ax_task"`
++	CommandSHA256   string `json:"command_sha256"`
++	ExitCode        int    `json:"exit_code"`
++	Signal          int    `json:"signal"`
++	Interrupted     bool   `json:"interrupted"`
++	Sequence        int64  `json:"sequence"`
++}
++
++type commandExitObserver struct {
++	gate    *bootstrapGate
++	mu      sync.RWMutex
++	command string
++	report  *commandExitReadback
++}
++
++func newCommandExitObserver(gate *bootstrapGate, argv []string) *commandExitObserver {
++	if gate == nil || len(argv) == 0 {
++		return nil
++	}
++	encoded, _ := json.Marshal(argv)
++	sum := sha256.Sum256(encoded)
++	return &commandExitObserver{gate: gate, command: hex.EncodeToString(sum[:])}
++}
++
++func (o *commandExitObserver) record(cmd *exec.Cmd, interrupted bool) {
++	if o == nil || cmd.ProcessState == nil {
++		return
++	}
++	o.gate.mu.Lock()
++	if !o.gate.done {
++		o.gate.mu.Unlock()
++		return
++	}
++	report := commandExitReadback{Schema: commandExitSchema, ActivationNonce: o.gate.nonce,
++		AXAtespace: o.gate.atespace, AXTask: o.gate.task, CommandSHA256: o.command,
++		ExitCode: cmd.ProcessState.ExitCode(), Interrupted: interrupted, Sequence: 1}
++	o.gate.mu.Unlock()
++	if state, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok && state.Signaled() {
++		report.Signal = int(state.Signal())
++	}
++	o.mu.Lock()
++	o.report = &report
++	o.mu.Unlock()
++}
++
++func (o *commandExitObserver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
++	if r.Method != http.MethodGet {
++		http.Error(w, "GET required", http.StatusMethodNotAllowed)
++		return
++	}
++	o.mu.RLock()
++	if o.report == nil {
++		o.mu.RUnlock()
++		w.WriteHeader(http.StatusAccepted)
++		return
++	}
++	report := *o.report
++	o.mu.RUnlock()
++	w.Header().Set("Content-Type", "application/json")
++	_ = json.NewEncoder(w).Encode(report)
++}
++
++var _ http.Handler = (*commandExitObserver)(nil)
+diff --git a/runner/command_exit_test.go b/runner/command_exit_test.go
+new file mode 100644
+index 0000000..a4daf9b
+--- /dev/null
++++ b/runner/command_exit_test.go
+@@ -0,0 +1,69 @@
++package runner_test
++
++import (
++	"crypto/ed25519"
++	"crypto/rand"
++	"crypto/sha256"
++	"encoding/base64"
++	"encoding/hex"
++	"encoding/json"
++	"fmt"
++	"net/http"
++	"testing"
++)
++
++func TestGatedCommandExitReadback(t *testing.T) {
++	public, private, err := ed25519.GenerateKey(rand.Reader)
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("BLAXSMITH_BOOTSTRAP_PUBLIC_KEY", base64.StdEncoding.EncodeToString(public))
++	h := newHarness(t)
++	h.task.Spec.Command = []string{"sh", "-c", "exit 7"}
++	h.start(t)
++	waitHealthy(t, h.cfg.Port)
++	challenge := readChallenge(t, h.cfg.Port)
++	url := fmt.Sprintf("http://127.0.0.1:%d/blaxsmith/command-exit", h.cfg.Port)
++	checkStatus := func(want int) *http.Response {
++		t.Helper()
++		response, err := http.Get(url)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if response.StatusCode != want {
++			response.Body.Close()
++			t.Fatalf("exit readback status = %d, want %d", response.StatusCode, want)
++		}
++		return response
++	}
++	checkStatus(http.StatusAccepted).Body.Close()
++	if status := sendRelease(t, h.cfg.Port, signedRelease(challenge, private, challenge.Task)); status != http.StatusNoContent {
++		t.Fatalf("release status = %d", status)
++	}
++	if exit := h.waitExit(t); exit.ExitCode != 7 {
++		t.Fatalf("command exit = %+v", exit)
++	}
++	response := checkStatus(http.StatusOK)
++	defer response.Body.Close()
++	var report struct {
++		Schema          string `json:"schema"`
++		ActivationNonce string `json:"activation_nonce"`
++		AXAtespace      string `json:"ax_atespace"`
++		AXTask          string `json:"ax_task"`
++		CommandSHA256   string `json:"command_sha256"`
++		ExitCode        int    `json:"exit_code"`
++		Signal          int    `json:"signal"`
++		Interrupted     bool   `json:"interrupted"`
++		Sequence        int64  `json:"sequence"`
++	}
++	if err := json.NewDecoder(response.Body).Decode(&report); err != nil {
++		t.Fatal(err)
++	}
++	command := sha256.Sum256([]byte(`["sh","-c","exit 7"]`))
++	if report.Schema != "blaxsmith.command-exit/v1alpha1" || report.ActivationNonce != challenge.Nonce ||
++		report.AXAtespace != challenge.Atespace || report.AXTask != challenge.Task ||
++		report.CommandSHA256 != hex.EncodeToString(command[:]) || report.ExitCode != 7 ||
++		report.Signal != 0 || report.Interrupted || report.Sequence != 1 {
++		t.Fatalf("invalid command exit readback: %+v", report)
++	}
++}
+diff --git a/runner/runner.go b/runner/runner.go
+index 4a09b7b..84fbd9a 100644
+--- a/runner/runner.go
++++ b/runner/runner.go
+@@ -151,11 +151,17 @@ func Run(ctx context.Context, cfg Config) error {
+ 	if err != nil {
+ 		return fmt.Errorf("configuring bootstrap gate: %w", err)
+ 	}
++	cmdArgs := cfg.Task.GetSpec().GetCommand()
++	exitObserver := newCommandExitObserver(gate, cmdArgs)
+ 	for _, e := range cfg.Task.GetSpec().GetEnv() {
+ 		_ = os.Setenv(e.GetName(), e.GetValue())
+ 	}
+ 
+-	metaServer := metadata.NewServer(port, cfg.Task, workspaces, metadata.ServerOptions{WorkspacePath: wsPath, Bootstrap: gate})
++	options := metadata.ServerOptions{WorkspacePath: wsPath, Bootstrap: gate}
++	if exitObserver != nil {
++		options.CommandExit = exitObserver
++	}
++	metaServer := metadata.NewServer(port, cfg.Task, workspaces, options)
+ 	if err := metaServer.Start(); err != nil {
+ 		return fmt.Errorf("starting metadata server: %w", err)
+ 	}
+@@ -198,7 +204,6 @@ func Run(ctx context.Context, cfg Config) error {
+ 	metaServer.SetWorkspaceReady(true)
+ 	slog.Info("workspace maiden run setup marked ready", "count", len(mounts))
+ 
+-	cmdArgs := cfg.Task.GetSpec().GetCommand()
+ 	if len(cmdArgs) == 0 {
+ 		slog.Info("no task command specified; serving metadata until stopped")
+ 		<-ctx.Done()
+@@ -225,11 +230,14 @@ func Run(ctx context.Context, cfg Config) error {
+ 
+ 	select {
+ 	case err := <-exited:
++		exitObserver.record(cmd, false)
+ 		reportExit(cfg, cmd, err)
+ 		// Keep the sandbox up and inspectable until told to stop.
+ 		<-ctx.Done()
+ 	case <-ctx.Done():
+-		reportExit(cfg, cmd, stopCommand(cmd, exited))
++		err := stopCommand(cmd, exited)
++		exitObserver.record(cmd, true)
++		reportExit(cfg, cmd, err)
+ 	}
+ 	return nil
+ }
