@@ -379,6 +379,51 @@ release is rejected. A newer offer also supersedes an unreleased redemption in
 the local database test. The dev authorizer checks only image/pool/gVisor; no
 grant, effective egress check, credential, or private Git access is involved.
 
+## Probe encrypted synthetic private Git setup
+
+The next probe uses a root-only synthetic token and a private HTTPS Git fixture
+bound to the node's `10.42.0.1` k3s bridge. Its test CA is built into the
+digest-pinned runner image; the Task and Workspace contain only the clean
+repository URL. Use fresh fixture, build, and evidence directories:
+
+```sh
+cd /opt/blaxsmith-dev/blaxsmith
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+fixture=/opt/blaxsmith-dev/private-git-fixture-$(date +%s)
+python3 deploy/dev/private-git-fixture.py prepare "$fixture"
+unit=blaxsmith-private-git-fixture-$(date +%s)
+systemd-run --unit="$unit" --property=RuntimeMaxSec=900 \
+  /usr/bin/python3 /opt/blaxsmith-dev/blaxsmith/deploy/dev/private-git-fixture.py serve "$fixture"
+built=/opt/blaxsmith-dev/ax-private-git-build-$(date +%s)
+bash integrations/ax/build.sh /opt/blaxsmith-dev/ax "$built"
+bash deploy/dev/publish-ax.sh "$built" "$fixture/ca.pem"
+python3 deploy/dev/enable-platform-bootstrap.py "$built" \
+  /opt/blaxsmith-dev/platform-bootstrap-signing.key
+export BLAXSMITH_DEV_SIGNING_KEY_FILE=/opt/blaxsmith-dev/platform-bootstrap-signing.key
+export BLAXSMITH_DEV_LEDGER=1
+export BLAXSMITH_DEV_GIT_REPO=https://10.42.0.1:8443/private.git
+export BLAXSMITH_DEV_GIT_TOKEN_FILE="$fixture/token"
+evidence=/opt/blaxsmith-dev/private-git-probe-$(date +%s)
+python3 deploy/dev/probe-bootstrap.py "$(cat "$built/ax-task-runner.image")" \
+  10.43.36.216 "$evidence"
+python3 deploy/dev/scan-private-git.py "$fixture/token" "$evidence" \
+  > "$evidence/secret-scan.json"
+systemctl stop "$unit"
+```
+
+The [passing live report](../../docs/bootstrap-private-git-probe.json) and
+[bounded secret scan](../../docs/bootstrap-private-git-secret-scan.json) used
+runner image `sha256:1fa9e93b2d63088c2a0ba673743ad568cceb17a799199e488512d50dbc8608b6`.
+The [Linux build provenance](../../integrations/ax/provenance-encrypted-git.json)
+records the tested source and binary hashes. PostgreSQL recorded two completed
+releases and an inactive generation-3 owner. The test found no token in AX
+Redis, inspected logs and control-plane objects, Git config, task environment,
+or evidence files. The first resume attempt exposed a missing `/ax` marker;
+the revised runner writes a URL-bound marker to the snapshotted workspace and
+rejects an existing `.git` without it or with a changed remote. This is a
+synthetic proof only: there is no product Grant/Binding/Lease or real provider
+credential, and full-snapshot memory/complete egress/revocation remain open.
+
 ## Original baseline task
 
 Replace `__WORKER_IMAGE__` and `__SUBSTRATE_VERSION__` in `workerpool.yaml` with

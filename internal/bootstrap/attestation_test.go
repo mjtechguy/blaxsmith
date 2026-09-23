@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -44,7 +45,11 @@ func TestVerifyActorProof(t *testing.T) {
 	if _, err := rand.Read(guestNonce[:]); err != nil {
 		t.Fatal(err)
 	}
-	challenge := Challenge{Nonce: base64.RawURLEncoding.EncodeToString(guestNonce[:]), ExpiresAt: now.Add(time.Minute).Unix(), Atespace: "team", Task: "task"}
+	recipient, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	challenge := Challenge{Nonce: base64.RawURLEncoding.EncodeToString(guestNonce[:]), ExpiresAt: now.Add(time.Minute).Unix(), Atespace: "team", Task: "task", RecipientKey: base64.RawURLEncoding.EncodeToString(recipient.PublicKey().Bytes())}
 	body, _ := json.Marshal(challenge)
 	sign := func(body []byte) []byte {
 		h := sha256.New()
@@ -73,6 +78,9 @@ func TestVerifyActorProof(t *testing.T) {
 	wrongTask := challenge
 	wrongTask.Task = "other"
 	wrongTaskBody, _ := json.Marshal(wrongTask)
+	invalidKey := challenge
+	invalidKey.RecipientKey = "not-a-key"
+	invalidKeyBody, _ := json.Marshal(invalidKey)
 	for _, tc := range []struct {
 		name     string
 		expected Expected
@@ -86,6 +94,7 @@ func TestVerifyActorProof(t *testing.T) {
 		{"tampered guest response", expected, append([]byte{}, expiredBody...), chain, sign(body)},
 		{"expired guest challenge", expected, expiredBody, chain, sign(expiredBody)},
 		{"wrong task", expected, wrongTaskBody, chain, sign(wrongTaskBody)},
+		{"invalid guest encryption key", expected, invalidKeyBody, chain, sign(invalidKeyBody)},
 		{"missing certificate", expected, body, nil, sign(body)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

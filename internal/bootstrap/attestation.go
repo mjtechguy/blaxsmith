@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"bytes"
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"crypto/x509"
@@ -27,10 +28,11 @@ type Expected struct {
 }
 
 type Challenge struct {
-	Nonce     string `json:"nonce"`
-	ExpiresAt int64  `json:"expires_at"`
-	Atespace  string `json:"atespace"`
-	Task      string `json:"task"`
+	Nonce        string `json:"nonce"`
+	ExpiresAt    int64  `json:"expires_at"`
+	Atespace     string `json:"atespace"`
+	Task         string `json:"task"`
+	RecipientKey string `json:"recipient_key,omitempty"`
 }
 
 // Verify checks a Substrate atunnel proof against the connector's own pending
@@ -116,6 +118,15 @@ func Verify(expected Expected, body, chainPEM, signature []byte) (Challenge, err
 	if err != nil || len(guestNonce) != 32 || challenge.Atespace != expected.Atespace || challenge.Task != expected.ActorName ||
 		!time.Unix(challenge.ExpiresAt, 0).After(expected.Now) || time.Unix(challenge.ExpiresAt, 0).After(expected.Now.Add(2*time.Minute)) {
 		return Challenge{}, fmt.Errorf("guest challenge is stale or mismatched")
+	}
+	if challenge.RecipientKey != "" {
+		key, err := base64.RawURLEncoding.DecodeString(challenge.RecipientKey)
+		if err != nil || len(key) != 32 {
+			return Challenge{}, fmt.Errorf("invalid guest recipient key")
+		}
+		if _, err := ecdh.X25519().NewPublicKey(key); err != nil {
+			return Challenge{}, fmt.Errorf("invalid guest recipient key")
+		}
 	}
 	return challenge, nil
 }

@@ -34,9 +34,12 @@ an audience-scoped connector identity before bootstrap. A
 [PostgreSQL challenge ledger](docs/bootstrap-ledger.md) now verifies and
 consumes an attempt/owner-bound proof once. A [live synthetic connector
 probe](docs/bootstrap-ledger-release-probe.json) exercised release and owner
-deactivation through PostgreSQL and the current actor. Product policy,
-credential delivery, and private Git checkout remain prerequisites for
-sensitive work.
+deactivation through PostgreSQL and the current actor. A subsequent
+[synthetic private Git probe](docs/bootstrap-private-git-probe.json) delivered
+an encrypted setup token and checked out a private HTTPS fixture before the
+task command, including a fresh release after data-snapshot resume. Product
+policy, real connection custody, effective egress enforcement, and revocation
+remain prerequisites for sensitive work.
 The [actor-UID fence](docs/bootstrap-actor-fence-proof.json) now rejects a
 stale target at both router and worker ingress in the dev cluster.
 The [controller-owned bootstrap key](docs/bootstrap-platform-key-probe.json)

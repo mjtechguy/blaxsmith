@@ -128,6 +128,18 @@ and deactivated the owner after suspension. Its authorization check is still
 synthetic; effective egress, product grants, encrypted credential delivery,
 private checkout, full-snapshot behavior, and recovery remain open.
 
+The [private-Git probe](bootstrap-private-git-probe.json) then delivered a
+synthetic token in an X25519/AES-GCM envelope bound to the actor-signed guest
+key and the one-use release. A pinned Git-capable runner fetched an authenticated
+HTTPS fixture before the task command. A missing `/ax` marker on data-snapshot
+resume initially blocked the checkout; the runner now places a URL-bound marker
+on the snapshotted workspace volume and rejects an existing `.git` without it.
+The resumed task required a new proof and kept the private checkout. The
+[surface scan](bootstrap-private-git-secret-scan.json) found no token in the
+listed persisted/logged surfaces. This does not prove full-snapshot memory
+exclusion, effective egress on every path, real grant/revocation, or exact
+repository revision; P0-04/05 remain open.
+
 ## Guild adoption map
 
 | Guild capability | Platform destination | Evidence / next work |

@@ -2,8 +2,8 @@
 
 Upstream: `github.com/google/ax`, commit
 `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`, Apache-2.0 (see LICENSE).
-`fail-closed.patch`, `egress-policy.patch`, `bootstrap-gate.patch`, and
-`platform-bootstrap-key.patch` change the files named in their
+`fail-closed.patch`, `egress-policy.patch`, `bootstrap-gate.patch`,
+`platform-bootstrap-key.patch`, and `encrypted-git-bootstrap.patch` change the files named in their
 diffs; the reference checkout stays untouched. This is a temporary integration overlay, not a claim that AX
 has accepted these changes or that secure bootstrap is finished.
 
@@ -42,14 +42,15 @@ it ran on the Linux development node.
 bash integrations/ax/build.sh ../reference/ax /tmp/blaxsmith-ax-build
 ```
 
-The script exports committed source into a temporary directory, applies all four
+The script exports committed source into a temporary directory, applies all five
 patches without changing the checkout, runs the full AX test suite and `go vet`,
 and builds the controller and runner. It records source/patch/binary hashes in
 `provenance.json`. Changing the upstream revision fails before building; update
 the patch intentionally and repeat the runtime probes when adopting a new AX pin.
 The [initial provenance](provenance.json), [egress follow-up
 provenance](provenance-egress.json), [bootstrap-gate provenance](provenance-bootstrap.json),
-and [platform-key provenance](provenance-platform-key.json) are evidence of tested Linux builds, not
+[platform-key provenance](provenance-platform-key.json), and [encrypted-Git
+provenance](provenance-encrypted-git.json) are evidence of tested Linux builds, not
 signatures.
 
 ## Synthetic bootstrap gate
@@ -82,9 +83,18 @@ release and replay checks using a root-owned test signer outside the repo.
 The [synthetic ledger-backed connector](../../docs/bootstrap-ledger.md) now
 verifies the activation-bound actor proof and current owner/runtime before
 signing. Its authorizer still has no product grant or measured egress decision.
-No credential is accepted by this endpoint. Private Git
-checkout, encrypted payload delivery, full-snapshot behavior, and revocation
-remain open; do not use this slice for sensitive work.
+The [encrypted-Git overlay](encrypted-git-bootstrap.patch) now accepts a
+synthetic setup credential only inside an envelope for the challenge's fresh
+guest X25519 key. Its signature covers the ciphertext hash. The runner uses
+Git askpass only during the exact HTTPS fetch, clears the credential before
+starting the command, and rejects a pre-existing `.git` without the
+workspace-volume marker or with a changed remote. The pinned runner image
+uses `alpine/git@sha256:8c843da8f112867e5d713f3bce85fbe815ec5582bd76bddb2e9121f8c7af9e8f`;
+the synthetic private CA was included in the exact [tested image](../../docs/bootstrap-private-git-probe.json).
+The [live private-Git probe](../../docs/bootstrap-private-git-probe.json) and
+[bounded secret scan](../../docs/bootstrap-private-git-secret-scan.json) pass.
+Product grants, complete egress, full-snapshot behavior, and revocation remain
+open; do not use this slice for sensitive work.
 
 The initial launch regression tests were also run against unmodified upstream
 production code. They failed on template fallback, policy failure, hidden stop failure,
@@ -112,12 +122,12 @@ PoliciesApplied` still only reports successful storage, not a measured dataplane
 check. Complete network bypass, existing-tunnel revocation, and credential
 boundaries remain open before sensitive or untrusted work.
 
-This patch does not authenticate a worker, implement Connection → Grant → Binding
-→ Lease, authorize startup, pin a private Git checkout, fence late results, or
-revoke provider credentials. SystemInfo actor metadata is not a signed workload
-credential. Readiness/initialization markers are not authority. The connector
-still needs to verify the actual actor/template/image/pool and effective policy;
-the overlay's template-name check alone does not verify their contents. The
+The combined overlays and connector now authenticate the synthetic worker and
+fence a private checkout. They do not implement product Connection → Grant →
+Binding → Lease authority, pin an exact source revision, fence late results,
+or revoke provider credentials. Readiness/initialization markers are not
+authority. The product connector still needs current policy and effective
+egress verification; the dev callback checks only image/pool/gVisor. The
 native worker starts during template preparation too, so golden-snapshot creation
 must be included in the future authenticated startup gate. Controller keys and
 raw task environment fields remain separate concerns: users must not put secrets

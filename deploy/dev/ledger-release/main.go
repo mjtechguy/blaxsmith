@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-	var space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database string
+	var space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitTokenFile string
 	var generation int64
 	var finish bool
 	flag.StringVar(&space, "space", "", "AX atespace")
@@ -36,6 +36,8 @@ func main() {
 	flag.StringVar(&actorCA, "actor-ca", "", "actor trust bundle PEM")
 	flag.StringVar(&signerFile, "signer", "", "root-owned synthetic Ed25519 seed file")
 	flag.StringVar(&database, "database", "host=/var/run/postgresql user=root dbname=blaxsmith_dev sslmode=disable", "dev PostgreSQL connection")
+	flag.StringVar(&gitRepo, "git-repo", "", "synthetic private HTTPS Git repository")
+	flag.StringVar(&gitTokenFile, "git-token-file", "", "owner-only synthetic Git token file")
 	flag.Int64Var(&generation, "previous-generation", 0, "prior scheduler owner generation")
 	flag.BoolVar(&finish, "finish", false, "deactivate the current synthetic owner")
 	flag.Parse()
@@ -46,7 +48,7 @@ func main() {
 		}
 		return
 	}
-	if err := run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, generation); err != nil {
+	if err := run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitTokenFile, generation); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -70,9 +72,9 @@ func deactivate(space, task, database string, generation int64) error {
 		"fenced_generation": scope.OwnerGeneration})
 }
 
-func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database string, generation int64) error {
+func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitTokenFile string, generation int64) error {
 	if space == "" || task == "" || !strings.Contains(image, "@sha256:") || pool == "" ||
-		net.ParseIP(routerIP) == nil || routerCA == "" || actorCA == "" || signerFile == "" {
+		net.ParseIP(routerIP) == nil || routerCA == "" || actorCA == "" || signerFile == "" || (gitRepo == "") != (gitTokenFile == "") {
 		return errors.New("incomplete synthetic connector inputs")
 	}
 	keyInfo, err := os.Stat(signerFile)
@@ -130,6 +132,14 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 	if err != nil {
 		return err
 	}
+	completed := false
+	defer func() {
+		if !completed {
+			cleanupCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+			defer stop()
+			_, _ = ledger.Deactivate(cleanupCtx, scope)
+		}
+	}()
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: serviceRoots, ServerName: "atenet-router.ate-system.svc", MinVersion: tls.VersionTLS12},
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -146,15 +156,32 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 			return nil // Synthetic gate only: no credential or repository is issued.
 		},
 	}
+	if gitRepo != "" {
+		connector.GitSetup = func(context.Context, bootstrap.Runtime) (bootstrap.GitSetup, error) {
+			info, err := os.Stat(gitTokenFile)
+			if err != nil || info.Mode().Perm()&0077 != 0 {
+				return bootstrap.GitSetup{}, bootstrap.ErrDenied
+			}
+			token, err := os.ReadFile(gitTokenFile)
+			if err != nil || len(token) == 0 || len(token) > 8192 {
+				return bootstrap.GitSetup{}, bootstrap.ErrDenied
+			}
+			return bootstrap.GitSetup{RepoURL: gitRepo, Username: "blaxsmith-probe", Token: token}, nil
+		}
+	}
 	if err := connector.Open(ctx, scope, expected); err != nil {
 		return err
 	}
-	return json.NewEncoder(os.Stdout).Encode(map[string]any{
+	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{
 		"cluster_id": scope.ClusterID, "attempt_id": scope.AttemptID,
 		"owner_generation": scope.OwnerGeneration, "actor_uid": expected.Actor.UID,
 		"template_uid": expected.TemplateUID, "worker_pool": expected.WorkerPool,
 		"opened": true,
-	})
+	}); err != nil {
+		return err
+	}
+	completed = true
+	return nil
 }
 
 func observe(ctx context.Context, space, task string) (bootstrap.Runtime, error) {

@@ -102,10 +102,12 @@ and consumes the nonce transactionally. A [synthetic connector
 probe](bootstrap-ledger-release-probe.json) rechecked the live actor UID,
 template, image, pool, and signer before release, fenced owner replacement
 through send, and passed data-snapshot resume. Product policy and effective
-egress are not yet checked. Next, probe full-snapshot resume and deliver an
-encrypted single-use private Git setup payload before workspace checkout,
-show failure blocks the command, and trace snapshots/logs for raw access. No
-real accounts or private repositories are admitted until those checks pass.
+egress are not yet checked. A later [private-Git probe](bootstrap-private-git-probe.json)
+delivered an encrypted synthetic token before checkout, blocked workspace
+readiness until release, and required a fresh proof after data-snapshot resume.
+The [surface scan](bootstrap-private-git-secret-scan.json) checked retained
+objects/logs for the token. Full-snapshot memory handling, exact input revision,
+real grant/revocation, and alternate egress paths still block real accounts.
 
 The pinned Substrate [actor-UID overlay](../integrations/substrate/README.md)
 now checks the expected UID after router resume and at the receiving `atunnel`.

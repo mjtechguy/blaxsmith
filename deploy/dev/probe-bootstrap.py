@@ -27,6 +27,10 @@ task = "gated-runner"
 signer = Ed25519PrivateKey.from_private_bytes(pathlib.Path(os.environ["BLAXSMITH_DEV_SIGNING_KEY_FILE"]).read_bytes())
 report = {"atespace": space, "image": image, "checks": []}
 ledger_mode = os.environ.get("BLAXSMITH_DEV_LEDGER") == "1"
+git_repo = os.environ.get("BLAXSMITH_DEV_GIT_REPO", "")
+git_token_file = os.environ.get("BLAXSMITH_DEV_GIT_TOKEN_FILE", "")
+if (git_repo == "") != (git_token_file == "") or (git_repo and not ledger_mode):
+    sys.exit("private Git probe requires BLAXSMITH_DEV_LEDGER=1 and both Git inputs")
 
 
 def kubectl(*args):
@@ -172,6 +176,8 @@ def release(challenge, previous_generation):
         "-actor-ca", str(output / "actor-ca.pem"),
         "-signer", os.environ["BLAXSMITH_DEV_SIGNING_KEY_FILE"],
         "-previous-generation", str(previous_generation)]
+    if git_repo:
+        args += ["-git-repo", git_repo, "-git-token-file", git_token_file]
     result = subprocess.run(args, input=connector_token, text=True, capture_output=True, timeout=90)
     if result.returncode:
         raise RuntimeError(f"ledger connector: {result.stderr.strip()}")
@@ -188,6 +194,20 @@ manifest = {
         "command": ["/bin/sh", "-c", "echo released > /workspace/bootstrap-result"],
     },
 }
+if git_repo:
+    manifest["spec"]["debug"] = True
+    manifest["spec"]["workspaces"] = [{"name": "private-source", "path": "/workspace"}]
+    manifest["spec"]["gateway"] = {"name": "private-git-gateway"}
+    manifest["spec"]["command"] = ["/bin/sh", "-c",
+        "test -f /workspace/private/README.md && echo released > /workspace/bootstrap-result"]
+    workspace = {"apiVersion": "ax.io/v1alpha1", "kind": "Workspace",
+        "metadata": {"name": "private-source", "atespace": space},
+        "spec": {"git": [{"name": "private", "repo": git_repo, "branch": "main", "dir": "private"}]}}
+    gateway = {"apiVersion": "ax.io/v1alpha1", "kind": "Gateway",
+        "metadata": {"name": "private-git-gateway", "atespace": space},
+        "spec": {"egress": {"allowlist": {"hosts": [{"host": "10.42.0.1/32"}]}}}}
+    (output / "workspace.json").write_text(json.dumps(workspace, indent=2) + "\n")
+    (output / "gateway.json").write_text(json.dumps(gateway, indent=2) + "\n")
 (output / "task.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 
@@ -209,6 +229,9 @@ def denied_task(name, spec, reason):
     raise RuntimeError(f"{name} did not fail closed")
 
 try:
+    if git_repo:
+        ax("apply", "-f", str(output / "workspace.json"))
+        ax("apply", "-f", str(output / "gateway.json"))
     denied_task("task-signer-override", {"image": image,
         "env": [{"name": "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY", "value": base64.b64encode(bytes(32)).decode()}],
         "command": ["touch", "/workspace/override-ran"]}, "BootstrapKeyOverride")
@@ -235,6 +258,22 @@ try:
     if request("/readyz")[0] != 200:
         raise RuntimeError("workspace did not become ready after release")
     report["checks"].append("signed release starts workspace")
+    if git_repo:
+        config = ax("ssh", task, "--", "/bin/sh", "-c",
+            "test -f /workspace/private/README.md && test -f /workspace/bootstrap-result && cat /workspace/private/.git/config; for f in /ax/git-success.log /ax/git-error.log; do test ! -f \"$f\" || cat \"$f\"; done")
+        token = pathlib.Path(git_token_file).read_text()
+        if token in config or token in ax("ssh", task, "--", "/usr/bin/env"):
+            raise RuntimeError("Git token entered workspace config or command environment")
+        actor_data = ate("get", "actor", task, "-a", space, "-o", "json")
+        template = actor_data["actors"][0]["actorTemplate"]
+        template_data = ate("get", "actor-template", template["name"],
+            "-a", template["atespace"], "-o", "json")
+        for body in (ax("get", "task", task, "-o", "json"),
+                     ax("get", "workspace", "private-source", "-o", "json"),
+                     json.dumps(actor_data), json.dumps(template_data)):
+            if token in body:
+                raise RuntimeError("Git token entered control-plane object")
+        report["checks"].append("private Git checkout succeeded without token in Git config or command environment")
 
     ax("suspend", "task", task)
     wait_actor_state("ACTOR_STATE_SUSPENDED")
@@ -255,6 +294,22 @@ try:
     if status != 204:
         raise RuntimeError(f"fresh release on resume returned {status}")
     report["checks"].append("data-snapshot resume requires fresh release; replay denied")
+    if git_repo:
+        resumed = None
+        deadline = time.monotonic() + 45
+        while time.monotonic() < deadline:
+            result = subprocess.run(("ax", "-a", space, "ssh", task, "--", "/bin/sh", "-c",
+                "test -f /workspace/private/README.md && cat /workspace/private/.git/config"),
+                text=True, capture_output=True, timeout=20)
+            if result.returncode == 0:
+                resumed = result.stdout
+                break
+            time.sleep(2)
+        if resumed is None:
+            raise RuntimeError("resumed private workspace could not be inspected")
+        if pathlib.Path(git_token_file).read_text() in resumed:
+            raise RuntimeError("Git token appeared in resumed workspace")
+        report["checks"].append("private checkout survived data-snapshot resume without token in Git config")
     print("PASS bootstrap gate and resume replay probe", flush=True)
 finally:
     try:

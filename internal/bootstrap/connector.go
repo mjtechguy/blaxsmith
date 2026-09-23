@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -28,9 +29,9 @@ type Runtime struct {
 	WorkerPool         string
 }
 
-// Connector only opens the pre-workspace gate. It never carries a credential.
-// The caller must authenticate the scheduler assignment and implement Current
-// and Authorize against trusted control-plane and policy state.
+// Connector opens the pre-workspace gate and can deliver one authorized Git
+// setup credential. The caller must authenticate the scheduler assignment and
+// implement Current and Authorize against trusted control-plane/policy state.
 type Connector struct {
 	Ledger    *Ledger
 	Client    *http.Client
@@ -40,6 +41,15 @@ type Connector struct {
 	Signer    ed25519.PrivateKey
 	Current   func(context.Context) (Runtime, error)
 	Authorize func(context.Context, Runtime) error
+	// GitSetup runs only after proof, owner fencing, runtime check, and policy.
+	// The returned token byte slice is consumed and cleared by Open.
+	GitSetup func(context.Context, Runtime) (GitSetup, error)
+}
+
+type GitSetup struct {
+	RepoURL  string
+	Username string
+	Token    []byte
 }
 
 func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) error {
@@ -87,11 +97,43 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 		challenge := redeemed.Challenge
 		message := []byte("blaxsmith/bootstrap/release/v1\n" + challenge.Nonce + "\n" +
 			strconv.FormatInt(challenge.ExpiresAt, 10) + "\n" + challenge.Atespace + "\n" + challenge.Task + "\n")
+		var envelope *Envelope
+		if c.GitSetup != nil {
+			setup, err := c.GitSetup(sendCtx, current)
+			if err != nil {
+				return err
+			}
+			defer clear(setup.Token)
+			u, err := url.Parse(setup.RepoURL)
+			if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.Path == "" || u.Path == "/" || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || setup.Username == "" || len(setup.Username) > 128 || len(setup.Token) == 0 || len(setup.Token) > 8192 || strings.ContainsAny(setup.RepoURL+setup.Username+string(setup.Token), "\r\n\x00") {
+				return ErrDenied
+			}
+			payload, err := json.Marshal(struct {
+				RepoURL  string `json:"repo_url"`
+				Username string `json:"username"`
+				Token    string `json:"token"`
+			}{setup.RepoURL, setup.Username, string(setup.Token)})
+			if err != nil {
+				return err
+			}
+			sealed, err := Seal(challenge, payload)
+			clear(payload)
+			if err != nil {
+				return err
+			}
+			envelope = &sealed
+			encoded, _ := json.Marshal(envelope)
+			digest := sha256.Sum256(encoded)
+			message = []byte("blaxsmith/bootstrap/release/v2\n" + challenge.Nonce + "\n" +
+				strconv.FormatInt(challenge.ExpiresAt, 10) + "\n" + challenge.Atespace + "\n" + challenge.Task + "\n" +
+				base64.RawURLEncoding.EncodeToString(digest[:]) + "\n")
+		}
 		release, err := json.Marshal(struct {
-			Nonce     string `json:"nonce"`
-			ExpiresAt int64  `json:"expires_at"`
-			Signature string `json:"signature"`
-		}{challenge.Nonce, challenge.ExpiresAt, base64.StdEncoding.EncodeToString(ed25519.Sign(c.Signer, message))})
+			Nonce     string    `json:"nonce"`
+			ExpiresAt int64     `json:"expires_at"`
+			Signature string    `json:"signature"`
+			Envelope  *Envelope `json:"envelope,omitempty"`
+		}{challenge.Nonce, challenge.ExpiresAt, base64.StdEncoding.EncodeToString(ed25519.Sign(c.Signer, message)), envelope})
 		if err != nil {
 			return err
 		}

@@ -28,15 +28,17 @@ git apply --check --whitespace=error-all "$integration/bootstrap-gate.patch"
 git apply "$integration/bootstrap-gate.patch"
 git apply --check --whitespace=error-all "$integration/platform-bootstrap-key.patch"
 git apply "$integration/platform-bootstrap-key.patch"
+git apply --check --whitespace=error-all "$integration/encrypted-git-bootstrap.patch"
+git apply "$integration/encrypted-git-bootstrap.patch"
 go test ./...
 go vet ./...
 for component in ax-controller ax-task-runner; do
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
     -ldflags='-s -w' -o "$output/$component" "./cmd/$component"
 done
-python3 - "$output" "$integration/fail-closed.patch" "$integration/egress-policy.patch" "$integration/bootstrap-gate.patch" "$integration/platform-bootstrap-key.patch" "$expected" <<'PY'
+python3 - "$output" "$integration/fail-closed.patch" "$integration/egress-policy.patch" "$integration/bootstrap-gate.patch" "$integration/platform-bootstrap-key.patch" "$integration/encrypted-git-bootstrap.patch" "$integration/blaxsmith-git-askpass" "$expected" <<'PY'
 import hashlib, json, pathlib, subprocess, sys
-output, patch, egress_patch, bootstrap_patch, platform_key_patch, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5]), sys.argv[6]
+output, patch, egress_patch, bootstrap_patch, platform_key_patch, encrypted_git_patch, askpass, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5]), pathlib.Path(sys.argv[6]), pathlib.Path(sys.argv[7]), sys.argv[8]
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 record = {
     'upstream_commit': revision,
@@ -44,6 +46,8 @@ record = {
     'egress_patch_sha256': sha(egress_patch),
     'bootstrap_patch_sha256': sha(bootstrap_patch),
     'platform_key_patch_sha256': sha(platform_key_patch),
+    'encrypted_git_patch_sha256': sha(encrypted_git_patch),
+    'askpass_sha256': sha(askpass),
     'go_version': subprocess.check_output(['go', 'version'], text=True).strip(),
     'platform': 'linux/amd64',
     'binaries': {name: sha(output / name) for name in ['ax-controller', 'ax-task-runner']},

@@ -1,0 +1,724 @@
+diff --git a/internal/workspace/git_credential_test.go b/internal/workspace/git_credential_test.go
+new file mode 100644
+index 0000000..d882242
+--- /dev/null
++++ b/internal/workspace/git_credential_test.go
+@@ -0,0 +1,129 @@
++package workspace
++
++import (
++	"bytes"
++	"context"
++	"encoding/pem"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"sync/atomic"
++	"testing"
++
++	"github.com/google/ax/pkg/apis/v1alpha1"
++)
++
++func TestGitCredentialOnlyOnMatchingFetch(t *testing.T) {
++	const token = "synthetic-private-token"
++	root := t.TempDir()
++	source := filepath.Join(root, "source")
++	bare := filepath.Join(root, "private.git")
++	if err := os.Mkdir(source, 0o700); err != nil {
++		t.Fatal(err)
++	}
++	run := func(dir string, args ...string) {
++		t.Helper()
++		cmd := exec.Command("git", args...)
++		cmd.Dir = dir
++		if out, err := cmd.CombinedOutput(); err != nil {
++			t.Fatalf("git %v: %v: %s", args, err, out)
++		}
++	}
++	run(source, "init")
++	run(source, "symbolic-ref", "HEAD", "refs/heads/main")
++	run(source, "config", "user.email", "test@example.invalid")
++	run(source, "config", "user.name", "Test")
++	if err := os.WriteFile(filepath.Join(source, "README.md"), []byte("private fixture\n"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	run(source, "add", "README.md")
++	run(source, "commit", "-m", "initial")
++	run(root, "clone", "--bare", source, bare)
++	run(root, "--git-dir", bare, "update-server-info")
++	var seen atomic.Bool
++	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		user, password, ok := r.BasicAuth()
++		if !ok {
++			w.Header().Set("WWW-Authenticate", `Basic realm="private"`)
++			w.WriteHeader(http.StatusUnauthorized)
++			return
++		}
++		if user == "test-user" && password == token {
++			seen.Store(true)
++			http.StripPrefix("/private.git/", http.FileServer(http.Dir(bare))).ServeHTTP(w, r)
++			return
++		}
++		http.Error(w, "denied", http.StatusForbidden)
++	}))
++	defer server.Close()
++	askpass := filepath.Join(root, "askpass")
++	if err := os.WriteFile(askpass, []byte("#!/bin/sh\ncase \"$1\" in *Username*) printf '%s' \"$BLAXSMITH_GIT_USERNAME\" ;; *Password*) printf '%s' \"$BLAXSMITH_GIT_TOKEN\" ;; esac\n"), 0o700); err != nil {
++		t.Fatal(err)
++	}
++	previous := GitAskpassPath
++	GitAskpassPath = askpass
++	defer func() { GitAskpassPath = previous }()
++	caPath := filepath.Join(root, "git-ca.pem")
++	if err := os.WriteFile(caPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	previousCA := GitCAFilePath
++	GitCAFilePath = caPath
++	defer func() { GitCAFilePath = previousCA }()
++	credential := &GitCredential{RepoURL: server.URL + "/private.git", Username: "test-user", Token: []byte(token)}
++	dir := filepath.Join(root, "checkout")
++	if err := os.Mkdir(dir, 0o700); err != nil {
++		t.Fatal(err)
++	}
++	output, err := fetchRepo(context.Background(), dir, credential.RepoURL, "main", 0, credential)
++	if err != nil || !seen.Load() {
++		t.Fatalf("Git did not fetch with askpass credential: err=%v seen=%t output=%s", err, seen.Load(), output)
++	}
++	readme, err := os.ReadFile(filepath.Join(dir, "README.md"))
++	if err != nil || string(readme) != "private fixture\n" {
++		t.Fatalf("private checkout missing: %v", err)
++	}
++	config, err := os.ReadFile(filepath.Join(dir, ".git", "config"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if bytes.Contains(config, []byte(token)) || bytes.Contains(output, []byte(token)) {
++		t.Fatal("token persisted in Git config or diagnostic")
++	}
++	seen.Store(false)
++	withoutCredential := filepath.Join(root, "without-credential")
++	if err := os.Mkdir(withoutCredential, 0o700); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := fetchRepo(context.Background(), withoutCredential, credential.RepoURL, "main", 0, nil); err == nil || seen.Load() {
++		t.Fatalf("private fetch succeeded without credential or sent authorization: %v, seen=%t", err, seen.Load())
++	}
++	previousAXDir := AXDir
++	AXDir = filepath.Join(root, "ax-ephemeral-1")
++	defer func() { AXDir = previousAXDir }()
++	ws := &v1alpha1.Workspace{Metadata: &v1alpha1.ObjectMeta{Name: "private"},
++		Spec: &v1alpha1.WorkspaceSpec{Git: []*v1alpha1.GitRepo{{Name: "private", Repo: credential.RepoURL, Branch: "main"}}}}
++	workspacePath := filepath.Join(root, "workspace")
++	if _, err := SetupWorkspaceWithGitCredential(context.Background(), ws, workspacePath, "", credential); err != nil {
++		t.Fatalf("initial private workspace: %v", err)
++	}
++	AXDir = filepath.Join(root, "ax-ephemeral-2")
++	resumed, err := SetupWorkspaceWithGitCredential(context.Background(), ws, workspacePath, "", credential)
++	if err != nil || resumed.IsMaidenRun {
++		t.Fatalf("data-snapshot resume repeated checkout: %+v, %v", resumed, err)
++	}
++	resumedConfig := filepath.Join(workspacePath, "private", ".git", "config")
++	run(root, "config", "-f", resumedConfig, "remote.origin.url", "https://example.invalid/other.git")
++	if _, err := SetupWorkspaceWithGitCredential(context.Background(), ws, workspacePath, "", credential); err == nil {
++		t.Fatal("changed repository remote accepted on resume")
++	}
++	run(root, "config", "-f", resumedConfig, "remote.origin.url", credential.RepoURL)
++	if err := os.Remove(filepath.Join(workspacePath, ".blaxsmith-initialized")); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := SetupWorkspaceWithGitCredential(context.Background(), ws, workspacePath, "", credential); err == nil {
++		t.Fatal("existing Git directory without marker accepted")
++	}
++}
+diff --git a/internal/workspace/setup.go b/internal/workspace/setup.go
+index a40fe0e..510d212 100644
+--- a/internal/workspace/setup.go
++++ b/internal/workspace/setup.go
+@@ -15,7 +15,9 @@
+ package workspace
+ 
+ import (
++	"bytes"
+ 	"context"
++	"crypto/sha256"
+ 	"errors"
+ 	"fmt"
+ 	"log/slog"
+@@ -59,6 +61,9 @@ const (
+ 	filePerm = 0o644
+ )
+ 
++var GitAskpassPath = "/usr/local/bin/blaxsmith-git-askpass"
++var GitCAFilePath = "/etc/ssl/certs/blaxsmith-git-ca.pem" // Image-owned trust; tests override this.
++
+ // AXDir is the directory inside the container used for AX system state and logs.
+ // Tests override it to keep state out of the workspace.
+ var AXDir = DefaultAXDir
+@@ -81,6 +86,24 @@ type SetupResult struct {
+ // Required Git, skills, bootstrap, and marker failures abort setup. No success
+ // marker is written until every required step succeeds.
+ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath string, goal string) (*SetupResult, error) {
++	return SetupWorkspaceWithGitCredential(ctx, ws, targetPath, goal, nil)
++}
++
++// GitCredential is handed to Git only for the exact authorized HTTPS fetch.
++// It is never stored in the workspace or passed to checkout hooks/filters.
++type GitCredential struct {
++	RepoURL  string
++	Username string
++	Token    []byte
++}
++
++func (c *GitCredential) Clear() {
++	if c != nil {
++		clear(c.Token)
++	}
++}
++
++func SetupWorkspaceWithGitCredential(ctx context.Context, ws *v1alpha1.Workspace, targetPath string, goal string, credential *GitCredential) (*SetupResult, error) {
+ 	if targetPath == "" {
+ 		targetPath = defaultWorkspacePath
+ 	}
+@@ -99,10 +122,44 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
+ 	}
+ 
+ 	markerPath := filepath.Join(AXDir, MarkerName(targetPath))
++	if credential != nil {
++		markerPath = filepath.Join(targetPath, ".blaxsmith-initialized")
++	}
+ 	if info, err := os.Lstat(markerPath); err == nil {
+ 		if !info.Mode().IsRegular() {
+ 			return nil, fmt.Errorf("workspace marker must be a regular file")
+ 		}
++		if credential != nil {
++			marker, err := os.ReadFile(markerPath)
++			if err != nil || string(marker) != fmt.Sprintf("repo_sha256: %x\n", sha256.Sum256([]byte(credential.RepoURL))) {
++				return nil, fmt.Errorf("credentialed workspace marker mismatch")
++			}
++			found := false
++			for _, repo := range ws.GetSpec().GetGit() {
++				if repo == nil || repo.Repo != credential.RepoURL {
++					continue
++				}
++				gitDir := filepath.Join(cloneDestination(repo, targetPath), ".git")
++				info, err := os.Lstat(gitDir)
++				if err != nil || !info.IsDir() {
++					return nil, fmt.Errorf("credentialed checkout is missing")
++				}
++				config := filepath.Join(gitDir, "config")
++				if info, err := os.Lstat(config); err != nil || !info.Mode().IsRegular() {
++					return nil, fmt.Errorf("credentialed checkout config is invalid")
++				}
++				cmd := exec.CommandContext(ctx, "/usr/bin/git", "config", "-f", config, "--get", "remote.origin.url")
++				cmd.Env = gitProcessEnv()
++				remote, err := cmd.Output()
++				if err != nil || strings.TrimSpace(string(remote)) != credential.RepoURL {
++					return nil, fmt.Errorf("credentialed checkout remote mismatch")
++				}
++				found = true
++			}
++			if !found {
++				return nil, fmt.Errorf("credentialed repository is no longer bound")
++			}
++		}
+ 		slog.Info("workspace already initialized; skipping maiden run setup", "path", targetPath)
+ 		return res, nil
+ 	} else if !errors.Is(err, os.ErrNotExist) {
+@@ -114,7 +171,7 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
+ 
+ 	if ws != nil && ws.Spec != nil {
+ 		var gitOK bool
+-		res.ClonedRepos, gitOK = cloneRepos(ctx, ws.Spec.Git, targetPath)
++		res.ClonedRepos, gitOK = cloneRepos(ctx, ws.Spec.Git, targetPath, credential)
+ 		if !gitOK {
+ 			return res, fmt.Errorf("required Git checkout failed")
+ 		}
+@@ -135,7 +192,11 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
+ 	if err := ctx.Err(); err != nil {
+ 		return res, err
+ 	}
+-	if err := writeMarker(markerPath, ws); err != nil {
++	if credential != nil {
++		if err := os.WriteFile(markerPath, []byte(fmt.Sprintf("repo_sha256: %x\n", sha256.Sum256([]byte(credential.RepoURL)))), 0o600); err != nil {
++			return res, fmt.Errorf("recording credentialed workspace initialization: %w", err)
++		}
++	} else if err := writeMarker(markerPath, ws); err != nil {
+ 		return res, fmt.Errorf("recording workspace initialization: %w", err)
+ 	}
+ 	slog.Info("maiden run workspace setup completed successfully", "path", targetPath)
+@@ -144,7 +205,7 @@ func SetupWorkspace(ctx context.Context, ws *v1alpha1.Workspace, targetPath stri
+ 
+ // cloneRepos fetches each declared repository into the workspace. It returns the
+ // repositories that succeeded and whether every clone succeeded.
+-func cloneRepos(ctx context.Context, repos []*v1alpha1.GitRepo, targetPath string) ([]string, bool) {
++func cloneRepos(ctx context.Context, repos []*v1alpha1.GitRepo, targetPath string, credential *GitCredential) ([]string, bool) {
+ 	var cloned []string
+ 	ok := true
+ 	for _, repo := range repos {
+@@ -164,8 +225,15 @@ func cloneRepos(ctx context.Context, repos []*v1alpha1.GitRepo, targetPath strin
+ 		}
+ 
+ 		slog.Info("initializing and fetching git repo", "repo", repo.Repo, "branch", branch, "dir", dest, "depth", repo.Depth)
++		if credential != nil && credential.RepoURL == repo.Repo {
++			if _, err := os.Lstat(filepath.Join(dest, ".git")); err == nil || !errors.Is(err, os.ErrNotExist) {
++				ok = false
++				slog.Warn("credentialed checkout requires a fresh Git directory", "dir", dest)
++				continue
++			}
++		}
+ 		out, err := retry(ctx, gitRetries, gitRetryDelay, func() ([]byte, error) {
+-			return fetchRepo(ctx, dest, repo.Repo, branch, repo.Depth)
++			return fetchRepo(ctx, dest, repo.Repo, branch, repo.Depth, credential)
+ 		})
+ 		if err != nil {
+ 			ok = false
+@@ -213,15 +281,26 @@ func cloneDestination(repo *v1alpha1.GitRepo, targetPath string) string {
+ // and checks it out. If depth > 0, it performs a shallow fetch. It is idempotent so it
+ // can be retried against a partially initialized directory. Arguments are passed
+ // directly to git, never through a shell.
+-func fetchRepo(ctx context.Context, dir, repoURL, branch string, depth int32) ([]byte, error) {
++func fetchRepo(ctx context.Context, dir, repoURL, branch string, depth int32, credential *GitCredential) ([]byte, error) {
+ 	var combined []byte
+ 	run := func(args ...string) error {
+-		cmd := exec.CommandContext(ctx, "git", args...)
++		useCredential := args[0] == "fetch" && credential != nil && credential.RepoURL == repoURL
++		if useCredential {
++			args = append([]string{"-c", "credential.helper=", "-c", "http.followRedirects=false", "-c", "core.hooksPath=/dev/null"}, args...)
++		}
++		cmd := exec.CommandContext(ctx, "/usr/bin/git", args...)
+ 		cmd.Dir = dir
++		cmd.Env = gitProcessEnv()
++		if useCredential {
++			cmd.Env = append(cmd.Env, "GIT_ASKPASS="+GitAskpassPath, "BLAXSMITH_GIT_USERNAME="+credential.Username, "BLAXSMITH_GIT_TOKEN="+string(credential.Token))
++		}
+ 		out, err := cmd.CombinedOutput()
++		if useCredential {
++			out = bytes.ReplaceAll(out, credential.Token, []byte("[redacted]"))
++		}
+ 		combined = append(combined, out...)
+ 		if err != nil {
+-			return fmt.Errorf("git %s: %w", args[0], err)
++			return fmt.Errorf("git operation: %w", err)
+ 		}
+ 		return nil
+ 	}
+@@ -249,6 +328,20 @@ func fetchRepo(ctx context.Context, dir, repoURL, branch string, depth int32) ([
+ 	return combined, nil
+ }
+ 
++func gitProcessEnv() []string {
++	// Do not inherit Task-selected Git config, credential helpers, or TLS bypass.
++	env := []string{"PATH=/usr/bin:/bin", "HOME=/", "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null"}
++	if info, err := os.Stat(GitCAFilePath); err == nil && info.Mode().IsRegular() {
++		env = append(env, "GIT_SSL_CAINFO="+GitCAFilePath)
++	}
++	for _, name := range []string{"TMPDIR", "LANG", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy"} {
++		if value := os.Getenv(name); value != "" {
++			env = append(env, name+"="+value)
++		}
++	}
++	return env
++}
++
+ // retry runs op up to attempts times, waiting delay between failures. It stops early
+ // when ctx is done and never sleeps after the final attempt.
+ func retry(ctx context.Context, attempts int, delay time.Duration, op func() ([]byte, error)) ([]byte, error) {
+diff --git a/runner/bootstrap.go b/runner/bootstrap.go
+index bc201ab..65d0a3f 100644
+--- a/runner/bootstrap.go
++++ b/runner/bootstrap.go
+@@ -1,18 +1,27 @@
+ package runner
+ 
+ import (
++	"bytes"
++	"crypto/aes"
++	"crypto/cipher"
++	"crypto/ecdh"
+ 	"crypto/ed25519"
++	"crypto/hkdf"
+ 	"crypto/rand"
++	"crypto/sha256"
+ 	"encoding/base64"
+ 	"encoding/json"
+ 	"fmt"
+ 	"io"
+ 	"net/http"
++	"net/url"
+ 	"os"
+ 	"strconv"
++	"strings"
+ 	"sync"
+ 	"time"
+ 
++	"github.com/google/ax/internal/workspace"
+ 	"github.com/google/ax/pkg/apis/v1alpha1"
+ )
+ 
+@@ -22,14 +31,16 @@ const challengeTTL = 2 * time.Minute
+ // bootstrapGate only releases startup. It never accepts or stores credentials.
+ // The signer must independently verify the live actor before signing a release.
+ type bootstrapGate struct {
+-	key      ed25519.PublicKey
+-	atespace string
+-	task     string
+-	mu       sync.Mutex
+-	nonce    string
+-	expires  time.Time
+-	released chan struct{}
+-	done     bool
++	key       ed25519.PublicKey
++	atespace  string
++	task      string
++	mu        sync.Mutex
++	nonce     string
++	expires   time.Time
++	recipient *ecdh.PrivateKey
++	payload   []byte
++	released  chan struct{}
++	done      bool
+ }
+ 
+ func newBootstrapGate(task *v1alpha1.Task) (*bootstrapGate, error) {
+@@ -86,15 +97,24 @@ func (g *bootstrapGate) challenge(w http.ResponseWriter) {
+ 			http.Error(w, "challenge unavailable", http.StatusServiceUnavailable)
+ 			return
+ 		}
++		recipient, err := ecdh.X25519().GenerateKey(rand.Reader)
++		if err != nil {
++			g.mu.Unlock()
++			http.Error(w, "challenge unavailable", http.StatusServiceUnavailable)
++			return
++		}
+ 		g.nonce = base64.RawURLEncoding.EncodeToString(random[:])
+ 		g.expires = time.Now().Add(challengeTTL)
++		g.recipient = recipient
+ 	}
+ 	response := struct {
+-		Nonce     string `json:"nonce"`
+-		ExpiresAt int64  `json:"expires_at"`
+-		Atespace  string `json:"atespace"`
+-		Task      string `json:"task"`
+-	}{g.nonce, g.expires.Unix(), g.atespace, g.task}
++		Nonce        string `json:"nonce"`
++		ExpiresAt    int64  `json:"expires_at"`
++		Atespace     string `json:"atespace"`
++		Task         string `json:"task"`
++		RecipientKey string `json:"recipient_key"`
++	}{g.nonce, g.expires.Unix(), g.atespace, g.task,
++		base64.RawURLEncoding.EncodeToString(g.recipient.PublicKey().Bytes())}
+ 	g.mu.Unlock()
+ 	w.Header().Set("Content-Type", "application/json")
+ 	_ = json.NewEncoder(w).Encode(response)
+@@ -102,11 +122,12 @@ func (g *bootstrapGate) challenge(w http.ResponseWriter) {
+ 
+ func (g *bootstrapGate) release(w http.ResponseWriter, r *http.Request) {
+ 	var request struct {
+-		Nonce     string `json:"nonce"`
+-		ExpiresAt int64  `json:"expires_at"`
+-		Signature string `json:"signature"`
++		Nonce     string             `json:"nonce"`
++		ExpiresAt int64              `json:"expires_at"`
++		Signature string             `json:"signature"`
++		Envelope  *bootstrapEnvelope `json:"envelope,omitempty"`
+ 	}
+-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2048))
++	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 25000))
+ 	decoder.DisallowUnknownFields()
+ 	if err := decoder.Decode(&request); err != nil {
+ 		http.Error(w, "invalid release", http.StatusBadRequest)
+@@ -123,15 +144,117 @@ func (g *bootstrapGate) release(w http.ResponseWriter, r *http.Request) {
+ 	}
+ 	g.mu.Lock()
+ 	message := []byte("blaxsmith/bootstrap/release/v1\n" + request.Nonce + "\n" + strconv.FormatInt(request.ExpiresAt, 10) + "\n" + g.atespace + "\n" + g.task + "\n")
++	if request.Envelope != nil {
++		encoded, _ := json.Marshal(request.Envelope)
++		digest := sha256.Sum256(encoded)
++		message = []byte("blaxsmith/bootstrap/release/v2\n" + request.Nonce + "\n" + strconv.FormatInt(request.ExpiresAt, 10) + "\n" + g.atespace + "\n" + g.task + "\n" + base64.RawURLEncoding.EncodeToString(digest[:]) + "\n")
++	}
+ 	if g.done || g.nonce == "" || request.Nonce != g.nonce || request.ExpiresAt != g.expires.Unix() || !time.Now().Before(g.expires) || !ed25519.Verify(g.key, message, signature) {
+ 		g.mu.Unlock()
+ 		http.Error(w, "release denied", http.StatusForbidden)
+ 		return
+ 	}
++	if request.Envelope != nil {
++		payload, err := g.open(*request.Envelope)
++		if err != nil {
++			g.mu.Unlock()
++			http.Error(w, "release denied", http.StatusForbidden)
++			return
++		}
++		g.payload = payload
++	}
+ 	g.done = true
+ 	close(g.released)
+ 	g.mu.Unlock()
+ 	w.WriteHeader(http.StatusNoContent)
+ }
+ 
++type bootstrapEnvelope struct {
++	EphemeralKey string `json:"ephemeral_key"`
++	Nonce        string `json:"nonce"`
++	Ciphertext   string `json:"ciphertext"`
++}
++
++func (g *bootstrapGate) open(envelope bootstrapEnvelope) ([]byte, error) {
++	ephBytes, err := base64.RawURLEncoding.DecodeString(envelope.EphemeralKey)
++	if err != nil || len(ephBytes) != 32 || g.recipient == nil {
++		return nil, fmt.Errorf("invalid ephemeral key")
++	}
++	eph, err := ecdh.X25519().NewPublicKey(ephBytes)
++	if err != nil {
++		return nil, err
++	}
++	shared, err := g.recipient.ECDH(eph)
++	if err != nil {
++		return nil, err
++	}
++	salt, _ := base64.RawURLEncoding.DecodeString(g.nonce)
++	key, err := hkdf.Key(sha256.New, shared, salt, "blaxsmith/bootstrap-envelope/v1", 32)
++	if err != nil {
++		return nil, err
++	}
++	block, err := aes.NewCipher(key)
++	if err != nil {
++		return nil, err
++	}
++	aead, err := cipher.NewGCM(block)
++	if err != nil {
++		return nil, err
++	}
++	nonce, err := base64.RawURLEncoding.DecodeString(envelope.Nonce)
++	if err != nil || len(nonce) != aead.NonceSize() {
++		return nil, fmt.Errorf("invalid envelope nonce")
++	}
++	ciphertext, err := base64.RawURLEncoding.DecodeString(envelope.Ciphertext)
++	if err != nil || len(ciphertext) > 16400 {
++		return nil, fmt.Errorf("invalid envelope ciphertext")
++	}
++	context, _ := json.Marshal([]string{g.nonce, strconv.FormatInt(g.expires.Unix(), 10), g.atespace, g.task, base64.RawURLEncoding.EncodeToString(g.recipient.PublicKey().Bytes())})
++	plain, err := aead.Open(nil, nonce, ciphertext, context)
++	if err != nil || len(plain) == 0 || len(plain) > 16384 {
++		return nil, fmt.Errorf("invalid envelope plaintext")
++	}
++	return plain, nil
++}
++
++func (g *bootstrapGate) takePayload() []byte {
++	g.mu.Lock()
++	defer g.mu.Unlock()
++	payload := g.payload
++	g.payload = nil
++	g.recipient = nil
++	return payload
++}
++
++func decodeGitPayload(payload []byte, workspaces []*v1alpha1.Workspace) (*workspace.GitCredential, error) {
++	var setup struct {
++		RepoURL  string `json:"repo_url"`
++		Username string `json:"username"`
++		Token    string `json:"token"`
++	}
++	decoder := json.NewDecoder(bytes.NewReader(payload))
++	decoder.DisallowUnknownFields()
++	if err := decoder.Decode(&setup); err != nil {
++		return nil, err
++	}
++	if err := decoder.Decode(new(any)); err != io.EOF {
++		return nil, fmt.Errorf("invalid trailing payload")
++	}
++	u, err := url.Parse(setup.RepoURL)
++	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.Path == "" || u.Path == "/" || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || len(setup.Username) == 0 || len(setup.Username) > 128 || len(setup.Token) == 0 || len(setup.Token) > 8192 || strings.ContainsAny(setup.RepoURL+setup.Username+setup.Token, "\r\n\x00") {
++		return nil, fmt.Errorf("invalid Git credential")
++	}
++	for _, ws := range workspaces {
++		if ws == nil || ws.Spec == nil {
++			continue
++		}
++		for _, repo := range ws.Spec.Git {
++			if repo != nil && repo.Repo == setup.RepoURL {
++				return &workspace.GitCredential{RepoURL: setup.RepoURL, Username: setup.Username, Token: []byte(setup.Token)}, nil
++			}
++		}
++	}
++	return nil, fmt.Errorf("credential repository is not a workspace input")
++}
++
+ var _ http.Handler = (*bootstrapGate)(nil)
+diff --git a/runner/bootstrap_payload_test.go b/runner/bootstrap_payload_test.go
+new file mode 100644
+index 0000000..efcbb48
+--- /dev/null
++++ b/runner/bootstrap_payload_test.go
+@@ -0,0 +1,134 @@
++package runner
++
++import (
++	"bytes"
++	"crypto/aes"
++	"crypto/cipher"
++	"crypto/ecdh"
++	"crypto/ed25519"
++	"crypto/hkdf"
++	"crypto/rand"
++	"crypto/sha256"
++	"encoding/base64"
++	"encoding/json"
++	"fmt"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"strconv"
++	"testing"
++
++	"github.com/google/ax/pkg/apis/v1alpha1"
++)
++
++func TestEncryptedReleaseBindsGuestKeyAndCiphertext(t *testing.T) {
++	public, signer, err := ed25519.GenerateKey(rand.Reader)
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv(bootstrapKeyEnv, base64.StdEncoding.EncodeToString(public))
++	newGate := func() (*bootstrapGate, *httptest.Server, map[string]any) {
++		t.Helper()
++		gate, err := newBootstrapGate(&v1alpha1.Task{Metadata: &v1alpha1.ObjectMeta{Atespace: "team", Name: "task"}, Spec: &v1alpha1.TaskSpec{}})
++		if err != nil {
++			t.Fatal(err)
++		}
++		server := httptest.NewServer(gate)
++		response, err := http.Get(server.URL + "/blaxsmith/bootstrap/challenge")
++		if err != nil {
++			t.Fatal(err)
++		}
++		defer response.Body.Close()
++		var challenge map[string]any
++		if err := json.NewDecoder(response.Body).Decode(&challenge); err != nil {
++			t.Fatal(err)
++		}
++		return gate, server, challenge
++	}
++	gate, server, challenge := newGate()
++	defer server.Close()
++	plaintext := []byte(`{"repo_url":"https://git.example/repo.git","username":"test","token":"synthetic-token"}`)
++	envelope := sealTestEnvelope(t, challenge, plaintext)
++	release := func(server *httptest.Server, challenge map[string]any, envelope bootstrapEnvelope) int {
++		t.Helper()
++		nonce := challenge["nonce"].(string)
++		expiry := int64(challenge["expires_at"].(float64))
++		encoded, _ := json.Marshal(envelope)
++		digest := sha256.Sum256(encoded)
++		message := []byte(fmt.Sprintf("blaxsmith/bootstrap/release/v2\n%s\n%d\n%s\n%s\n%s\n", nonce, expiry, "team", "task", base64.RawURLEncoding.EncodeToString(digest[:])))
++		body, _ := json.Marshal(map[string]any{"nonce": nonce, "expires_at": expiry, "signature": base64.StdEncoding.EncodeToString(ed25519.Sign(signer, message)), "envelope": envelope})
++		response, err := http.Post(server.URL+"/blaxsmith/bootstrap/release", "application/json", bytes.NewReader(body))
++		if err != nil {
++			t.Fatal(err)
++		}
++		defer response.Body.Close()
++		_, _ = io.Copy(io.Discard, response.Body)
++		return response.StatusCode
++	}
++	if status := release(server, challenge, envelope); status != http.StatusNoContent {
++		t.Fatalf("encrypted release status = %d", status)
++	}
++	if got := gate.takePayload(); !bytes.Equal(got, plaintext) {
++		t.Fatal("guest did not receive plaintext")
++	}
++	if status := release(server, challenge, envelope); status != http.StatusForbidden {
++		t.Fatalf("replay status = %d", status)
++	}
++	secondGate, secondServer, secondChallenge := newGate()
++	defer secondServer.Close()
++	if secondGate == nil {
++		t.Fatal("missing second gate")
++	}
++	if status := release(secondServer, secondChallenge, envelope); status != http.StatusForbidden {
++		t.Fatalf("other guest accepted ciphertext: %d", status)
++	}
++	tamperedGate, tamperedServer, tamperedChallenge := newGate()
++	defer tamperedServer.Close()
++	tampered := sealTestEnvelope(t, tamperedChallenge, plaintext)
++	tampered.Ciphertext = base64.RawURLEncoding.EncodeToString([]byte("tampered"))
++	if status := release(tamperedServer, tamperedChallenge, tampered); status != http.StatusForbidden {
++		t.Fatalf("tampered ciphertext status = %d", status)
++	}
++	if tamperedGate.done {
++		t.Fatal("tampered release opened gate")
++	}
++}
++
++func sealTestEnvelope(t *testing.T, challenge map[string]any, plaintext []byte) bootstrapEnvelope {
++	t.Helper()
++	recipientBytes, err := base64.RawURLEncoding.DecodeString(challenge["recipient_key"].(string))
++	if err != nil {
++		t.Fatal(err)
++	}
++	recipient, err := ecdh.X25519().NewPublicKey(recipientBytes)
++	if err != nil {
++		t.Fatal(err)
++	}
++	eph, err := ecdh.X25519().GenerateKey(rand.Reader)
++	if err != nil {
++		t.Fatal(err)
++	}
++	shared, err := eph.ECDH(recipient)
++	if err != nil {
++		t.Fatal(err)
++	}
++	salt, _ := base64.RawURLEncoding.DecodeString(challenge["nonce"].(string))
++	key, err := hkdf.Key(sha256.New, shared, salt, "blaxsmith/bootstrap-envelope/v1", 32)
++	if err != nil {
++		t.Fatal(err)
++	}
++	block, err := aes.NewCipher(key)
++	if err != nil {
++		t.Fatal(err)
++	}
++	aead, err := cipher.NewGCM(block)
++	if err != nil {
++		t.Fatal(err)
++	}
++	iv := make([]byte, aead.NonceSize())
++	if _, err := rand.Read(iv); err != nil {
++		t.Fatal(err)
++	}
++	context, _ := json.Marshal([]string{challenge["nonce"].(string), strconv.FormatInt(int64(challenge["expires_at"].(float64)), 10), "team", "task", challenge["recipient_key"].(string)})
++	return bootstrapEnvelope{base64.RawURLEncoding.EncodeToString(eph.PublicKey().Bytes()), base64.RawURLEncoding.EncodeToString(iv), base64.RawURLEncoding.EncodeToString(aead.Seal(nil, iv, plaintext, context))}
++}
+diff --git a/runner/runner.go b/runner/runner.go
+index 4b7af5e..4a09b7b 100644
+--- a/runner/runner.go
++++ b/runner/runner.go
+@@ -170,12 +170,28 @@ func Run(ctx context.Context, cfg Config) error {
+ 			return nil
+ 		}
+ 	}
++	var credential *workspace.GitCredential
++	if gate != nil {
++		payload := gate.takePayload()
++		if len(payload) != 0 {
++			credential, err = decodeGitPayload(payload, workspaces)
++			clear(payload)
++			if err != nil {
++				return fmt.Errorf("invalid bootstrap payload: %w", err)
++			}
++			defer credential.Clear()
++		}
++	}
+ 
+ 	for _, m := range mounts {
+-		if _, err := workspace.SetupWorkspace(ctx, m.ws, m.path, m.ref.GetGoal()); err != nil {
++		if _, err := workspace.SetupWorkspaceWithGitCredential(ctx, m.ws, m.path, m.ref.GetGoal(), credential); err != nil {
+ 			return fmt.Errorf("workspace %q setup failed: %w", m.ref.GetName(), err)
+ 		}
+ 	}
++	if credential != nil {
++		credential.Clear()
++		credential = nil
++	}
+ 	if err := ctx.Err(); err != nil {
+ 		return err
+ 	}
