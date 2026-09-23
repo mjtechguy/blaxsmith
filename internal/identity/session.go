@@ -121,6 +121,25 @@ func LoadSessionSigner(path string) (ed25519.PrivateKey, error) {
 	return signer, nil
 }
 
+// LoadSessionPublicKey reads a prior signer's raw public key. Public read is
+// permitted, but a writable mount cannot be trusted for token verification.
+func LoadSessionPublicKey(path string) (ed25519.PublicKey, error) {
+	file, err := os.Open(path) // #nosec G304 -- path is trusted platform configuration; opened file is mode-checked
+	if err != nil {
+		return nil, fmt.Errorf("open previous session public key: %w", err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o022 != 0 || info.Size() != ed25519.PublicKeySize {
+		return nil, ErrSessionConfiguration
+	}
+	key := make([]byte, ed25519.PublicKeySize)
+	if _, err := io.ReadFull(file, key); err != nil {
+		return nil, ErrSessionConfiguration
+	}
+	return ed25519.PublicKey(key), nil
+}
+
 // LoginLocal is an internal operation. The source must be the authenticated
 // network peer, not an untrusted forwarding header. Browser transport still
 // needs secure cookies, CSRF/origin checks, and response redaction.

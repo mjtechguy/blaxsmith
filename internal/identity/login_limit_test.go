@@ -74,3 +74,50 @@ func TestLoginLimitPostgres(t *testing.T) {
 		t.Fatalf("old limit keys remain: %d, %v", remaining, err)
 	}
 }
+
+func TestLoginLimitAcrossSourcesPostgres(t *testing.T) {
+	pool := identityTestPool(t)
+	first, err := NewLoginLimit(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewLoginLimit(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	results := make(chan error, 40)
+	for i := range 40 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			limiter := first
+			if i%2 == 1 {
+				limiter = second
+			}
+			results <- limiter.Allow(context.Background(), "engineering", "alice", netip.AddrFrom4([4]byte{192, 0, 2, byte(i + 1)}))
+		}()
+	}
+	wg.Wait()
+	close(results)
+	allowed, denied := 0, 0
+	for err := range results {
+		switch {
+		case err == nil:
+			allowed++
+		case errors.Is(err, ErrRateLimited):
+			denied++
+		default:
+			t.Fatal(err)
+		}
+	}
+	if allowed != 30 || denied != 10 {
+		t.Fatalf("distributed account limit: %d allowed, %d denied", allowed, denied)
+	}
+	if err := first.Allow(context.Background(), "engineering", "bob", netip.MustParseAddr("192.0.2.1")); err != nil {
+		t.Fatalf("other account was blocked: %v", err)
+	}
+	if err := first.Allow(context.Background(), "other-org", "alice", netip.MustParseAddr("192.0.2.1")); err != nil {
+		t.Fatalf("same username in another organization was blocked: %v", err)
+	}
+}

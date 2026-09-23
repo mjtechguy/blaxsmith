@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -25,8 +26,8 @@ import (
 )
 
 type appConfig struct {
-	listen, origin, certFile, keyFile, signerFile, databaseURL, staticDir string
-	allowLocalDatabase                                                    bool
+	listen, origin, certFile, keyFile, signerFile, previousSignerFile, databaseURL, staticDir string
+	allowLocalDatabase                                                                        bool
 }
 
 func serveApp(args []string) error {
@@ -60,6 +61,14 @@ func serveAppContext(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	var previous []ed25519.PublicKey
+	if config.previousSignerFile != "" {
+		key, err := identity.LoadSessionPublicKey(config.previousSignerFile)
+		if err != nil {
+			return err
+		}
+		previous = append(previous, key)
+	}
 	dbConfig, err := pgxpool.ParseConfig(config.databaseURL)
 	if err != nil {
 		return fmt.Errorf("configure database: %w", err)
@@ -80,7 +89,7 @@ func serveAppContext(ctx context.Context, args []string) error {
 	if _, err := db.Migrate(startupCtx, pool); err != nil {
 		return fmt.Errorf("verify database migrations: %w", err)
 	}
-	manager, err := identity.NewSessionManager(pool, config.origin, signer)
+	manager, err := identity.NewSessionManager(pool, config.origin, signer, previous...)
 	if err != nil {
 		return err
 	}
@@ -148,6 +157,7 @@ func parseAppConfig(args []string) (appConfig, error) {
 	flags.StringVar(&c.certFile, "tls-cert-file", "", "HTTPS certificate file")
 	flags.StringVar(&c.keyFile, "tls-key-file", "", "HTTPS private-key file")
 	flags.StringVar(&c.signerFile, "signer-file", "", "platform-mounted 32-byte Ed25519 seed file")
+	flags.StringVar(&c.previousSignerFile, "previous-signer-public-file", "", "optional prior 32-byte Ed25519 public key for access-token rotation overlap")
 	flags.StringVar(&c.staticDir, "static-dir", "", "built frontend directory containing index.html")
 	flags.BoolVar(&c.allowLocalDatabase, "allow-insecure-local-database", false, "allow plaintext PostgreSQL only over a literal loopback address or Unix socket")
 	if err := flags.Parse(args); err != nil {

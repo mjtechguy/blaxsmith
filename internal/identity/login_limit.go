@@ -36,6 +36,7 @@ func (l *LoginLimit) Allow(ctx context.Context, slug, username string, source ne
 	}{
 		{"source", address, 60},
 		{"account_source", slug + "\x00" + username + "\x00" + address, 10},
+		{"account", slug + "\x00" + username, 30},
 	} {
 		hash := sha256.Sum256([]byte(item.scope + "\x00" + item.key))
 		var allowed bool

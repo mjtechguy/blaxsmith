@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -162,6 +163,14 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if err := os.WriteFile(signerFile, seed, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	previousPublic, previousSigner, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousFile := filepath.Join(dir, "previous.pub")
+	if err := os.WriteFile(previousFile, previousPublic, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -171,6 +180,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	origin := "https://" + address
 	appArgs := []string{"--listen", address, "--origin", origin,
 		"--tls-cert-file", certFile, "--tls-key-file", keyFile, "--signer-file", signerFile,
+		"--previous-signer-public-file", previousFile,
 		"--static-dir", staticDir,
 		"--allow-insecure-local-database"}
 	if _, err := pool.Exec(ctx, `INSERT INTO blaxsmith_schema_migrations(version,sha256) VALUES ('future','invalid')`); err != nil {
@@ -222,6 +232,21 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if response, err := tls12.Get(origin + "/healthz"); err == nil {
 		response.Body.Close()
 		t.Fatal("TLS 1.2 was accepted")
+	}
+	previousManager, err := identity.NewSessionManager(pool, origin, previousSigner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousTokens, err := previousManager.LoginLocal(ctx, "engineering", "alice", password, netip.MustParseAddr("192.0.2.77"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousClient := apiv1connect.NewAuthServiceClient(&http.Client{Timeout: 3 * time.Second, Transport: client.Transport}, origin+"/api")
+	current := connect.NewRequest(&api.CurrentSessionRequest{})
+	current.Header().Set("Origin", origin)
+	current.Header().Set("Cookie", "__Host-blaxsmith_access="+previousTokens.Access)
+	if response, err := previousClient.CurrentSession(ctx, current); err != nil || response.Msg.Session.PrincipalId != owner.PrincipalID {
+		t.Fatalf("previous signing key was not accepted during overlap: %+v, %v", response, err)
 	}
 	apiClient := apiv1connect.NewAuthServiceClient(client, origin+"/api")
 	csrfRequest := connect.NewRequest(&api.GetCsrfRequest{})

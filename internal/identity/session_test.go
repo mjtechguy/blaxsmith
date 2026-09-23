@@ -43,6 +43,36 @@ func TestLoadSessionSigner(t *testing.T) {
 	}
 }
 
+func TestLoadSessionPublicKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "previous.pub")
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, public, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadSessionPublicKey(path)
+	if err != nil || !bytes.Equal(loaded, public) {
+		t.Fatalf("valid previous public key rejected: %v", err)
+	}
+	if err := os.Chmod(path, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSessionPublicKey(path); !errors.Is(err, ErrSessionConfiguration) {
+		t.Fatalf("writable previous public key accepted: %v", err)
+	}
+	if err := os.WriteFile(path, public[:16], 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSessionPublicKey(path); !errors.Is(err, ErrSessionConfiguration) {
+		t.Fatalf("short previous public key accepted: %v", err)
+	}
+}
+
 func TestSessionLifecyclePostgres(t *testing.T) {
 	pool := identityTestPool(t)
 	ctx := context.Background()

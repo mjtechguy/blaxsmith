@@ -109,8 +109,14 @@ one principal, organization, owner membership, and audit event. The internal
 session service now verifies local credentials, issues ten-minute signed access
 tokens, rotates hashed refresh tokens, checks current membership/policy on each
 request, and revokes on refresh replay. Login attempts are counted in PostgreSQL
-across replicas before bounded password hashing; identity state is rechecked
-under a lock before a session is issued. `serve-app` mounts the generated auth
+across replicas by source, account/source, and account across all source IPs
+before bounded password hashing. The account cap is 30 attempts per minute per
+organization and username, including unknown names and successful attempts;
+the same generic throttle response avoids an account-existence check. An
+attacker can still temporarily deny a known user's login by spending that
+minute's allowance, so support and alerting must treat throttling as a signal.
+Identity state is rechecked under a lock before a session is issued.
+`serve-app` mounts the generated auth
 and public catalog APIs over direct TLS, applies/verifies migrations before
 binding, checks PostgreSQL on `/healthz`, and prunes expired login-limit keys
 at startup and hourly. It requires an exact
@@ -123,8 +129,10 @@ socket for local development only. `--static-dir` serves a built Vite frontend
 from the same HTTPS origin, including direct links to workspace routes. The
 `app` Dockerfile target bundles those assets with the API; mounting TLS,
 signer, and database configuration remains an installation responsibility.
-For example, after supplying a trusted
-certificate and seed outside this repository:
+`--previous-signer-public-file` optionally loads a raw 32-byte Ed25519 public
+key from a regular file without group/world write access. It verifies access
+tokens during a signing-key overlap; it never signs new tokens. For example,
+after supplying a trusted certificate and seed outside this repository:
 
 ```sh
 go run ./cmd/blaxsmith serve-app --listen 127.0.0.1:8443 \
@@ -133,6 +141,14 @@ go run ./cmd/blaxsmith serve-app --listen 127.0.0.1:8443 \
   --signer-file /secure/session.seed --static-dir frontend/dist \
   --allow-insecure-local-database
 ```
+
+For a rolling signer rotation, first restart every old-signer replica with the
+new public key in `--previous-signer-public-file`. Then roll the new seed while
+setting that file to the old public key; both old and new replicas can now
+verify each other's access tokens. After every replica uses the new seed, wait
+longer than the ten-minute access-token lifetime plus rollout/clock margin,
+then remove the old public key and restart. The process reads key files only at
+startup; changing a mounted file alone does not update its verifier.
 
 `serve-app` accepts the direct TLS peer as the client address and ignores
 forwarding headers. An ingress may be used only when it preserves end-to-end

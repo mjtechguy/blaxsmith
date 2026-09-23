@@ -30,11 +30,14 @@ The operator command never accepts a password argument or environment variable.
 The internal session service uses Ed25519 JWTs via `golang-jwt/jwt/v5`, ten-minute
 access validity, seven-day server-side sessions, hashed single-use refresh
 tokens, current membership/policy checks, and auditable revocation/replay.
-Tokens carry a signing-key ID; a replacement signer can accept prior public keys
-for the access-token overlap. A platform-mounted 32-byte seed loader rejects
-world-readable files. PostgreSQL-backed per-source and per-account/source
-login limits apply across replicas before bounded password hashing; a second
-identity read under lock prevents policy or password changes from racing session
+Tokens carry a signing-key ID; `serve-app` can load one secondary public key to
+verify tokens during a staged, rolling signer rotation. A platform-mounted
+32-byte seed loader rejects world-readable files. PostgreSQL-backed per-source,
+per-account/source, and per-account login limits apply across replicas before
+bounded password hashing. The account limit applies to every syntactically
+valid name, whether or not it exists, and permits a one-minute targeted login
+denial if an attacker exhausts the allowance. A second identity read under lock
+prevents policy or password changes from racing session
 creation. A generated Connect browser handler verifies HTTPS/host/origin and
 CSRF, uses `__Host-` `HttpOnly`, `Secure`, `SameSite=Lax` cookies, and never
 returns bearer tokens in response bodies. `serve-app` now mounts it with the
