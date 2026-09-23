@@ -35,7 +35,7 @@ test("live activity merges replay once and detects missing events", async () => 
   globalThis.window = { location: { origin: "https://blaxsmith.test" } };
   const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
   try {
-    const { appendRunEvent, liveEventsUrl, parseLiveEvent } = await server.ssrLoadModule("/src/workflow.ts");
+    const { appendRunEvent, liveEventsUrl, parseLiveEvent, recoverRunEventBatch } = await server.ssrLoadModule("/src/workflow.ts");
     const parse = (id, runId = "run") => parseLiveEvent(JSON.stringify({ id: String(id), runId, kind: "attempt.started", occurredAt: "2026-09-23T00:00:00Z" }), "run");
     assert.equal(liveEventsUrl("run", 12n), "https://blaxsmith.test/api/runs/run/events?after=12");
     assert.throws(() => parse(1, "other"), /Invalid run event/);
@@ -51,6 +51,17 @@ test("live activity merges replay once and detects missing events", async () => 
     assert.equal(appendRunEvent(data, parse(101)).data, data);
     assert.equal(appendRunEvent(data, parse(103)).gap, true);
     assert.equal(data.pages[1].events.length, 1);
+    data = { pages: [{ events: [], nextAfterId: 0n }], pageParams: [0n] };
+    const cursor = () => data.pages.at(-1).nextAfterId;
+    const fetchPage = async (after) => {
+      const end = Math.min(Number(after) + 100, 600);
+      return { events: Array.from({ length: end - Number(after) }, (_, index) => parse(Number(after) + index + 1)), nextAfterId: BigInt(end) };
+    };
+    const append = (event) => { data = appendRunEvent(data, event).data; };
+    assert.equal(await recoverRunEventBatch(fetchPage, cursor, append), true);
+    assert.equal(cursor(), 500n);
+    assert.equal(await recoverRunEventBatch(fetchPage, cursor, append), false);
+    assert.equal(cursor(), 600n);
   } finally {
     await server.close();
     globalThis.window = previousWindow;

@@ -5,7 +5,7 @@ import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { ArrowLeft, Check, GitCommitHorizontal, RefreshCw } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
 import { PageHeader, PageShell } from "../page";
-import { appendRunEvent, decideReview, eventsAfter, getCurrentReview, getRun, liveEventsUrl, parseLiveEvent, type RunEventPages } from "../workflow";
+import { appendRunEvent, decideReview, eventsAfter, getCurrentReview, getRun, liveEventsUrl, parseLiveEvent, recoverRunEventBatch, type RunEventPages } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId/runs/$runId")({ component: RunDetail });
 
@@ -39,17 +39,20 @@ function RunDetail() {
     const recover = async () => {
       if (closed || recovering) return;
       window.clearTimeout(retryRecovery);
+      retryRecovery = undefined;
       recovering = true;
+      let more = false;
       try {
-        for (let batch = 0; batch < 5 && !closed; batch++) {
-          const after = cursor();
-          const page = await eventsAfter(runId, after);
-          for (const event of page.events) queryClient.setQueryData<RunEventPages>(key, (old) => appendRunEvent(old, event).data);
-          if (page.events.length < 100 || cursor() <= after) break;
-        }
+        more = await recoverRunEventBatch((after) => eventsAfter(runId, after), cursor,
+          (event) => { if (!closed) queryClient.setQueryData<RunEventPages>(key, (old) => appendRunEvent(old, event).data); });
       } catch {
         if (!closed) retryRecovery = window.setTimeout(() => void recover(), 5_000);
-      } finally { recovering = false; }
+      } finally {
+        recovering = false;
+        if (!closed && retryRecovery === undefined && cursor() < latestDelivered.current) {
+          retryRecovery = window.setTimeout(() => void recover(), more ? 0 : 5_000);
+        }
+      }
     };
     recoverRef.current = recover;
     const source = new EventSource(liveEventsUrl(runId, cursor()));

@@ -55,6 +55,20 @@ export function appendRunEvent(data: RunEventPages | undefined, event: WorkflowE
     { events: [...last.events, event], nextAfterId: event.id })] }, gap: false };
 }
 
+// Catch up in bounded passes so a long-disconnected run does not monopolize the UI.
+export async function recoverRunEventBatch(
+  fetchPage: (after: bigint) => Promise<EventsAfterResponse>, cursor: () => bigint,
+  append: (event: WorkflowEvent) => void,
+): Promise<boolean> {
+  for (let batch = 0; batch < 5; batch++) {
+    const after = cursor();
+    const page = await fetchPage(after);
+    for (const event of page.events) append(event);
+    if (page.events.length < 100 || cursor() <= after) return false;
+  }
+  return true;
+}
+
 export function liveEventsUrl(runId: string, afterId: bigint): string {
   return `${window.location.origin}/api/runs/${encodeURIComponent(runId)}/events?after=${afterId}`;
 }
