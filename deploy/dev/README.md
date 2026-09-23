@@ -356,8 +356,9 @@ written to the report or repository.
 
 On the dedicated node, PostgreSQL 18 listens only on its Unix socket. The
 `blaxsmith_dev` database and limited peer-authenticated `root` role hold the
-five `db/migrations` files. The fourth adds non-secret access-authority records
-and the fifth adds versioned encrypted secret rows;
+six `db/migrations` files. The fourth adds non-secret access-authority records,
+the fifth adds versioned encrypted secret rows, and the sixth records delivery
+leases;
 the database is synthetic evidence, not product
 storage. Run with a new output directory each time:
 
@@ -423,6 +424,9 @@ attempt binding rows before task launch, then encrypts the fixture token in a
 versioned database row. The connector checks the live rows and reads the
 current secret under the same release transaction; it does not reread the
 fixture token file. The separate owner-only key file is not stored in PostgreSQL.
+Each release reserves a lease with its durable release intent, then records
+the secret version and acknowledged delivery in the send transaction. The
+probe checks both lease rows after initial setup and resume.
 
 The [passing live report](../../docs/bootstrap-private-git-probe.json) and
 [bounded secret scan](../../docs/bootstrap-private-git-secret-scan.json) used
@@ -434,13 +438,14 @@ encrypted Git setup names the exact fixture commit; the runner rejects a
 different fetched SHA before checkout, and the probe checks the live checkout.
 The [Linux build provenance](../../integrations/ax/provenance-encrypted-git.json)
 records the tested source and binary hashes. PostgreSQL recorded two completed
-releases and an inactive generation-3 owner. The test found no token in AX
+releases, two delivered access leases, and an inactive generation-3 owner. The test found no token in AX
 Redis, inspected logs and control-plane objects, Git config, task environment,
 or evidence files. The first resume attempt exposed a missing `/ax` marker;
 the revised runner writes a URL-and-commit-bound marker to the snapshotted workspace and
 rejects an existing `.git` without it or with a changed remote. This is a
-synthetic proof only: there is no authenticated product grant/binding/lease or real provider
-credential, and full-snapshot memory/complete egress/revocation remain open.
+synthetic proof only: grants, bindings, and leases are operator-seeded rather
+than authorized through product APIs; there is no real provider credential,
+and full-snapshot memory/complete egress/provider revocation remain open.
 
 ## Original baseline task
 

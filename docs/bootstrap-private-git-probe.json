@@ -1,5 +1,5 @@
 {
-  "atespace": "blaxsmith-gate-5c75a089fc",
+  "atespace": "blaxsmith-gate-0d3922f162",
   "image": "127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:32e908293a10e176a4b69f3e12d1a7789418dcda57ac9d732f2c1f7de3d60e81",
   "checks": [
     "task-signer-override blocked before actor launch",
@@ -16,34 +16,52 @@
   "git_commit": "76575d1fa33498e68db4468dcc9b0c292699552e",
   "ledger_releases": [
     {
-      "access_connection": "blaxsmith-gate-5c75a089fc/private-git",
-      "actor_uid": "0855642a-38de-4c26-955c-09fa8c9d40f2",
-      "attempt_id": "blaxsmith-gate-5c75a089fc/gated-runner",
+      "access_connection": "blaxsmith-gate-0d3922f162/private-git",
+      "access_lease": "w6Mb-Bh8GGB-SMX6EDLnrQ",
+      "actor_uid": "a3e6ddce-7ed7-48a3-bca1-9a5a6c3ba9dd",
+      "attempt_id": "blaxsmith-gate-0d3922f162/gated-runner",
       "cluster_id": "dev-cluster",
       "opened": true,
       "owner_generation": 1,
       "snapshot_scope": "SNAPSHOT_CONTENT_SCOPE_DATA",
-      "template_uid": "03f51899-35a8-449b-a80c-d02c64bd4549",
+      "template_uid": "f21d79b2-f81c-4925-a2b1-d26435d6a011",
       "worker_pool": "blaxsmith-smoke"
     },
     {
-      "access_connection": "blaxsmith-gate-5c75a089fc/private-git",
-      "actor_uid": "0855642a-38de-4c26-955c-09fa8c9d40f2",
-      "attempt_id": "blaxsmith-gate-5c75a089fc/gated-runner",
+      "access_connection": "blaxsmith-gate-0d3922f162/private-git",
+      "access_lease": "mHYOEiYS9MaPzoRTo5V-1g",
+      "actor_uid": "a3e6ddce-7ed7-48a3-bca1-9a5a6c3ba9dd",
+      "attempt_id": "blaxsmith-gate-0d3922f162/gated-runner",
       "cluster_id": "dev-cluster",
       "opened": true,
       "owner_generation": 2,
       "snapshot_scope": "SNAPSHOT_CONTENT_SCOPE_DATA",
-      "template_uid": "03f51899-35a8-449b-a80c-d02c64bd4549",
+      "template_uid": "f21d79b2-f81c-4925-a2b1-d26435d6a011",
       "worker_pool": "blaxsmith-smoke"
     }
   ],
   "access_seed": {
-    "binding_id": "blaxsmith-gate-5c75a089fc/gated-runner/git-read",
+    "binding_id": "blaxsmith-gate-0d3922f162/gated-runner/git-read",
     "organization_id": "synthetic-org",
-    "project_id": "blaxsmith-gate-5c75a089fc",
+    "project_id": "blaxsmith-gate-0d3922f162",
     "secret_version": 1
   },
+  "access_leases": [
+    {
+      "id": "w6Mb-Bh8GGB-SMX6EDLnrQ",
+      "owner_generation": 1,
+      "actor_uid": "a3e6ddce-7ed7-48a3-bca1-9a5a6c3ba9dd",
+      "secret_version": 1,
+      "delivered": true
+    },
+    {
+      "id": "mHYOEiYS9MaPzoRTo5V-1g",
+      "owner_generation": 2,
+      "actor_uid": "a3e6ddce-7ed7-48a3-bca1-9a5a6c3ba9dd",
+      "secret_version": 1,
+      "delivered": true
+    }
+  ],
   "final_phase": "Suspended",
   "owner_cleanup": {
     "deactivated": true,

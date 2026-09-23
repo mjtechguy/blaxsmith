@@ -6,6 +6,7 @@ import http.client
 import json
 import os
 import pathlib
+import re
 import socket
 import ssl
 import subprocess
@@ -197,6 +198,21 @@ def release(challenge, previous_generation):
         raise RuntimeError(f"ledger connector: {result.stderr.strip()}")
     record = json.loads(result.stdout)
     report["ledger_releases"].append(record)
+    if git_repo:
+        lease_id = record["access_lease"]
+        if not re.fullmatch(r"[A-Za-z0-9_-]{22}", lease_id):
+            raise RuntimeError("invalid access lease ID")
+        query = ("SELECT owner_generation,actor_uid,secret_version,"
+                 "delivery_attempted_at IS NOT NULL,delivered_at IS NOT NULL,revoked_at IS NOT NULL "
+                 "FROM access_leases WHERE organization_id='synthetic-org' AND id='" + lease_id + "'")
+        state = subprocess.run(("psql", "-d", "blaxsmith_dev", "-Atc", query),
+                               text=True, capture_output=True, timeout=15)
+        expected = f"{record['owner_generation']}|{record['actor_uid']}|{report['access_seed']['secret_version']}|t|t|f"
+        if state.returncode or state.stdout.strip() != expected:
+            raise RuntimeError("access lease is not a committed delivery for the current owner")
+        report.setdefault("access_leases", []).append({"id": lease_id,
+            "owner_generation": record["owner_generation"], "actor_uid": record["actor_uid"],
+            "secret_version": report["access_seed"]["secret_version"], "delivered": True})
     return 204
 
 

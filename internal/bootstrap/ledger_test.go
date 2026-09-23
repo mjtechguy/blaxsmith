@@ -126,10 +126,10 @@ func TestLedgerPostgres(t *testing.T) {
 		t.Fatalf("durable redeem from another connection: %v", err)
 	}
 	sent := 0
-	if _, err := ledger.Release(ctx, redeemed, func(context.Context, pgx.Tx) error { sent++; return nil }); err != nil {
+	if _, err := ledger.Release(ctx, redeemed, nil, func(context.Context, pgx.Tx) error { sent++; return nil }); err != nil {
 		t.Fatalf("release under owner fence: %v", err)
 	}
-	if _, err := ledger.Release(ctx, redeemed, func(context.Context, pgx.Tx) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
+	if _, err := ledger.Release(ctx, redeemed, nil, func(context.Context, pgx.Tx) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
 		t.Fatalf("replayed release: %v, sends=%d", err, sent)
 	}
 	denied(owner, second, secondProof, secondRoots) // replay
@@ -148,7 +148,7 @@ func TestLedgerPostgres(t *testing.T) {
 	finishSend := make(chan struct{})
 	completedSend := make(chan error, 1)
 	go func() {
-		_, err := ledger.Release(ctx, policyRedeemed, func(sendCtx context.Context, tx pgx.Tx) error {
+		_, err := ledger.Release(ctx, policyRedeemed, nil, func(sendCtx context.Context, tx pgx.Tx) error {
 			var active bool
 			err := tx.QueryRow(sendCtx, `SELECT active FROM policy_fence WHERE id=1 FOR SHARE`).Scan(&active)
 			if err == nil && !active {
@@ -186,7 +186,7 @@ func TestLedgerPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ledger.Release(ctx, revokedRedeemed, func(sendCtx context.Context, tx pgx.Tx) error {
+	if _, err := ledger.Release(ctx, revokedRedeemed, nil, func(sendCtx context.Context, tx pgx.Tx) error {
 		var active bool
 		if err := tx.QueryRow(sendCtx, `SELECT active FROM policy_fence WHERE id=1 FOR SHARE`).Scan(&active); err != nil {
 			return err
@@ -205,11 +205,22 @@ func TestLedgerPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, `CREATE TABLE release_intents (challenge_id text PRIMARY KEY)`); err != nil {
+		t.Fatal(err)
+	}
 	transportErr := errors.New("unknown delivery outcome")
-	if _, err := ledger.Release(ctx, unknownRedeemed, func(context.Context, pgx.Tx) error { return transportErr }); !errors.Is(err, transportErr) {
+	if _, err := ledger.Release(ctx, unknownRedeemed, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO release_intents (challenge_id) VALUES ($1)`, unknown.ID)
+		return err
+	}, func(context.Context, pgx.Tx) error { return transportErr }); !errors.Is(err, transportErr) {
 		t.Fatalf("release outcome: %v", err)
 	}
-	if _, err := ledger.Release(ctx, unknownRedeemed, func(context.Context, pgx.Tx) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
+	var intentCount int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM release_intents WHERE challenge_id=$1`, unknown.ID).
+		Scan(&intentCount); err != nil || intentCount != 1 {
+		t.Fatalf("unknown send lost durable intent: %d, %v", intentCount, err)
+	}
+	if _, err := ledger.Release(ctx, unknownRedeemed, nil, func(context.Context, pgx.Tx) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
 		t.Fatalf("unknown release retried: %v, sends=%d", err, sent)
 	}
 	var attempted, completed bool
@@ -225,7 +236,7 @@ func TestLedgerPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = issue(owner)
-	if _, err := ledger.Release(ctx, supersededRedeemed, func(context.Context, pgx.Tx) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
+	if _, err := ledger.Release(ctx, supersededRedeemed, nil, func(context.Context, pgx.Tx) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
 		t.Fatalf("superseded proof released: %v, sends=%d", err, sent)
 	}
 
@@ -273,7 +284,7 @@ func TestLedgerPostgres(t *testing.T) {
 	if err != nil || newOwner.OwnerGeneration != 2 {
 		t.Fatalf("replacement owner: %+v, %v", newOwner, err)
 	}
-	if _, err := ledger.Release(ctx, staleRedeemed, func(context.Context, pgx.Tx) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
+	if _, err := ledger.Release(ctx, staleRedeemed, nil, func(context.Context, pgx.Tx) error { sent++; return nil }); !errors.Is(err, ErrDenied) || sent != 1 {
 		t.Fatalf("stale owner released: %v, sends=%d", err, sent)
 	}
 	denied(owner, stale, staleProof, staleRoots)

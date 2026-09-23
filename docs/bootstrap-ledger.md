@@ -2,7 +2,8 @@
 
 The migrations and `internal/bootstrap` implement the durable owner/challenge
 fence for P0-04. A synthetic connector uses it to release the AX runner and
-deliver a synthetic private-Git setup token; it does not issue product leases.
+deliver a synthetic private-Git setup token under an attempt-bound platform
+lease; this is not yet a user-authorized product lease.
 
 The scheduler owns one `bootstrap_owners` row per cluster/attempt. `Assign`
 creates its first generation or replaces an owner only when the caller supplies
@@ -53,7 +54,7 @@ rejects a template unless pause and commit use data-only snapshots, resume
 starts from the golden image, and the dev storage location matches the
 configured snapshot bucket. The [live rerun](bootstrap-private-git-probe.json)
 also observed data-only external snapshots after both suspensions. A [bounded
-surface scan](bootstrap-private-git-secret-scan.json) found no token in 161 AX Redis
+surface scan](bootstrap-private-git-secret-scan.json) found no token in 177 AX Redis
 keys, eight runtime container logs, the dev platform database, fixture logs,
 or nine probe evidence files. The owner ended inactive at generation 3.
 
@@ -61,11 +62,15 @@ The latest synthetic probe seeds provider, connection, project policy, grant,
 and binding records before task launch, encrypts the fixture token in a
 versioned database row, and reads it only after a row-locked Git-read decision
 in the release transaction. The key remains in an owner-only file outside the
-database. This tests the access path but does not provide authenticated
-onboarding, a real provider credential, or an access lease.
+database. A distinct lease reservation is committed with each release intent;
+the [live report](bootstrap-private-git-probe.json) confirms delivery to the
+same actor under owner generations 1 and 2. This tests the access path but
+does not provide authenticated onboarding or a real provider credential.
 The product scheduler must still own `Assign`/`Deactivate`, authenticate the
 connector, enforce real membership/RBAC and measured effective
-isolation/egress, and issue and revoke short-lived Git access with leases. The synthetic connector supplies a pinned
+isolation/egress, and issue and revoke provider-scoped Git access. The current
+synthetic raw token can remain provider-valid after its platform lease expires
+or is revoked. The synthetic connector supplies a pinned
 Git commit inside the encrypted release; the runner rejects a fetch that does
 not resolve to that commit before checkout, and the live fixture matched it.
 The product must derive that pin from an authorized frozen input bundle. The

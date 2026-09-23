@@ -19,6 +19,18 @@ returns a byte slice the caller must clear. Missing old keys or tampered
 ciphertext fail closed. Old keys must remain recoverable while retained rows
 or backups require them.
 
+`0006_access_leases.sql` records an attempt, actor UID, owner generation,
+binding, connection, audience, resource, secret version, expiry, and delivery
+state. `ReserveGitLease` runs in the transaction that commits bootstrap release
+intent, before network delivery. The send transaction checks current authority,
+reads the secret, and marks that lease attempted and delivered only after the
+guest acknowledges release. If the send outcome or commit is uncertain, the
+reservation and bootstrap challenge's durable attempted state remain for
+reconciliation; the same challenge cannot be retried. Resume gets a new
+challenge and lease. `RevokeGrant` blocks later decisions and marks recorded
+leases revoked. **Lease expiry or revocation does not invalidate a raw bearer
+token already copied into a sandbox or at its provider.**
+
 `access.AuthorizeGitRead` is the first read-side decision. A trusted caller
 provides the current organization, project, initiator, attempt, binding,
 repository, commit, and policy version. The function locks the binding,
@@ -47,11 +59,17 @@ The [secret-store test](../internal/access/secret_test.go) verifies ciphertext
 at rest, tenant isolation, copied-ciphertext rejection, key-version reads, stale and concurrent rotations,
 rotation blocked by an active credential read, expiry, disabled connections,
 tampering, and caller-side clearing. It uses synthetic values only.
+The [lease test](../internal/access/lease_test.go) covers actor binding,
+duplicate reservation, delivery state, rollback after a possible send, and
+grant revocation. The [live report](bootstrap-private-git-probe.json) confirms
+two distinct delivered lease records with the current actor and owner
+generations across data-snapshot resume.
 
 This is **not yet a usable account system**. There are no authenticated write
 APIs, membership/RBAC checks for creating these rows, deployment key loading
-and recovery, provider credential issuance, access leases, provider refresh or
-revocation workers, or product scheduler wiring. The dev seed command reads a
+and recovery, provider credential issuance, lease renewal/reconciliation,
+provider refresh or revocation workers, or product scheduler wiring. The dev
+seed command reads a
 root-owned fixture token once; the release connector reads only ciphertext
 through `SecretStore`. Those pieces must precede real
 credentials.

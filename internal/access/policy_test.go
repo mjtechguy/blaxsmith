@@ -172,8 +172,12 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	for _, name := range []string{"0004_access_authority.sql", "0005_access_secrets.sql"} {
-		migration, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", name))
+	migrations, err := filepath.Glob(filepath.Join("..", "..", "db", "migrations", "*.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range migrations {
+		migration, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
 		}

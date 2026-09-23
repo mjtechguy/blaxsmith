@@ -168,6 +168,7 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 		}}
 	defer transport.CloseIdleConnections()
 	var decision access.Decision
+	var leaseID string
 	connector := &bootstrap.Connector{Ledger: ledger, Client: &http.Client{Transport: transport, Timeout: 20 * time.Second},
 		RouterURL: "https://atenet-router.ate-system.svc", Roots: actorRoots, Signer: signer,
 		Token: func(context.Context) (string, error) { return token, nil }, Current: current,
@@ -194,15 +195,32 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 		},
 	}
 	if gitRepo != "" {
+		connector.Reserve = func(ctx context.Context, tx pgx.Tx, redeemed bootstrap.Redeemed) error {
+			id, err := access.ReserveGitLease(ctx, tx, access.LeaseRequest{
+				OrganizationID: "synthetic-org", BindingID: gitBinding, ChallengeID: redeemed.ID,
+				ClusterID: redeemed.Scope.ClusterID, AttemptID: redeemed.Scope.AttemptID,
+				OwnerGeneration: redeemed.Scope.OwnerGeneration, ActorUID: redeemed.ActorUID,
+				RepoURL: gitRepo, GuestExpiresAt: time.Unix(redeemed.Challenge.ExpiresAt, 0),
+			})
+			leaseID = id
+			return err
+		}
 		connector.GitSetup = func(ctx context.Context, tx pgx.Tx, _ bootstrap.Runtime) (bootstrap.GitSetup, error) {
-			if decision.ConnectionID == "" {
+			if decision.ConnectionID == "" || leaseID == "" {
 				return bootstrap.GitSetup{}, access.ErrDenied
 			}
 			secret, err := secretStore.ReadCurrent(ctx, tx, "synthetic-org", decision.ConnectionID)
 			if err != nil {
 				return bootstrap.GitSetup{}, err
 			}
+			if err := access.MarkLeaseAttempt(ctx, tx, "synthetic-org", leaseID, decision.ConnectionID, secret.Version); err != nil {
+				secret.Clear()
+				return bootstrap.GitSetup{}, err
+			}
 			return bootstrap.GitSetup{RepoURL: gitRepo, Commit: gitCommit, Username: "blaxsmith-probe", Token: secret.Bytes}, nil
+		}
+		connector.Delivered = func(ctx context.Context, tx pgx.Tx, _ bootstrap.Redeemed) error {
+			return access.MarkLeaseDelivered(ctx, tx, "synthetic-org", leaseID)
 		}
 	}
 	if err := connector.Open(ctx, scope, expected); err != nil {
@@ -214,6 +232,7 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 		"template_uid": expected.TemplateUID, "worker_pool": expected.WorkerPool,
 		"snapshot_scope":    expected.SnapshotOnPause,
 		"access_connection": decision.ConnectionID,
+		"access_lease":      leaseID,
 		"opened":            true,
 	}); err != nil {
 		return err

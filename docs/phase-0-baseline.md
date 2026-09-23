@@ -148,7 +148,10 @@ The resumed task required a new proof and kept the private checkout. The
 provider/connection/project/grant/binding chain and stored the fixture token
 as encrypted database ciphertext. The connector checked current rows and read
 the secret under the release transaction for both initial setup and resume.
-The
+Each release first reserved a distinct access lease with the actor UID and
+owner generation; [the live report](bootstrap-private-git-probe.json) confirms
+both were marked delivered with secret version 1. These are platform delivery
+records, not provider-enforced expiration of the raw fixture token. The
 [surface scan](bootstrap-private-git-secret-scan.json) found no token in the
 listed persisted/logged surfaces. This does not prove full-snapshot memory
 exclusion, effective egress on every path, authenticated grant/revocation, or trusted

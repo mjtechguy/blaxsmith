@@ -56,6 +56,10 @@ type Connector struct {
 	// Authorize and GitSetup must use the supplied release transaction for
 	// policy/credential reads whose revocation must fence delivery.
 	Authorize func(context.Context, pgx.Tx, Runtime) error
+	// Reserve commits an access-delivery intent before send; Delivered records
+	// an acknowledged send in the release transaction.
+	Reserve   func(context.Context, pgx.Tx, Redeemed) error
+	Delivered func(context.Context, pgx.Tx, Redeemed) error
 	// GitSetup runs only after proof, owner fencing, runtime check, and policy.
 	// The returned token byte slice is consumed and cleared by Open.
 	GitSetup func(context.Context, pgx.Tx, Runtime) (GitSetup, error)
@@ -107,7 +111,11 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 	if err != nil {
 		return err
 	}
-	_, err = c.Ledger.Release(ctx, redeemed, func(sendCtx context.Context, tx pgx.Tx) error {
+	var prepare func(context.Context, pgx.Tx) error
+	if c.Reserve != nil {
+		prepare = func(prepareCtx context.Context, tx pgx.Tx) error { return c.Reserve(prepareCtx, tx, redeemed) }
+	}
+	_, err = c.Ledger.Release(ctx, redeemed, prepare, func(sendCtx context.Context, tx pgx.Tx) error {
 		current, err := c.Current(sendCtx)
 		if err != nil {
 			return err
@@ -163,7 +171,13 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 			return err
 		}
 		_, _, _, err = c.request(sendCtx, router, offer, http.MethodPost, "/blaxsmith/bootstrap/release", release)
-		return err
+		if err != nil {
+			return err
+		}
+		if c.Delivered != nil {
+			return c.Delivered(sendCtx, tx, redeemed)
+		}
+		return nil
 	})
 	return err
 }

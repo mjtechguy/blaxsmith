@@ -233,11 +233,13 @@ func (l *Ledger) Redeem(ctx context.Context, scope Scope, id string, nonce [32]b
 }
 
 // Release records an irrevocable attempt before calling checkAndSend. The
+// optional prepare callback commits a durable access-delivery intent with it.
 // callback must recheck live runtime and policy, then send the release while
 // this method holds the owner row lock. Policy reads must use the supplied
 // transaction and lock rows that revocation changes. Any error leaves the attempt unknown;
 // callers must issue a new challenge rather than retry this redemption.
-func (l *Ledger) Release(ctx context.Context, redeemed Redeemed, checkAndSend func(context.Context, pgx.Tx) error) (time.Time, error) {
+func (l *Ledger) Release(ctx context.Context, redeemed Redeemed,
+	prepare func(context.Context, pgx.Tx) error, checkAndSend func(context.Context, pgx.Tx) error) (time.Time, error) {
 	if !validScope(redeemed.Scope) || redeemed.ID == "" || redeemed.ActorAtespace == "" ||
 		redeemed.ActorName == "" || redeemed.ActorUID == "" || checkAndSend == nil {
 		return time.Time{}, ErrDenied
@@ -277,6 +279,11 @@ func (l *Ledger) Release(ctx context.Context, redeemed Redeemed, checkAndSend fu
 	}
 	if err != nil {
 		return time.Time{}, fmt.Errorf("record bootstrap release intent: %w", err)
+	}
+	if prepare != nil {
+		if err := prepare(ctx, tx); err != nil {
+			return time.Time{}, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return time.Time{}, fmt.Errorf("commit bootstrap release intent: %w", err)
