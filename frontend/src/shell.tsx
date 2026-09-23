@@ -102,7 +102,8 @@ export function Shell({ children, session }: { children: ReactNode; session?: Se
             {theme === "dark" ? <Moon size={17} /> : <Sun size={17} />}
           </button>
           {session ? <><span className="account-role" title={`Signed in as ${session.role}`}>{session.role}</span>
-            <button type="button" className="secondary-button sign-out" onClick={() => void signOut()} disabled={signingOut}><LogOut size={15} aria-hidden="true" />{signingOut ? "Signing out…" : "Sign out"}</button></> : null}
+            <button type="button" className="secondary-button sign-out" onClick={() => void signOut()} disabled={signingOut}><LogOut size={15} aria-hidden="true" />{signingOut ? "Signing out…" : "Sign out"}</button></> :
+            <Link to="/login" search={{ next: "/tools" }} className="secondary-button">Sign in</Link>}
         </div>
       </header>
       {signOutError ? <div className="account-error" role="alert">Sign-out could not be completed. Please try again.</div> : null}

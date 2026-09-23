@@ -57,6 +57,7 @@ installations and exact runtime pins afterward. The first [read-only catalog
 command](docs/tool-runtime-catalog.md) now lists recent publisher-backed CLI
 versions and their exact package integrity metadata with `blaxsmith tools`.
 The [catalog web preview](docs/frontend-adoption.md) lists these releases but cannot approve or install them. Verified installation and launch adapters are not implemented yet.
+A separate [Linux/amd64 runtime image proof](deploy/runtime-proof/README.md) pins and smoke-tests native Codex, Claude Code, and OpenCode packages without credentials; it is not promoted for agent execution.
 
 ## Run the web preview
 
