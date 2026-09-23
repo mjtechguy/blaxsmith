@@ -108,9 +108,12 @@ It reads and confirms the password from the terminal and atomically creates
 one principal, organization, owner membership, and audit event. The internal
 session service now verifies local credentials, issues ten-minute signed access
 tokens, rotates hashed refresh tokens, checks current membership/policy on each
-request, and revokes on refresh replay. No sign-in endpoint or browser session
-is exposed yet; MFA, key custody, account management, and browser protections
-remain release work. The [guide adoption record](docs/adr/0001-technology-guide.md)
+request, and revokes on refresh replay. Login attempts are counted in PostgreSQL
+across replicas before bounded password hashing; identity state is rechecked
+under a lock before a session is issued. No sign-in endpoint or browser session
+is exposed yet; MFA, key custody, account management, browser protections, and
+scheduled pruning of old login-limit keys remain release work. The
+[guide adoption record](docs/adr/0001-technology-guide.md)
 tracks exact baseline choices and current deviations.
 
 ## Workspace layout

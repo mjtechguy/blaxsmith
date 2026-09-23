@@ -32,8 +32,11 @@ access validity, seven-day server-side sessions, hashed single-use refresh
 tokens, current membership/policy checks, and auditable revocation/replay.
 Tokens carry a signing-key ID; a replacement signer can accept prior public keys
 for the access-token overlap. A platform-mounted 32-byte seed loader rejects
-world-readable files. Deployment key custody, rotation orchestration, login
-throttling, and browser transport are not implemented. No login/session
+world-readable files. PostgreSQL-backed per-source and per-account/source
+login limits apply across replicas before bounded password hashing; a second
+identity read under lock prevents policy or password changes from racing session
+creation. Deployment key custody, rotation orchestration, scheduled limit-key
+pruning, and browser transport are not implemented. No login/session
 endpoint is exposed yet. Browser sessions will require
 `HttpOnly`, `Secure`, `SameSite` cookies plus CSRF/origin protection as described
 by the [OWASP session](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)

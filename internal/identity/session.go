@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"time"
 
@@ -26,11 +27,13 @@ var ErrRefreshReuse = errors.New("refresh token reused; session revoked")
 var ErrSessionConfiguration = errors.New("invalid session signing configuration")
 
 type SessionManager struct {
-	db     *pgxpool.Pool
-	issuer string
-	signer ed25519.PrivateKey
-	keyID  string
-	keys   map[string]ed25519.PublicKey
+	db            *pgxpool.Pool
+	issuer        string
+	signer        ed25519.PrivateKey
+	keyID         string
+	keys          map[string]ed25519.PublicKey
+	limits        *LoginLimit
+	passwordSlots chan struct{}
 }
 
 type Tokens struct {
@@ -80,7 +83,13 @@ func NewSessionManager(db *pgxpool.Pool, issuer string, signer ed25519.PrivateKe
 		}
 		keys[signingKeyID(key)] = append(ed25519.PublicKey(nil), key...)
 	}
-	return &SessionManager{db: db, issuer: issuer, signer: copyKey, keyID: signingKeyID(active), keys: keys}, nil
+	limits, err := NewLoginLimit(db)
+	if err != nil {
+		clear(copyKey)
+		return nil, err
+	}
+	return &SessionManager{db: db, issuer: issuer, signer: copyKey, keyID: signingKeyID(active), keys: keys,
+		limits: limits, passwordSlots: make(chan struct{}, 2)}, nil
 }
 
 func signingKeyID(public ed25519.PublicKey) string {
@@ -110,25 +119,28 @@ func LoadSessionSigner(path string) (ed25519.PrivateKey, error) {
 	return signer, nil
 }
 
-// LoginLocal is an internal operation. Do not expose it over HTTP until login
-// throttling, secure cookies, CSRF/origin checks, and response redaction exist.
-func (m *SessionManager) LoginLocal(ctx context.Context, slug, username string, password []byte) (Tokens, error) {
+// LoginLocal is an internal operation. The source must be the authenticated
+// network peer, not an untrusted forwarding header. Browser transport still
+// needs secure cookies, CSRF/origin checks, and response redaction.
+func (m *SessionManager) LoginLocal(ctx context.Context, slug, username string, password []byte, source netip.Addr) (Tokens, error) {
 	if m == nil || !organizationSlug.MatchString(slug) || !accountName.MatchString(username) || len(password) > passwordMax {
 		return Tokens{}, ErrUnauthenticated
 	}
-	tx, err := m.db.Begin(ctx)
-	if err != nil {
+	if err := m.limits.Allow(ctx, slug, username, source); err != nil {
 		return Tokens{}, err
 	}
-	defer tx.Rollback(ctx)
-	var orgID, principalID, principalState, membershipState, role, loginPolicy, mfaPolicy string
+	select {
+	case m.passwordSlots <- struct{}{}:
+		defer func() { <-m.passwordSlots }()
+	case <-ctx.Done():
+		return Tokens{}, ctx.Err()
+	}
 	var encoded *string
-	err = tx.QueryRow(ctx, `SELECT o.id,p.id,p.password_hash,p.state,m.state,m.role,o.login_policy,o.mfa_policy
+	err := m.db.QueryRow(ctx, `SELECT p.password_hash
 		FROM identity_organizations o
 		JOIN identity_memberships m ON m.organization_id=o.id
 		JOIN identity_principals p ON p.id=m.principal_id
-		WHERE o.slug=$1 AND p.username=$2 FOR SHARE OF o,m,p`, slug, username).
-		Scan(&orgID, &principalID, &encoded, &principalState, &membershipState, &role, &loginPolicy, &mfaPolicy)
+		WHERE o.slug=$1 AND p.username=$2`, slug, username).Scan(&encoded)
 	if errors.Is(err, pgx.ErrNoRows) {
 		burnPasswordAttempt(password)
 		return Tokens{}, ErrUnauthenticated
@@ -142,9 +154,28 @@ func (m *SessionManager) LoginLocal(ctx context.Context, slug, username string, 
 	} else {
 		burnPasswordAttempt(password)
 	}
-	if !validPassword || principalState != "active" || membershipState != "active" ||
-		(loginPolicy != "local" && loginPolicy != "mixed") || mfaPolicy != "optional" {
+	if !validPassword || encoded == nil {
 		return Tokens{}, ErrUnauthenticated
+	}
+	tx, err := m.db.Begin(ctx)
+	if err != nil {
+		return Tokens{}, err
+	}
+	defer tx.Rollback(ctx)
+	var orgID, principalID, role string
+	err = tx.QueryRow(ctx, `SELECT o.id,p.id,m.role
+		FROM identity_organizations o
+		JOIN identity_memberships m ON m.organization_id=o.id
+		JOIN identity_principals p ON p.id=m.principal_id
+		WHERE o.slug=$1 AND p.username=$2 AND p.password_hash=$3
+		AND p.state='active' AND m.state='active'
+		AND o.login_policy IN ('local','mixed') AND o.mfa_policy='optional'
+		FOR SHARE OF o,m,p`, slug, username, *encoded).Scan(&orgID, &principalID, &role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Tokens{}, ErrUnauthenticated
+	}
+	if err != nil {
+		return Tokens{}, fmt.Errorf("recheck local identity: %w", err)
 	}
 	var sessionID string
 	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()`).Scan(&sessionID); err != nil {

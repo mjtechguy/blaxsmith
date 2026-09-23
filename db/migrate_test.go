@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"io/fs"
 	"os"
 	"strings"
 	"sync"
@@ -74,8 +75,9 @@ func TestMigratePostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if total != 8 {
-		t.Fatalf("concurrent migrations applied %d versions", total)
+	names, err := fs.Glob(migrations, "migrations/*.sql")
+	if err != nil || total != len(names) {
+		t.Fatalf("concurrent migrations applied %d versions, want %d: %v", total, len(names), err)
 	}
 	if count, err := Migrate(ctx, pool); err != nil || count != 0 {
 		t.Fatalf("repeat migration: %d, %v", count, err)

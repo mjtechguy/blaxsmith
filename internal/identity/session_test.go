@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,13 +59,14 @@ func TestSessionLifecyclePostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.LoginLocal(ctx, "engineering", "alice", []byte("wrong password")); !errors.Is(err, ErrUnauthenticated) {
+	source := netip.MustParseAddr("192.0.2.1")
+	if _, err := manager.LoginLocal(ctx, "engineering", "alice", []byte("wrong password"), source); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("wrong password accepted: %v", err)
 	}
-	if _, err := manager.LoginLocal(ctx, "engineering", "unknown", password); !errors.Is(err, ErrUnauthenticated) {
+	if _, err := manager.LoginLocal(ctx, "engineering", "unknown", password, source); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("unknown account accepted: %v", err)
 	}
-	first, err := manager.LoginLocal(ctx, "engineering", "alice", password)
+	first, err := manager.LoginLocal(ctx, "engineering", "alice", password, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +150,7 @@ func TestSessionLifecyclePostgres(t *testing.T) {
 		t.Fatalf("replayed session still refreshes: %v", err)
 	}
 
-	last, err := manager.LoginLocal(ctx, "engineering", "alice", password)
+	last, err := manager.LoginLocal(ctx, "engineering", "alice", password, source)
 	if err != nil {
 		t.Fatal(err)
 	}
