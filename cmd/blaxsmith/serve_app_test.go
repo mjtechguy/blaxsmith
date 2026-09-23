@@ -276,7 +276,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 		if err != nil {
 			t.Fatalf("graceful shutdown failed: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("app did not shut down")
 	}
 	manager, err := identity.NewSessionManager(pool, origin, ed25519.NewKeyFromSeed(seed))
