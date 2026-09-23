@@ -24,6 +24,7 @@ message ToolCatalog {
 
 message ListToolsResponse {
   repeated ToolCatalog tools = 1;
+  bool stale = 2; // Last successful catalog served during an upstream failure.
 }
 
 service CatalogService {

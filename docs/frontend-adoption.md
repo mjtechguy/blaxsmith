@@ -52,7 +52,8 @@ installation exists. There is no placeholder login or configuration drawer.
 the generated Connect contract in `proto/blaxsmith/api/v1/catalog.proto`. The
 catalog fetches up to 20 non-prerelease versions per tool, shows publisher
 stable tags and package integrity, and supports search, tool filter, date and
-numeric-version sorting, and pagination. A version shown here is discoverable,
+numeric-version sorting, and pagination. It marks a bounded stale result when
+the publisher is unavailable. A version shown here is discoverable,
 not an approved or installed runtime.
 
 Validation on 2026-09-22: `make check`, a Node 24 production build/typecheck,

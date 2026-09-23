@@ -26,10 +26,13 @@ shows both names and versions without collapsing them.
 
 The reader is read-only. It does not approve, download, verify, install, or
 run any version; the npm integrity field is metadata until actual bytes are
-checked. It does not yet cache conditional responses, attest binary assets,
-check Linux/architecture compatibility, disable self-updates, or bind a
-release to an adapter/profile. A failed live fetch fails visibly instead of
-reusing an unlabelled stale result. Those are P0-12 and P1-24 follow-ups.
+checked. The CLI always fetches live metadata. The web preview coalesces
+concurrent requests, caches success for 15 minutes, and serves the last success
+for at most 24 hours during an upstream failure with a visible stale label and
+one-minute retry backoff. It does not yet use conditional requests or a durable
+scheduled catalog, attest binary assets, check Linux/architecture
+compatibility, disable self-updates, or bind a release to an adapter/profile.
+Those are P0-12 and P1-24 follow-ups.
 The separate [credential-free Linux probe](tool-cli-probe.md) confirms basic
 version/help entry points for one exact selection from each package.
 

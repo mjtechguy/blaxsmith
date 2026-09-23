@@ -228,6 +228,7 @@ func (x *ToolCatalog) GetReleases() []*ToolRelease {
 type ListToolsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Tools         []*ToolCatalog         `protobuf:"bytes,1,rep,name=tools,proto3" json:"tools,omitempty"`
+	Stale         bool                   `protobuf:"varint,2,opt,name=stale,proto3" json:"stale,omitempty"` // Last successful catalog served during an upstream failure.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -269,6 +270,13 @@ func (x *ListToolsResponse) GetTools() []*ToolCatalog {
 	return nil
 }
 
+func (x *ListToolsResponse) GetStale() bool {
+	if x != nil {
+		return x.Stale
+	}
+	return false
+}
+
 var File_blaxsmith_api_v1_catalog_proto protoreflect.FileDescriptor
 
 const file_blaxsmith_api_v1_catalog_proto_rawDesc = "" +
@@ -289,9 +297,10 @@ const file_blaxsmith_api_v1_catalog_proto_rawDesc = "" +
 	"\rlatest_stable\x18\x05 \x01(\tR\flatestStable\x12)\n" +
 	"\x10publisher_latest\x18\x06 \x01(\tR\x0fpublisherLatest\x12)\n" +
 	"\x10publisher_stable\x18\a \x01(\tR\x0fpublisherStable\x129\n" +
-	"\breleases\x18\b \x03(\v2\x1d.blaxsmith.api.v1.ToolReleaseR\breleases\"H\n" +
+	"\breleases\x18\b \x03(\v2\x1d.blaxsmith.api.v1.ToolReleaseR\breleases\"^\n" +
 	"\x11ListToolsResponse\x123\n" +
-	"\x05tools\x18\x01 \x03(\v2\x1d.blaxsmith.api.v1.ToolCatalogR\x05tools2f\n" +
+	"\x05tools\x18\x01 \x03(\v2\x1d.blaxsmith.api.v1.ToolCatalogR\x05tools\x12\x14\n" +
+	"\x05stale\x18\x02 \x01(\bR\x05stale2f\n" +
 	"\x0eCatalogService\x12T\n" +
 	"\tListTools\x12\".blaxsmith.api.v1.ListToolsRequest\x1a#.blaxsmith.api.v1.ListToolsResponseB\xc4\x01\n" +
 	"\x14com.blaxsmith.api.v1B\fCatalogProtoP\x01Z<github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1;apiv1\xa2\x02\x03BAX\xaa\x02\x10Blaxsmith.Api.V1\xca\x02\x10Blaxsmith\\Api\\V1\xe2\x02\x1cBlaxsmith\\Api\\V1\\GPBMetadata\xea\x02\x12Blaxsmith::Api::V1b\x06proto3"
