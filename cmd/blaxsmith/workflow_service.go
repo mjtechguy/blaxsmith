@@ -35,7 +35,7 @@ func (s *workflowService) CreateProject(ctx context.Context, req *connect.Reques
 	if caller.Role != "owner" && caller.Role != "admin" && caller.Role != "member" {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("project creation denied"))
 	}
-	id, err := s.store.CreateProject(ctx, caller.OrganizationID, req.Msg.Slug, strings.TrimSpace(req.Msg.Name))
+	id, err := s.store.CreateProjectAs(ctx, caller, req.Msg.Slug, strings.TrimSpace(req.Msg.Name))
 	if err != nil {
 		var dbErr *pgconn.PgError
 		if errors.As(err, &dbErr) && dbErr.Code == "23505" {
@@ -221,6 +221,8 @@ func workflowError(err error) error {
 		return connect.NewError(connect.CodeNotFound, errors.New("workflow resource not found"))
 	case errors.Is(err, workflow.ErrConflict):
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("workflow state conflict"))
+	case errors.Is(err, workflow.ErrProjectDenied):
+		return connect.NewError(connect.CodePermissionDenied, errors.New("project creation denied"))
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("workflow unavailable"))
 	}

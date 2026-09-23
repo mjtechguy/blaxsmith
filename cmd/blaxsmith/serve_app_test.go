@@ -353,6 +353,12 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 		t.Fatalf("mutation from another origin allowed: %v", err)
 	}
 	first, second := create("first-project"), create("second-project")
+	var createdAudit int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM identity_audit_events
+		WHERE organization_id=$1 AND actor_id=$2 AND action='workflow.project.created'
+		AND subject_id IN ($3,$4)`, owner.OrganizationID, owner.PrincipalID, first.Id, second.Id).Scan(&createdAudit); err != nil || createdAudit != 2 {
+		t.Fatalf("project creation audit: %d, %v", createdAudit, err)
+	}
 	getProject := connect.NewRequest(&api.GetProjectRequest{ProjectId: first.Id})
 	getProject.Header().Set("Origin", origin)
 	if got, err := w.GetProject(ctx, getProject); err != nil || got.Msg.Project.Id != first.Id {
