@@ -4,6 +4,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { ArrowRight, FolderKanban, Plus, RefreshCw } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
+import { DataTable } from "../data-table";
 import type { Project } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
 import { listProjects, projectQueries } from "../workflow";
@@ -47,8 +48,7 @@ function Workspace() {
     </section> : null}
     {rows.length > 0 ? <section className="table-section" aria-labelledby="projects-heading">
       <div className="table-heading"><div><h2 id="projects-heading">Projects</h2><p>Open a project to see its runs and evidence.</p></div><span className="fetched-time">{rows.length} loaded</span></div>
-      <div className="table-scroll"><table><thead>{table.getHeaderGroups().map((group) => <tr key={group.id}>{group.headers.map((header) => <th key={header.id} scope="col"><span className="table-label"><table.FlexRender header={header} /></span></th>)}</tr>)}</thead>
-        <tbody>{table.getRowModel().rows.map((row) => <tr key={row.id}>{row.getAllCells().map((cell) => <td key={cell.id}><table.FlexRender cell={cell} /></td>)}</tr>)}</tbody></table></div>
+      <DataTable table={table} label="Projects" />
       {projects.hasNextPage ? <div className="table-footer"><span>Most recent first</span><button className="secondary-button" type="button" disabled={projects.isFetchingNextPage} onClick={() => void projects.fetchNextPage()}>{projects.isFetchingNextPage ? "Loading…" : "Load more"}</button></div> : null}
     </section> : null}
   </PageShell>;

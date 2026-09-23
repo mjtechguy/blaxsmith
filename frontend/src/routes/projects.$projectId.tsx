@@ -4,6 +4,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, ArrowRight, GitBranch, RefreshCw } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
+import { DataTable } from "../data-table";
 import type { Run } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
 import { getProject, listRuns, runQueries } from "../workflow";
@@ -42,7 +43,7 @@ function ProjectRuns() {
     {runs.isError ? <div className="state-panel" role="alert"><h2>Runs unavailable</h2><p>Could not load runs for this project.</p><button className="secondary-button" type="button" onClick={() => void runs.refetch()}>Try again</button></div> : null}
     {runs.data && rows.length === 0 ? <section className="empty-card"><div className="empty-icon"><GitBranch size={22} aria-hidden="true" /></div><h2>No runs yet</h2><p>Runs will appear here after an approved recipe and execution environment are connected.</p></section> : null}
     {rows.length > 0 ? <section className="table-section" aria-labelledby="runs-heading"><div className="table-heading"><div><h2 id="runs-heading">Recent runs</h2><p>Open a run to inspect its recorded activity.</p></div><span className="fetched-time">{rows.length} loaded</span></div>
-      <div className="table-scroll"><table><thead>{table.getHeaderGroups().map((group) => <tr key={group.id}>{group.headers.map((header) => <th key={header.id} scope="col"><span className="table-label"><table.FlexRender header={header} /></span></th>)}</tr>)}</thead><tbody>{table.getRowModel().rows.map((row) => <tr key={row.id}>{row.getAllCells().map((cell) => <td key={cell.id}><table.FlexRender cell={cell} /></td>)}</tr>)}</tbody></table></div>
+      <DataTable table={table} label="Project runs" />
       {runs.hasNextPage ? <div className="table-footer"><span>Most recent first</span><button type="button" className="secondary-button" disabled={runs.isFetchingNextPage} onClick={() => void runs.fetchNextPage()}>{runs.isFetchingNextPage ? "Loading…" : "Load more"}</button></div> : null}
     </section> : null}
   </PageShell>;

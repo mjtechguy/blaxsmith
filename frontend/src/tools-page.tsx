@@ -4,6 +4,7 @@ import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { createPaginatedRowModel, createSortedRowModel, rowPaginationFeature, rowSortingFeature, sortFns, tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, Plus, RefreshCw, Search } from "lucide-react";
+import { DataTable } from "./data-table";
 import { PageHeader, PageShell } from "./page";
 import { CatalogService, type ListToolsResponse, type ToolRelease } from "./gen/blaxsmith/api/v1/catalog_pb";
 
@@ -51,7 +52,8 @@ export function ToolsPage() {
       <section className="table-section" aria-labelledby="release-heading">
         <div className="table-heading"><div><h2 id="release-heading">Recent releases</h2><p>Showing up to 20 stable versions per tool. Version selection does not install a runtime.</p></div><span className="fetched-time">Fetched {new Date(query.data.tools[0]?.fetchedAt).toLocaleString()}</span></div>
         <div className="table-toolbar"><label className="search-field"><Search size={16} aria-hidden="true" /><span className="sr-only">Search releases</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search versions or packages" /></label><label className="filter-field"><span className="sr-only">Filter by tool</span><select value={tool} onChange={(event) => setTool(event.target.value)}><option value="all">All tools</option>{query.data.tools.map((entry) => <option key={entry.tool} value={entry.tool}>{names[entry.tool]}</option>)}</select></label></div>
-        <div className="table-scroll"><table><thead>{table.getHeaderGroups().map((group) => <tr key={group.id}>{group.headers.map((header) => <th key={header.id} scope="col"><button type="button" onClick={header.column.getToggleSortingHandler()} aria-label={`Sort by ${String(header.column.columnDef.header)}`}><table.FlexRender header={header} />{header.column.getIsSorted() === "asc" ? <ArrowUp size={13} /> : header.column.getIsSorted() === "desc" ? <ArrowDown size={13} /> : <ArrowUpDown size={13} />}</button></th>)}</tr>)}</thead><tbody>{table.getRowModel().rows.map((row) => <tr key={row.id}>{row.getAllCells().map((cell) => <td key={cell.id}><table.FlexRender cell={cell} /></td>)}</tr>)}</tbody></table>{rows.length === 0 ? <div className="table-empty">No releases match this filter.</div> : null}</div>
+        <DataTable table={table} label="Recent tool releases" empty="No releases match this filter."
+          header={(header) => <button type="button" onClick={header.column.getToggleSortingHandler()} aria-label={`Sort by ${String(header.column.columnDef.header)}`}><table.FlexRender header={header} />{header.column.getIsSorted() === "asc" ? <ArrowUp size={13} /> : header.column.getIsSorted() === "desc" ? <ArrowDown size={13} /> : <ArrowUpDown size={13} />}</button>} />
         <div className="table-footer"><span>{rows.length} releases</span><div><button type="button" className="secondary-button" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>Previous</button><span>Page {table.state.pagination.pageIndex + 1} of {Math.max(1, table.getPageCount())}</span><button type="button" className="secondary-button" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>Next</button></div></div>
       </section>
     </> : null}
