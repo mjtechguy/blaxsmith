@@ -59,3 +59,9 @@ func VerifyPassword(encoded string, password []byte) bool {
 	actual := argon2.IDKey(password, salt, argonTime, argonMemory, argonLanes, 32)
 	return subtle.ConstantTimeCompare(actual, want) == 1
 }
+
+func burnPasswordAttempt(password []byte) {
+	// Spend roughly the same work when the account has no local password.
+	actual := argon2.IDKey(password, []byte("blaxsmith-no-user"), argonTime, argonMemory, argonLanes, 32)
+	clear(actual)
+}

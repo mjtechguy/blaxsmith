@@ -24,7 +24,12 @@ approved scope choices, not claims of guide conformance.
 The first-owner password uses Argon2id at 64 MiB, three iterations, one lane,
 with a random salt; this exceeds the [OWASP password-storage minimum](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
 The operator command never accepts a password argument or environment variable.
-No login/session endpoint is exposed yet. Browser sessions will require
+The internal session service uses Ed25519 JWTs via `golang-jwt/jwt/v5`, ten-minute
+access validity, seven-day server-side sessions, hashed single-use refresh
+tokens, current membership/policy checks, and auditable revocation/replay.
+Its signing key is in memory only in tests; persistent key loading/rotation,
+login throttling, and browser transport are not implemented. No login/session
+endpoint is exposed yet. Browser sessions will require
 `HttpOnly`, `Secure`, `SameSite` cookies plus CSRF/origin protection as described
 by the [OWASP session](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
 and [CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)

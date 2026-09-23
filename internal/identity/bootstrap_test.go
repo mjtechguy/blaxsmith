@@ -29,44 +29,8 @@ func TestPassword(t *testing.T) {
 }
 
 func TestBootstrapOwnerPostgres(t *testing.T) {
-	dsn := os.Getenv("BLAXSMITH_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set BLAXSMITH_TEST_DATABASE_URL")
-	}
+	pool := identityTestPool(t)
 	ctx := context.Background()
-	admin, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(admin.Close)
-	var suffix [8]byte
-	if _, err := rand.Read(suffix[:]); err != nil {
-		t.Fatal(err)
-	}
-	schema := "blaxsmith_identity_" + hex.EncodeToString(suffix[:])
-	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if _, err := admin.Exec(cleanupCtx, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE"); err != nil {
-			t.Error(err)
-		}
-	})
-	config, err := pgxpool.ParseConfig(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.ConnConfig.RuntimeParams["search_path"] = schema
-	pool, err := pgxpool.NewWithConfig(ctx, config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
-	if _, err := db.Migrate(ctx, pool); err != nil {
-		t.Fatal(err)
-	}
 	password := []byte("correct horse battery staple")
 	var wg sync.WaitGroup
 	type result struct {
@@ -116,4 +80,47 @@ func TestBootstrapOwnerPostgres(t *testing.T) {
 	if hash == string(password) || !VerifyPassword(hash, password) {
 		t.Fatal("owner password was not stored as an Argon2id hash")
 	}
+}
+
+func identityTestPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	dsn := os.Getenv("BLAXSMITH_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set BLAXSMITH_TEST_DATABASE_URL")
+	}
+	ctx := context.Background()
+	admin, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(admin.Close)
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		t.Fatal(err)
+	}
+	schema := "blaxsmith_identity_" + hex.EncodeToString(suffix[:])
+	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, err := admin.Exec(cleanupCtx, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE"); err != nil {
+			t.Error(err)
+		}
+	})
+	config, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.ConnConfig.RuntimeParams["search_path"] = schema
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	if _, err := db.Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	return pool
 }

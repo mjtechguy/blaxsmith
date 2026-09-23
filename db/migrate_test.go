@@ -74,7 +74,7 @@ func TestMigratePostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if total != 7 {
+	if total != 8 {
 		t.Fatalf("concurrent migrations applied %d versions", total)
 	}
 	if count, err := Migrate(ctx, pool); err != nil || count != 0 {

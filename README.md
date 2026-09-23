@@ -105,9 +105,12 @@ go run ./cmd/blaxsmith bootstrap-owner --username alice \
 ```
 
 It reads and confirms the password from the terminal and atomically creates
-one principal, organization, owner membership, and audit event. This is a
-foundation for local authentication; sign-in, sessions, MFA, and account
-management are not available yet. The [guide adoption record](docs/adr/0001-technology-guide.md)
+one principal, organization, owner membership, and audit event. The internal
+session service now verifies local credentials, issues ten-minute signed access
+tokens, rotates hashed refresh tokens, checks current membership/policy on each
+request, and revokes on refresh replay. No sign-in endpoint or browser session
+is exposed yet; MFA, key custody, account management, and browser protections
+remain release work. The [guide adoption record](docs/adr/0001-technology-guide.md)
 tracks exact baseline choices and current deviations.
 
 ## Workspace layout
