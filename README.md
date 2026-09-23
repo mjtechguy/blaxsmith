@@ -97,6 +97,19 @@ and rejects changed or unknown applied versions. Use `docker compose down` to
 stop the service without deleting its data. The `.env` file is ignored by Git;
 the password applies when the volume is first initialized.
 
+The operator can create the installation's first local owner after migration:
+
+```sh
+go run ./cmd/blaxsmith bootstrap-owner --username alice \
+  --organization-slug example --organization-name "Example"
+```
+
+It reads and confirms the password from the terminal and atomically creates
+one principal, organization, owner membership, and audit event. This is a
+foundation for local authentication; sign-in, sessions, MFA, and account
+management are not available yet. The [guide adoption record](docs/adr/0001-technology-guide.md)
+tracks exact baseline choices and current deviations.
+
 ## Workspace layout
 
 ```text
