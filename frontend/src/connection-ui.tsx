@@ -61,7 +61,7 @@ export function HealthLine({ connection, compact = false }: { connection: Connec
   const fix = healthFix(connection);
   return <span className={compact ? "health-line health-compact" : "health-line"}>
     <span className={`state-badge ${healthTone[h.state] ?? ""}`}>{h.state}</span>
-    {!compact || h.state === "ready" ? <span>{authLabel(h.auth)}{h.identity ? <> as <RedactedText text={h.identity} label="identity" /></> : null}</span> : null}
+    {!compact ? <span>{authLabel(h.auth)}{h.identity ? <> · <RedactedText text={h.identity} label="identity" /></> : null}</span> : null}
     {!compact ? <span>{h.checkedAt ? <>Checked <time dateTime={h.checkedAt}>{ago(h.checkedAt)}</time></> : "Never checked"}</span> : null}
     {h.message ? <span className={h.state === "error" ? "form-field-error" : undefined}>{h.message}</span> : null}
     {fix ? <Link className="text-action" to={fix.to as "/"}>{fix.label} <ArrowRight size={13} aria-hidden="true" /></Link> : null}

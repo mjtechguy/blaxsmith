@@ -577,9 +577,9 @@ a { color: inherit; text-decoration: none; }
 .model-select .is-favorite { fill: currentColor; color: var(--warning-text); }
 
 /* Connection health line. */
-.health-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.health-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted); font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
 .health-line .state-badge { flex: none; }
-.health-compact { flex-direction: column; align-items: flex-start; gap: 3px; max-width: 280px; }
-.redacted { padding: 0 3px; border: 0; border-radius: 4px; background: var(--hover); color: var(--text); font: inherit; cursor: pointer; }
+.health-compact { flex-direction: column; align-items: flex-start; gap: 3px; min-width: 180px; max-width: 260px; }
+.redacted { padding: 0 3px; white-space: nowrap; border: 0; border-radius: 4px; background: var(--hover); color: var(--text); font: inherit; cursor: pointer; }
 .redacted:not(.is-shown) span { filter: blur(4px); user-select: none; }
 .redacted:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
