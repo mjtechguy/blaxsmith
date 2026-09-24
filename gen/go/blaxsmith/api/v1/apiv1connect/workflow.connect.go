@@ -51,6 +51,12 @@ const (
 	// WorkflowServiceSetProjectVerificationProcedure is the fully-qualified name of the
 	// WorkflowService's SetProjectVerification RPC.
 	WorkflowServiceSetProjectVerificationProcedure = "/blaxsmith.api.v1.WorkflowService/SetProjectVerification"
+	// WorkflowServiceListProjectModelAccessProcedure is the fully-qualified name of the
+	// WorkflowService's ListProjectModelAccess RPC.
+	WorkflowServiceListProjectModelAccessProcedure = "/blaxsmith.api.v1.WorkflowService/ListProjectModelAccess"
+	// WorkflowServiceCreateProjectModelAccessProcedure is the fully-qualified name of the
+	// WorkflowService's CreateProjectModelAccess RPC.
+	WorkflowServiceCreateProjectModelAccessProcedure = "/blaxsmith.api.v1.WorkflowService/CreateProjectModelAccess"
 	// WorkflowServiceListProjectsProcedure is the fully-qualified name of the WorkflowService's
 	// ListProjects RPC.
 	WorkflowServiceListProjectsProcedure = "/blaxsmith.api.v1.WorkflowService/ListProjects"
@@ -90,6 +96,8 @@ type WorkflowServiceClient interface {
 	SetProjectSource(context.Context, *connect.Request[v1.SetProjectSourceRequest]) (*connect.Response[v1.SetProjectSourceResponse], error)
 	GetProjectVerification(context.Context, *connect.Request[v1.GetProjectVerificationRequest]) (*connect.Response[v1.GetProjectVerificationResponse], error)
 	SetProjectVerification(context.Context, *connect.Request[v1.SetProjectVerificationRequest]) (*connect.Response[v1.SetProjectVerificationResponse], error)
+	ListProjectModelAccess(context.Context, *connect.Request[v1.ListProjectModelAccessRequest]) (*connect.Response[v1.ListProjectModelAccessResponse], error)
+	CreateProjectModelAccess(context.Context, *connect.Request[v1.CreateProjectModelAccessRequest]) (*connect.Response[v1.CreateProjectModelAccessResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	LaunchRun(context.Context, *connect.Request[v1.LaunchRunRequest]) (*connect.Response[v1.LaunchRunResponse], error)
@@ -147,6 +155,18 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			httpClient,
 			baseURL+WorkflowServiceSetProjectVerificationProcedure,
 			connect.WithSchema(workflowServiceMethods.ByName("SetProjectVerification")),
+			connect.WithClientOptions(opts...),
+		),
+		listProjectModelAccess: connect.NewClient[v1.ListProjectModelAccessRequest, v1.ListProjectModelAccessResponse](
+			httpClient,
+			baseURL+WorkflowServiceListProjectModelAccessProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ListProjectModelAccess")),
+			connect.WithClientOptions(opts...),
+		),
+		createProjectModelAccess: connect.NewClient[v1.CreateProjectModelAccessRequest, v1.CreateProjectModelAccessResponse](
+			httpClient,
+			baseURL+WorkflowServiceCreateProjectModelAccessProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("CreateProjectModelAccess")),
 			connect.WithClientOptions(opts...),
 		),
 		listProjects: connect.NewClient[v1.ListProjectsRequest, v1.ListProjectsResponse](
@@ -214,22 +234,24 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 
 // workflowServiceClient implements WorkflowServiceClient.
 type workflowServiceClient struct {
-	createProject          *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
-	getProject             *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
-	getProjectSource       *connect.Client[v1.GetProjectSourceRequest, v1.GetProjectSourceResponse]
-	setProjectSource       *connect.Client[v1.SetProjectSourceRequest, v1.SetProjectSourceResponse]
-	getProjectVerification *connect.Client[v1.GetProjectVerificationRequest, v1.GetProjectVerificationResponse]
-	setProjectVerification *connect.Client[v1.SetProjectVerificationRequest, v1.SetProjectVerificationResponse]
-	listProjects           *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
-	getRun                 *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
-	launchRun              *connect.Client[v1.LaunchRunRequest, v1.LaunchRunResponse]
-	getLaunchAvailability  *connect.Client[v1.GetLaunchAvailabilityRequest, v1.GetLaunchAvailabilityResponse]
-	listRunTasks           *connect.Client[v1.ListRunTasksRequest, v1.ListRunTasksResponse]
-	listRuns               *connect.Client[v1.ListRunsRequest, v1.ListRunsResponse]
-	eventsAfter            *connect.Client[v1.EventsAfterRequest, v1.EventsAfterResponse]
-	listCommandExits       *connect.Client[v1.ListCommandExitsRequest, v1.ListCommandExitsResponse]
-	getCurrentReview       *connect.Client[v1.GetCurrentReviewRequest, v1.GetCurrentReviewResponse]
-	decideReview           *connect.Client[v1.DecideReviewRequest, v1.DecideReviewResponse]
+	createProject            *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
+	getProject               *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
+	getProjectSource         *connect.Client[v1.GetProjectSourceRequest, v1.GetProjectSourceResponse]
+	setProjectSource         *connect.Client[v1.SetProjectSourceRequest, v1.SetProjectSourceResponse]
+	getProjectVerification   *connect.Client[v1.GetProjectVerificationRequest, v1.GetProjectVerificationResponse]
+	setProjectVerification   *connect.Client[v1.SetProjectVerificationRequest, v1.SetProjectVerificationResponse]
+	listProjectModelAccess   *connect.Client[v1.ListProjectModelAccessRequest, v1.ListProjectModelAccessResponse]
+	createProjectModelAccess *connect.Client[v1.CreateProjectModelAccessRequest, v1.CreateProjectModelAccessResponse]
+	listProjects             *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
+	getRun                   *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
+	launchRun                *connect.Client[v1.LaunchRunRequest, v1.LaunchRunResponse]
+	getLaunchAvailability    *connect.Client[v1.GetLaunchAvailabilityRequest, v1.GetLaunchAvailabilityResponse]
+	listRunTasks             *connect.Client[v1.ListRunTasksRequest, v1.ListRunTasksResponse]
+	listRuns                 *connect.Client[v1.ListRunsRequest, v1.ListRunsResponse]
+	eventsAfter              *connect.Client[v1.EventsAfterRequest, v1.EventsAfterResponse]
+	listCommandExits         *connect.Client[v1.ListCommandExitsRequest, v1.ListCommandExitsResponse]
+	getCurrentReview         *connect.Client[v1.GetCurrentReviewRequest, v1.GetCurrentReviewResponse]
+	decideReview             *connect.Client[v1.DecideReviewRequest, v1.DecideReviewResponse]
 }
 
 // CreateProject calls blaxsmith.api.v1.WorkflowService.CreateProject.
@@ -260,6 +282,16 @@ func (c *workflowServiceClient) GetProjectVerification(ctx context.Context, req 
 // SetProjectVerification calls blaxsmith.api.v1.WorkflowService.SetProjectVerification.
 func (c *workflowServiceClient) SetProjectVerification(ctx context.Context, req *connect.Request[v1.SetProjectVerificationRequest]) (*connect.Response[v1.SetProjectVerificationResponse], error) {
 	return c.setProjectVerification.CallUnary(ctx, req)
+}
+
+// ListProjectModelAccess calls blaxsmith.api.v1.WorkflowService.ListProjectModelAccess.
+func (c *workflowServiceClient) ListProjectModelAccess(ctx context.Context, req *connect.Request[v1.ListProjectModelAccessRequest]) (*connect.Response[v1.ListProjectModelAccessResponse], error) {
+	return c.listProjectModelAccess.CallUnary(ctx, req)
+}
+
+// CreateProjectModelAccess calls blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess.
+func (c *workflowServiceClient) CreateProjectModelAccess(ctx context.Context, req *connect.Request[v1.CreateProjectModelAccessRequest]) (*connect.Response[v1.CreateProjectModelAccessResponse], error) {
+	return c.createProjectModelAccess.CallUnary(ctx, req)
 }
 
 // ListProjects calls blaxsmith.api.v1.WorkflowService.ListProjects.
@@ -320,6 +352,8 @@ type WorkflowServiceHandler interface {
 	SetProjectSource(context.Context, *connect.Request[v1.SetProjectSourceRequest]) (*connect.Response[v1.SetProjectSourceResponse], error)
 	GetProjectVerification(context.Context, *connect.Request[v1.GetProjectVerificationRequest]) (*connect.Response[v1.GetProjectVerificationResponse], error)
 	SetProjectVerification(context.Context, *connect.Request[v1.SetProjectVerificationRequest]) (*connect.Response[v1.SetProjectVerificationResponse], error)
+	ListProjectModelAccess(context.Context, *connect.Request[v1.ListProjectModelAccessRequest]) (*connect.Response[v1.ListProjectModelAccessResponse], error)
+	CreateProjectModelAccess(context.Context, *connect.Request[v1.CreateProjectModelAccessRequest]) (*connect.Response[v1.CreateProjectModelAccessResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	LaunchRun(context.Context, *connect.Request[v1.LaunchRunRequest]) (*connect.Response[v1.LaunchRunResponse], error)
@@ -373,6 +407,18 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		WorkflowServiceSetProjectVerificationProcedure,
 		svc.SetProjectVerification,
 		connect.WithSchema(workflowServiceMethods.ByName("SetProjectVerification")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceListProjectModelAccessHandler := connect.NewUnaryHandler(
+		WorkflowServiceListProjectModelAccessProcedure,
+		svc.ListProjectModelAccess,
+		connect.WithSchema(workflowServiceMethods.ByName("ListProjectModelAccess")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceCreateProjectModelAccessHandler := connect.NewUnaryHandler(
+		WorkflowServiceCreateProjectModelAccessProcedure,
+		svc.CreateProjectModelAccess,
+		connect.WithSchema(workflowServiceMethods.ByName("CreateProjectModelAccess")),
 		connect.WithHandlerOptions(opts...),
 	)
 	workflowServiceListProjectsHandler := connect.NewUnaryHandler(
@@ -449,6 +495,10 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 			workflowServiceGetProjectVerificationHandler.ServeHTTP(w, r)
 		case WorkflowServiceSetProjectVerificationProcedure:
 			workflowServiceSetProjectVerificationHandler.ServeHTTP(w, r)
+		case WorkflowServiceListProjectModelAccessProcedure:
+			workflowServiceListProjectModelAccessHandler.ServeHTTP(w, r)
+		case WorkflowServiceCreateProjectModelAccessProcedure:
+			workflowServiceCreateProjectModelAccessHandler.ServeHTTP(w, r)
 		case WorkflowServiceListProjectsProcedure:
 			workflowServiceListProjectsHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetRunProcedure:
@@ -500,6 +550,14 @@ func (UnimplementedWorkflowServiceHandler) GetProjectVerification(context.Contex
 
 func (UnimplementedWorkflowServiceHandler) SetProjectVerification(context.Context, *connect.Request[v1.SetProjectVerificationRequest]) (*connect.Response[v1.SetProjectVerificationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.SetProjectVerification is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) ListProjectModelAccess(context.Context, *connect.Request[v1.ListProjectModelAccessRequest]) (*connect.Response[v1.ListProjectModelAccessResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ListProjectModelAccess is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) CreateProjectModelAccess(context.Context, *connect.Request[v1.CreateProjectModelAccessRequest]) (*connect.Response[v1.CreateProjectModelAccessResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess is not implemented"))
 }
 
 func (UnimplementedWorkflowServiceHandler) ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error) {

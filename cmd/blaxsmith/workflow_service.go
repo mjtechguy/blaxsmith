@@ -13,6 +13,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5/pgconn"
 	api "github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1"
+	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/gitfetch"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
@@ -22,6 +23,7 @@ import (
 type workflowService struct {
 	guard         *identity.BrowserGuard
 	store         *workflow.Store
+	secrets       *access.SecretStore
 	launchEnabled bool
 }
 
@@ -126,6 +128,46 @@ func projectVerificationMessage(projectID string, verification workflow.ProjectV
 		message.Checks = append(message.Checks, &api.VerificationCheck{Id: check.ID, Command: check.Command})
 	}
 	return message
+}
+
+func (s *workflowService) ListProjectModelAccess(ctx context.Context, req *connect.Request[api.ListProjectModelAccessRequest]) (*connect.Response[api.ListProjectModelAccessResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.store.ListProjectModelAccess(ctx, caller.OrganizationID, req.Msg.ProjectId)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	response := &api.ListProjectModelAccessResponse{}
+	for _, item := range items {
+		response.Access = append(response.Access, projectModelAccessMessage(item))
+	}
+	return connect.NewResponse(response), nil
+}
+
+func (s *workflowService) CreateProjectModelAccess(ctx context.Context, req *connect.Request[api.CreateProjectModelAccessRequest]) (*connect.Response[api.CreateProjectModelAccessResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	if s.secrets == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("credential custody is not configured"))
+	}
+	key := []byte(req.Msg.ApiKey)
+	req.Msg.ApiKey = ""
+	defer clear(key)
+	item, err := s.store.CreateProjectModelAccessAs(ctx, caller, req.Msg.ProjectId, req.Msg.Provider, req.Msg.Model, key, s.secrets)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.CreateProjectModelAccessResponse{Access: projectModelAccessMessage(item)}), nil
+}
+
+func projectModelAccessMessage(item workflow.ProjectModelAccess) *api.ProjectModelAccess {
+	return &api.ProjectModelAccess{Id: item.ID, ProjectId: item.ProjectID, Provider: item.Provider,
+		Model: item.Model, ConnectionId: item.ConnectionID, GrantId: item.GrantID,
+		CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339Nano)}
 }
 
 func (s *workflowService) ListProjects(ctx context.Context, req *connect.Request[api.ListProjectsRequest]) (*connect.Response[api.ListProjectsResponse], error) {
@@ -499,6 +541,8 @@ func workflowError(err error) error {
 		return connect.NewError(connect.CodePermissionDenied, errors.New("project source change denied"))
 	case errors.Is(err, workflow.ErrProjectVerificationDenied):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("project verification change denied"))
+	case errors.Is(err, workflow.ErrProjectModelAccessDenied):
+		return connect.NewError(connect.CodePermissionDenied, errors.New("project model access denied"))
 	case errors.Is(err, workflow.ErrFenced):
 		return connect.NewError(connect.CodeUnauthenticated, errors.New("session changed during launch"))
 	case errors.Is(err, workflow.ErrSourceRoute):

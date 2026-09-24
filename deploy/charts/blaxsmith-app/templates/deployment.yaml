@@ -97,6 +97,10 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.databaseSecretName | quote }}
                   key: url
+            {{- if .Values.accessKeySecretName }}
+            - name: BLAXSMITH_ACCESS_KEY_FILE
+              value: /run/blaxsmith/access-key/key
+            {{- end }}
           ports:
             - name: https
               containerPort: 8443
@@ -135,6 +139,11 @@ spec:
             - name: signer
               mountPath: /run/blaxsmith/signer
               readOnly: true
+            {{- if .Values.accessKeySecretName }}
+            - name: access-key
+              mountPath: /run/blaxsmith/access-key
+              readOnly: true
+            {{- end }}
             {{- if .Values.databaseCASecretName }}
             - name: database-ca
               mountPath: /run/blaxsmith/database-ca
@@ -157,6 +166,15 @@ spec:
           secret:
             secretName: {{ .Values.signerSecretName | quote }}
             defaultMode: 288
+        {{- if .Values.accessKeySecretName }}
+        - name: access-key
+          secret:
+            secretName: {{ .Values.accessKeySecretName | quote }}
+            items:
+              - key: key
+                path: key
+            defaultMode: 288
+        {{- end }}
         {{- if .Values.databaseCASecretName }}
         - name: database-ca
           secret:

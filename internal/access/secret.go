@@ -65,9 +65,27 @@ func (s *SecretStore) Rotate(ctx context.Context, organizationID, connectionID s
 		return 0, fmt.Errorf("begin secret rotation: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	version, err := s.RotateTx(ctx, tx, organizationID, connectionID, expectedVersion, plaintext, expiresAt)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit secret rotation: %w", err)
+	}
+	return version, nil
+}
+
+// RotateTx lets connection/grant onboarding and the encrypted secret commit
+// together. The caller owns and commits the transaction.
+func (s *SecretStore) RotateTx(ctx context.Context, tx pgx.Tx, organizationID, connectionID string,
+	expectedVersion int64, plaintext []byte, expiresAt *time.Time) (int64, error) {
+	if s == nil || tx == nil || organizationID == "" || connectionID == "" || expectedVersion < 0 ||
+		len(plaintext) == 0 || len(plaintext) > maxSecretBytes {
+		return 0, ErrDenied
+	}
 	var state string
 	var previous *int64
-	err = tx.QueryRow(ctx, `SELECT state, active_secret_version FROM access_connections
+	err := tx.QueryRow(ctx, `SELECT state, active_secret_version FROM access_connections
 		WHERE organization_id=$1 AND id=$2 FOR UPDATE`, organizationID, connectionID).
 		Scan(&state, &previous)
 	if err != nil {
@@ -113,9 +131,6 @@ func (s *SecretStore) Rotate(ctx context.Context, organizationID, connectionID s
 	if _, err := tx.Exec(ctx, `UPDATE access_connections SET active_secret_version=$3
 		WHERE organization_id=$1 AND id=$2`, organizationID, connectionID, version); err != nil {
 		return 0, fmt.Errorf("activate secret version: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("commit secret rotation: %w", err)
 	}
 	return version, nil
 }

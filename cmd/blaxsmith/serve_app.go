@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
+	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
@@ -233,10 +234,15 @@ func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin,
 	if err != nil {
 		return nil, err
 	}
+	secrets, err := appSecretStore(pool)
+	if err != nil {
+		return nil, err
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/api"+authPath, http.StripPrefix("/api", authHandler))
 	workflowPath, workflowHandler := apiv1connect.NewWorkflowServiceHandler(&workflowService{
-		guard: guard, store: store, launchEnabled: os.Getenv("BLAXSMITH_RUN_LAUNCH_ENABLED") == "1",
+		guard: guard, store: store, secrets: secrets,
+		launchEnabled: os.Getenv("BLAXSMITH_RUN_LAUNCH_ENABLED") == "1",
 	}, connect.WithReadMaxBytes(1<<20))
 	mux.Handle("/api"+workflowPath, http.StripPrefix("/api", guard.Wrap(workflowHandler)))
 	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity}))
@@ -289,4 +295,24 @@ func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin,
 		})
 	}
 	return mux, nil
+}
+
+func appSecretStore(pool *pgxpool.Pool) (*access.SecretStore, error) {
+	path := os.Getenv("BLAXSMITH_ACCESS_KEY_FILE")
+	if path == "" {
+		return nil, nil
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o027 != 0 {
+		return nil, errors.New("access encryption key must be a private regular file")
+	}
+	key, err := os.ReadFile(path)
+	if err != nil {
+		return nil, errors.New("access encryption key unavailable")
+	}
+	defer clear(key)
+	if len(key) != 32 {
+		return nil, errors.New("access encryption key must be 32 bytes")
+	}
+	return access.NewSecretStore(pool, "primary", map[string][]byte{"primary": key})
 }

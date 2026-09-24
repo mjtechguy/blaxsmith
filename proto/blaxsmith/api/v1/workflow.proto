@@ -71,6 +71,27 @@ message SetProjectVerificationRequest {
 }
 message SetProjectVerificationResponse { ProjectVerification verification = 1; }
 
+// An organization-owned model connection and project grant. Credential bytes
+// are accepted only on creation and are never returned to the browser.
+message ProjectModelAccess {
+  string id = 1;
+  string project_id = 2;
+  string provider = 3; // openai or anthropic.
+  string model = 4; // Exact provider model identifier.
+  string connection_id = 5;
+  string grant_id = 6;
+  string created_at = 7; // RFC 3339.
+}
+message ListProjectModelAccessRequest { string project_id = 1; }
+message ListProjectModelAccessResponse { repeated ProjectModelAccess access = 1; }
+message CreateProjectModelAccessRequest {
+  string project_id = 1;
+  string provider = 2;
+  string model = 3;
+  string api_key = 4; // Write-only organization credential, max 8192 bytes.
+}
+message CreateProjectModelAccessResponse { ProjectModelAccess access = 1; }
+
 message ListProjectsRequest {
   int32 page_size = 1; // 1-100; zero selects 50.
   string page_token = 2;
@@ -203,6 +224,8 @@ service WorkflowService {
   rpc SetProjectSource(SetProjectSourceRequest) returns (SetProjectSourceResponse);
   rpc GetProjectVerification(GetProjectVerificationRequest) returns (GetProjectVerificationResponse);
   rpc SetProjectVerification(SetProjectVerificationRequest) returns (SetProjectVerificationResponse);
+  rpc ListProjectModelAccess(ListProjectModelAccessRequest) returns (ListProjectModelAccessResponse);
+  rpc CreateProjectModelAccess(CreateProjectModelAccessRequest) returns (CreateProjectModelAccessResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
   rpc LaunchRun(LaunchRunRequest) returns (LaunchRunResponse);

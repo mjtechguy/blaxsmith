@@ -13,6 +13,7 @@ signerSecretName: "" # Existing Secret with a 32-byte seed under key seed.
 previousSignerPublicSecretName: "" # Optional Secret with a 32-byte public key under key public.
 databaseSecretName: "" # Existing Secret with PostgreSQL URL under key url; verified TLS required.
 databaseCASecretName: "" # Optional existing Secret with ca.crt; set for a private PostgreSQL CA.
+accessKeySecretName: "" # Optional existing Secret with a 32-byte raw encryption key under key key.
 resources:
   requests:
     cpu: 100m
