@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, ArrowRight, BookCopy, Check, CopyPlus, FileJson, GitFork, ListTree, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { currentSession, sessionQueryKey } from "./auth";
@@ -10,6 +10,9 @@ import { DataTable } from "./data-table";
 import { TextField } from "./form-field";
 import type { LibraryRecipe, RecipeModelConnection, RecipeValidationError, RecipeVersion } from "./gen/blaxsmith/api/v1/recipes_pb";
 import { PageHeader, PageShell } from "./page";
+import { CollectionTable, inSet, useUrlView, type GridColumn } from "./data-table";
+import { DetailLayout, SummaryList } from "./layouts";
+import { Card, CopyValue, Disclosure, EmptyState, StatePanel, tabFrom, Timestamp, type TabSpec } from "./ui";
 import {
   cloneRecipe, createRecipe, createRecipeVersion, emptyRecipe, formatRecipe, getRecipe, getRecipeEditorOptions, grantRecipe, revokeRecipeGrant,
   getRecipeVersion, listProjectRecipeFiles, listRecipes, mayEditRecipes, parseRecipe, recipeFilesKey, recipeKey, recipeOptionsKey,
@@ -21,10 +24,13 @@ import { listTools } from "./tools-page";
 type Page = "list" | "new" | "detail" | "version";
 
 // One link vocabulary for the organization and project recipe routes.
-export function RecipeLink({ projectId, recipeId = "", page, from, className = "text-action", children }: {
-  projectId?: string; recipeId?: string; page: Page; from?: string; className?: string; children: ReactNode;
+export function RecipeLink({ projectId, recipeId = "", page, from, className = "text-action", children, library }: {
+  projectId?: string; recipeId?: string; page: Page; from?: string; className?: string; children: ReactNode; library?: boolean;
 }) {
   const search = from ? { from } : {};
+  // The Library views are read-only; editing still happens on the admin routes.
+  if (library && page === "list") return <Link className={className} to="/recipes">{children}</Link>;
+  if (library && page === "detail") return <Link className={className} to="/recipes/$recipeId" params={{ recipeId }}>{children}</Link>;
   if (projectId) {
     if (page === "list") return <Link className={className} to="/projects/$projectId/recipes" params={{ projectId }}>{children}</Link>;
     if (page === "new") return <Link className={className} to="/projects/$projectId/recipes/new" params={{ projectId }} search={search}>{children}</Link>;
@@ -44,50 +50,43 @@ function useSession() {
 
 const listFeatures = tableFeatures({});
 
-export function RecipeLibraryPage({ projectId }: { projectId?: string }) {
+export function RecipeLibraryPage({ projectId, library }: { projectId?: string; library?: boolean }) {
   const { org, mayEdit } = useSession();
   const recipes = useQuery({ queryKey: recipesKey(org, projectId), enabled: Boolean(org), queryFn: ({ signal }) => listRecipes(projectId, signal) });
-  const [search, setSearch] = useState("");
-  const rows = useMemo(() => (recipes.data?.recipes || []).filter((r) =>
-    !search.trim() || `${r.name} ${r.description}`.toLowerCase().includes(search.trim().toLowerCase())), [recipes.data, search]);
-  const columns = useMemo<ColumnDef<typeof listFeatures, LibraryRecipe>[]>(() => [
-    { id: "name", header: "Recipe", cell: ({ row }) => <RecipeLink projectId={projectId} recipeId={row.original.id} page="detail" className="run-link">
+  const [view, setView] = useUrlView({ sort: [{ id: "name", desc: false }], size: 20 });
+  const columns = useMemo<GridColumn<LibraryRecipe>[]>(() => [
+    { id: "name", accessorKey: "name", header: "Recipe", enableHiding: false, cell: ({ row }) => <RecipeLink projectId={projectId} library={library} recipeId={row.original.id} page="detail" className="run-link">
       <span className="project-symbol"><BookCopy size={15} aria-hidden="true" /></span>
-      <span><strong>{row.original.name}</strong><small>{row.original.description || "No description"}</small></span>
-      <ArrowRight size={15} aria-hidden="true" /></RecipeLink> },
-    { id: "scope", header: "Scope", cell: ({ row }) => <span className="state-badge">{row.original.projectId ? "Project" : projectId ? "Organization · granted" : "Organization"}</span> },
-    { id: "current", header: "Current", cell: ({ row }) => row.original.currentVersion ? `v${row.original.currentVersion} of ${row.original.versionCount}` : "—" },
-    { id: "updated", header: "Updated", cell: ({ row }) => <time dateTime={row.original.updatedAt}>{new Date(row.original.updatedAt).toLocaleString()}</time> },
-    { id: "actions", header: "Actions", cell: ({ row }) => mayEdit && row.original.currentVersionId && (!projectId || !row.original.projectId)
-      ? <RecipeLink projectId={projectId} page="new" from={row.original.currentVersionId}><GitFork size={14} aria-hidden="true" /> {projectId ? "Clone to project" : "Clone"}</RecipeLink>
-      : mayEdit && row.original.currentVersionId ? <RecipeLink projectId={projectId} page="new" from={row.original.currentVersionId}><GitFork size={14} aria-hidden="true" /> Clone</RecipeLink> : null },
-  ], [projectId, mayEdit]);
-  const table = useTable({ features: listFeatures, data: rows, columns, getRowId: (row) => row.id });
+      <span><strong>{row.original.name}</strong><small>{row.original.description || "No description"}</small></span></RecipeLink> },
+    { id: "scope", accessorFn: (r) => r.projectId ? "project" : "organization", header: "Scope", filterFn: inSet, cell: ({ row }) => <span className="state-badge">{row.original.projectId ? "Project" : projectId ? "Organization · granted" : "Organization"}</span> },
+    { id: "current", accessorKey: "currentVersion", header: "Current", cell: ({ row }) => row.original.currentVersion ? `v${row.original.currentVersion} of ${row.original.versionCount}` : "—" },
+    { id: "updated", accessorKey: "updatedAt", header: "Updated", cell: ({ row }) => <Timestamp value={row.original.updatedAt} /> },
+    { id: "actions", header: "Actions", enableSorting: false, enableHiding: false, cell: ({ row }) => mayEdit && row.original.currentVersionId
+      ? <RecipeLink projectId={projectId} page="new" from={row.original.currentVersionId}><GitFork size={14} aria-hidden="true" /> {projectId && !row.original.projectId ? "Clone to project" : "Clone"}</RecipeLink> : null },
+  ], [projectId, mayEdit, library]);
+  const create = mayEdit ? <RecipeLink projectId={projectId} page="new" className="primary-button"><Plus size={15} aria-hidden="true" /> New recipe</RecipeLink> : null;
 
   return <PageShell>
-    <PageHeader eyebrow={projectId ? "Project / Recipes" : "Administration / Recipes"} title="Recipes"
-      description={projectId ? "This project's recipes plus organization recipes granted to it. Runs freeze an exact version." : "Organization recipes: versioned stage graphs, role profiles, checks, and limits."}
-      actions={mayEdit ? <RecipeLink projectId={projectId} page="new" className="primary-button"><Plus size={15} aria-hidden="true" /> New recipe</RecipeLink> : null} />
-    {projectId ? <Link to="/projects/$projectId" params={{ projectId }} className="text-action"><ArrowLeft size={15} aria-hidden="true" /> Back to project</Link>
-      : <Link to="/admin" className="text-action"><ArrowLeft size={15} aria-hidden="true" /> Operations</Link>}
-    <section className="table-section" aria-labelledby="recipes-heading">
-      <div className="table-heading"><div><h2 id="recipes-heading">Library</h2><p>{mayEdit ? "Create, clone, or version a recipe. Versions are immutable; mark one current." : "Members can read recipes. Owners and admins edit them."}</p></div>
-        <button type="button" className="secondary-button" disabled={recipes.isFetching} onClick={() => void recipes.refetch()}><RefreshCw size={14} aria-hidden="true" className={recipes.isFetching ? "spin" : undefined} /> Refresh</button></div>
-      <div className="table-toolbar"><label className="search-field"><Search size={16} aria-hidden="true" /><span className="sr-only">Search recipes</span>
-        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search recipes" maxLength={120} /></label></div>
-      {recipes.isPending ? <div className="source-summary" role="status">Loading recipes…</div> : null}
-      {recipes.isError ? <div className="source-summary" role="alert">Recipes could not be loaded. <button type="button" className="text-action" onClick={() => void recipes.refetch()}>Try again</button></div> : null}
-      <DataTable table={table} label="Recipes" empty={recipes.isPending || recipes.isError ? undefined : search ? "No recipes match this search." : "No recipes yet."} />
-      <div className="table-footer"><span>{rows.length} shown</span></div>
+    <PageHeader title="Recipes"
+      description={projectId ? "This project's recipes plus organization recipes granted to it. Runs freeze an exact version." : library ? "Organization recipes: versioned stage graphs, role profiles, checks, and limits. Projects use the ones granted to them." : "Organization recipes: versioned stage graphs, role profiles, checks, and limits."}
+      actions={create} />
+    <section className="table-section" aria-label="Recipes">
+      <CollectionTable id={projectId ? "project-recipes" : "recipes"} label="Recipes" noun="recipes" columns={columns} data={recipes.data?.recipes ?? []} getRowId={(r) => r.id}
+        view={view} onView={setView} pinFirst searchLabel="Search recipes"
+        facets={projectId ? [{ id: "scope", label: "Scope", options: [{ value: "project", label: "Project" }, { value: "organization", label: "Organization" }] }] : []}
+        loading={recipes.isPending} refreshing={recipes.isFetching && !recipes.isPending}
+        error={recipes.isError ? <>Recipes could not be loaded. <button type="button" className="text-action" onClick={() => void recipes.refetch()}>Try again</button></> : undefined}
+        empty={<EmptyState icon={<BookCopy size={22} aria-hidden="true" />} title="No recipes yet" action={create}>{mayEdit ? "Create a recipe or clone one to start." : "Owners and admins create recipes; members read and use them."}</EmptyState>} />
     </section>
   </PageShell>;
 }
 
 const versionFeatures = tableFeatures({});
 
-export function RecipeDetailPage({ projectId, recipeId }: { projectId?: string; recipeId: string }) {
+export function RecipeDetailPage({ projectId, recipeId, library }: { projectId?: string; recipeId: string; library?: boolean }) {
   const { org, mayEdit } = useSession();
   const queryClient = useQueryClient();
+  const search = useLocation({ select: (l) => l.search as Record<string, unknown> });
   const recipe = useQuery({ queryKey: recipeKey(org, recipeId), enabled: Boolean(org), queryFn: ({ signal }) => getRecipe(recipeId, signal) });
   const [selected, setSelected] = useState("");
   const versionId = selected || recipe.data?.recipe?.currentVersionId || recipe.data?.versions[0]?.id || "";
@@ -96,6 +95,13 @@ export function RecipeDetailPage({ projectId, recipeId }: { projectId?: string; 
   const [busy, setBusy] = useState("");
   const current = recipe.data?.recipe;
   const editable = mayEdit && Boolean(current) && (projectId ? current?.projectId === projectId : !current?.projectId);
+  const showGrants = Boolean(current && !projectId && !current.projectId && mayEdit);
+  const tabs: TabSpec[] = [
+    { id: "overview", label: "Overview" },
+    { id: "versions", label: "Versions", count: recipe.data?.versions.length },
+    { id: "grants", label: "Grants", count: recipe.data?.grants.length, hidden: !showGrants },
+  ];
+  const tab = tabFrom(search, tabs);
 
   async function markCurrent(id: string) {
     setBusy(id);
@@ -113,10 +119,10 @@ export function RecipeDetailPage({ projectId, recipeId }: { projectId?: string; 
   const columns = useMemo<ColumnDef<typeof versionFeatures, RecipeVersion>[]>(() => [
     { id: "version", header: "Version", cell: ({ row }) => <button type="button" className="text-action" aria-pressed={row.original.id === versionId} onClick={() => setSelected(row.original.id)}>
       v{row.original.version}{row.original.id === current?.currentVersionId ? " · current" : ""}</button> },
-    { id: "sha", header: "SHA-256", cell: ({ row }) => <code title={row.original.sha256}>{row.original.sha256.slice(0, 12)}</code> },
+    { id: "sha", header: "SHA-256", cell: ({ row }) => <CopyValue value={row.original.sha256} label="Version SHA-256" chars={12} /> },
     { id: "path", header: "Frozen as", cell: ({ row }) => <span className="mono">{row.original.frozenPath}</span> },
     { id: "author", header: "Author", cell: ({ row }) => row.original.authorUsername || <span className="state-badge">seed</span> },
-    { id: "created", header: "Created", cell: ({ row }) => <time dateTime={row.original.createdAt}>{new Date(row.original.createdAt).toLocaleString()}</time> },
+    { id: "created", header: "Created", cell: ({ row }) => <Timestamp value={row.original.createdAt} /> },
     { id: "actions", header: "Actions", cell: ({ row }) => <span className="recipe-actions">
       {editable && row.original.id !== current?.currentVersionId ? <button type="button" className="text-action" disabled={Boolean(busy)} onClick={() => void markCurrent(row.original.id)}><Check size={14} aria-hidden="true" /> Mark current</button> : null}
       {editable ? <RecipeLink projectId={projectId} recipeId={recipeId} page="version" from={row.original.id}><CopyPlus size={14} aria-hidden="true" /> New version from this</RecipeLink> : null}
@@ -127,27 +133,61 @@ export function RecipeDetailPage({ projectId, recipeId }: { projectId?: string; 
   const doc = parseRecipe(version.data?.version?.recipeJson || "");
   const validation = useQuery({ queryKey: ["recipe-order", org, versionId], enabled: Boolean(org && version.data?.version),
     queryFn: ({ signal }) => validateRecipe(version.data?.version?.recipeJson || "", "", signal) });
+  const base = useLocation({ select: (l) => l.pathname });
+  const tabLink = (id: string, label: string) => <Link to={base as "/"} search={{ tab: id } as never} className="text-action">{label} <ArrowRight size={13} aria-hidden="true" /></Link>;
 
-  return <PageShell>
-    <PageHeader eyebrow={projectId ? "Project / Recipes" : "Administration / Recipes"} title={current?.name || "Recipe"}
-      description={current ? `${current.description || "No description"} · ${current.projectId ? "Project recipe" : "Organization recipe"}` : undefined}
-      actions={editable ? <RecipeLink projectId={projectId} recipeId={recipeId} page="version" from={versionId} className="primary-button"><Plus size={15} aria-hidden="true" /> New version</RecipeLink> : null} />
-    <RecipeLink projectId={projectId} page="list"><ArrowLeft size={15} aria-hidden="true" /> All recipes</RecipeLink>
-    {recipe.isPending ? <div className="state-panel" role="status"><RefreshCw className="spin" size={22} aria-hidden="true" /><h2>Loading recipe</h2></div> : null}
-    {recipe.isError ? <div className="state-panel" role="alert"><h2>Recipe unavailable</h2><p>This recipe could not be loaded.</p><button type="button" className="secondary-button" onClick={() => void recipe.refetch()}>Try again</button></div> : null}
+  if (recipe.isPending) return <StatePanel kind="loading" title="Loading recipe" />;
+  if (recipe.isError || !current) return <StatePanel kind="error" title="Recipe unavailable" retry={() => void recipe.refetch()}>This recipe could not be loaded.</StatePanel>;
+  const currentVersion = recipe.data.versions.find((v) => v.id === current.currentVersionId);
+  const listHref = projectId ? `/projects/${projectId}/recipes` : library ? "/recipes" : "/admin/recipes";
+
+  return <DetailLayout back={{ href: listHref, label: "All recipes" }} title={current.name}
+    status={<span className="state-badge">{current.projectId ? "Project recipe" : "Organization recipe"}</span>}
+    facts={[
+      { label: "Current version", value: current.currentVersion ? `v${current.currentVersion} of ${current.versionCount}` : "None" },
+      { label: "Updated", value: <Timestamp value={current.updatedAt} /> },
+      { label: "Stages", value: doc ? doc.stages.length : "—" },
+    ]}
+    actions={editable ? <RecipeLink projectId={projectId} recipeId={recipeId} page="version" from={versionId} className="primary-button"><Plus size={15} aria-hidden="true" /> New version</RecipeLink>
+      : !editable && mayEdit && library ? <RecipeLink recipeId={recipeId} page="detail" className="secondary-button">Manage in Admin</RecipeLink> : null}
+    tabs={tabs} current={tab} tabsLabel="Recipe sections">
     {error ? <p className="auth-alert" role="alert">{error}</p> : null}
-    {current ? <section className="table-section" aria-labelledby="versions-heading">
-      <div className="table-heading"><div><h2 id="versions-heading">Versions</h2><p>Immutable. Runs record the exact bytes they froze; changing the current version affects only new runs.</p></div></div>
-      <DataTable table={table} label="Recipe versions" empty="No versions." />
-    </section> : null}
-    {current && !projectId && !current.projectId && mayEdit ? <ResourceGrants grants={recipe.data?.grants || []} label="Recipe grants" canManage canAdd
+    {tab === "overview" ? <>
+      <div className="dash-grid">
+        <Card title="About" className="dash-main" description={current.description || "No description."}>
+          <SummaryList items={[
+            { label: "Scope", value: current.projectId ? "This project only" : projectId ? "Organization, granted to this project" : "Organization" },
+            { label: "Current", value: currentVersion ? <>v{currentVersion.version} · frozen as <span className="mono">{currentVersion.frozenPath}</span></> : "No current version" },
+            { label: "Order", value: validation.data?.stageOrder.length ? validation.data.stageOrder.join(" → ") : "—" },
+          ]} />
+          <div className="card-body"><Disclosure summary="Advanced: identifiers"><SummaryList items={[
+            { label: "Recipe ID", value: <CopyValue value={current.id} label="Recipe ID" chars={13} /> },
+            ...(currentVersion ? [{ label: "SHA-256", value: <CopyValue value={currentVersion.sha256} label="Version SHA-256" chars={16} /> }] : []),
+          ]} /></Disclosure></div>
+        </Card>
+        <Card title="More" className="dash-side">
+          <ul className="link-list">
+            <li>{tabLink("versions", `${recipe.data.versions.length} ${recipe.data.versions.length === 1 ? "version" : "versions"}`)}</li>
+            {showGrants ? <li>{tabLink("grants", `${recipe.data.grants.length} ${recipe.data.grants.length === 1 ? "grant" : "grants"}`)}</li> : null}
+          </ul>
+        </Card>
+      </div>
+      {version.data?.version ? <StageDag doc={doc} order={validation.data?.stageOrder} title={`Stage graph · v${version.data.version.version}`} /> : null}
+    </> : null}
+    {tab === "versions" ? <>
+      <section className="table-section" aria-labelledby="versions-heading">
+        <div className="table-heading"><div><h2 id="versions-heading">Versions</h2><p>Immutable. Runs record the exact bytes they froze; changing the current version affects only new runs. Select a version to inspect it.</p></div></div>
+        <DataTable table={table} label="Recipe versions" empty="No versions." />
+      </section>
+      {version.data?.version ? <StageDag doc={doc} order={validation.data?.stageOrder} title={`Stage graph · v${version.data.version.version}`} /> : null}
+      {version.data?.version ? <Disclosure summary={<><FileJson size={14} aria-hidden="true" /> Advanced: raw JSON · v{version.data.version.version}</>}><pre className="code-block">{version.data.version.recipeJson}</pre></Disclosure> : null}
+    </> : null}
+    {tab === "grants" && showGrants ? <ResourceGrants grants={recipe.data.grants} label="Recipe grants" canManage canAdd
       description="Each grant names one project, one user, or a minimum role that may use this recipe from any project. Owners and admins get no implicit use; viewers never. Project recipes need no grant."
       revokeNote="New runs can no longer launch it there; runs already launched keep the bytes they froze."
       grant={(kind, project, grantee) => grantRecipe(recipeId, project, kind, grantee)} revoke={revokeRecipeGrant}
       onChanged={() => Promise.all([queryClient.invalidateQueries({ queryKey: recipeKey(org, recipeId) }), queryClient.invalidateQueries({ queryKey: ["recipes", org] })])} /> : null}
-    {version.data?.version ? <StageDag doc={doc} order={validation.data?.stageOrder} title={`Stage graph · v${version.data.version.version}`} /> : null}
-    {version.data?.version ? <details className="recipe-source"><summary><FileJson size={14} aria-hidden="true" /> JSON · v{version.data.version.version}</summary><pre className="mono">{version.data.version.recipeJson}</pre></details> : null}
-  </PageShell>;
+  </DetailLayout>;
 }
 
 const dagFeatures = tableFeatures({});
@@ -180,7 +220,7 @@ export function RecipeEditorPage({ projectId, recipeId, from }: { projectId?: st
   const title = recipeId ? `New version · ${target.data?.recipe?.name || "recipe"}` : from ? "Clone recipe" : "New recipe";
   const ready = session.isSuccess && (!recipeId || target.isSuccess) && (!fromId || source.isSuccess) && (recipeId || !fromId || !sourceRecipe.isPending);
   return <PageShell>
-    <PageHeader eyebrow={projectId ? "Project / Recipes" : "Administration / Recipes"} title={title}
+    <PageHeader title={title}
       description="Edit with the form or JSON; both write the same document. The server validates as you type." />
     {recipeId ? <RecipeLink projectId={projectId} recipeId={recipeId} page="detail"><ArrowLeft size={15} aria-hidden="true" /> Back to recipe</RecipeLink>
       : <RecipeLink projectId={projectId} page="list"><ArrowLeft size={15} aria-hidden="true" /> All recipes</RecipeLink>}

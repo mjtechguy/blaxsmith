@@ -3,12 +3,15 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { Activity, ArrowRight, BookCopy, Inbox, KeyRound, OctagonX, RefreshCw, ScrollText, Square, Trash2, Users } from "lucide-react";
+import { Activity, ArrowRight, Inbox, KeyRound, OctagonX, Square, Trash2 } from "lucide-react";
 import { ADMIN_REFRESH_MS, adminOverviewKey, ago, getAdminOverview, haltRun, revokeGrant } from "../admin";
 import { currentSession, sessionQueryKey } from "../auth";
-import { DataTable } from "../data-table";
+import { DataTable, inSet } from "../data-table";
 import type { AdminConnection, AdminGrant, AdminLiveAttempt, AdminOpenInteraction } from "../gen/blaxsmith/api/v1/admin_pb";
-import { PageHeader, PageShell } from "../page";
+import { CollectionTable, useLocalView, type GridColumn } from "../data-table";
+import { DashboardLayout } from "../layouts";
+import { Slot } from "../slots";
+import { EmptyState, StatePanel, StatTile, Timestamp } from "../ui";
 import { steerAttempt } from "../run-control";
 import type { AgentStatus } from "../agent-view";
 import { StatusPill, useAttentionTitle } from "../work-log";
@@ -26,7 +29,8 @@ export const Route = createFileRoute("/admin/")({ component: AdminOverview });
 type PendingAction =
   | { kind: "stop"; attempt: AdminLiveAttempt }
   | { kind: "halt"; runId: string; label: string }
-  | { kind: "revoke"; grant: AdminGrant };
+  | { kind: "revoke"; grant: AdminGrant }
+  | { kind: "revoke-many"; grants: AdminGrant[]; clear: () => void };
 
 const features = tableFeatures({});
 const stateLabels: Record<string, string> = {
@@ -61,13 +65,22 @@ function AdminOverview() {
     mutationFn: async (action: PendingAction) => {
       if (action.kind === "stop") return steerAttempt(action.attempt.attemptId, "halt", { reason: reason.trim() });
       if (action.kind === "halt") return haltRun(action.runId);
+      if (action.kind === "revoke-many") {
+        // The server rechecks each grant; report partial failure instead of claiming success.
+        const results = await Promise.allSettled(action.grants.map((g) => revokeGrant(g.id)));
+        const failed = results.filter((r) => r.status === "rejected").length;
+        if (failed) throw new Error(`${action.grants.length - failed} of ${action.grants.length} grants revoked; ${failed} could not be revoked.`);
+        return;
+      }
       return revokeGrant(action.grant.id);
     },
-    onSuccess: async () => {
+    onSuccess: async (_, action) => {
+      if (action.kind === "revoke-many") action.clear();
       setPending(null);
       await queryClient.invalidateQueries({ queryKey: adminOverviewKey(org) });
     },
-    onError: (cause) => {
+    onError: (cause, action) => {
+      if (action.kind === "revoke-many") { action.clear(); setActionError(cause instanceof Error ? cause.message : "Some grants could not be revoked."); void queryClient.invalidateQueries({ queryKey: adminOverviewKey(org) }); return; }
       const code = ConnectError.from(cause).code;
       setActionError(code === Code.PermissionDenied ? "Your session is not allowed to do this."
         : code === Code.NotFound ? "This item no longer exists. The dashboard will refresh."
@@ -130,67 +143,68 @@ function AdminOverview() {
     { id: "used", header: "Last used", cell: ({ row }) => row.original.lastUsedAt ? <time dateTime={row.original.lastUsedAt} title={new Date(row.original.lastUsedAt).toLocaleString()}>{ago(row.original.lastUsedAt, now)}</time> : "Never" },
   ], [now]);
 
-  const grantColumns = useMemo<ColumnDef<typeof features, AdminGrant>[]>(() => [
-    { id: "project", header: "Project", cell: ({ row }) => <strong>{row.original.projectName || row.original.projectId.slice(0, 8)}</strong> },
-    { id: "capability", header: "Capability", cell: ({ row }) => <span className="mono">{row.original.capability}</span> },
-    { id: "resource", header: "Resource", cell: ({ row }) => <span className="mono admin-wrap">{row.original.resource}</span> },
-    { id: "expires", header: "Expires", cell: ({ row }) => row.original.expiresAt ? new Date(row.original.expiresAt).toLocaleString() : "Standing" },
-    { id: "created", header: "Granted", cell: ({ row }) => <time dateTime={row.original.createdAt}>{ago(row.original.createdAt, now)}</time> },
-    { id: "actions", header: "Actions", cell: ({ row }) => <button type="button" className="text-action text-action-danger" disabled={busy}
+  const grantColumns = useMemo<GridColumn<AdminGrant>[]>(() => [
+    { id: "project", accessorKey: "projectName", header: "Project", enableHiding: false, cell: ({ row }) => <strong>{row.original.projectName || row.original.projectId.slice(0, 8)}</strong> },
+    { id: "capability", accessorKey: "capability", header: "Capability", filterFn: inSet, cell: ({ row }) => <span className="mono">{row.original.capability}</span> },
+    { id: "resource", accessorKey: "resource", header: "Resource", cell: ({ row }) => <span className="mono admin-wrap">{row.original.resource}</span> },
+    { id: "expires", accessorKey: "expiresAt", header: "Expires", cell: ({ row }) => row.original.expiresAt ? <Timestamp value={row.original.expiresAt} /> : "Standing" },
+    { id: "created", accessorKey: "createdAt", header: "Granted", cell: ({ row }) => <Timestamp value={row.original.createdAt} now={now} /> },
+    { id: "actions", header: "Actions", enableSorting: false, enableHiding: false, cell: ({ row }) => <button type="button" className="text-action text-action-danger" disabled={busy}
       onClick={() => ask({ kind: "revoke", grant: row.original })} aria-label={`Revoke ${row.original.capability} grant for ${row.original.projectName}`}><Trash2 size={13} aria-hidden="true" /> Revoke</button> },
   ], [busy, now]);
+  const [grantView, setGrantView] = useLocalView({ sort: [{ id: "created", desc: true }], size: 10 });
 
   const data = overview.data;
   const live = useTable({ features, data: data?.liveAttempts || [], columns: liveColumns, getRowId: (row) => row.attemptId });
   const inbox = useTable({ features, data: data?.openInteractions || [], columns: inboxColumns, getRowId: (row) => row.id });
   const connections = useTable({ features, data: data?.connections || [], columns: connectionColumns, getRowId: (row) => row.id });
-  const grants = useTable({ features, data: data?.grants || [], columns: grantColumns, getRowId: (row) => row.id });
 
   const denied = overview.isError && ConnectError.from(overview.error).code === Code.PermissionDenied;
   const capacity = data?.capacity;
 
-  return <PageShell>
-    <PageHeader eyebrow="Administration" title="Operations" description="What is running, what is waiting on a person, and connection health across every project in this organization."
-      actions={<><Link className="secondary-button" to="/admin/users"><Users size={15} aria-hidden="true" /> Users</Link><Link className="secondary-button" to="/admin/recipes"><BookCopy size={15} aria-hidden="true" /> Recipes</Link><Link className="secondary-button" to="/admin/audit"><ScrollText size={15} aria-hidden="true" /> Audit log</Link></>} />
-    {overview.isPending ? <div className="state-panel" role="status"><RefreshCw className="spin" size={22} aria-hidden="true" /><h2>Loading operations</h2></div> : null}
-    {overview.isError ? <div className="state-panel" role="alert"><h2>{denied ? "Administration is restricted" : "Operations unavailable"}</h2><p>{denied ? "Your session is not an organization owner or admin." : "The admin overview could not be loaded."}</p>{denied ? null : <button className="secondary-button" type="button" onClick={() => void overview.refetch()}>Try again</button>}</div> : null}
+  return <DashboardLayout title="Operations" description="What is running, what is waiting on a person, and connection health across every project in this organization."
+    tiles={data ? <>
+      {data.runStates.map((entry) => <StatTile key={entry.state} label={stateLabels[entry.state] ?? entry.state} value={entry.count} meta="Last 24 hours and open"
+        tone={entry.state === "failed" || entry.state === "escalated" ? entry.count ? "danger" : undefined : entry.state === "waiting_on_human" && entry.count ? "attention" : undefined} />)}
+      <StatTile label="Capacity" value={<>{capacity?.inFlight ?? 0}{capacity?.configuredMax ? <small className="admin-capacity-max"> / {capacity.configuredMax}</small> : null}</>}
+        meta={`${capacity?.running ?? 0} running · ${capacity?.takenOver ?? 0} taken over${capacity?.workerPool ? ` · pool ${capacity.workerPool}` : ""}`} />
+    </> : undefined}
+    slot={session.data ? <Slot name="admin.checklist" role={session.data.role} /> : null}>
+    {overview.isPending ? <StatePanel kind="loading" title="Loading operations" /> : null}
+    {overview.isError ? <StatePanel kind="error" title={denied ? "Administration is restricted" : "Operations unavailable"} retry={denied ? undefined : () => void overview.refetch()}>{denied ? "Your session is not an organization owner or admin." : "The admin overview could not be loaded."}</StatePanel> : null}
     {data ? <>
-      <section aria-labelledby="run-states-heading">
-        <h2 id="run-states-heading" className="sr-only">Runs by state</h2>
-        <div className="summary-grid admin-tiles">
-          {data.runStates.map((entry) => <div key={entry.state} className="summary-card">
-            <span className="summary-label">{stateLabels[entry.state] ?? entry.state}</span>
-            <strong>{entry.count}</strong>
-            <span className="summary-meta"><span className={`admin-dot ${stateBadge[entry.state] ?? ""}`} aria-hidden="true" /> last 24h + open</span>
-          </div>)}
-          <div className="summary-card">
-            <span className="summary-label">Capacity</span>
-            <strong>{capacity?.inFlight ?? 0}{capacity?.configuredMax ? <small className="admin-capacity-max"> / {capacity.configuredMax}</small> : null}</strong>
-            <span className="summary-meta">{capacity?.running ?? 0} running · {capacity?.takenOver ?? 0} taken over{capacity?.workerPool ? ` · pool ${capacity.workerPool}` : ""}</span>
-          </div>
-        </div>
-        {capacity && !capacity.configuredMax ? <p className="admin-note">Capacity counts in-flight attempts. Worker pool replicas are not readable by the app; set <code>BLAXSMITH_ADMIN_ATTEMPT_CAPACITY</code> to show a maximum.</p> : null}
-      </section>
-
-      <section className="table-section" aria-labelledby="live-heading">
+      {capacity && !capacity.configuredMax ? <p className="admin-note dash-wide">Capacity counts in-flight attempts. Worker pool replicas are not readable by the app; set <code>BLAXSMITH_ADMIN_ATTEMPT_CAPACITY</code> to show a maximum.</p> : null}
+      <section className="table-section dash-wide" aria-labelledby="live-heading">
         <div className="table-heading"><div><h2 id="live-heading"><Activity size={15} aria-hidden="true" /> Live agents</h2><p>Current attempt owners across projects. Stop asks the agent to halt at its next safe point; Halt run cancels the whole run and stops its workers.</p></div>
           <span className="fetched-time" role="status" aria-live="polite">{overview.isRefetching ? "Refreshing…" : `Updated ${ago(new Date(overview.dataUpdatedAt).toISOString(), now)}`}</span></div>
         <DataTable table={live} label="Live agents" empty="No agents are running." />
       </section>
 
-      <section className="table-section" aria-labelledby="admin-inbox-heading">
-        <div className="table-heading"><div><h2 id="admin-inbox-heading"><Inbox size={15} aria-hidden="true" /> Waiting on a person</h2><p>Open questions, approvals, and escalations on active runs, oldest first.</p></div><span className="fetched-time">{data.openInteractions.length} open</span></div>
+      <section className="table-section dash-main" aria-labelledby="admin-inbox-heading">
+        <div className="table-heading"><div><h2 id="admin-inbox-heading"><Inbox size={15} aria-hidden="true" /> Waiting on a person</h2><p>Open questions, approvals, and escalations on active runs, oldest first.</p></div>
+          <Link className="text-action" to="/inbox" search={{ all: 1 } as never}>Inbox <ArrowRight size={13} aria-hidden="true" /></Link></div>
         <DataTable table={inbox} label="Open interactions" empty="Nothing is waiting on a person." />
       </section>
 
-      <section className="table-section" aria-labelledby="connections-heading">
-        <div className="table-heading"><div><h2 id="connections-heading"><KeyRound size={15} aria-hidden="true" /> Connections</h2><p>Model and Git connections with grant and lease health. Credentials are never shown.</p></div><span className="fetched-time">{data.connections.length} connections</span></div>
-        <DataTable table={connections} label="Connections" empty="No model or Git connections yet." />
+      <section className="table-section dash-side" aria-labelledby="connections-heading">
+        <div className="table-heading"><div><h2 id="connections-heading"><KeyRound size={15} aria-hidden="true" /> Connections</h2><p>Grant and lease health. Credentials are never shown.</p></div>
+          <Link className="text-action" to="/admin/connections">All <ArrowRight size={13} aria-hidden="true" /></Link></div>
+        <ul className="health-list">{data.connections.map((c) => <li key={c.id}>
+          <span className="task-stage"><strong>{c.providerKind === "git" ? "Git" : c.providerKind === "openai" ? "OpenAI" : c.providerKind === "anthropic" ? "Anthropic" : c.providerKind}</strong><small className="mono">{c.account}</small></span>
+          <span className={`state-badge ${c.state === "active" ? "state-succeeded" : "state-failed"}`}>{c.state}</span>
+          <small>{c.activeGrants} grants · {c.activeLeases} live{c.expiringLeases ? ` · ${c.expiringLeases} expiring` : ""}</small>
+        </li>)}</ul>
+        {data.connections.length === 0 ? <EmptyState title="No model or Git connections yet" action={<Link className="text-action" to="/admin/connections/new">Add a connection</Link>} /> : null}
       </section>
 
-      <section className="table-section" aria-labelledby="grants-heading">
-        <div className="table-heading"><div><h2 id="grants-heading">Active grants</h2><p>Revoking a grant stops future attempts from receiving it and revokes its leases. A running actor may still hold a delivered credential until stopped.</p></div><span className="fetched-time">{data.grants.length} active</span></div>
-        <DataTable table={grants} label="Active grants" empty="No active grants." />
+      <section className="table-section dash-wide" aria-labelledby="grants-heading">
+        <div className="table-heading"><div><h2 id="grants-heading">Active grants</h2><p>Revoking a grant stops future attempts from receiving it and revokes its leases. A running actor may still hold a delivered credential until stopped.</p></div></div>
+        {actionError && !pending ? <p className="grid-state" role="alert">{actionError}</p> : null}
+        <CollectionTable id="admin-grants" label="Active grants" noun="grants" columns={grantColumns} data={data.grants} getRowId={(g) => g.id} view={grantView} onView={setGrantView}
+          searchLabel="Search grants" facets={[{ id: "capability", label: "Capability", options: [...new Set(data.grants.map((g) => g.capability))].map((c) => ({ value: c, label: c })) }]}
+          canSelect={() => true} expandLabel={(g) => `${g.capability} on ${g.resource}`}
+          bulk={(rows, clear) => <button type="button" className="secondary-button danger-outline" disabled={busy} onClick={() => { setActionError(""); setPending({ kind: "revoke-many", grants: rows, clear }); }}><Trash2 size={14} aria-hidden="true" /> Revoke {rows.length}</button>}
+          empty={<EmptyState title="No active grants">Grants appear when a connection is granted to a project, user, or role.</EmptyState>} />
       </section>
     </> : null}
 
@@ -198,7 +212,8 @@ function AdminOverview() {
       onCancel={(event) => { if (busy) event.preventDefault(); }}
       onClose={() => { if (!busy) { setPending(null); setActionError(""); } }}>
       {pending ? <>
-        <h3 id="admin-confirm-title">{pending.kind === "stop" ? "Stop attempt" : pending.kind === "halt" ? "Halt run" : "Revoke grant"}</h3>
+        <h3 id="admin-confirm-title">{pending.kind === "stop" ? "Stop attempt" : pending.kind === "halt" ? "Halt run" : pending.kind === "revoke-many" ? `Revoke ${pending.grants.length} grants` : "Revoke grant"}</h3>
+        {pending.kind === "revoke-many" ? <p>Revoke these grants? Future attempts lose them and their leases are revoked: <strong className="admin-wrap">{pending.grants.map((g) => `${g.capability} · ${g.projectName || g.resource}`).join(", ")}</strong>. Each revocation is recorded in the audit log.</p> : null}
         {pending.kind === "stop" ? <>
           <p>Ask the agent on <strong>{pending.attempt.stage}</strong> of <strong>{pending.attempt.projectName} / {pending.attempt.runLaunchKey}</strong> to halt at its next safe point. The stage then fails and the run continues its normal failure path. This is recorded in the audit log.</p>
           <div className="review-feedback-input"><label htmlFor="admin-stop-reason">Reason</label>
@@ -210,9 +225,9 @@ function AdminOverview() {
         <div className="review-confirm-actions">
           <button type="button" className="secondary-button" disabled={busy} onClick={() => setPending(null)}>Cancel</button>
           <button type="button" className="primary-button danger-button" disabled={busy || (pending.kind === "stop" && !reason.trim())} onClick={() => act.mutate(pending)}>
-            {busy ? "Working…" : pending.kind === "stop" ? "Stop attempt" : pending.kind === "halt" ? "Halt run" : "Revoke grant"}</button>
+            {busy ? "Working…" : pending.kind === "stop" ? "Stop attempt" : pending.kind === "halt" ? "Halt run" : pending.kind === "revoke-many" ? "Revoke grants" : "Revoke grant"}</button>
         </div>
       </> : null}
     </dialog>
-  </PageShell>;
+  </DashboardLayout>;
 }

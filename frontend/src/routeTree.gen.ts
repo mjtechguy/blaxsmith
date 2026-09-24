@@ -11,25 +11,47 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as RunsRouteImport } from './routes/runs'
 import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as MeSettingsRouteImport } from './routes/me.settings'
+import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsNewRouteImport } from './routes/projects.new'
+import { Route as RecipesIndexRouteImport } from './routes/recipes.index'
+import { Route as RecipesRecipeIdRouteImport } from './routes/recipes.$recipeId'
 import { Route as SetupTokenRouteImport } from './routes/setup.$token'
 import { Route as AdminConnectionsIndexRouteImport } from './routes/admin.connections.index'
 import { Route as AdminConnectionsConnectionIdRouteImport } from './routes/admin.connections.$connectionId'
 import { Route as AdminConnectionsGithubAppRouteImport } from './routes/admin.connections.github-app'
 import { Route as AdminRecipesIndexRouteImport } from './routes/admin.recipes.index'
 import { Route as AdminRecipesNewRouteImport } from './routes/admin.recipes.new'
+import { Route as AdminSettingsIndexRouteImport } from './routes/admin.settings.index'
+import { Route as AdminSettingsGithubAppRouteImport } from './routes/admin.settings.github-app'
+import { Route as AdminSettingsPoliciesRouteImport } from './routes/admin.settings.policies'
+import { Route as AdminSettingsRetentionRouteImport } from './routes/admin.settings.retention'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin.users.index'
+import { Route as AdminUsersPrincipalIdRouteImport } from './routes/admin.users.$principalId'
 import { Route as AdminUsersNewRouteImport } from './routes/admin.users.new'
 import { Route as MeConnectionsIndexRouteImport } from './routes/me.connections.index'
 import { Route as MeConnectionsConnectionIdRouteImport } from './routes/me.connections.$connectionId'
+import { Route as MeSettingsIndexRouteImport } from './routes/me.settings.index'
+import { Route as MeSettingsConnectionsRouteImport } from './routes/me.settings.connections'
+import { Route as MeSettingsPasswordRouteImport } from './routes/me.settings.password'
+import { Route as MeSettingsPreferencesRouteImport } from './routes/me.settings.preferences'
+import { Route as MeSettingsProfileRouteImport } from './routes/me.settings.profile'
+import { Route as MeSettingsSessionsRouteImport } from './routes/me.settings.sessions'
+import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
 import { Route as ProjectsProjectIdModelAccessRouteImport } from './routes/projects.$projectId.model-access'
+import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
+import { Route as ProjectsProjectIdSetupRouteImport } from './routes/projects.$projectId.setup'
 import { Route as ProjectsProjectIdSourceRouteImport } from './routes/projects.$projectId.source'
 import { Route as ProjectsProjectIdVerificationRouteImport } from './routes/projects.$projectId.verification'
+import { Route as AdminConnectionsNewIndexRouteImport } from './routes/admin.connections.new.index'
 import { Route as AdminConnectionsNewApiKeyRouteImport } from './routes/admin.connections.new.api-key'
 import { Route as AdminConnectionsNewGitRouteImport } from './routes/admin.connections.new.git'
 import { Route as AdminRecipesRecipeIdIndexRouteImport } from './routes/admin.recipes.$recipeId.index'
@@ -41,8 +63,12 @@ import { Route as ProjectsProjectIdModelAccessNewRouteImport } from './routes/pr
 import { Route as ProjectsProjectIdModelAccessSubscriptionRouteImport } from './routes/projects.$projectId.model-access.subscription'
 import { Route as ProjectsProjectIdRecipesIndexRouteImport } from './routes/projects.$projectId.recipes.index'
 import { Route as ProjectsProjectIdRecipesNewRouteImport } from './routes/projects.$projectId.recipes.new'
+import { Route as ProjectsProjectIdRunsIndexRouteImport } from './routes/projects.$projectId.runs.index'
 import { Route as ProjectsProjectIdRunsRunIdRouteImport } from './routes/projects.$projectId.runs.$runId'
 import { Route as ProjectsProjectIdRunsNewRouteImport } from './routes/projects.$projectId.runs.new'
+import { Route as ProjectsProjectIdSettingsIndexRouteImport } from './routes/projects.$projectId.settings.index'
+import { Route as ProjectsProjectIdSettingsSourceRouteImport } from './routes/projects.$projectId.settings.source'
+import { Route as ProjectsProjectIdSettingsVerificationRouteImport } from './routes/projects.$projectId.settings.verification'
 import { Route as AdminRecipesRecipeIdVersionsNewRouteImport } from './routes/admin.recipes.$recipeId.versions.new'
 import { Route as ProjectsProjectIdConnectionsNewApiKeyRouteImport } from './routes/projects.$projectId.connections.new.api-key'
 import { Route as ProjectsProjectIdConnectionsNewGitRouteImport } from './routes/projects.$projectId.connections.new.git'
@@ -59,9 +85,19 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InboxRoute = InboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RunsRoute = RunsRouteImport.update({
+  id: '/runs',
+  path: '/runs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ToolsRoute = ToolsRouteImport.update({
@@ -79,6 +115,21 @@ const AdminAuditRoute = AdminAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const MeSettingsRoute = MeSettingsRouteImport.update({
+  id: '/me/settings',
+  path: '/me/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
+  id: '/projects/',
+  path: '/projects/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
   path: '/projects/$projectId',
@@ -87,6 +138,16 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
 const ProjectsNewRoute = ProjectsNewRouteImport.update({
   id: '/projects/new',
   path: '/projects/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecipesIndexRoute = RecipesIndexRouteImport.update({
+  id: '/recipes/',
+  path: '/recipes/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecipesRecipeIdRoute = RecipesRecipeIdRouteImport.update({
+  id: '/recipes/$recipeId',
+  path: '/recipes/$recipeId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SetupTokenRoute = SetupTokenRouteImport.update({
@@ -121,9 +182,34 @@ const AdminRecipesNewRoute = AdminRecipesNewRouteImport.update({
   path: '/recipes/new',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSettingsIndexRoute = AdminSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminSettingsRoute,
+} as any)
+const AdminSettingsGithubAppRoute = AdminSettingsGithubAppRouteImport.update({
+  id: '/github-app',
+  path: '/github-app',
+  getParentRoute: () => AdminSettingsRoute,
+} as any)
+const AdminSettingsPoliciesRoute = AdminSettingsPoliciesRouteImport.update({
+  id: '/policies',
+  path: '/policies',
+  getParentRoute: () => AdminSettingsRoute,
+} as any)
+const AdminSettingsRetentionRoute = AdminSettingsRetentionRouteImport.update({
+  id: '/retention',
+  path: '/retention',
+  getParentRoute: () => AdminSettingsRoute,
+} as any)
 const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
   id: '/users/',
   path: '/users/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersPrincipalIdRoute = AdminUsersPrincipalIdRouteImport.update({
+  id: '/users/$principalId',
+  path: '/users/$principalId',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminUsersNewRoute = AdminUsersNewRouteImport.update({
@@ -142,12 +228,58 @@ const MeConnectionsConnectionIdRoute =
     path: '/me/connections/$connectionId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const MeSettingsIndexRoute = MeSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => MeSettingsRoute,
+} as any)
+const MeSettingsConnectionsRoute = MeSettingsConnectionsRouteImport.update({
+  id: '/connections',
+  path: '/connections',
+  getParentRoute: () => MeSettingsRoute,
+} as any)
+const MeSettingsPasswordRoute = MeSettingsPasswordRouteImport.update({
+  id: '/password',
+  path: '/password',
+  getParentRoute: () => MeSettingsRoute,
+} as any)
+const MeSettingsPreferencesRoute = MeSettingsPreferencesRouteImport.update({
+  id: '/preferences',
+  path: '/preferences',
+  getParentRoute: () => MeSettingsRoute,
+} as any)
+const MeSettingsProfileRoute = MeSettingsProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => MeSettingsRoute,
+} as any)
+const MeSettingsSessionsRoute = MeSettingsSessionsRouteImport.update({
+  id: '/sessions',
+  path: '/sessions',
+  getParentRoute: () => MeSettingsRoute,
+} as any)
+const ProjectsProjectIdIndexRoute = ProjectsProjectIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ProjectsProjectIdRoute,
+} as any)
 const ProjectsProjectIdModelAccessRoute =
   ProjectsProjectIdModelAccessRouteImport.update({
     id: '/model-access',
     path: '/model-access',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProjectsProjectIdSettingsRoute =
+  ProjectsProjectIdSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdSetupRoute = ProjectsProjectIdSetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => ProjectsProjectIdRoute,
+} as any)
 const ProjectsProjectIdSourceRoute = ProjectsProjectIdSourceRouteImport.update({
   id: '/source',
   path: '/source',
@@ -158,6 +290,12 @@ const ProjectsProjectIdVerificationRoute =
     id: '/verification',
     path: '/verification',
     getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const AdminConnectionsNewIndexRoute =
+  AdminConnectionsNewIndexRouteImport.update({
+    id: '/connections/new/',
+    path: '/connections/new/',
+    getParentRoute: () => AdminRoute,
   } as any)
 const AdminConnectionsNewApiKeyRoute =
   AdminConnectionsNewApiKeyRouteImport.update({
@@ -223,6 +361,12 @@ const ProjectsProjectIdRecipesNewRoute =
     path: '/recipes/new',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProjectsProjectIdRunsIndexRoute =
+  ProjectsProjectIdRunsIndexRouteImport.update({
+    id: '/runs/',
+    path: '/runs/',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdRunsRunIdRoute =
   ProjectsProjectIdRunsRunIdRouteImport.update({
     id: '/runs/$runId',
@@ -234,6 +378,24 @@ const ProjectsProjectIdRunsNewRoute =
     id: '/runs/new',
     path: '/runs/new',
     getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdSettingsIndexRoute =
+  ProjectsProjectIdSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => ProjectsProjectIdSettingsRoute,
+  } as any)
+const ProjectsProjectIdSettingsSourceRoute =
+  ProjectsProjectIdSettingsSourceRouteImport.update({
+    id: '/source',
+    path: '/source',
+    getParentRoute: () => ProjectsProjectIdSettingsRoute,
+  } as any)
+const ProjectsProjectIdSettingsVerificationRoute =
+  ProjectsProjectIdSettingsVerificationRouteImport.update({
+    id: '/verification',
+    path: '/verification',
+    getParentRoute: () => ProjectsProjectIdSettingsRoute,
   } as any)
 const AdminRecipesRecipeIdVersionsNewRoute =
   AdminRecipesRecipeIdVersionsNewRouteImport.update({
@@ -269,25 +431,46 @@ const ProjectsProjectIdRecipesRecipeIdVersionsNewRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/inbox': typeof InboxRoute
   '/login': typeof LoginRoute
+  '/runs': typeof RunsRoute
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/admin/settings': typeof AdminSettingsRouteWithChildren
+  '/me/settings': typeof MeSettingsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
+  '/recipes/$recipeId': typeof RecipesRecipeIdRoute
   '/setup/$token': typeof SetupTokenRoute
   '/admin/': typeof AdminIndexRoute
+  '/projects/': typeof ProjectsIndexRoute
+  '/recipes/': typeof RecipesIndexRoute
   '/admin/connections/$connectionId': typeof AdminConnectionsConnectionIdRoute
   '/admin/connections/github-app': typeof AdminConnectionsGithubAppRoute
   '/admin/recipes/new': typeof AdminRecipesNewRoute
+  '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
+  '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
+  '/admin/settings/retention': typeof AdminSettingsRetentionRoute
+  '/admin/users/$principalId': typeof AdminUsersPrincipalIdRoute
   '/admin/users/new': typeof AdminUsersNewRoute
   '/me/connections/$connectionId': typeof MeConnectionsConnectionIdRoute
+  '/me/settings/connections': typeof MeSettingsConnectionsRoute
+  '/me/settings/password': typeof MeSettingsPasswordRoute
+  '/me/settings/preferences': typeof MeSettingsPreferencesRoute
+  '/me/settings/profile': typeof MeSettingsProfileRoute
+  '/me/settings/sessions': typeof MeSettingsSessionsRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
+  '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRouteWithChildren
+  '/projects/$projectId/setup': typeof ProjectsProjectIdSetupRoute
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/admin/connections/': typeof AdminConnectionsIndexRoute
   '/admin/recipes/': typeof AdminRecipesIndexRoute
+  '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/me/connections/': typeof MeConnectionsIndexRoute
+  '/me/settings/': typeof MeSettingsIndexRoute
+  '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/admin/connections/new/api-key': typeof AdminConnectionsNewApiKeyRoute
   '/admin/connections/new/git': typeof AdminConnectionsNewGitRoute
   '/me/connections/new/api-key': typeof MeConnectionsNewApiKeyRoute
@@ -298,9 +481,14 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/projects/$projectId/settings/source': typeof ProjectsProjectIdSettingsSourceRoute
+  '/projects/$projectId/settings/verification': typeof ProjectsProjectIdSettingsVerificationRoute
+  '/admin/connections/new/': typeof AdminConnectionsNewIndexRoute
   '/admin/recipes/$recipeId/': typeof AdminRecipesRecipeIdIndexRoute
   '/projects/$projectId/connections/': typeof ProjectsProjectIdConnectionsIndexRoute
   '/projects/$projectId/recipes/': typeof ProjectsProjectIdRecipesIndexRoute
+  '/projects/$projectId/runs/': typeof ProjectsProjectIdRunsIndexRoute
+  '/projects/$projectId/settings/': typeof ProjectsProjectIdSettingsIndexRoute
   '/admin/recipes/$recipeId/versions/new': typeof AdminRecipesRecipeIdVersionsNewRoute
   '/projects/$projectId/connections/new/api-key': typeof ProjectsProjectIdConnectionsNewApiKeyRoute
   '/projects/$projectId/connections/new/git': typeof ProjectsProjectIdConnectionsNewGitRoute
@@ -309,25 +497,42 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/inbox': typeof InboxRoute
   '/login': typeof LoginRoute
+  '/runs': typeof RunsRoute
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
+  '/recipes/$recipeId': typeof RecipesRecipeIdRoute
   '/setup/$token': typeof SetupTokenRoute
   '/admin': typeof AdminIndexRoute
+  '/projects': typeof ProjectsIndexRoute
+  '/recipes': typeof RecipesIndexRoute
   '/admin/connections/$connectionId': typeof AdminConnectionsConnectionIdRoute
   '/admin/connections/github-app': typeof AdminConnectionsGithubAppRoute
   '/admin/recipes/new': typeof AdminRecipesNewRoute
+  '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
+  '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
+  '/admin/settings/retention': typeof AdminSettingsRetentionRoute
+  '/admin/users/$principalId': typeof AdminUsersPrincipalIdRoute
   '/admin/users/new': typeof AdminUsersNewRoute
   '/me/connections/$connectionId': typeof MeConnectionsConnectionIdRoute
+  '/me/settings/connections': typeof MeSettingsConnectionsRoute
+  '/me/settings/password': typeof MeSettingsPasswordRoute
+  '/me/settings/preferences': typeof MeSettingsPreferencesRoute
+  '/me/settings/profile': typeof MeSettingsProfileRoute
+  '/me/settings/sessions': typeof MeSettingsSessionsRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
+  '/projects/$projectId/setup': typeof ProjectsProjectIdSetupRoute
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/admin/connections': typeof AdminConnectionsIndexRoute
   '/admin/recipes': typeof AdminRecipesIndexRoute
+  '/admin/settings': typeof AdminSettingsIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/me/connections': typeof MeConnectionsIndexRoute
+  '/me/settings': typeof MeSettingsIndexRoute
+  '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
   '/admin/connections/new/api-key': typeof AdminConnectionsNewApiKeyRoute
   '/admin/connections/new/git': typeof AdminConnectionsNewGitRoute
   '/me/connections/new/api-key': typeof MeConnectionsNewApiKeyRoute
@@ -338,9 +543,14 @@ export interface FileRoutesByTo {
   '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/projects/$projectId/settings/source': typeof ProjectsProjectIdSettingsSourceRoute
+  '/projects/$projectId/settings/verification': typeof ProjectsProjectIdSettingsVerificationRoute
+  '/admin/connections/new': typeof AdminConnectionsNewIndexRoute
   '/admin/recipes/$recipeId': typeof AdminRecipesRecipeIdIndexRoute
   '/projects/$projectId/connections': typeof ProjectsProjectIdConnectionsIndexRoute
   '/projects/$projectId/recipes': typeof ProjectsProjectIdRecipesIndexRoute
+  '/projects/$projectId/runs': typeof ProjectsProjectIdRunsIndexRoute
+  '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsIndexRoute
   '/admin/recipes/$recipeId/versions/new': typeof AdminRecipesRecipeIdVersionsNewRoute
   '/projects/$projectId/connections/new/api-key': typeof ProjectsProjectIdConnectionsNewApiKeyRoute
   '/projects/$projectId/connections/new/git': typeof ProjectsProjectIdConnectionsNewGitRoute
@@ -351,25 +561,46 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/inbox': typeof InboxRoute
   '/login': typeof LoginRoute
+  '/runs': typeof RunsRoute
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/admin/settings': typeof AdminSettingsRouteWithChildren
+  '/me/settings': typeof MeSettingsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
+  '/recipes/$recipeId': typeof RecipesRecipeIdRoute
   '/setup/$token': typeof SetupTokenRoute
   '/admin/': typeof AdminIndexRoute
+  '/projects/': typeof ProjectsIndexRoute
+  '/recipes/': typeof RecipesIndexRoute
   '/admin/connections/$connectionId': typeof AdminConnectionsConnectionIdRoute
   '/admin/connections/github-app': typeof AdminConnectionsGithubAppRoute
   '/admin/recipes/new': typeof AdminRecipesNewRoute
+  '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
+  '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
+  '/admin/settings/retention': typeof AdminSettingsRetentionRoute
+  '/admin/users/$principalId': typeof AdminUsersPrincipalIdRoute
   '/admin/users/new': typeof AdminUsersNewRoute
   '/me/connections/$connectionId': typeof MeConnectionsConnectionIdRoute
+  '/me/settings/connections': typeof MeSettingsConnectionsRoute
+  '/me/settings/password': typeof MeSettingsPasswordRoute
+  '/me/settings/preferences': typeof MeSettingsPreferencesRoute
+  '/me/settings/profile': typeof MeSettingsProfileRoute
+  '/me/settings/sessions': typeof MeSettingsSessionsRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
+  '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRouteWithChildren
+  '/projects/$projectId/setup': typeof ProjectsProjectIdSetupRoute
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/admin/connections/': typeof AdminConnectionsIndexRoute
   '/admin/recipes/': typeof AdminRecipesIndexRoute
+  '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/me/connections/': typeof MeConnectionsIndexRoute
+  '/me/settings/': typeof MeSettingsIndexRoute
+  '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/admin/connections/new/api-key': typeof AdminConnectionsNewApiKeyRoute
   '/admin/connections/new/git': typeof AdminConnectionsNewGitRoute
   '/me/connections/new/api-key': typeof MeConnectionsNewApiKeyRoute
@@ -380,9 +611,14 @@ export interface FileRoutesById {
   '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/projects/$projectId/settings/source': typeof ProjectsProjectIdSettingsSourceRoute
+  '/projects/$projectId/settings/verification': typeof ProjectsProjectIdSettingsVerificationRoute
+  '/admin/connections/new/': typeof AdminConnectionsNewIndexRoute
   '/admin/recipes/$recipeId/': typeof AdminRecipesRecipeIdIndexRoute
   '/projects/$projectId/connections/': typeof ProjectsProjectIdConnectionsIndexRoute
   '/projects/$projectId/recipes/': typeof ProjectsProjectIdRecipesIndexRoute
+  '/projects/$projectId/runs/': typeof ProjectsProjectIdRunsIndexRoute
+  '/projects/$projectId/settings/': typeof ProjectsProjectIdSettingsIndexRoute
   '/admin/recipes/$recipeId/versions/new': typeof AdminRecipesRecipeIdVersionsNewRoute
   '/projects/$projectId/connections/new/api-key': typeof ProjectsProjectIdConnectionsNewApiKeyRoute
   '/projects/$projectId/connections/new/git': typeof ProjectsProjectIdConnectionsNewGitRoute
@@ -394,25 +630,46 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/inbox'
     | '/login'
+    | '/runs'
     | '/tools'
     | '/admin/audit'
+    | '/admin/settings'
+    | '/me/settings'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/recipes/$recipeId'
     | '/setup/$token'
     | '/admin/'
+    | '/projects/'
+    | '/recipes/'
     | '/admin/connections/$connectionId'
     | '/admin/connections/github-app'
     | '/admin/recipes/new'
+    | '/admin/settings/github-app'
+    | '/admin/settings/policies'
+    | '/admin/settings/retention'
+    | '/admin/users/$principalId'
     | '/admin/users/new'
     | '/me/connections/$connectionId'
+    | '/me/settings/connections'
+    | '/me/settings/password'
+    | '/me/settings/preferences'
+    | '/me/settings/profile'
+    | '/me/settings/sessions'
     | '/projects/$projectId/model-access'
+    | '/projects/$projectId/settings'
+    | '/projects/$projectId/setup'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
     | '/admin/connections/'
     | '/admin/recipes/'
+    | '/admin/settings/'
     | '/admin/users/'
     | '/me/connections/'
+    | '/me/settings/'
+    | '/projects/$projectId/'
     | '/admin/connections/new/api-key'
     | '/admin/connections/new/git'
     | '/me/connections/new/api-key'
@@ -423,9 +680,14 @@ export interface FileRouteTypes {
     | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/projects/$projectId/settings/source'
+    | '/projects/$projectId/settings/verification'
+    | '/admin/connections/new/'
     | '/admin/recipes/$recipeId/'
     | '/projects/$projectId/connections/'
     | '/projects/$projectId/recipes/'
+    | '/projects/$projectId/runs/'
+    | '/projects/$projectId/settings/'
     | '/admin/recipes/$recipeId/versions/new'
     | '/projects/$projectId/connections/new/api-key'
     | '/projects/$projectId/connections/new/git'
@@ -434,25 +696,42 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/inbox'
     | '/login'
+    | '/runs'
     | '/tools'
     | '/admin/audit'
-    | '/projects/$projectId'
     | '/projects/new'
+    | '/recipes/$recipeId'
     | '/setup/$token'
     | '/admin'
+    | '/projects'
+    | '/recipes'
     | '/admin/connections/$connectionId'
     | '/admin/connections/github-app'
     | '/admin/recipes/new'
+    | '/admin/settings/github-app'
+    | '/admin/settings/policies'
+    | '/admin/settings/retention'
+    | '/admin/users/$principalId'
     | '/admin/users/new'
     | '/me/connections/$connectionId'
+    | '/me/settings/connections'
+    | '/me/settings/password'
+    | '/me/settings/preferences'
+    | '/me/settings/profile'
+    | '/me/settings/sessions'
     | '/projects/$projectId/model-access'
+    | '/projects/$projectId/setup'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
     | '/admin/connections'
     | '/admin/recipes'
+    | '/admin/settings'
     | '/admin/users'
     | '/me/connections'
+    | '/me/settings'
+    | '/projects/$projectId'
     | '/admin/connections/new/api-key'
     | '/admin/connections/new/git'
     | '/me/connections/new/api-key'
@@ -463,9 +742,14 @@ export interface FileRouteTypes {
     | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/projects/$projectId/settings/source'
+    | '/projects/$projectId/settings/verification'
+    | '/admin/connections/new'
     | '/admin/recipes/$recipeId'
     | '/projects/$projectId/connections'
     | '/projects/$projectId/recipes'
+    | '/projects/$projectId/runs'
+    | '/projects/$projectId/settings'
     | '/admin/recipes/$recipeId/versions/new'
     | '/projects/$projectId/connections/new/api-key'
     | '/projects/$projectId/connections/new/git'
@@ -475,25 +759,46 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
+    | '/inbox'
     | '/login'
+    | '/runs'
     | '/tools'
     | '/admin/audit'
+    | '/admin/settings'
+    | '/me/settings'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/recipes/$recipeId'
     | '/setup/$token'
     | '/admin/'
+    | '/projects/'
+    | '/recipes/'
     | '/admin/connections/$connectionId'
     | '/admin/connections/github-app'
     | '/admin/recipes/new'
+    | '/admin/settings/github-app'
+    | '/admin/settings/policies'
+    | '/admin/settings/retention'
+    | '/admin/users/$principalId'
     | '/admin/users/new'
     | '/me/connections/$connectionId'
+    | '/me/settings/connections'
+    | '/me/settings/password'
+    | '/me/settings/preferences'
+    | '/me/settings/profile'
+    | '/me/settings/sessions'
     | '/projects/$projectId/model-access'
+    | '/projects/$projectId/settings'
+    | '/projects/$projectId/setup'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
     | '/admin/connections/'
     | '/admin/recipes/'
+    | '/admin/settings/'
     | '/admin/users/'
     | '/me/connections/'
+    | '/me/settings/'
+    | '/projects/$projectId/'
     | '/admin/connections/new/api-key'
     | '/admin/connections/new/git'
     | '/me/connections/new/api-key'
@@ -504,9 +809,14 @@ export interface FileRouteTypes {
     | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/projects/$projectId/settings/source'
+    | '/projects/$projectId/settings/verification'
+    | '/admin/connections/new/'
     | '/admin/recipes/$recipeId/'
     | '/projects/$projectId/connections/'
     | '/projects/$projectId/recipes/'
+    | '/projects/$projectId/runs/'
+    | '/projects/$projectId/settings/'
     | '/admin/recipes/$recipeId/versions/new'
     | '/projects/$projectId/connections/new/api-key'
     | '/projects/$projectId/connections/new/git'
@@ -517,11 +827,17 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
+  InboxRoute: typeof InboxRoute
   LoginRoute: typeof LoginRoute
+  RunsRoute: typeof RunsRoute
   ToolsRoute: typeof ToolsRoute
+  MeSettingsRoute: typeof MeSettingsRouteWithChildren
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
   ProjectsNewRoute: typeof ProjectsNewRoute
+  RecipesRecipeIdRoute: typeof RecipesRecipeIdRoute
   SetupTokenRoute: typeof SetupTokenRoute
+  ProjectsIndexRoute: typeof ProjectsIndexRoute
+  RecipesIndexRoute: typeof RecipesIndexRoute
   MeConnectionsConnectionIdRoute: typeof MeConnectionsConnectionIdRoute
   MeConnectionsIndexRoute: typeof MeConnectionsIndexRoute
   MeConnectionsNewApiKeyRoute: typeof MeConnectionsNewApiKeyRoute
@@ -544,11 +860,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inbox': {
+      id: '/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof InboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/runs': {
+      id: '/runs'
+      path: '/runs'
+      fullPath: '/runs'
+      preLoaderRoute: typeof RunsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tools': {
@@ -572,6 +902,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAuditRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/me/settings': {
+      id: '/me/settings'
+      path: '/me/settings'
+      fullPath: '/me/settings'
+      preLoaderRoute: typeof MeSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/': {
+      id: '/projects/'
+      path: '/projects'
+      fullPath: '/projects/'
+      preLoaderRoute: typeof ProjectsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects/$projectId': {
       id: '/projects/$projectId'
       path: '/projects/$projectId'
@@ -584,6 +935,20 @@ declare module '@tanstack/react-router' {
       path: '/projects/new'
       fullPath: '/projects/new'
       preLoaderRoute: typeof ProjectsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recipes/': {
+      id: '/recipes/'
+      path: '/recipes'
+      fullPath: '/recipes/'
+      preLoaderRoute: typeof RecipesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recipes/$recipeId': {
+      id: '/recipes/$recipeId'
+      path: '/recipes/$recipeId'
+      fullPath: '/recipes/$recipeId'
+      preLoaderRoute: typeof RecipesRecipeIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setup/$token': {
@@ -628,11 +993,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRecipesNewRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/settings/': {
+      id: '/admin/settings/'
+      path: '/'
+      fullPath: '/admin/settings/'
+      preLoaderRoute: typeof AdminSettingsIndexRouteImport
+      parentRoute: typeof AdminSettingsRoute
+    }
+    '/admin/settings/github-app': {
+      id: '/admin/settings/github-app'
+      path: '/github-app'
+      fullPath: '/admin/settings/github-app'
+      preLoaderRoute: typeof AdminSettingsGithubAppRouteImport
+      parentRoute: typeof AdminSettingsRoute
+    }
+    '/admin/settings/policies': {
+      id: '/admin/settings/policies'
+      path: '/policies'
+      fullPath: '/admin/settings/policies'
+      preLoaderRoute: typeof AdminSettingsPoliciesRouteImport
+      parentRoute: typeof AdminSettingsRoute
+    }
+    '/admin/settings/retention': {
+      id: '/admin/settings/retention'
+      path: '/retention'
+      fullPath: '/admin/settings/retention'
+      preLoaderRoute: typeof AdminSettingsRetentionRouteImport
+      parentRoute: typeof AdminSettingsRoute
+    }
     '/admin/users/': {
       id: '/admin/users/'
       path: '/users'
       fullPath: '/admin/users/'
       preLoaderRoute: typeof AdminUsersIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/users/$principalId': {
+      id: '/admin/users/$principalId'
+      path: '/users/$principalId'
+      fullPath: '/admin/users/$principalId'
+      preLoaderRoute: typeof AdminUsersPrincipalIdRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/users/new': {
@@ -656,11 +1056,74 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MeConnectionsConnectionIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/me/settings/': {
+      id: '/me/settings/'
+      path: '/'
+      fullPath: '/me/settings/'
+      preLoaderRoute: typeof MeSettingsIndexRouteImport
+      parentRoute: typeof MeSettingsRoute
+    }
+    '/me/settings/connections': {
+      id: '/me/settings/connections'
+      path: '/connections'
+      fullPath: '/me/settings/connections'
+      preLoaderRoute: typeof MeSettingsConnectionsRouteImport
+      parentRoute: typeof MeSettingsRoute
+    }
+    '/me/settings/password': {
+      id: '/me/settings/password'
+      path: '/password'
+      fullPath: '/me/settings/password'
+      preLoaderRoute: typeof MeSettingsPasswordRouteImport
+      parentRoute: typeof MeSettingsRoute
+    }
+    '/me/settings/preferences': {
+      id: '/me/settings/preferences'
+      path: '/preferences'
+      fullPath: '/me/settings/preferences'
+      preLoaderRoute: typeof MeSettingsPreferencesRouteImport
+      parentRoute: typeof MeSettingsRoute
+    }
+    '/me/settings/profile': {
+      id: '/me/settings/profile'
+      path: '/profile'
+      fullPath: '/me/settings/profile'
+      preLoaderRoute: typeof MeSettingsProfileRouteImport
+      parentRoute: typeof MeSettingsRoute
+    }
+    '/me/settings/sessions': {
+      id: '/me/settings/sessions'
+      path: '/sessions'
+      fullPath: '/me/settings/sessions'
+      preLoaderRoute: typeof MeSettingsSessionsRouteImport
+      parentRoute: typeof MeSettingsRoute
+    }
+    '/projects/$projectId/': {
+      id: '/projects/$projectId/'
+      path: '/'
+      fullPath: '/projects/$projectId/'
+      preLoaderRoute: typeof ProjectsProjectIdIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/model-access': {
       id: '/projects/$projectId/model-access'
       path: '/model-access'
       fullPath: '/projects/$projectId/model-access'
       preLoaderRoute: typeof ProjectsProjectIdModelAccessRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/settings': {
+      id: '/projects/$projectId/settings'
+      path: '/settings'
+      fullPath: '/projects/$projectId/settings'
+      preLoaderRoute: typeof ProjectsProjectIdSettingsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/setup': {
+      id: '/projects/$projectId/setup'
+      path: '/setup'
+      fullPath: '/projects/$projectId/setup'
+      preLoaderRoute: typeof ProjectsProjectIdSetupRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
     '/projects/$projectId/source': {
@@ -676,6 +1139,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/projects/$projectId/verification'
       preLoaderRoute: typeof ProjectsProjectIdVerificationRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/admin/connections/new/': {
+      id: '/admin/connections/new/'
+      path: '/connections/new'
+      fullPath: '/admin/connections/new/'
+      preLoaderRoute: typeof AdminConnectionsNewIndexRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/connections/new/api-key': {
       id: '/admin/connections/new/api-key'
@@ -754,6 +1224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRecipesNewRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/runs/': {
+      id: '/projects/$projectId/runs/'
+      path: '/runs'
+      fullPath: '/projects/$projectId/runs/'
+      preLoaderRoute: typeof ProjectsProjectIdRunsIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/runs/$runId': {
       id: '/projects/$projectId/runs/$runId'
       path: '/runs/$runId'
@@ -767,6 +1244,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/projects/$projectId/runs/new'
       preLoaderRoute: typeof ProjectsProjectIdRunsNewRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/settings/': {
+      id: '/projects/$projectId/settings/'
+      path: '/'
+      fullPath: '/projects/$projectId/settings/'
+      preLoaderRoute: typeof ProjectsProjectIdSettingsIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdSettingsRoute
+    }
+    '/projects/$projectId/settings/source': {
+      id: '/projects/$projectId/settings/source'
+      path: '/source'
+      fullPath: '/projects/$projectId/settings/source'
+      preLoaderRoute: typeof ProjectsProjectIdSettingsSourceRouteImport
+      parentRoute: typeof ProjectsProjectIdSettingsRoute
+    }
+    '/projects/$projectId/settings/verification': {
+      id: '/projects/$projectId/settings/verification'
+      path: '/verification'
+      fullPath: '/projects/$projectId/settings/verification'
+      preLoaderRoute: typeof ProjectsProjectIdSettingsVerificationRouteImport
+      parentRoute: typeof ProjectsProjectIdSettingsRoute
     }
     '/admin/recipes/$recipeId/versions/new': {
       id: '/admin/recipes/$recipeId/versions/new'
@@ -806,39 +1304,85 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminSettingsRouteChildren {
+  AdminSettingsGithubAppRoute: typeof AdminSettingsGithubAppRoute
+  AdminSettingsPoliciesRoute: typeof AdminSettingsPoliciesRoute
+  AdminSettingsRetentionRoute: typeof AdminSettingsRetentionRoute
+  AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
+}
+
+const AdminSettingsRouteChildren: AdminSettingsRouteChildren = {
+  AdminSettingsGithubAppRoute: AdminSettingsGithubAppRoute,
+  AdminSettingsPoliciesRoute: AdminSettingsPoliciesRoute,
+  AdminSettingsRetentionRoute: AdminSettingsRetentionRoute,
+  AdminSettingsIndexRoute: AdminSettingsIndexRoute,
+}
+
+const AdminSettingsRouteWithChildren = AdminSettingsRoute._addFileChildren(
+  AdminSettingsRouteChildren,
+)
+
 interface AdminRouteChildren {
   AdminAuditRoute: typeof AdminAuditRoute
+  AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
   AdminIndexRoute: typeof AdminIndexRoute
   AdminConnectionsConnectionIdRoute: typeof AdminConnectionsConnectionIdRoute
   AdminConnectionsGithubAppRoute: typeof AdminConnectionsGithubAppRoute
   AdminRecipesNewRoute: typeof AdminRecipesNewRoute
+  AdminUsersPrincipalIdRoute: typeof AdminUsersPrincipalIdRoute
   AdminUsersNewRoute: typeof AdminUsersNewRoute
   AdminConnectionsIndexRoute: typeof AdminConnectionsIndexRoute
   AdminRecipesIndexRoute: typeof AdminRecipesIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
   AdminConnectionsNewApiKeyRoute: typeof AdminConnectionsNewApiKeyRoute
   AdminConnectionsNewGitRoute: typeof AdminConnectionsNewGitRoute
+  AdminConnectionsNewIndexRoute: typeof AdminConnectionsNewIndexRoute
   AdminRecipesRecipeIdIndexRoute: typeof AdminRecipesRecipeIdIndexRoute
   AdminRecipesRecipeIdVersionsNewRoute: typeof AdminRecipesRecipeIdVersionsNewRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAuditRoute: AdminAuditRoute,
+  AdminSettingsRoute: AdminSettingsRouteWithChildren,
   AdminIndexRoute: AdminIndexRoute,
   AdminConnectionsConnectionIdRoute: AdminConnectionsConnectionIdRoute,
   AdminConnectionsGithubAppRoute: AdminConnectionsGithubAppRoute,
   AdminRecipesNewRoute: AdminRecipesNewRoute,
+  AdminUsersPrincipalIdRoute: AdminUsersPrincipalIdRoute,
   AdminUsersNewRoute: AdminUsersNewRoute,
   AdminConnectionsIndexRoute: AdminConnectionsIndexRoute,
   AdminRecipesIndexRoute: AdminRecipesIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
   AdminConnectionsNewApiKeyRoute: AdminConnectionsNewApiKeyRoute,
   AdminConnectionsNewGitRoute: AdminConnectionsNewGitRoute,
+  AdminConnectionsNewIndexRoute: AdminConnectionsNewIndexRoute,
   AdminRecipesRecipeIdIndexRoute: AdminRecipesRecipeIdIndexRoute,
   AdminRecipesRecipeIdVersionsNewRoute: AdminRecipesRecipeIdVersionsNewRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface MeSettingsRouteChildren {
+  MeSettingsConnectionsRoute: typeof MeSettingsConnectionsRoute
+  MeSettingsPasswordRoute: typeof MeSettingsPasswordRoute
+  MeSettingsPreferencesRoute: typeof MeSettingsPreferencesRoute
+  MeSettingsProfileRoute: typeof MeSettingsProfileRoute
+  MeSettingsSessionsRoute: typeof MeSettingsSessionsRoute
+  MeSettingsIndexRoute: typeof MeSettingsIndexRoute
+}
+
+const MeSettingsRouteChildren: MeSettingsRouteChildren = {
+  MeSettingsConnectionsRoute: MeSettingsConnectionsRoute,
+  MeSettingsPasswordRoute: MeSettingsPasswordRoute,
+  MeSettingsPreferencesRoute: MeSettingsPreferencesRoute,
+  MeSettingsProfileRoute: MeSettingsProfileRoute,
+  MeSettingsSessionsRoute: MeSettingsSessionsRoute,
+  MeSettingsIndexRoute: MeSettingsIndexRoute,
+}
+
+const MeSettingsRouteWithChildren = MeSettingsRoute._addFileChildren(
+  MeSettingsRouteChildren,
+)
 
 interface ProjectsProjectIdModelAccessRouteChildren {
   ProjectsProjectIdModelAccessNewRoute: typeof ProjectsProjectIdModelAccessNewRoute
@@ -857,16 +1401,39 @@ const ProjectsProjectIdModelAccessRouteWithChildren =
     ProjectsProjectIdModelAccessRouteChildren,
   )
 
+interface ProjectsProjectIdSettingsRouteChildren {
+  ProjectsProjectIdSettingsSourceRoute: typeof ProjectsProjectIdSettingsSourceRoute
+  ProjectsProjectIdSettingsVerificationRoute: typeof ProjectsProjectIdSettingsVerificationRoute
+  ProjectsProjectIdSettingsIndexRoute: typeof ProjectsProjectIdSettingsIndexRoute
+}
+
+const ProjectsProjectIdSettingsRouteChildren: ProjectsProjectIdSettingsRouteChildren =
+  {
+    ProjectsProjectIdSettingsSourceRoute: ProjectsProjectIdSettingsSourceRoute,
+    ProjectsProjectIdSettingsVerificationRoute:
+      ProjectsProjectIdSettingsVerificationRoute,
+    ProjectsProjectIdSettingsIndexRoute: ProjectsProjectIdSettingsIndexRoute,
+  }
+
+const ProjectsProjectIdSettingsRouteWithChildren =
+  ProjectsProjectIdSettingsRoute._addFileChildren(
+    ProjectsProjectIdSettingsRouteChildren,
+  )
+
 interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdModelAccessRoute: typeof ProjectsProjectIdModelAccessRouteWithChildren
+  ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRouteWithChildren
+  ProjectsProjectIdSetupRoute: typeof ProjectsProjectIdSetupRoute
   ProjectsProjectIdSourceRoute: typeof ProjectsProjectIdSourceRoute
   ProjectsProjectIdVerificationRoute: typeof ProjectsProjectIdVerificationRoute
+  ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
   ProjectsProjectIdConnectionsConnectionIdRoute: typeof ProjectsProjectIdConnectionsConnectionIdRoute
   ProjectsProjectIdRecipesNewRoute: typeof ProjectsProjectIdRecipesNewRoute
   ProjectsProjectIdRunsRunIdRoute: typeof ProjectsProjectIdRunsRunIdRoute
   ProjectsProjectIdRunsNewRoute: typeof ProjectsProjectIdRunsNewRoute
   ProjectsProjectIdConnectionsIndexRoute: typeof ProjectsProjectIdConnectionsIndexRoute
   ProjectsProjectIdRecipesIndexRoute: typeof ProjectsProjectIdRecipesIndexRoute
+  ProjectsProjectIdRunsIndexRoute: typeof ProjectsProjectIdRunsIndexRoute
   ProjectsProjectIdConnectionsNewApiKeyRoute: typeof ProjectsProjectIdConnectionsNewApiKeyRoute
   ProjectsProjectIdConnectionsNewGitRoute: typeof ProjectsProjectIdConnectionsNewGitRoute
   ProjectsProjectIdRecipesRecipeIdIndexRoute: typeof ProjectsProjectIdRecipesRecipeIdIndexRoute
@@ -876,8 +1443,11 @@ interface ProjectsProjectIdRouteChildren {
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdModelAccessRoute:
     ProjectsProjectIdModelAccessRouteWithChildren,
+  ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRouteWithChildren,
+  ProjectsProjectIdSetupRoute: ProjectsProjectIdSetupRoute,
   ProjectsProjectIdSourceRoute: ProjectsProjectIdSourceRoute,
   ProjectsProjectIdVerificationRoute: ProjectsProjectIdVerificationRoute,
+  ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,
   ProjectsProjectIdConnectionsConnectionIdRoute:
     ProjectsProjectIdConnectionsConnectionIdRoute,
   ProjectsProjectIdRecipesNewRoute: ProjectsProjectIdRecipesNewRoute,
@@ -886,6 +1456,7 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdConnectionsIndexRoute:
     ProjectsProjectIdConnectionsIndexRoute,
   ProjectsProjectIdRecipesIndexRoute: ProjectsProjectIdRecipesIndexRoute,
+  ProjectsProjectIdRunsIndexRoute: ProjectsProjectIdRunsIndexRoute,
   ProjectsProjectIdConnectionsNewApiKeyRoute:
     ProjectsProjectIdConnectionsNewApiKeyRoute,
   ProjectsProjectIdConnectionsNewGitRoute:
@@ -902,11 +1473,17 @@ const ProjectsProjectIdRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
+  InboxRoute: InboxRoute,
   LoginRoute: LoginRoute,
+  RunsRoute: RunsRoute,
   ToolsRoute: ToolsRoute,
+  MeSettingsRoute: MeSettingsRouteWithChildren,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
   ProjectsNewRoute: ProjectsNewRoute,
+  RecipesRecipeIdRoute: RecipesRecipeIdRoute,
   SetupTokenRoute: SetupTokenRoute,
+  ProjectsIndexRoute: ProjectsIndexRoute,
+  RecipesIndexRoute: RecipesIndexRoute,
   MeConnectionsConnectionIdRoute: MeConnectionsConnectionIdRoute,
   MeConnectionsIndexRoute: MeConnectionsIndexRoute,
   MeConnectionsNewApiKeyRoute: MeConnectionsNewApiKeyRoute,

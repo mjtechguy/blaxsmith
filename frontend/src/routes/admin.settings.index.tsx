@@ -1,6 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-// The GitHub app registration moved to Admin › Settings; the old URL still works.
-export const Route = createFileRoute("/admin/connections/github-app")({
+export const Route = createFileRoute("/admin/settings/")({
   beforeLoad: () => { throw redirect({ to: "/admin/settings/github-app", replace: true }); },
 });
