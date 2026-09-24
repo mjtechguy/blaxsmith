@@ -2,7 +2,7 @@
 
 An enterprise web workspace for composable AI engineering teams, built on AX.
 
-**Status:** implementation in progress. Git-backed recipes compile into immutable input bundles and run Guild's pinned Forge validator. The authenticated workspace can create projects and frozen runs and record a final human review decision. A fenced workflow ledger, synthetic AX bridge, and signed command-exit receipts exist, but they are not yet a complete agent workflow. The public tool catalog lists current Codex, Claude Code, and OpenCode publisher releases; installation and tool execution adapters are still being built. The [main implementation plan](agent-factory-plan.md) contains the agreed architecture, phased tasks, and acceptance criteria.
+**Status:** implementation in progress. Git-backed recipes compile into immutable input bundles and run Guild's pinned Forge validator. The authenticated workspace can create projects and frozen runs and record a final human review decision. A fenced workflow ledger, AX bridge, signed command-exit receipts, and pinned CLI worker exist, but product dispatch, lifecycle supervision, evidence verification, and final workflow completion are not yet connected. The public tool catalog lists current Codex, Claude Code, and OpenCode publisher releases; runtime approval and product installation remain unfinished. The [main implementation plan](agent-factory-plan.md) contains the agreed architecture, phased tasks, and acceptance criteria.
 
 ## Run the first slice
 
@@ -56,7 +56,7 @@ includes a recent tool-version catalog with latest stable selected for new
 installations and exact runtime pins afterward. The first [read-only catalog
 command](docs/tool-runtime-catalog.md) now lists recent publisher-backed CLI
 versions and their exact package integrity metadata with `blaxsmith tools`.
-The [catalog web preview](docs/frontend-adoption.md) lists these releases but cannot approve or install them. Verified installation and launch adapters are not implemented yet.
+The [catalog web preview](docs/frontend-adoption.md) lists these releases but cannot approve or install them. The pinned worker adapter and combined runner/CLI image are built; administrator runtime approval, product installation/promotion, and authenticated dispatch remain open.
 A separate [Linux/amd64 runtime image proof](deploy/runtime-proof/README.md) pins and smoke-tests native Codex, Claude Code, and OpenCode packages without credentials; it is not promoted for agent execution.
 
 ## Run the web preview

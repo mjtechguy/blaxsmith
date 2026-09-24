@@ -59,13 +59,16 @@ the key to the live actor challenge. The AX runner rejects a mismatched tool
 command and writes only the worker's private credential file, then removes it
 on command exit. No raw key goes into AX Task metadata.
 
-The lease table still permits **one capability per challenge**. A run needing
-both private Git setup and a provider credential remains blocked until the
-schema and envelope support both. A recorded revocation fences future
-delivery; an already issued raw provider key remains usable until provider
-rotation, expiry, or actor termination. The scheduler must stop the actor on
-grant/connection revocation. A combined immutable AX runner+CLI+worker image
-and product connector callbacks are still required before live use. A CLI exit only proves process
+The lease table now permits **one Git and one model capability per challenge**;
+each keeps a separate binding and lease while AX seals both in one challenge-bound
+envelope. The pinned AX overlay and combined Git/model path have passed the
+overlay build and security tests. The dispatcher still does not select a
+product Git binding or pass an AX-mounted checkout to this worker; public runs
+continue to use the worker's own pinned checkout. A recorded revocation fences
+future delivery; an already issued raw provider key remains usable until
+provider rotation, expiry, or actor termination. The scheduler must stop the
+actor on grant/connection revocation. An approved registry image and product
+connector callbacks are still required before live use. A CLI exit only proves process
 exit; evidence collection, actual model identification, and a trusted
 supervisor boundary remain required before crediting work or enabling
 untrusted repositories.

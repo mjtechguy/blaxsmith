@@ -69,8 +69,9 @@ The AX runner currently serves port 80 and this combined image therefore
 keeps its existing root process model inside the gVisor sandbox. A rootless
 runner needs a separate AX port/ownership change. The image only supplies the
 credential file location and tool binaries; the product connector must deliver
-an authorized provider lease before the command runs. Private Git plus a
-provider key in one bootstrap release remains blocked by the one-lease schema.
+authorized leases before the command runs. The lease schema and AX envelope
+support one Git plus one model capability together, but product Git-binding
+selection and per-attempt Git Workspace wiring are still unfinished.
 
 The APT source follows the [Debian snapshot format](https://snapshot.debian.org/)
 with `check-valid-until=no`. It uses HTTP for the initial package metadata
