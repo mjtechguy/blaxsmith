@@ -112,6 +112,10 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		outcome.Err = err
 		return outcome
 	}
+	if err := d.Bridge.CheckToolInputs(ctx, candidate.OrganizationID, frozen.RepositoryURL, provider); err != nil {
+		outcome.Err = err
+		return outcome
+	}
 	if err := d.PreflightWorker(ctx, approved, frozen.RepositoryURL, provider); err != nil {
 		outcome.Err = err
 		return outcome

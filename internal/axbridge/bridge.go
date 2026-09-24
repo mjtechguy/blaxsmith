@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"reflect"
 	"strings"
 	"time"
@@ -56,14 +57,17 @@ type Inspector interface {
 }
 
 type Bridge struct {
-	Workflow *workflow.Store
-	AX       Client
-	Actor    Inspector
-	Image    string // exact digest-pinned AX runner image
-	Pool     string
-	Signer   string               // enrolled bootstrap public key, base64
-	Storage  string               // approved data-only snapshot location
-	Tool     *tooladapter.Request // frozen, public CLI selection; nil runs the synthetic probe
+	Workflow   *workflow.Store
+	AX         Client
+	Actor      Inspector
+	Image      string // exact digest-pinned AX runner image
+	Pool       string
+	Signer     string                                              // enrolled bootstrap public key, base64
+	Storage    string                                              // approved data-only snapshot location
+	Tool       *tooladapter.Request                                // frozen, public CLI selection; nil runs the synthetic probe
+	Workspace  string                                              // approved empty AX Workspace, bound at /workspace for tool tasks
+	Gateway    string                                              // approved AX Gateway with exact public-IP egress rules
+	LookupIPv4 func(context.Context, string) ([]netip.Addr, error) // nil uses system DNS
 	// RevokeOwner must fence the bootstrap owner and any access lease before
 	// deletion. A nil revoker fails closed.
 	RevokeOwner func(context.Context, workflow.Attempt) error
@@ -72,8 +76,12 @@ type Bridge struct {
 // Name is stable across retries; AX may never receive a second identity for
 // the same reserved attempt. The fence token is never placed in Task YAML.
 func Name(a workflow.Attempt) (atespace, task string) {
-	return "blaxsmith-" + strings.ReplaceAll(a.OrganizationID, "-", ""),
+	return Space(a.OrganizationID),
 		"attempt-" + strings.ReplaceAll(a.ID, "-", "")
+}
+
+func Space(organizationID string) string {
+	return "blaxsmith-" + strings.ReplaceAll(organizationID, "-", "")
 }
 
 func (b *Bridge) task(a workflow.Attempt) (Task, error) {
@@ -90,13 +98,17 @@ func (b *Bridge) task(a workflow.Attempt) (Task, error) {
 	for i, arg := range command {
 		argv[i] = arg
 	}
+	spec := map[string]any{"image": b.Image, "command": argv, "debug": true}
+	if b.Tool != nil {
+		if !axResourceName.MatchString(b.Workspace) || !axResourceName.MatchString(b.Gateway) {
+			return Task{}, ErrInputs
+		}
+		spec["workspaces"] = []any{map[string]any{"name": b.Workspace, "path": "/workspace"}}
+		spec["gateway"] = map[string]any{"name": b.Gateway}
+	}
 	return Task{APIVersion: "ax.io/v1alpha1", Kind: "Task",
 		Metadata: TaskMetadata{Name: name, Atespace: space},
-		Spec: map[string]any{
-			"image":   b.Image,
-			"command": argv,
-			"debug":   true,
-		},
+		Spec:     spec,
 	}, nil
 }
 

@@ -20,18 +20,26 @@ func TestToolTaskPinsPublicCommandWithoutCredential(t *testing.T) {
 		Profile: recipe.Profile{Harness: "opencode", Model: "openai/gpt-6-luna", Effort: "high"},
 		Prompt:  "Implement the task", TimeoutSeconds: 60, MaxOutputBytes: 1024}
 	bridge := &Bridge{Workflow: &workflow.Store{}, AX: &fakeAX{}, Actor: fakeActor{}, Image: image,
-		Pool: "pool", Signer: "signer", Storage: "gs://snapshots/", Tool: &request}
+		Pool: "pool", Signer: "signer", Storage: "gs://snapshots/", Tool: &request,
+		Workspace: "source", Gateway: "public-egress"}
 	task, err := bridge.task(attempt)
 	if err != nil {
 		t.Fatal(err)
 	}
 	command, err := tooladapter.Command(request)
 	if err != nil || !reflect.DeepEqual(task.Spec["command"], []any{command[0], command[1]}) ||
+		!reflect.DeepEqual(task.Spec["workspaces"], []any{map[string]any{"name": "source", "path": "/workspace"}}) ||
+		!reflect.DeepEqual(task.Spec["gateway"], map[string]any{"name": "public-egress"}) ||
 		strings.Contains(command[1], "api_key") || strings.Contains(command[1], "credential") {
 		t.Fatalf("task contains unexpected command: %+v: %v", task, err)
 	}
 	request.Runtime.Image = "example/other@sha256:" + strings.Repeat("a", 64)
 	if _, err := bridge.task(attempt); err == nil {
 		t.Fatal("mismatched runner image was accepted")
+	}
+	request.Runtime.Image = image
+	bridge.Gateway = ""
+	if _, err := bridge.task(attempt); err == nil {
+		t.Fatal("tool task without AX gateway was accepted")
 	}
 }

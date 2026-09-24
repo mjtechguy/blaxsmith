@@ -15,8 +15,8 @@ func TestPublicIP(t *testing.T) {
 		"169.254.169.254": false, "192.0.2.1": false, "198.18.0.1": false,
 		"::1": false, "fd00::1": false, "2001:db8::1": false, "64:ff9b::a2a:1": false,
 	} {
-		if got := publicIP(netip.MustParseAddr(raw)); got != want {
-			t.Errorf("publicIP(%s) = %v, want %v", raw, got, want)
+		if got := PublicIPv4(netip.MustParseAddr(raw)); got != want {
+			t.Errorf("PublicIPv4(%s) = %v, want %v", raw, got, want)
 		}
 	}
 }

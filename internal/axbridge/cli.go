@@ -58,6 +58,30 @@ func (c CLI) Get(ctx context.Context, space, name string) (Task, error) {
 	return task, nil
 }
 
+func (c CLI) GetWorkspace(ctx context.Context, space, name string) (Workspace, error) {
+	out, err := c.ax(ctx, nil, "get", "workspace", name, "--atespace", space)
+	if err != nil {
+		return Workspace{}, err
+	}
+	var workspace Workspace
+	if err := yaml.Unmarshal(out, &workspace); err != nil {
+		return Workspace{}, err
+	}
+	return workspace, nil
+}
+
+func (c CLI) GetGateway(ctx context.Context, space, name string) (Gateway, error) {
+	out, err := c.ax(ctx, nil, "get", "gateway", name, "--atespace", space)
+	if err != nil {
+		return Gateway{}, err
+	}
+	var gateway Gateway
+	if err := yaml.Unmarshal(out, &gateway); err != nil {
+		return Gateway{}, err
+	}
+	return gateway, nil
+}
+
 func (c CLI) Apply(ctx context.Context, task Task) error {
 	manifest, err := yaml.Marshal(struct {
 		APIVersion string         `yaml:"apiVersion"`

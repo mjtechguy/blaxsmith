@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/netip"
 	"os"
 	"strings"
 	"testing"
@@ -21,7 +22,11 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
-type dispatchAX struct{ task *axbridge.Task }
+type dispatchAX struct {
+	task      *axbridge.Task
+	workspace axbridge.Workspace
+	gateway   axbridge.Gateway
+}
 
 func (a *dispatchAX) Get(context.Context, string, string) (axbridge.Task, error) {
 	if a.task == nil {
@@ -35,6 +40,12 @@ func (a *dispatchAX) Apply(_ context.Context, task axbridge.Task) error {
 	return nil
 }
 func (a *dispatchAX) Delete(context.Context, string, string) error { a.task = nil; return nil }
+func (a *dispatchAX) GetWorkspace(context.Context, string, string) (axbridge.Workspace, error) {
+	return a.workspace, nil
+}
+func (a *dispatchAX) GetGateway(context.Context, string, string) (axbridge.Gateway, error) {
+	return a.gateway, nil
+}
 
 type dispatchActor struct{ image, pool, signer, storage string }
 
@@ -98,13 +109,16 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	image := "runner@sha256:" + strings.Repeat("a", 64)
+	artifact := func(name, body string) recipe.Artifact {
+		return recipe.Artifact{Path: name, Data: []byte(body), SHA256: dispatchSHA([]byte(body))}
+	}
 	bundle := recipe.Bundle{SchemaVersion: "blaxsmith.bundle/v1alpha1",
 		Source: recipe.Source{Commit: strings.Repeat("b", 40), Spec: "spec.md", Transcript: "transcript.md", Scope: "."},
 		Recipe: recipe.Recipe{Profiles: map[string]recipe.Profile{"engineer": {Harness: "codex", Model: "gpt-6-luna", Effort: "xhigh"}},
 			Stages:         []recipe.Stage{{ID: "plan", Kind: "plan", Profile: "engineer", Prompt: "plan.md"}},
 			RequiredChecks: []string{"checks"}, Limits: recipe.Limits{MaxCorrectionCycles: 1, TimeoutSeconds: 60}},
-		StageOrder: []string{"plan"}, Artifacts: []recipe.Artifact{{Path: "spec.md", Data: []byte("requirements")},
-			{Path: "transcript.md", Data: []byte("decisions")}, {Path: "plan.md", Data: []byte("make a plan")}}}
+		StageOrder: []string{"plan"}, Artifacts: []recipe.Artifact{artifact("spec.md", "requirements"),
+			artifact("transcript.md", "decisions"), artifact("plan.md", "make a plan")}}
 	canonical, _ := json.Marshal(bundle)
 	bundle.Digest = dispatchSHA(canonical)
 	bundleJSON, _ := json.Marshal(bundle)
@@ -168,7 +182,13 @@ func TestDispatchBatchPostgres(t *testing.T) {
 	}
 	ax := &dispatchAX{}
 	bridge := &axbridge.Bridge{AX: ax, Actor: dispatchActor{image, "pool-a", "signer", "gs://snapshots/test/"},
-		Signer: "signer", Storage: "gs://snapshots/test/"}
+		Signer: "signer", Storage: "gs://snapshots/test/", Workspace: "source", Gateway: "public-egress",
+		LookupIPv4: func(_ context.Context, host string) ([]netip.Addr, error) {
+			if host == "github.com" {
+				return []netip.Addr{netip.MustParseAddr("140.82.114.3")}, nil
+			}
+			return []netip.Addr{netip.MustParseAddr("104.18.33.45")}, nil
+		}}
 	if _, err := (&Dispatcher{Workflow: store, DB: pool, Secrets: secretStore, Bridge: bridge}).DispatchBatch(ctx, "", 1, 1); err != ErrNotReady {
 		t.Fatalf("missing worker route preflight must block dispatch: %v", err)
 	}
@@ -184,6 +204,21 @@ func TestDispatchBatchPostgres(t *testing.T) {
 			}
 			return nil
 		}}
+	blocked, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
+	if err != nil || len(blocked.Outcomes) != 1 || blocked.Outcomes[0].State != "blocked" ||
+		blocked.Outcomes[0].Err != axbridge.ErrInputs {
+		t.Fatalf("missing native AX resources were admitted: %+v, %v", blocked, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM workflow_attempts WHERE organization_id=$1 AND run_id=$2`,
+		orgID, run.ID).Scan(&unreserved); err != nil || unreserved != 0 {
+		t.Fatalf("missing native AX resources reserved attempt: %d, %v", unreserved, err)
+	}
+	ax.workspace = axbridge.Workspace{APIVersion: "ax.io/v1alpha1", Kind: "Workspace",
+		Metadata: axbridge.TaskMetadata{Name: "source", Atespace: axbridge.Space(orgID)}}
+	ax.gateway = axbridge.Gateway{APIVersion: "ax.io/v1alpha1", Kind: "Gateway",
+		Metadata: axbridge.TaskMetadata{Name: "public-egress", Atespace: axbridge.Space(orgID)}}
+	ax.gateway.Spec.Egress = &axbridge.GatewayEgress{Allowlist: &axbridge.GatewayAllowlist{
+		Hosts: []axbridge.GatewayHostRule{{Host: "140.82.114.3/32"}, {Host: "104.18.33.45/32"}}}}
 	batch, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
 	if err != nil || len(batch.Outcomes) != 1 || batch.Outcomes[0].State != "started" ||
 		batch.Outcomes[0].AttemptID == "" || batch.Outcomes[0].BindingID == "" || ax.task == nil {

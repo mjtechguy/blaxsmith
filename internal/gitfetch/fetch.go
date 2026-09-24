@@ -205,7 +205,7 @@ func newProxy(ctx context.Context, host string) (*proxyServer, error) {
 		var upstream net.Conn
 		for _, candidate := range addresses {
 			address, ok := netip.AddrFromSlice(candidate.IP)
-			if !ok || !publicIP(address) {
+			if !ok || !PublicIPv4(address) {
 				continue
 			}
 			upstream, err = (&net.Dialer{Timeout: 5 * time.Second}).DialContext(r.Context(), "tcp", net.JoinHostPort(address.String(), "443"))
@@ -242,7 +242,9 @@ func newProxy(ctx context.Context, host string) (*proxyServer, error) {
 	return p, nil
 }
 
-func publicIP(address netip.Addr) bool {
+// PublicIPv4 is the restricted address test shared by source fetch and AX
+// gateway preflight. IPv6 transition routes are deliberately unsupported.
+func PublicIPv4(address netip.Addr) bool {
 	address = address.Unmap()
 	// This first release uses IPv4 only. IPv6 transition/NAT64 ranges can
 	// tunnel a public-looking address into a private IPv4 destination.
