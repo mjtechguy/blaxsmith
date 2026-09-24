@@ -8,6 +8,7 @@ const client = createClient(WorkflowService, browserTransport);
 
 export const projectQueries = (organizationId: string, search = "", sortBy = "created_at", sortDirection = "desc") => ["projects", organizationId, search, sortBy, sortDirection] as const;
 export const runQueries = (organizationId: string, projectId: string, search = "", sortBy = "created_at", sortDirection = "desc") => ["runs", organizationId, projectId, search, sortBy, sortDirection] as const;
+export const projectSourceQueryKey = (organizationId: string, projectId: string) => ["project-source", organizationId, projectId] as const;
 
 export async function listProjects(pageToken = "", search = "", sortBy = "created_at", sortDirection = "desc", signal?: AbortSignal) {
   return client.listProjects({ pageSize: 20, pageToken, search, sortBy, sortDirection }, { signal });
@@ -15,6 +16,20 @@ export async function listProjects(pageToken = "", search = "", sortBy = "create
 
 export async function getProject(projectId: string, signal?: AbortSignal) {
   return client.getProject({ projectId }, { signal });
+}
+
+export async function getProjectSource(projectId: string, signal?: AbortSignal) {
+  try {
+    return (await client.getProjectSource({ projectId }, { signal })).source ?? null;
+  } catch (error) {
+    if (ConnectError.from(error).code === Code.NotFound) return null;
+    throw error;
+  }
+}
+
+export async function setProjectSource(projectId: string, repositoryUrl: string, ref: string) {
+  const token = await csrfToken();
+  return client.setProjectSource({ projectId, repositoryUrl, ref }, { headers: { "X-Blaxsmith-CSRF": token } });
 }
 
 export async function createProject(slug: string, name: string) {

@@ -8,7 +8,7 @@ export function TextField({ label, name, value, onChange, onBlur, autoComplete, 
   onBlur: () => void;
   autoComplete: string;
   placeholder: string;
-  type?: "text" | "password";
+  type?: "text" | "password" | "url";
   autoFocus?: boolean;
   error?: string;
   trailing?: ReactNode;

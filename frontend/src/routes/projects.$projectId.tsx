@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useMatchRoute } from "@tanstack/react-router";
 import { rowSortingFeature, tableFeatures, useTable, type ColumnDef, type SortingState } from "@tanstack/react-table";
-import { ArrowLeft, ArrowRight, GitBranch, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, GitBranch, Plus, RefreshCw, Search } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
 import type { Run } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
-import { getProject, listRuns, runQueries } from "../workflow";
+import { getProject, getProjectSource, listRuns, projectSourceQueryKey, runQueries } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId")({ component: ProjectRuns });
 
@@ -26,9 +26,13 @@ const columns: ColumnDef<typeof features, Run>[] = [
 function ProjectRuns() {
   const { projectId } = Route.useParams();
   const runDetail = useMatchRoute()({ to: "/projects/$projectId/runs/$runId" });
+  const sourceSettings = useMatchRoute()({ to: "/projects/$projectId/source" });
+  const childPage = Boolean(runDetail || sourceSettings);
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const org = session.data?.organizationId || "";
-  const project = useQuery({ queryKey: ["project", org, projectId], enabled: Boolean(org), queryFn: ({ signal }) => getProject(projectId, signal) });
+  const project = useQuery({ queryKey: ["project", org, projectId], enabled: Boolean(org && !childPage), queryFn: ({ signal }) => getProject(projectId, signal) });
+  const source = useQuery({ queryKey: projectSourceQueryKey(org, projectId), enabled: Boolean(org && !childPage && project.data?.project), queryFn: ({ signal }) => getProjectSource(projectId, signal) });
+  const mayEditSource = session.data?.role === "owner" || session.data?.role === "admin";
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
   const [sorting, setSorting] = useState<SortingState>([{ id: "created", desc: true }]);
@@ -36,7 +40,7 @@ function ProjectRuns() {
   const sortBy = sorting[0]?.id === "run" ? "launch_key" : sorting[0]?.id === "state" ? "state" : "created_at";
   const sortDirection = sorting[0]?.desc ? "desc" : "asc";
   const runs = useInfiniteQuery({
-    queryKey: runQueries(org, projectId, submittedSearch, sortBy, sortDirection), enabled: Boolean(org && project.data?.project), initialPageParam: "",
+    queryKey: runQueries(org, projectId, submittedSearch, sortBy, sortDirection), enabled: Boolean(org && !childPage && project.data?.project), initialPageParam: "",
     queryFn: ({ pageParam, signal }) => listRuns(projectId, pageParam, submittedSearch, sortBy, sortDirection, signal),
     getNextPageParam: (page) => page.nextPageToken || undefined,
   });
@@ -44,12 +48,19 @@ function ProjectRuns() {
   const table = useTable({ features, data: rows, columns, getRowId: (row) => row.id,
     manualSorting: true, enableMultiSort: false, enableSortingRemoval: false, state: { sorting }, onSortingChange: setSorting });
 
-  if (runDetail) return <Outlet />;
+  if (childPage) return <Outlet />;
 
   return <PageShell>
     <PageHeader eyebrow="Workspace / Project" title={project.data?.project?.name || "Project runs"} description={project.data?.project ? `Project URL: ${project.data.project.slug}` : "Runs and evidence for this project."} />
     <Link to="/" className="text-action"><ArrowLeft size={15} aria-hidden="true" /> All projects</Link>
     {project.isError ? <div className="state-panel" role="alert"><h2>Project unavailable</h2><p>This project could not be loaded.</p><button className="secondary-button" type="button" onClick={() => void project.refetch()}>Try again</button></div> : null}
+    {project.data?.project ? <section className="table-section" aria-labelledby="source-heading">
+      <div className="table-heading"><div><h2 id="source-heading">Git source</h2><p>The repository and ref used to prepare future runs.</p></div>
+        {mayEditSource && source.isSuccess ? <Link className="secondary-button" to="/projects/$projectId/source" params={{ projectId }}>{source.data ? "Edit source" : <><Plus size={15} aria-hidden="true" /> Add source</>}</Link> : null}</div>
+      {source.isPending ? <div className="source-summary" role="status">Loading source…</div> : null}
+      {source.isError ? <div className="source-summary" role="alert">Source could not be loaded. <button type="button" className="text-action" onClick={() => void source.refetch()}>Try again</button></div> : null}
+      {source.isSuccess ? <div className="source-summary">{source.data ? <><strong>{source.data.repositoryUrl}</strong><span>Ref: {source.data.ref || "Remote default branch"} · Updated {new Date(source.data.updatedAt).toLocaleString()}</span></> : <span>No Git source configured. Add a public GitHub or GitLab repository before starting a run.</span>}</div> : null}
+    </section> : null}
     {project.data?.project && runs.isPending ? <div className="state-panel" role="status"><RefreshCw size={22} className="spin" aria-hidden="true" /><h2>Loading runs</h2></div> : null}
     {runs.isError ? <div className="state-panel" role="alert"><h2>Runs unavailable</h2><p>Could not load runs for this project.</p><button className="secondary-button" type="button" onClick={() => void runs.refetch()}>Try again</button></div> : null}
     {runs.data && rows.length === 0 && !submittedSearch ? <section className="empty-card"><div className="empty-icon"><GitBranch size={22} aria-hidden="true" /></div><h2>No runs yet</h2><p>Runs will appear here after an approved recipe and execution environment are connected.</p></section> : null}
