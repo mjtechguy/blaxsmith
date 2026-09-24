@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useMatchRoute } from "@tanstack/react-router";
 import { rowSortingFeature, tableFeatures, useTable, type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { ArrowLeft, ArrowRight, BookCopy, GitBranch, KeyRound, Plus, RefreshCw, Search } from "lucide-react";
@@ -7,11 +7,21 @@ import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
 import type { Run } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
-import { getLaunchAvailability, getProject, getProjectSource, getProjectVerification, launchAvailabilityQueryKey, listProjectModelAccess, listRuns, projectModelAccessQueryKey, projectSourceQueryKey, projectVerificationQueryKey, runQueries } from "../workflow";
+import { needsYou, runStatus, type AgentStatus } from "../agent-view";
+import { listInteractions } from "../run-control";
+import { StatusPill, useAttentionTitle } from "../work-log";
+import { listRunTasks, getLaunchAvailability, getProject, getProjectSource, getProjectVerification, launchAvailabilityQueryKey, listProjectModelAccess, listRuns, projectModelAccessQueryKey, projectSourceQueryKey, projectVerificationQueryKey, runQueries } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId")({ component: ProjectRuns });
 
 const features = tableFeatures({ rowSortingFeature });
+// Agent status per run (docs/interactive-sessions.md, status rollup), filled for open runs.
+const RunStatuses = createContext<Map<string, AgentStatus | null>>(new Map());
+function RunStatusCell({ run }: { run: Run }) {
+  const statuses = useContext(RunStatuses);
+  return <StatusPill status={statuses.has(run.id) ? statuses.get(run.id)! : run.state === "succeeded" ? "done" : run.state === "failed" ? "failed" : null} />;
+}
+const openRun = (run: Run) => run.state === "active" || run.state === "queued" || run.state === "cancel_requested";
 const columns: ColumnDef<typeof features, Run>[] = [
   { id: "run", accessorKey: "launchKey", header: "Run", cell: ({ row }) =>
     <Link className="run-link" to="/projects/$projectId/runs/$runId" params={{ projectId: row.original.projectId, runId: row.original.id }}>
@@ -20,6 +30,7 @@ const columns: ColumnDef<typeof features, Run>[] = [
       <ArrowRight size={15} aria-hidden="true" />
     </Link> },
   { id: "state", accessorKey: "state", header: "State", cell: ({ row }) => <span className={`state-badge state-${row.original.state}`}>{row.original.state.replaceAll("_", " ")}</span> },
+  { id: "status", header: "Status", cell: ({ row }) => <RunStatusCell run={row.original} /> },
   { id: "created", accessorKey: "createdAt", header: "Created", cell: ({ row }) => <time dateTime={row.original.createdAt}>{new Date(row.original.createdAt).toLocaleString()}</time> },
 ];
 
@@ -54,6 +65,18 @@ function ProjectRuns() {
     getNextPageParam: (page) => page.nextPageToken || undefined,
   });
   const rows = useMemo(() => runs.data?.pages.flatMap((page) => page.runs) || [], [runs.data]);
+  // ponytail: two small reads per open run on the loaded page; add a server-side rollup if run lists grow.
+  const live = rows.filter(openRun).slice(0, 25);
+  const liveReads = useQueries({ queries: live.flatMap((run) => [
+    { queryKey: ["run-tasks", org, run.id], enabled: !childPage, queryFn: ({ signal }: { signal: AbortSignal }) => listRunTasks(run.id, signal), refetchInterval: 15_000, staleTime: 10_000 },
+    { queryKey: ["run-interactions", org, run.id, "list"], enabled: !childPage, queryFn: ({ signal }: { signal: AbortSignal }) => listInteractions(run.id, signal), refetchInterval: 15_000, staleTime: 10_000 },
+  ]) });
+  const runStatuses = new Map<string, AgentStatus | null>(live.flatMap((run, index) => {
+    const tasks = liveReads[index * 2]?.data as Awaited<ReturnType<typeof listRunTasks>> | undefined;
+    const items = liveReads[index * 2 + 1]?.data as Awaited<ReturnType<typeof listInteractions>> | undefined;
+    return tasks && items ? [[run.id, runStatus(run.state, tasks.tasks, items)] as const] : [];
+  }));
+  useAttentionTitle(childPage ? null : [...runStatuses.values()].filter(needsYou).length);
   const table = useTable({ features, data: rows, columns, getRowId: (row) => row.id,
     manualSorting: true, enableMultiSort: false, enableSortingRemoval: false, state: { sorting }, onSortingChange: setSorting });
 
@@ -106,7 +129,7 @@ function ProjectRuns() {
     {runs.data && rows.length === 0 && !submittedSearch ? <section className="empty-card"><div className="empty-icon"><GitBranch size={22} aria-hidden="true" /></div><h2>No runs yet</h2><p>Once Git and verification are configured, start a run from input files already committed to the repository.</p>{mayLaunch && launchAvailability.data?.enabled && source.data && verification.data ? <Link className="secondary-button" to="/projects/$projectId/runs/new" params={{ projectId }}><Plus size={15} aria-hidden="true" /> Create first run</Link> : null}</section> : null}
     {rows.length > 0 || search || submittedSearch ? <section className="table-section" aria-labelledby="runs-heading"><div className="table-heading"><div><h2 id="runs-heading">Runs</h2><p>Open a run to inspect its recorded activity.</p></div><span className="fetched-time">{rows.length} loaded</span></div>
       <div className="table-toolbar"><label className="search-field"><Search size={16} aria-hidden="true" /><span className="sr-only">Search runs</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search run keys or commits" maxLength={120} /></label></div>
-      <DataTable table={table} label="Project runs" empty={runs.isPending || runs.isError ? undefined : "No runs match this search."} />
+      <RunStatuses.Provider value={runStatuses}><DataTable table={table} label="Project runs" empty={runs.isPending || runs.isError ? undefined : "No runs match this search."} /></RunStatuses.Provider>
       <div className="table-footer"><span>{rows.length} loaded in server order</span>{runs.hasNextPage ? <button type="button" className="secondary-button" disabled={runs.isFetchingNextPage} onClick={() => void runs.fetchNextPage()}>{runs.isFetchingNextPage ? "Loading…" : "Load more"}</button> : null}</div>
     </section> : null}
   </PageShell>;

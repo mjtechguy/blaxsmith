@@ -54,13 +54,19 @@ export function AttemptTerminal({ attemptId, inControl, onState, onLink }: {
       ws.binaryType = "arraybuffer";
       ws.onopen = () => { delay = 1_000; terminal.reset(); callbacks.current.onLink({ status: "open" }); sendSize(); };
       ws.onmessage = ({ data }) => {
-        if (typeof data !== "string") { terminal.write(new Uint8Array(data as ArrayBuffer)); return; }
+        if (typeof data !== "string") {
+          // Ack once xterm has parsed the bytes: the server's output window
+          // (docs/interactive-sessions.md, flow control) waits for this.
+          const bytes = new Uint8Array(data as ArrayBuffer);
+          terminal.write(bytes, () => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ack", bytes: bytes.length })); });
+          return;
+        }
         let frame: TerminalFrame;
         try { frame = JSON.parse(data); } catch { return; }
         if (frame.type === "state") callbacks.current.onState(frame);
         else if (frame.type === "exit") { stopped = true; callbacks.current.onLink({ status: "ended", message: `Session exited with code ${frame.code}.` }); }
         // Transient server errors fall through to onclose and retry; access errors are final.
-        else if (frame.type === "error" && !/unavailable|disconnected/.test(frame.message)) { stopped = true; callbacks.current.onLink({ status: "ended", message: frame.message }); }
+        else if (frame.type === "error" && !/unavailable|disconnected|overflowed/.test(frame.message)) { stopped = true; callbacks.current.onLink({ status: "ended", message: frame.message }); }
       };
       ws.onclose = () => {
         if (stopped || socket !== ws) return;

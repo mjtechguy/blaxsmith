@@ -10,6 +10,16 @@ import { DataTable } from "../data-table";
 import type { AdminConnection, AdminGrant, AdminLiveAttempt, AdminOpenInteraction } from "../gen/blaxsmith/api/v1/admin_pb";
 import { PageHeader, PageShell } from "../page";
 import { steerAttempt } from "../run-control";
+import type { AgentStatus } from "../agent-view";
+import { StatusPill, useAttentionTitle } from "../work-log";
+
+// Live-agent pill: an open approval or question on the attempt's stage outranks its runtime state.
+function liveStatus(attempt: AdminLiveAttempt, open: AdminOpenInteraction[]): AgentStatus | null {
+  const mine = open.filter((item) => item.runId === attempt.runId && item.stage === attempt.stage);
+  if (mine.some((item) => item.kind === "approval")) return "needs_approval";
+  if (mine.length) return "awaiting_input";
+  return ["reserved", "starting", "running", "reconciling"].includes(attempt.state) ? "working" : null;
+}
 
 export const Route = createFileRoute("/admin/")({ component: AdminOverview });
 
@@ -79,11 +89,14 @@ function AdminOverview() {
     else if (dialog.current?.open) dialog.current.close();
   }, [pending]);
 
+  const openItems = overview.data?.openInteractions;
+  useAttentionTitle((openItems ?? []).length);
   const liveColumns = useMemo<ColumnDef<typeof features, AdminLiveAttempt>[]>(() => [
     { id: "run", header: "Project / run", cell: ({ row }) => <span className="task-stage"><strong>{row.original.projectName}</strong>
       <RunLink projectId={row.original.projectId} runId={row.original.runId} label={row.original.runLaunchKey} stage={row.original.stage} /></span> },
     { id: "stage", header: "Stage", cell: ({ row }) => <span className="task-stage"><strong>{row.original.stage}</strong><small>{row.original.kind.replaceAll("_", " ") || "—"}</small></span> },
     { id: "runtime", header: "Harness / model", cell: ({ row }) => <span className="task-stage"><strong>{row.original.harness || "—"}</strong><small className="mono">{row.original.model || "—"}</small></span> },
+    { id: "status", header: "Status", cell: ({ row }) => <StatusPill status={liveStatus(row.original, openItems ?? [])} /> },
     { id: "state", header: "State", cell: ({ row }) => <span className={`state-badge state-${row.original.state}`}>{row.original.state}</span> },
     { id: "control", header: "Control", cell: ({ row }) => row.original.controllerPrincipalId
       ? <span className="control-pill control-other" title={row.original.controllerPrincipalId}>Taken over · {row.original.controllerUsername || row.original.controllerPrincipalId.slice(0, 8)}</span>
@@ -99,7 +112,7 @@ function AdminOverview() {
         onClick={() => ask({ kind: "halt", runId: row.original.runId, label: `${row.original.projectName} / ${row.original.runLaunchKey}` })}
         aria-label={`Halt run ${row.original.runLaunchKey}`}><OctagonX size={13} aria-hidden="true" /> Halt run</button>
     </span> },
-  ], [busy, now]);
+  ], [busy, now, openItems]);
 
   const inboxColumns = useMemo<ColumnDef<typeof features, AdminOpenInteraction>[]>(() => [
     { id: "age", header: "Waiting", cell: ({ row }) => <time dateTime={row.original.createdAt} title={new Date(row.original.createdAt).toLocaleString()}>{ago(row.original.createdAt, now)}</time> },

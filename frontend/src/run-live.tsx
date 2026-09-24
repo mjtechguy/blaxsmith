@@ -1,14 +1,18 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Activity, FileText, Hand, MessageSquare, Repeat, TerminalSquare } from "lucide-react";
+import { Check, FileText, Hand, MessageSquare, TerminalSquare, X } from "lucide-react";
 import type { RunTask, WorkflowEvent } from "./gen/blaxsmith/api/v1/workflow_pb";
 import {
   answerInteraction, eventPayload, getAttemptControl, handBackAttempt, listInteractions, steerAttempt, takeOverAttempt,
   type Interaction, type SteerKind, type TerminalState,
 } from "./run-control";
 import { AttemptTerminal, type TerminalLink } from "./terminal";
+import { approvalChoices, cardKey, workLog, type AgentStatus, type Progress } from "./agent-view";
+import { StatusPill, TasksBadge, WorkLog } from "./work-log";
+
+type StageTab = "work" | "terminal";
 
 function errorText(cause: unknown, fallback: string) {
   const code = ConnectError.from(cause).code;
@@ -37,10 +41,13 @@ export function ConfirmModal({ open, title, children, confirmLabel, pending, dis
   </dialog>;
 }
 
-function TextArea({ label, value, onChange, placeholder, hint }: { label: string; value: string; onChange: (value: string) => void; placeholder: string; hint?: string }) {
+function TextArea({ label, value, onChange, placeholder, hint, inputRef, describedBy }: {
+  label: string; value: string; onChange: (value: string) => void; placeholder: string; hint?: string;
+  inputRef?: Ref<HTMLTextAreaElement>; describedBy?: string;
+}) {
   const id = useId();
   return <div className="review-feedback-input"><label htmlFor={id}>{label}</label>
-    <textarea id={id} value={value} rows={4} maxLength={4000} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+    <textarea ref={inputRef} id={id} value={value} rows={4} maxLength={4000} placeholder={placeholder} aria-describedby={describedBy} onChange={(event) => onChange(event.target.value)} />
     {hint ? <small>{hint}</small> : null}</div>;
 }
 
@@ -58,36 +65,80 @@ export function QuestionCard({ item, mayAnswer, scope, runId }: { item: Interact
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const name = useId();
+  const hintId = useId();
+  const optionRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const textRef = useRef<HTMLTextAreaElement>(null);
   const answer = useMutation({
-    mutationFn: () => answerInteraction(item.id, selected, text),
+    mutationFn: (reply: { optionIds: string[]; text: string }) => answerInteraction(item.id, reply.optionIds, reply.text),
     onSuccess: () => { setError(""); void queryClient.invalidateQueries({ queryKey: interactionsKey(scope, runId) }); },
     onError: (cause) => { setError(errorText(cause, "The answer could not be sent. Please try again.")); void queryClient.invalidateQueries({ queryKey: interactionsKey(scope, runId) }); },
   });
   const open = item.state === "open";
   const toggle = (id: string) => setSelected((old) => item.multiSelect ? (old.includes(id) ? old.filter((other) => other !== id) : [...old, id]) : [id]);
   const canSend = open && mayAnswer && !answer.isPending && (selected.length > 0 || (item.allowFreeText && text.trim().length > 0));
+  const send = () => { if (canSend) answer.mutate({ optionIds: selected, text }); };
+  const { approve, decline } = item.kind === "approval" ? approvalChoices(item.options) : {};
+  const isApproval = item.kind === "approval" && (approve !== undefined || (item.options.length === 0 && item.allowFreeText));
+  const decide = (option: typeof approve, fallback: string) => {
+    if (!open || !mayAnswer || answer.isPending) return;
+    answer.mutate(option ? { optionIds: [option.id], text } : { optionIds: [], text: text.trim() || fallback });
+  };
+  const keyed = Math.min(item.options.length, 9);
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (!open || !mayAnswer || answer.isPending) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button, a, summary")) return; // their own Enter/Space
+    const key = cardKey(event.key, keyed, target === textRef.current,
+      { shift: event.shiftKey, ctrl: event.ctrlKey, meta: event.metaKey, alt: event.altKey, composing: event.nativeEvent.isComposing });
+    if (!key) return;
+    event.preventDefault();
+    if (key.action === "select") {
+      toggle(item.options[key.index].id);
+      optionRefs.current[key.index]?.focus();
+    } else if (key.action === "submit") {
+      send();
+    } else {
+      setText("");
+      const index = Math.max(0, item.options.findIndex((option) => selected.includes(option.id)));
+      if (optionRefs.current[index]) optionRefs.current[index]!.focus(); else textRef.current?.blur();
+    }
+  };
+  const approveOrDecline = selected.length === 1 && (selected[0] === approve?.id || selected[0] === decline?.id);
 
-  return <article className={`ix-card ${item.blocking && open ? "ix-blocking" : ""}`} aria-label={item.title}>
+  return <article className={`ix-card ${item.blocking && open ? "ix-blocking" : ""}`} aria-label={item.title} onKeyDown={onKeyDown}>
     <header className="ix-heading">
       <span className="state-badge">{kindLabel(item.kind)}{item.interview ? ` · round ${item.interview.round}` : ""}</span>
       <span className="ix-stage">Stage {item.stage}</span>
-      {item.blocking && open ? <span className="state-badge state-blocked">Agent waiting</span> : null}
+      {item.blocking && open ? <span className={`status-pill ${item.kind === "approval" ? "status-needs_approval" : "status-awaiting_input"}`}>{item.kind === "approval" ? "Needs approval" : "Agent waiting"}</span> : null}
     </header>
     <h3>{item.title}</h3>
     {item.bodyMd ? <div className="ix-body">{item.bodyMd}</div> : null}
     {item.sources.length ? <ul className="ix-sources" aria-label="Sources">{item.sources.map((source) =>
       <li key={`${source.path}:${source.line ?? ""}`}><FileText size={13} aria-hidden="true" /><code>{source.path}{source.line ? `:${source.line}` : ""}</code></li>)}</ul> : null}
-    {open ? <fieldset className="ix-options" disabled={!mayAnswer || answer.isPending}>
+    {open ? <fieldset className="ix-options" disabled={!mayAnswer || answer.isPending} aria-describedby={mayAnswer ? hintId : undefined}>
       <legend className="sr-only">{item.multiSelect ? "Choose any" : "Choose one"}</legend>
-      {item.options.map((option) => <label key={option.id} className={`ix-option ${selected.includes(option.id) ? "is-selected" : ""}`}>
-        <input type={item.multiSelect ? "checkbox" : "radio"} name={name} checked={selected.includes(option.id)} onChange={() => toggle(option.id)} />
+      {item.options.map((option, index) => <label key={option.id} className={`ix-option ${selected.includes(option.id) ? "is-selected" : ""}`}>
+        <input ref={(el) => { optionRefs.current[index] = el; }} type={item.multiSelect ? "checkbox" : "radio"} name={name}
+          checked={selected.includes(option.id)} onChange={() => toggle(option.id)} aria-keyshortcuts={index < 9 ? String(index + 1) : undefined} />
         <span><strong>{option.label}{option.recommended ? <span className="version-badge">Recommended</span> : null}</strong>
           {option.description ? <small>{option.description}</small> : null}</span>
+        {index < 9 && mayAnswer ? <kbd className="ix-key" aria-hidden="true">{index + 1}</kbd> : null}
       </label>)}
-      {item.allowFreeText ? <TextArea label={item.options.length ? "Or add your own answer" : "Your answer"} value={text} onChange={setText} placeholder="Type a reply for the agent." /> : null}
+      {item.allowFreeText ? <TextArea inputRef={textRef} describedBy={mayAnswer ? hintId : undefined} label={item.options.length ? "Or add your own answer" : "Your answer"}
+        value={text} onChange={setText} placeholder="Type a reply for the agent." /> : null}
     </fieldset> : <p className="ix-answer">{item.state === "answered" ? <>Answered{item.answer ? `: ${item.answer.optionIds.map((id) => item.options.find((option) => option.id === id)?.label ?? id).join(", ")}${item.answer.text ? ` — “${item.answer.text}”` : ""}` : ""}</> : `This ${kindLabel(item.kind).toLowerCase()} was ${item.state}.`}</p>}
     {error ? <p className="auth-alert" role="alert">{error}</p> : null}
-    {open && mayAnswer ? <div className="ix-actions"><button type="button" className="primary-button" disabled={!canSend} onClick={() => answer.mutate()}>{answer.isPending ? "Sending…" : "Send answer"}</button></div> : null}
+    {open && mayAnswer ? <div className="ix-actions">
+      <p id={hintId} className="ix-keys">
+        {keyed ? <><kbd>1</kbd>{keyed > 1 ? <>–<kbd>{keyed}</kbd></> : null} choose · </> : null}<kbd>Enter</kbd> send
+        {item.allowFreeText ? <> · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>Esc</kbd> clear reply</> : null}
+      </p>
+      {isApproval ? <>
+        {decline || item.options.length === 0 ? <button type="button" className="secondary-button" disabled={answer.isPending} onClick={() => decide(decline, "Declined")}><X size={15} aria-hidden="true" /> Decline</button> : null}
+        {!approveOrDecline && canSend && (selected.length > 0 || text.trim()) && item.options.length > 0 ? <button type="button" className="secondary-button" onClick={send}>Send answer</button> : null}
+        <button type="button" className="primary-button" disabled={answer.isPending} onClick={() => decide(approve, "Approved")}><Check size={15} aria-hidden="true" /> {answer.isPending ? "Sending…" : "Approve"}</button>
+      </> : <button type="button" className="primary-button" disabled={!canSend} onClick={send}>{answer.isPending ? "Sending…" : "Send answer"}</button>}
+    </div> : null}
     {open && !mayAnswer ? <p className="review-message">Your role can view this question but not answer it.</p> : null}
   </article>;
 }
@@ -131,7 +182,6 @@ function InterviewView({ items, mayAnswer, scope, runId }: { items: Interaction[
 }
 
 const num = (value: unknown) => typeof value === "number" ? value : Number(value) || 0;
-type Progress = { id: string; attemptId: string; at: string; kind: string; type: string; p: Record<string, unknown> };
 const progressText = (event: Progress) => String(event.p.text ?? event.p.message ?? event.p.name ?? "");
 
 function LoopPanel({ attemptId, events, task }: { attemptId: string; events: Progress[]; task: RunTask }) {
@@ -177,19 +227,11 @@ function LoopPanel({ attemptId, events, task }: { attemptId: string; events: Pro
   </section>;
 }
 
-function ActivityFeed({ events, label }: { events: Progress[]; label: (kind: string) => string }) {
-  return <section className="table-section" aria-labelledby="stage-activity-heading">
-    <div className="table-heading"><div><h2 id="stage-activity-heading">Stage activity</h2><p>Progress reported by the agent, newest first.</p></div><span className="fetched-time">{events.length} events</span></div>
-    {events.length === 0 ? <div className="table-empty">No progress reported yet.</div> : <ol className="event-list">{events.slice().reverse().map((event) => <li key={event.id}>
-      <span className="event-mark">{event.type === "cycle" ? <Repeat size={14} aria-hidden="true" /> : <Activity size={14} aria-hidden="true" />}</span>
-      <div><strong>{event.kind !== "attempt.progress" ? label(event.kind) : event.type}{event.kind === "attempt.progress" && event.type === "cycle" ? ` ${num(event.p.cycle)} · ${String(event.p.status ?? "")}` : ""}</strong><small>{[progressText(event), event.attemptId ? `Attempt ${event.attemptId.slice(0, 8)}` : ""].filter(Boolean).join(" · ")}</small></div>
-      <time dateTime={event.at}>{new Date(event.at).toLocaleTimeString()}</time></li>)}</ol>}
-  </section>;
-}
-
-export function StagePanel({ task, principalId, mayControl, interactions, events, label, scope, runId }: {
-  task: RunTask; principalId: string; mayControl: boolean; interactions: Interaction[]; events: WorkflowEvent[]; label: (kind: string) => string; scope: string; runId: string;
+export function StagePanel({ task, principalId, mayControl, interactions, events, status, scope, runId }: {
+  task: RunTask; principalId: string; mayControl: boolean; interactions: Interaction[]; events: WorkflowEvent[]; status: AgentStatus | null; scope: string; runId: string;
 }) {
+  const [tab, setTab] = useState<StageTab>("work");
+  const tabIds = { work: useId(), terminal: useId() };
   const [state, setState] = useState<TerminalState | null>(null);
   const [link, setLink] = useState<TerminalLink>({ status: "connecting" });
   const [confirm, setConfirm] = useState<"take" | "hand" | null>(null);
@@ -212,18 +254,42 @@ export function StagePanel({ task, principalId, mayControl, interactions, events
   const interview = interactions.filter((item) => item.stage === task.key && item.kind === "interview_round");
   const loopEvents = stageEvents.filter((event) => event.kind === "attempt.progress" && (event.type === "cycle" || event.type === "finding"));
   const steerAttemptId = attemptId || stageEvents.at(-1)?.attemptId || "";
+  // The work log follows the live attempt, or the latest one that reported.
+  const logAttempt = attemptId || stageEvents.filter((event) => event.kind === "attempt.progress").at(-1)?.attemptId || "";
+  const logEvents = stageEvents.filter((event) => event.attemptId === logAttempt);
+  const plan = workLog(logEvents).plan;
+  useEffect(() => { if (inControl) setTab("terminal"); }, [inControl]);
+  const tabKeys = (event: KeyboardEvent) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+    event.preventDefault();
+    const next: StageTab = event.key === "Home" ? "work" : event.key === "End" ? "terminal" : tab === "work" ? "terminal" : "work";
+    setTab(next);
+    document.getElementById(`${tabIds[next]}-tab`)?.focus();
+  };
 
   return <>
-    <section className="table-section" aria-labelledby="terminal-heading">
-      <div className="table-heading"><div><h2 id="terminal-heading"><TerminalSquare size={15} aria-hidden="true" /> {task.key}</h2>
-        <p>{task.kind === "human_review" ? "Human review" : [task.kind.replaceAll("_", " "), task.harness, task.model, task.effort].filter(Boolean).join(" · ")} · {task.state.replaceAll("_", " ")}</p></div>
+    <section className="table-section" aria-labelledby="stage-heading">
+      <div className="table-heading"><div><h2 id="stage-heading"><TerminalSquare size={15} aria-hidden="true" /> {task.key} <StatusPill status={status} /></h2>
+        <p>{task.kind === "human_review" ? "Human review" : [task.kind.replaceAll("_", " "), task.harness, task.model, task.effort].filter(Boolean).join(" · ")} · {task.state.replaceAll("_", " ")}{logAttempt ? ` · Attempt ${logAttempt.slice(0, 8)}` : ""}</p></div>
         {attemptId ? <div className="control-bar">
           <span className={`control-pill ${tone}`} role="status" aria-live="polite">{controlLabel}</span>
           {inControl ? <button type="button" className="secondary-button" onClick={() => { control.reset(); setConfirm("hand"); }}>Hand back</button>
             : canTakeOver ? <button type="button" className="primary-button" disabled={!mayControl || link.status !== "open" || state?.control !== "agent"} onClick={() => { control.reset(); setConfirm("take"); }}><Hand size={15} aria-hidden="true" /> Take over</button> : null}
         </div> : null}</div>
-      {attemptId ? <AttemptTerminal key={attemptId} attemptId={attemptId} inControl={inControl} onState={setState} onLink={setLink} />
-        : <div className="table-empty">This stage has no live attempt. Its terminal opens when the stage starts.</div>}
+      <div className="stage-tabs" role="tablist" aria-label={`Stage ${task.key} views`} onKeyDown={tabKeys}>
+        {(["work", "terminal"] as StageTab[]).map((name) => <button key={name} type="button" role="tab" id={`${tabIds[name]}-tab`}
+          aria-selected={tab === name} aria-controls={`${tabIds[name]}-panel`} tabIndex={tab === name ? 0 : -1} className="stage-tab" onClick={() => setTab(name)}>
+          {name === "work" ? <>Work log{plan?.length ? <TasksBadge plan={plan} /> : null}</> : <>Terminal</>}
+        </button>)}
+      </div>
+      <div role="tabpanel" id={`${tabIds.work}-panel`} aria-labelledby={`${tabIds.work}-tab`} hidden={tab !== "work"}>
+        <WorkLog events={logEvents} />
+      </div>
+      {/* The terminal stays mounted while hidden so its socket, scrollback and control state survive tab switches. */}
+      <div role="tabpanel" id={`${tabIds.terminal}-panel`} aria-labelledby={`${tabIds.terminal}-tab`} hidden={tab !== "terminal"}>
+        {attemptId ? <AttemptTerminal key={attemptId} attemptId={attemptId} inControl={inControl} onState={setState} onLink={setLink} />
+          : <div className="table-empty">This stage has no live attempt. Its terminal opens when the stage starts.</div>}
+      </div>
     </section>
     <ConfirmModal open={confirm !== null} title={confirm === "take" ? "Take over this stage" : "Hand back to the agent"}
       confirmLabel={confirm === "take" ? "Take over" : "Hand back"} pending={control.isPending}
@@ -235,6 +301,5 @@ export function StagePanel({ task, principalId, mayControl, interactions, events
     </ConfirmModal>
     {interview.length ? <InterviewView items={interview} mayAnswer={mayControl} scope={scope} runId={runId} /> : null}
     {(task.loopWith || loopEvents.length) && steerAttemptId ? <LoopPanel attemptId={steerAttemptId} events={loopEvents} task={task} /> : null}
-    <ActivityFeed events={stageEvents} label={label} />
   </>;
 }

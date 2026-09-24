@@ -3,6 +3,7 @@ package terminal
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
@@ -106,11 +107,22 @@ type Session struct {
 	Check   func(context.Context) (Access, error)
 	Wake    <-chan struct{}
 	Recheck time.Duration // default 10s
+	Window  Window        // zero fields take the defaults below
 }
+
+// Window is the acknowledgement-based output window: at most Chunks binary
+// frames or Bytes bytes are unacknowledged on the wire, and at most Buffer
+// bytes wait behind them before the viewer is dropped with an error frame.
+type Window struct{ Chunks, Bytes, Buffer int }
 
 const (
 	maxClientFrame = 64 << 10
 	writeTimeout   = 10 * time.Second
+	windowChunks   = 8
+	windowBytes    = 64 << 10
+	windowBuffer   = 1 << 20
+	// ErrSlowViewer is the error frame message when a viewer falls behind.
+	ErrSlowViewer = "terminal output overflowed; the viewer fell behind"
 )
 
 type attachResult struct {
@@ -136,6 +148,23 @@ func (s *Session) Serve(ctx context.Context, c *websocket.Conn) {
 		return
 	}
 
+	out := newOutbox(s.Window)
+	go func() { // the only writer of binary frames; it waits on the window
+		for {
+			data, err := out.next(ctx)
+			if err != nil {
+				return
+			}
+			wctx, wcancel := context.WithTimeout(ctx, writeTimeout)
+			err = c.Write(wctx, websocket.MessageBinary, data)
+			wcancel()
+			if err != nil {
+				cancel()
+				return
+			}
+		}
+	}()
+
 	input := make(chan []byte, 16)
 	resize := make(chan [2]int, 1)
 	readDone := make(chan struct{})
@@ -158,6 +187,11 @@ func (s *Session) Serve(ctx context.Context, c *websocket.Conn) {
 			var frame struct {
 				Type       string `json:"type"`
 				Cols, Rows int
+				Bytes      int `json:"bytes"`
+			}
+			if json.Unmarshal(data, &frame) == nil && frame.Type == "ack" {
+				out.ack(frame.Bytes)
+				continue
 			}
 			if json.Unmarshal(data, &frame) != nil || frame.Type != "resize" {
 				continue // unknown client text frames are ignored
@@ -189,16 +223,13 @@ func (s *Session) Serve(ctx context.Context, c *websocket.Conn) {
 					done <- attachResult{exit, err}
 					return
 				}
-				wctx, wcancel := context.WithTimeout(ctx, writeTimeout)
-				err = c.Write(wctx, websocket.MessageBinary, data)
-				wcancel()
-				if err != nil {
-					done <- attachResult{nil, err}
+				if !out.push(data) {
+					done <- attachResult{nil, errOverflow}
 					return
 				}
 			}
 		}()
-		reattach, closeMsg := s.pump(ctx, c, att, &access, input, resize, done, ticker.C)
+		reattach, closeMsg := s.pump(ctx, c, att, out, &access, input, resize, done, ticker.C)
 		att.Close()
 		<-finished
 		if reattach {
@@ -212,7 +243,7 @@ func (s *Session) Serve(ctx context.Context, c *websocket.Conn) {
 }
 
 // pump relays one attachment until it ends or control changes.
-func (s *Session) pump(ctx context.Context, c *websocket.Conn, att *Attachment, access *Access,
+func (s *Session) pump(ctx context.Context, c *websocket.Conn, att *Attachment, out *outbox, access *Access,
 	input <-chan []byte, resize <-chan [2]int, done <-chan attachResult, tick <-chan time.Time) (bool, *string) {
 	for {
 		recheck := false
@@ -220,7 +251,15 @@ func (s *Session) pump(ctx context.Context, c *websocket.Conn, att *Attachment, 
 		case <-ctx.Done():
 			return false, nil
 		case r := <-done:
+			if errors.Is(r.err, errOverflow) {
+				s.fail(ctx, c, ErrSlowViewer)
+				return false, nil
+			}
 			if r.exit != nil {
+				// Output queued before the exit reaches the viewer first.
+				dctx, dcancel := context.WithTimeout(ctx, writeTimeout)
+				out.drain(dctx)
+				dcancel()
 				if s.text(ctx, c, struct {
 					Type string `json:"type"`
 					Code int    `json:"code"`
@@ -292,4 +331,121 @@ func (s *Session) fail(ctx context.Context, c *websocket.Conn, message string) {
 		Message string `json:"message"`
 	}{"error", message})
 	_ = c.Close(websocket.StatusPolicyViolation, message)
+}
+
+var errOverflow = errors.New("terminal viewer buffer overflow")
+
+// outbox is one socket's output window (docs/interactive-sessions.md,
+// "Flow control"). The attach reader pushes guest bytes; the socket writer
+// takes them only while the unacknowledged window has room; the client acks
+// the bytes it has rendered. Idea from t3code's terminal OutputProtocol (MIT).
+type outbox struct {
+	mu      sync.Mutex
+	limit   Window
+	sent    []int // sizes of unacknowledged frames, oldest first
+	inWire  int   // bytes in sent
+	credit  int   // acknowledged bytes not yet covering a whole frame
+	queue   [][]byte
+	queued  int
+	wake    chan struct{} // writer: queue or window changed
+	drained chan struct{} // drain: the queue emptied
+}
+
+func newOutbox(w Window) *outbox {
+	if w.Chunks <= 0 {
+		w.Chunks = windowChunks
+	}
+	if w.Bytes <= 0 {
+		w.Bytes = windowBytes
+	}
+	if w.Buffer <= 0 {
+		w.Buffer = windowBuffer
+	}
+	return &outbox{limit: w, wake: make(chan struct{}, 1), drained: make(chan struct{}, 1)}
+}
+
+func signal(ch chan struct{}) {
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
+}
+
+// push queues guest output; false means the viewer is too far behind.
+func (o *outbox) push(data []byte) bool {
+	if len(data) == 0 {
+		return true
+	}
+	o.mu.Lock()
+	for len(data) > 0 { // bounded frames keep the byte window meaningful
+		n := min(len(data), max(o.limit.Bytes/4, 1))
+		o.queue = append(o.queue, data[:n])
+		o.queued += n
+		data = data[n:]
+	}
+	over := o.queued > o.limit.Buffer
+	o.mu.Unlock()
+	signal(o.wake)
+	return !over
+}
+
+// ack credits n rendered bytes and retires every frame they fully cover.
+// Credit never exceeds what is on the wire, so acks cannot pre-pay output.
+func (o *outbox) ack(n int) {
+	if n <= 0 {
+		return
+	}
+	o.mu.Lock()
+	o.credit = min(o.credit+n, o.inWire)
+	for len(o.sent) > 0 && o.sent[0] <= o.credit {
+		o.credit -= o.sent[0]
+		o.inWire -= o.sent[0]
+		o.sent = o.sent[1:]
+	}
+	o.mu.Unlock()
+	signal(o.wake)
+}
+
+// next blocks until a frame may be sent and records it as unacknowledged.
+func (o *outbox) next(ctx context.Context) ([]byte, error) {
+	for {
+		o.mu.Lock()
+		if len(o.queue) > 0 && len(o.sent) < o.limit.Chunks && o.inWire < o.limit.Bytes {
+			data := o.queue[0]
+			o.queue[0] = nil
+			o.queue = o.queue[1:]
+			o.queued -= len(data)
+			o.sent = append(o.sent, len(data))
+			o.inWire += len(data)
+			empty := len(o.queue) == 0
+			o.mu.Unlock()
+			if empty {
+				signal(o.drained)
+			}
+			return data, nil
+		}
+		o.mu.Unlock()
+		select {
+		case <-o.wake:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+// drain waits until every queued frame has been handed to the socket.
+func (o *outbox) drain(ctx context.Context) {
+	for {
+		o.mu.Lock()
+		empty := len(o.queue) == 0
+		o.mu.Unlock()
+		if empty {
+			return
+		}
+		select {
+		case <-o.drained:
+		case <-ctx.Done():
+			return
+		}
+	}
 }
