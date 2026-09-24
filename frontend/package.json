@@ -12,7 +12,7 @@
     "build": "vite build && tsc --noEmit",
     "check:ui": "node scripts/check-ui-conventions.mjs",
     "test:auth": "node --test tests/auth.test.mjs",
-    "test:workflow": "node --test tests/workflow.test.mjs",
+    "test:workflow": "node --test tests/workflow.test.mjs tests/admin.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

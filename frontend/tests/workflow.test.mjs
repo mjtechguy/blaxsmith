@@ -107,6 +107,9 @@ test("session scope change removes cached run activity", async () => {
     await clearWorkspaceCache(queryClient);
     assert.equal(queryClient.getQueryData(["run-events", "first:user", "run"]), undefined);
     assert.equal(queryClient.getQueryData(sessionQueryKey).organizationId, "first");
+    queryClient.setQueryData(["admin-overview", "first"], { liveAttempts: [] });
+    await clearWorkspaceCache(queryClient);
+    assert.equal(queryClient.getQueryData(["admin-overview", "first"]), undefined);
   } finally {
     await server.close();
     globalThis.window = previousWindow;

@@ -242,6 +242,19 @@ a { color: inherit; text-decoration: none; }
 .state-blocked { background: var(--danger-soft); color: var(--danger-text); }
 .state-active, .state-reserved, .state-starting, .state-running, .state-reconciling { background: var(--primary-soft); color: var(--primary); }
 .summary-value { font-size: 17px !important; }
+.state-waiting { background: var(--warning-soft); color: var(--warning-text); }
+.admin-tiles { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.admin-tiles .summary-card { min-height: 96px; padding: 14px 16px; }
+.admin-capacity-max { color: var(--muted); font-size: 14px; }
+.admin-note { margin: 8px 0 0; color: var(--muted); font-size: 11px; }
+.admin-actions { display: inline-flex; gap: 12px; }
+.admin-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.admin-wrap { display: inline-block; max-width: 420px; white-space: normal; overflow-wrap: anywhere; }
+.admin-inline-badge { margin-left: 6px; }
+.admin-dot { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; background: currentColor; vertical-align: 0; }
+.admin-dot.state-waiting, .admin-dot.state-running, .admin-dot.state-blocked, .admin-dot.state-failed, .admin-dot.state-succeeded, .admin-dot.state-cancelled { background: currentColor; }
+.danger-button { background: var(--danger-text); border-color: var(--danger-text); color: var(--surface); }
+.danger-button:hover:not(:disabled) { background: var(--danger-text); border-color: var(--danger-text); opacity: .9; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .editor-layout { display: grid; grid-template-columns: minmax(0, 700px) minmax(240px, 340px); gap: 20px; align-items: start; }
 .editor-card, .editor-note { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--card-shadow); }
@@ -369,6 +382,7 @@ a { color: inherit; text-decoration: none; }
   .account-error { grid-row: 3; }
   .main-content { padding: 22px 17px 45px; }
   .summary-grid { grid-template-columns: 1fr; }
+  .summary-grid.admin-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .summary-card { min-height: 92px; }
   .table-heading { flex-direction: column; }
   .table-toolbar { flex-wrap: wrap; }

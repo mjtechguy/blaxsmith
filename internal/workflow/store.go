@@ -721,30 +721,39 @@ func (s *Store) RequestCancel(ctx context.Context, orgID, runID string) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
-	var state string
-	if err := tx.QueryRow(ctx, `SELECT state FROM workflow_runs WHERE organization_id=$1 AND id=$2 FOR UPDATE`, orgID, runID).Scan(&state); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
-		}
-		return err
-	}
-	if state == "cancel_requested" {
-		return tx.Commit(ctx)
-	}
-	if state != "queued" && state != "active" {
-		return ErrConflict
-	}
-	if _, err := tx.Exec(ctx, `UPDATE workflow_runs SET state='cancel_requested' WHERE organization_id=$1 AND id=$2`, orgID, runID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `UPDATE workflow_tasks SET state='cancelled' WHERE organization_id=$1
-		AND run_id=$2 AND state='pending'`, orgID, runID); err != nil {
-		return err
-	}
-	if err := event(ctx, tx, orgID, runID, "", "", "run.cancel_requested"); err != nil {
+	if _, err := requestCancel(ctx, tx, orgID, runID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// requestCancel reports whether this call moved the run to cancel_requested.
+func requestCancel(ctx context.Context, tx pgx.Tx, orgID, runID string) (bool, error) {
+	var state string
+	if err := tx.QueryRow(ctx, `SELECT state FROM workflow_runs WHERE organization_id=$1 AND id=$2 FOR UPDATE`, orgID, runID).Scan(&state); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, ErrNotFound
+		}
+		return false, err
+	}
+	if state == "cancel_requested" {
+		return false, nil
+	}
+	if state != "queued" && state != "active" {
+		return false, ErrConflict
+	}
+	if _, err := tx.Exec(ctx, `UPDATE workflow_runs SET state='cancel_requested' WHERE organization_id=$1 AND id=$2`, orgID, runID); err != nil {
+		return false, err
+	}
+	// Pending and escalated stages have no live owner, so they cancel now.
+	if _, err := tx.Exec(ctx, `UPDATE workflow_tasks SET state='cancelled' WHERE organization_id=$1
+		AND run_id=$2 AND state IN ('pending','escalated')`, orgID, runID); err != nil {
+		return false, err
+	}
+	if err := event(ctx, tx, orgID, runID, "", "", "run.cancel_requested"); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // FinalizeCancel requires all active attempts to have been confirmed stopped.

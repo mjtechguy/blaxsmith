@@ -57,6 +57,8 @@ func (s *Store) Progress(ctx context.Context, afterOrgID, afterRunID string, lim
 		WHERE (r.organization_id,r.id)>($1::uuid,$2::uuid) AND r.graph_sealed AND (
 		(r.state='active' AND NOT EXISTS (SELECT 1 FROM workflow_tasks t WHERE t.organization_id=r.organization_id
 			AND t.run_id=r.id AND t.state NOT IN ('succeeded','blocked')))
+		OR (r.state='cancel_requested' AND NOT EXISTS (SELECT 1 FROM workflow_tasks t
+			WHERE t.organization_id=r.organization_id AND t.run_id=r.id AND t.active_attempt_id IS NOT NULL))
 		OR (r.state='succeeded' AND r.review_package_id IS NULL)
 		OR (r.state='succeeded' AND EXISTS (SELECT 1 FROM workflow_review_decisions d
 			WHERE d.organization_id=r.organization_id AND d.run_id=r.id AND d.package_id=r.review_package_id
@@ -95,6 +97,13 @@ func (s *Store) progressRun(ctx context.Context, orgID, runID string, sink Escal
 		return err
 	}
 	state := run.State
+	if state == "cancel_requested" {
+		// A halted run closes once every owner is confirmed stopped.
+		if err := s.FinalizeCancel(ctx, orgID, runID); err != nil && !errors.Is(err, ErrConflict) {
+			return err
+		}
+		return nil
+	}
 	if state == "active" {
 		if state, err = s.FinalizeRun(ctx, orgID, runID); err != nil && !errors.Is(err, ErrConflict) {
 			return err

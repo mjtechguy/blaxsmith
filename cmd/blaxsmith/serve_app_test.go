@@ -843,6 +843,7 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 		t.Fatalf("cross-tenant review decision: %v", err)
 	}
 	interactionID, interactionAttempt := testInteractionBrowserAPI(t, ctx, pool, client, origin, csrf, owner)
+	testAdminBrowserAPI(t, ctx, client, origin, csrf, true)
 	if _, err := pool.Exec(ctx, `UPDATE identity_memberships SET role='viewer'
 		WHERE organization_id=$1 AND principal_id=$2`, owner.OrganizationID, owner.PrincipalID); err != nil {
 		t.Fatal(err)
@@ -854,6 +855,7 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if got, err := auth.RefreshSession(ctx, refresh); err != nil || got.Msg.Session.Role != "viewer" {
 		t.Fatalf("viewer refresh: %+v, %v", got, err)
 	}
+	testAdminBrowserAPI(t, ctx, client, origin, csrf, false)
 	viewerCreate := connect.NewRequest(&api.CreateProjectRequest{Slug: "viewer-denied", Name: "Denied"})
 	viewerCreate.Header().Set("Origin", origin)
 	viewerCreate.Header().Set("X-Blaxsmith-CSRF", csrf)

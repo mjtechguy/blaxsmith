@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Hammer, LayoutDashboard, LogOut, Menu, Moon, Sun, Wrench, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Hammer, LayoutDashboard, LogOut, Menu, Moon, ShieldCheck, Sun, Wrench, X } from "lucide-react";
+import { isOrgAdmin } from "./admin";
 import { announceSessionChange, clearWorkspaceCache, logout, sessionQueryKey } from "./auth";
 import type { SessionIdentity } from "./gen/blaxsmith/api/v1/auth_pb";
 
@@ -44,8 +45,9 @@ export function Shell({ children, session }: { children: ReactNode; session?: Se
   const nav = [
     ...(session ? [{ to: "/" as const, label: "Workspace", icon: LayoutDashboard }] : []),
     { to: "/tools" as const, label: "Tools & runtimes", icon: Wrench },
+    ...(isOrgAdmin(session) ? [{ to: "/admin" as const, label: "Admin", icon: ShieldCheck }] : []),
   ];
-  const pageName = pathname === "/tools" ? "Tools & runtimes" : "Workspace";
+  const pageName = pathname === "/tools" ? "Tools & runtimes" : pathname.startsWith("/admin") ? "Admin" : "Workspace";
   const nextTheme: Theme = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
 
   async function signOut() {
@@ -83,7 +85,7 @@ export function Shell({ children, session }: { children: ReactNode; session?: Se
         <p className="nav-caption">WORKSPACE</p>
         <nav aria-label="Main">
           {nav.map(({ to, label, icon: Icon }) =>
-            <Link key={to} to={to} activeOptions={{ exact: true }} className="nav-link" activeProps={{ className: "nav-link active" }} title={collapsed ? label : undefined}>
+            <Link key={to} to={to} activeOptions={{ exact: to !== "/admin" }} className="nav-link" activeProps={{ className: "nav-link active" }} title={collapsed ? label : undefined}>
               <Icon size={17} aria-hidden="true" /><span>{label}</span>
             </Link>) }
         </nav>

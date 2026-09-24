@@ -177,7 +177,64 @@ const rpc = {
     emit(tasks.find((t) => t.activeAttemptId === attemptId)?.key, "attempt.control");
     return {};
   },
+  // AdminService: derived from the scenario above plus a second, stuck run.
+  GetAdminOverview: () => {
+    const project = { projectId, projectName: "Demo project", runId, runLaunchKey: run.launchKey };
+    const liveAttempts = tasks.filter((t) => t.activeAttemptId && run.state === "active").map((t) => ({ ...project, attemptId: t.activeAttemptId, stage: t.key,
+      kind: t.key === "plan" ? "plan" : t.key === "verify" ? "verify" : "implement", harness: t.harness, model: t.model, state: "running",
+      controllerPrincipalId: control.get(t.activeAttemptId) ?? "", controllerUsername: control.get(t.activeAttemptId) ? "you" : "",
+      startedAt: minutesAgo(t.key === "plan" ? 14 : 6), lastActivityAt: events.filter((e) => e.attemptId === t.activeAttemptId).at(-1)?.occurredAt ?? "" }));
+    liveAttempts.push({ attemptId: "att-stuck", runId: "run-stuck", projectId: "proj-billing", projectName: "Billing service", runLaunchKey: "invoice-retry-fix",
+      stage: "implement", kind: "implement", harness: "codex", model: "gpt-5.6-luna", state: "reconciling", controllerPrincipalId: "", controllerUsername: "",
+      startedAt: minutesAgo(190), lastActivityAt: minutesAgo(47) });
+    const openInteractions = interactions.filter((i) => i.state === "open").map((i) => ({ ...project, id: i.id, stage: i.stage, kind: i.kind, title: i.title, blocking: i.blocking, createdAt: i.createdAt }));
+    return {
+      liveAttempts, openInteractions, generatedAt: now(),
+      runStates: [["running", run.state === "active" ? 2 : 1], ["waiting_on_human", openInteractions.length ? 1 : 0], ["escalated", interactions.some((i) => i.state === "open" && i.kind === "escalation") ? 1 : 0], ["failed", 1], ["succeeded", 4], ["halted", adminHalted.size]].map(([state, count]) => ({ state, count })),
+      capacity: { inFlight: liveAttempts.length, running: liveAttempts.filter((a) => a.state === "running").length, takenOver: liveAttempts.filter((a) => a.controllerPrincipalId).length, configuredMax: 8, workerPool: "dev-pool" },
+      connections: [
+        { id: "conn-openai", providerKind: "openai", host: "api.openai.com", account: "unverified-openai-api-key", ownerKind: "organization", state: "active", activeGrants: adminGrants.filter((g) => g.connectionId === "conn-openai").length, activeLeases: 2, expiringLeases: 1, lastUsedAt: minutesAgo(1), createdAt: minutesAgo(60 * 24 * 9) },
+        { id: "conn-git", providerKind: "git", host: "github.com", account: "blaxsmith-bot", ownerKind: "organization", state: "active", activeGrants: adminGrants.filter((g) => g.connectionId === "conn-git").length, activeLeases: 1, expiringLeases: 0, lastUsedAt: minutesAgo(6), createdAt: minutesAgo(60 * 24 * 12) },
+        { id: "conn-old", providerKind: "anthropic", host: "api.anthropic.com", account: "unverified-anthropic-api-key", ownerKind: "organization", state: "revoked", activeGrants: 0, activeLeases: 0, expiringLeases: 0, lastUsedAt: "", createdAt: minutesAgo(60 * 24 * 30) },
+      ],
+      grants: adminGrants,
+    };
+  },
+  ListAuditEvents: ({ pageToken = "", action = "", actor = "", projectId: project = "", pageSize = 50 }) => {
+    const before = pageToken ? Number(atob(pageToken)) : Infinity;
+    const rows = audit.filter((e) => Number(e.id) < before && (!action || e.action === action) && (!actor || e.actorUsername === actor || e.actorId === actor) && (!project || e.projectId === project));
+    const page = rows.slice(0, pageSize);
+    return { events: page, nextPageToken: rows.length > pageSize ? btoa(page.at(-1).id) : "" };
+  },
+  HaltRun: ({ runId: id }) => {
+    adminHalted.add(id);
+    if (id === runId) { run.state = "cancel_requested"; emit("", "run.cancel_requested"); }
+    auditEvent("workflow.run.halted", id);
+    return { runId: id, state: "cancel_requested" };
+  },
+  RevokeGrant: ({ grantId }) => {
+    const index = adminGrants.findIndex((g) => g.id === grantId);
+    if (index < 0) return connectError(404, "not_found", "workflow resource not found");
+    adminGrants.splice(index, 1);
+    auditEvent("access.grant.revoked", grantId);
+    return { grantId };
+  },
 };
+
+function minutesAgo(n) { return new Date(Date.now() - n * 60_000).toISOString(); }
+const adminHalted = new Set();
+const adminGrants = [
+  { id: "grant-model", connectionId: "conn-openai", projectId, projectName: "Demo project", capability: "model.invoke", resource: "openai/gpt-5.6-luna", expiresAt: "", createdAt: minutesAgo(60 * 24 * 9) },
+  { id: "grant-git-read", connectionId: "conn-git", projectId, projectName: "Demo project", capability: "git.read", resource: "https://github.com/example/blaxsmith-demo.git", expiresAt: "", createdAt: minutesAgo(60 * 24 * 12) },
+  { id: "grant-git-write", connectionId: "conn-git", projectId, projectName: "Demo project", capability: "git.write", resource: "https://github.com/example/blaxsmith-demo.git", expiresAt: "", createdAt: minutesAgo(60 * 24 * 12) },
+];
+const audit = [];
+function auditEvent(action, subjectId, actorUsername = "you", minutes = 0) {
+  audit.unshift({ id: String(audit.length + 1), action, actorKind: "principal", actorId: actorUsername === "you" ? principalId : `p-${actorUsername}`, actorUsername, subjectId, projectId: action.startsWith("identity.") || action === "access.git_connection.created" ? "" : projectId, projectName: action.startsWith("identity.") || action === "access.git_connection.created" ? "" : "Demo project", occurredAt: minutesAgo(minutes) });
+}
+for (const [i, action] of ["installation.bootstrap_owner", "identity.login", "workflow.project.created", "access.git_connection.created", "workflow.project_source.set", "access.project_model.created", "workflow.project_verification.set", "identity.login", "workflow.run.launched", "workflow.interaction.answered", "workflow.attempt.steered", "identity.refresh"].entries()) {
+  auditEvent(action, `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, i % 3 === 1 ? "mara" : "you", 600 - i * 45);
+}
 
 const server = createHttp(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
@@ -225,8 +282,12 @@ server.on("upgrade", (req, socket, head) => {
   });
 });
 
-server.listen(8001, "127.0.0.1", async () => {
-  const vite = await createVite({ root: new URL("..", import.meta.url).pathname });
+// MOCK_API_PORT / MOCK_WEB_PORT let parallel checkouts run their own mock.
+const apiPort = Number(process.env.MOCK_API_PORT || 8001);
+const webPort = Number(process.env.MOCK_WEB_PORT || 3000);
+server.listen(apiPort, "127.0.0.1", async () => {
+  const vite = await createVite({ root: new URL("..", import.meta.url).pathname,
+    server: { port: webPort, strictPort: true, proxy: { "/api": { target: `http://127.0.0.1:${apiPort}`, ws: true } } } });
   await vite.listen();
-  console.log(`[mock] API on http://127.0.0.1:8001 · open http://127.0.0.1:3000/projects/${projectId}/runs/${runId}`);
+  console.log(`[mock] API on http://127.0.0.1:${apiPort} · open http://127.0.0.1:${webPort}/projects/${projectId}/runs/${runId} or /admin`);
 });

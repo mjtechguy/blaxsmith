@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package blaxsmith.api.v1;
+
+// Organization operations for owners and admins. Every read is scoped to the
+// caller's session organization and bounded; no response carries secret
+// material (keys, tokens, secret versions, or ciphertext).
+
+// A current attempt owner: reserved, starting, running, or reconciling.
+message AdminLiveAttempt {
+  string attempt_id = 1;
+  string run_id = 2;
+  string project_id = 3;
+  string project_name = 4;
+  string run_launch_key = 5;
+  string stage = 6; // Frozen stage id (task key).
+  string kind = 7; // Frozen stage kind, e.g. implement or verify.
+  string harness = 8;
+  string model = 9;
+  string state = 10;
+  string controller_principal_id = 11; // Set while a human holds the terminal.
+  string controller_username = 12;
+  string started_at = 13; // RFC 3339.
+  string last_activity_at = 14; // RFC 3339; latest attempt event.
+}
+
+// An open interaction on a queued or active run, oldest first.
+message AdminOpenInteraction {
+  string id = 1;
+  string run_id = 2;
+  string project_id = 3;
+  string project_name = 4;
+  string run_launch_key = 5;
+  string stage = 6;
+  string kind = 7; // question, approval, escalation, or interview_round.
+  string title = 8;
+  bool blocking = 9;
+  string created_at = 10; // RFC 3339.
+}
+
+// Runs created in the last 24 hours plus every still-open run, bucketed as
+// running, waiting_on_human, escalated, failed, succeeded, or halted.
+message AdminRunStateCount {
+  string state = 1;
+  int32 count = 2;
+}
+
+// Attempt capacity in this organization. The app cannot read AX worker pool
+// replicas; configured_max comes from BLAXSMITH_ADMIN_ATTEMPT_CAPACITY (0 = unset).
+message AdminCapacity {
+  int32 in_flight = 1; // reserved + starting + running + reconciling.
+  int32 running = 2;
+  int32 taken_over = 3;
+  int32 configured_max = 4;
+  string worker_pool = 5; // Empty when dispatch is not enabled.
+}
+
+message AdminConnection {
+  string id = 1;
+  string provider_kind = 2; // openai, anthropic, or git.
+  string host = 3;
+  string account = 4; // Non-secret external account label.
+  string owner_kind = 5; // organization or user.
+  string state = 6; // active, disabled, or revoked.
+  int32 active_grants = 7;
+  int32 active_leases = 8;
+  int32 expiring_leases = 9; // Unrevoked leases expiring in the next 15 minutes.
+  string last_used_at = 10; // RFC 3339 of the latest lease; empty if never.
+  string created_at = 11;
+}
+
+message AdminGrant {
+  string id = 1;
+  string connection_id = 2;
+  string project_id = 3;
+  string project_name = 4;
+  string capability = 5; // model.invoke, git.read, or git.write.
+  string resource = 6;
+  string expires_at = 7; // Empty when standing.
+  string created_at = 8;
+}
+
+message GetAdminOverviewRequest {}
+message GetAdminOverviewResponse {
+  repeated AdminLiveAttempt live_attempts = 1;
+  repeated AdminOpenInteraction open_interactions = 2;
+  repeated AdminRunStateCount run_states = 3;
+  AdminCapacity capacity = 4;
+  repeated AdminConnection connections = 5;
+  repeated AdminGrant grants = 6;
+  string generated_at = 7;
+}
+
+message AdminAuditEvent {
+  int64 id = 1;
+  string action = 2;
+  string actor_kind = 3;
+  string actor_id = 4;
+  string actor_username = 5;
+  string subject_id = 6;
+  string project_id = 7;
+  string project_name = 8;
+  string occurred_at = 9;
+}
+message ListAuditEventsRequest {
+  int32 page_size = 1; // 1-100, default 50.
+  string page_token = 2;
+  string action = 3; // Exact action; empty for all.
+  string actor = 4; // Principal id or username; empty for all.
+  string project_id = 5;
+}
+message ListAuditEventsResponse {
+  repeated AdminAuditEvent events = 1;
+  string next_page_token = 2;
+}
+
+// HaltRun requests cancellation: pending stages are cancelled and running
+// attempts are stopped by the completion sweep before the run is cancelled.
+message HaltRunRequest { string run_id = 1; }
+message HaltRunResponse { string run_id = 1; string state = 2; }
+
+// RevokeGrant revokes a model or Git connection grant and its leases.
+message RevokeGrantRequest { string grant_id = 1; }
+message RevokeGrantResponse { string grant_id = 1; }
+
+service AdminService {
+  rpc GetAdminOverview(GetAdminOverviewRequest) returns (GetAdminOverviewResponse);
+  rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
+  rpc HaltRun(HaltRunRequest) returns (HaltRunResponse);
+  rpc RevokeGrant(RevokeGrantRequest) returns (RevokeGrantResponse);
+}
