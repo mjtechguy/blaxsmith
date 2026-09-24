@@ -329,6 +329,21 @@ func (s *Store) AddTask(ctx context.Context, orgID, runID, taskKey, inputSHA256 
 // ReserveAttempt persists dispatch intent before the AX connector is called.
 // An uncertain launch must be reconciled before another attempt is reserved.
 func (s *Store) ReserveAttempt(ctx context.Context, orgID, runID, taskID string) (Attempt, error) {
+	return s.reserveAttempt(ctx, orgID, runID, taskID, nil)
+}
+
+// ReserveAttemptWithBinding creates an attempt and its required access binding
+// in one transaction. A denied or stale binding rolls back the reservation.
+func (s *Store) ReserveAttemptWithBinding(ctx context.Context, orgID, runID, taskID string,
+	bind func(context.Context, pgx.Tx, Attempt) error) (Attempt, error) {
+	if bind == nil {
+		return Attempt{}, ErrInvalid
+	}
+	return s.reserveAttempt(ctx, orgID, runID, taskID, bind)
+}
+
+func (s *Store) reserveAttempt(ctx context.Context, orgID, runID, taskID string,
+	bind func(context.Context, pgx.Tx, Attempt) error) (Attempt, error) {
 	if !ids(orgID, runID, taskID) {
 		return Attempt{}, ErrInvalid
 	}
@@ -393,6 +408,11 @@ func (s *Store) ReserveAttempt(ctx context.Context, orgID, runID, taskID string)
 	}
 	if err := event(ctx, tx, orgID, runID, taskID, a.ID, "attempt.reserved"); err != nil {
 		return Attempt{}, err
+	}
+	if bind != nil {
+		if err := bind(ctx, tx, a); err != nil {
+			return Attempt{}, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Attempt{}, err

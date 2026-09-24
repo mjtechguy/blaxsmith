@@ -402,6 +402,11 @@ func TestDependencyReservationGatePostgres(t *testing.T) {
 	if _, err := store.ReserveAttempt(ctx, org, run.ID, build); !errors.Is(err, ErrConflict) {
 		t.Fatalf("dependent task dispatched before parent completion: %v", err)
 	}
+	denied := errors.New("binding denied")
+	if _, err := store.ReserveAttemptWithBinding(ctx, org, run.ID, plan,
+		func(context.Context, pgx.Tx, Attempt) error { return denied }); !errors.Is(err, denied) {
+		t.Fatalf("binding failure did not fail reservation: %v", err)
+	}
 	a, err := store.ReserveAttempt(ctx, org, run.ID, plan)
 	if err != nil {
 		t.Fatal(err)
