@@ -7,7 +7,7 @@ import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
 import type { Run } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
-import { getLaunchAvailability, getProject, getProjectSource, getProjectVerification, launchAvailabilityQueryKey, listRuns, projectSourceQueryKey, projectVerificationQueryKey, runQueries } from "../workflow";
+import { getLaunchAvailability, getProject, getProjectSource, getProjectVerification, launchAvailabilityQueryKey, listProjectModelAccess, listRuns, projectModelAccessQueryKey, projectSourceQueryKey, projectVerificationQueryKey, runQueries } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId")({ component: ProjectRuns });
 
@@ -28,13 +28,16 @@ function ProjectRuns() {
   const runDetail = useMatchRoute()({ to: "/projects/$projectId/runs/$runId" });
   const sourceSettings = useMatchRoute()({ to: "/projects/$projectId/source" });
   const verificationSettings = useMatchRoute()({ to: "/projects/$projectId/verification" });
+  const modelAccessSettings = useMatchRoute()({ to: "/projects/$projectId/model-access" });
+  const newModelAccess = useMatchRoute()({ to: "/projects/$projectId/model-access/new" });
   const newRun = useMatchRoute()({ to: "/projects/$projectId/runs/new" });
-  const childPage = Boolean(runDetail || sourceSettings || verificationSettings || newRun);
+  const childPage = Boolean(runDetail || sourceSettings || verificationSettings || modelAccessSettings || newModelAccess || newRun);
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const org = session.data?.organizationId || "";
   const project = useQuery({ queryKey: ["project", org, projectId], enabled: Boolean(org && !childPage), queryFn: ({ signal }) => getProject(projectId, signal) });
   const source = useQuery({ queryKey: projectSourceQueryKey(org, projectId), enabled: Boolean(org && !childPage && project.data?.project), queryFn: ({ signal }) => getProjectSource(projectId, signal) });
   const verification = useQuery({ queryKey: projectVerificationQueryKey(org, projectId), enabled: Boolean(org && !childPage && project.data?.project), queryFn: ({ signal }) => getProjectVerification(projectId, signal) });
+  const modelAccess = useQuery({ queryKey: projectModelAccessQueryKey(org, projectId), enabled: Boolean(org && !childPage && project.data?.project), queryFn: ({ signal }) => listProjectModelAccess(projectId, signal) });
   const launchAvailability = useQuery({ queryKey: launchAvailabilityQueryKey(org, projectId), enabled: Boolean(org && !childPage && project.data?.project), queryFn: ({ signal }) => getLaunchAvailability(projectId, signal) });
   const mayEditSource = session.data?.role === "owner" || session.data?.role === "admin";
   const mayLaunch = mayEditSource || session.data?.role === "member";
@@ -75,6 +78,14 @@ function ProjectRuns() {
       {verification.isPending ? <div className="source-summary" role="status">Loading checks…</div> : null}
       {verification.isError ? <div className="source-summary" role="alert">Verification could not be loaded. <button type="button" className="text-action" onClick={() => void verification.refetch()}>Try again</button></div> : null}
       {verification.isSuccess ? <div className="source-summary">{verification.data ? <><strong>{verification.data.checks.length} checks · Version {verification.data.version.toString()}</strong>{verification.data.checks.map((check) => <span key={check.id}><strong>{check.id}</strong> <code>{JSON.stringify(check.command)}</code></span>)}</> : <span>No verification checks configured. An owner or admin must add at least one before starting a run.</span>}</div> : null}
+    </section> : null}
+    {project.data?.project ? <section className="table-section" aria-labelledby="model-access-heading">
+      <div className="table-heading"><div><h2 id="model-access-heading">Model access</h2><p>Organization connections granted to this project.</p></div>
+        {mayEditSource && modelAccess.data?.access.length === 0 ? <Link className="secondary-button" to="/projects/$projectId/model-access/new" params={{ projectId }}><Plus size={15} aria-hidden="true" /> Add model access</Link>
+          : <Link className="secondary-button" to="/projects/$projectId/model-access" params={{ projectId }}>View model access <ArrowRight size={15} aria-hidden="true" /></Link>}</div>
+      {modelAccess.isPending ? <div className="source-summary" role="status">Loading model access…</div> : null}
+      {modelAccess.isError ? <div className="source-summary" role="alert">Model access could not be loaded. <button type="button" className="text-action" onClick={() => void modelAccess.refetch()}>Try again</button></div> : null}
+      {modelAccess.isSuccess ? <div className="source-summary">{modelAccess.data.access.length ? <><strong>{modelAccess.data.access.length} model {modelAccess.data.access.length === 1 ? "grant" : "grants"}</strong><span>{modelAccess.data.access.slice(0, 3).map((entry) => `${entry.provider} / ${entry.model}`).join(" · ")}{modelAccess.data.access.length > 3 ? ` · +${modelAccess.data.access.length - 3} more` : ""}</span></> : <span>No model access configured. An owner or admin can add an organization API key for this project.</span>}</div> : null}
     </section> : null}
     {project.data?.project && runs.isPending ? <div className="state-panel" role="status"><RefreshCw size={22} className="spin" aria-hidden="true" /><h2>Loading runs</h2></div> : null}
     {runs.isError ? <div className="state-panel" role="alert"><h2>Runs unavailable</h2><p>Could not load runs for this project.</p><button className="secondary-button" type="button" onClick={() => void runs.refetch()}>Try again</button></div> : null}

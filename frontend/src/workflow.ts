@@ -10,6 +10,7 @@ export const projectQueries = (organizationId: string, search = "", sortBy = "cr
 export const runQueries = (organizationId: string, projectId: string, search = "", sortBy = "created_at", sortDirection = "desc") => ["runs", organizationId, projectId, search, sortBy, sortDirection] as const;
 export const projectSourceQueryKey = (organizationId: string, projectId: string) => ["project-source", organizationId, projectId] as const;
 export const projectVerificationQueryKey = (organizationId: string, projectId: string) => ["project-verification", organizationId, projectId] as const;
+export const projectModelAccessQueryKey = (organizationId: string, projectId: string) => ["project-model-access", organizationId, projectId] as const;
 export const launchAvailabilityQueryKey = (organizationId: string, projectId: string) => ["launch-availability", organizationId, projectId] as const;
 
 export async function listProjects(pageToken = "", search = "", sortBy = "created_at", sortDirection = "desc", signal?: AbortSignal) {
@@ -46,6 +47,15 @@ export async function getProjectVerification(projectId: string, signal?: AbortSi
 export async function setProjectVerification(projectId: string, checks: Array<{ id: string; command: string[] }>) {
   const token = await csrfToken();
   return client.setProjectVerification({ projectId, checks }, { headers: { "X-Blaxsmith-CSRF": token } });
+}
+
+export async function listProjectModelAccess(projectId: string, signal?: AbortSignal) {
+  return client.listProjectModelAccess({ projectId }, { signal });
+}
+
+export async function createProjectModelAccess(projectId: string, provider: string, model: string, apiKey: string) {
+  const token = await csrfToken();
+  return client.createProjectModelAccess({ projectId, provider, model, apiKey }, { headers: { "X-Blaxsmith-CSRF": token } });
 }
 
 export async function launchRun(projectId: string, launchKey: string, recipePath: string, specPath: string, transcriptPath: string, scope: string) {

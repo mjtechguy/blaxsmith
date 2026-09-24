@@ -14,8 +14,10 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsNewRouteImport } from './routes/projects.new'
+import { Route as ProjectsProjectIdModelAccessRouteImport } from './routes/projects.$projectId.model-access'
 import { Route as ProjectsProjectIdSourceRouteImport } from './routes/projects.$projectId.source'
 import { Route as ProjectsProjectIdVerificationRouteImport } from './routes/projects.$projectId.verification'
+import { Route as ProjectsProjectIdModelAccessNewRouteImport } from './routes/projects.$projectId.model-access.new'
 import { Route as ProjectsProjectIdRunsRunIdRouteImport } from './routes/projects.$projectId.runs.$runId'
 import { Route as ProjectsProjectIdRunsNewRouteImport } from './routes/projects.$projectId.runs.new'
 
@@ -44,6 +46,12 @@ const ProjectsNewRoute = ProjectsNewRouteImport.update({
   path: '/projects/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsProjectIdModelAccessRoute =
+  ProjectsProjectIdModelAccessRouteImport.update({
+    id: '/model-access',
+    path: '/model-access',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdSourceRoute = ProjectsProjectIdSourceRouteImport.update({
   id: '/source',
   path: '/source',
@@ -54,6 +62,12 @@ const ProjectsProjectIdVerificationRoute =
     id: '/verification',
     path: '/verification',
     getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdModelAccessNewRoute =
+  ProjectsProjectIdModelAccessNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => ProjectsProjectIdModelAccessRoute,
   } as any)
 const ProjectsProjectIdRunsRunIdRoute =
   ProjectsProjectIdRunsRunIdRouteImport.update({
@@ -74,8 +88,10 @@ export interface FileRoutesByFullPath {
   '/tools': typeof ToolsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
+  '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
+  '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
 }
@@ -85,8 +101,10 @@ export interface FileRoutesByTo {
   '/tools': typeof ToolsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
+  '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
+  '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
 }
@@ -97,8 +115,10 @@ export interface FileRoutesById {
   '/tools': typeof ToolsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
+  '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
+  '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
 }
@@ -110,8 +130,10 @@ export interface FileRouteTypes {
     | '/tools'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
+    | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
   fileRoutesByTo: FileRoutesByTo
@@ -121,8 +143,10 @@ export interface FileRouteTypes {
     | '/tools'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
+    | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
   id:
@@ -132,8 +156,10 @@ export interface FileRouteTypes {
     | '/tools'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
+    | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
   fileRoutesById: FileRoutesById
@@ -183,6 +209,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/projects/$projectId/model-access': {
+      id: '/projects/$projectId/model-access'
+      path: '/model-access'
+      fullPath: '/projects/$projectId/model-access'
+      preLoaderRoute: typeof ProjectsProjectIdModelAccessRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/source': {
       id: '/projects/$projectId/source'
       path: '/source'
@@ -196,6 +229,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/projects/$projectId/verification'
       preLoaderRoute: typeof ProjectsProjectIdVerificationRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/model-access/new': {
+      id: '/projects/$projectId/model-access/new'
+      path: '/new'
+      fullPath: '/projects/$projectId/model-access/new'
+      preLoaderRoute: typeof ProjectsProjectIdModelAccessNewRouteImport
+      parentRoute: typeof ProjectsProjectIdModelAccessRoute
     }
     '/projects/$projectId/runs/$runId': {
       id: '/projects/$projectId/runs/$runId'
@@ -214,7 +254,22 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface ProjectsProjectIdModelAccessRouteChildren {
+  ProjectsProjectIdModelAccessNewRoute: typeof ProjectsProjectIdModelAccessNewRoute
+}
+
+const ProjectsProjectIdModelAccessRouteChildren: ProjectsProjectIdModelAccessRouteChildren =
+  {
+    ProjectsProjectIdModelAccessNewRoute: ProjectsProjectIdModelAccessNewRoute,
+  }
+
+const ProjectsProjectIdModelAccessRouteWithChildren =
+  ProjectsProjectIdModelAccessRoute._addFileChildren(
+    ProjectsProjectIdModelAccessRouteChildren,
+  )
+
 interface ProjectsProjectIdRouteChildren {
+  ProjectsProjectIdModelAccessRoute: typeof ProjectsProjectIdModelAccessRouteWithChildren
   ProjectsProjectIdSourceRoute: typeof ProjectsProjectIdSourceRoute
   ProjectsProjectIdVerificationRoute: typeof ProjectsProjectIdVerificationRoute
   ProjectsProjectIdRunsRunIdRoute: typeof ProjectsProjectIdRunsRunIdRoute
@@ -222,6 +277,8 @@ interface ProjectsProjectIdRouteChildren {
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
+  ProjectsProjectIdModelAccessRoute:
+    ProjectsProjectIdModelAccessRouteWithChildren,
   ProjectsProjectIdSourceRoute: ProjectsProjectIdSourceRoute,
   ProjectsProjectIdVerificationRoute: ProjectsProjectIdVerificationRoute,
   ProjectsProjectIdRunsRunIdRoute: ProjectsProjectIdRunsRunIdRoute,
