@@ -44,6 +44,9 @@ func frozenPrompt(task workflow.FrozenTask) (string, []tooladapter.ArtifactDiges
 	seen := map[string]bool{}
 	fmt.Fprintf(&prompt, "Frozen source commit: %s\nScope: %s\nStage: %s (%s)\n",
 		task.Bundle.Source.Commit, task.Bundle.Source.Scope, task.Stage.ID, task.Stage.Kind)
+	if len(task.Profile.Skills) > 0 {
+		fmt.Fprintln(&prompt, "Selected Skills are installed for native discovery by the chosen harness; load only those relevant to this stage. Supporting files are available beside each skill.")
+	}
 	for _, name := range paths {
 		if seen[name] {
 			continue
@@ -55,8 +58,10 @@ func frozenPrompt(task workflow.FrozenTask) (string, []tooladapter.ArtifactDiges
 			bytes.IndexByte(artifact.Data, 0) >= 0 || strings.ContainsAny(name, "\r\n\x00") {
 			return "", nil, tooladapter.ErrBlocked
 		}
-		fmt.Fprintf(&prompt, "\n--- %s ---\n", name)
-		prompt.Write(artifact.Data)
+		if !slices.Contains(task.Profile.Skills, name) {
+			fmt.Fprintf(&prompt, "\n--- %s ---\n", name)
+			prompt.Write(artifact.Data)
+		}
 		if prompt.Len() > maxPromptBytes {
 			return "", nil, tooladapter.ErrBlocked
 		}

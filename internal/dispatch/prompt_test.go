@@ -26,7 +26,8 @@ func TestFrozenPrompt(t *testing.T) {
 	prompt, manifest, err := frozenPrompt(task)
 	if err != nil || !strings.Contains(prompt, "requirements") || !strings.Contains(prompt, "local rules") ||
 		!strings.Contains(prompt, "make a plan") || !strings.Contains(prompt, "design intent") ||
-		!strings.Contains(prompt, "evidence workflow") || !strings.Contains(prompt, bundle.Source.Commit) || len(manifest) != 6 {
+		strings.Contains(prompt, "evidence workflow") || !strings.Contains(prompt, "Selected Skills are installed") ||
+		!strings.Contains(prompt, bundle.Source.Commit) || len(manifest) != 6 {
 		t.Fatalf("frozen prompt: %q, %v", prompt, err)
 	}
 	bundle.Artifacts[4].Data = []byte("tampered")

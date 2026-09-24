@@ -83,7 +83,7 @@ func TestAXWorkerRequiresScopedCredentialBeforePinnedTool(t *testing.T) {
 func TestWorkerChecksFrozenSkillAgainstPinnedCheckout(t *testing.T) {
 	root := t.TempDir()
 	binary := filepath.Join(root, "codex")
-	program := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'codex-cli 0.156.1'; else printf ran; fi\n")
+	program := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'codex-cli 0.156.1'; elif [ ! -f \"$HOME/.agents/skills/evidence/SKILL.md\" ] || [ ! -f \"$HOME/.agents/skills/evidence/references/evidence.md\" ]; then exit 9; else printf ran; fi\n")
 	if err := os.WriteFile(binary, program, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -92,18 +92,27 @@ func TestWorkerChecksFrozenSkillAgainstPinnedCheckout(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "skills/evidence"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	content := []byte("review the evidence")
+	content := []byte("---\nname: evidence\ndescription: Keep findings tied to frozen requirements and source evidence.\n---\n\nReview the evidence.")
+	reference := "skills/evidence/references/evidence.md"
+	referenceContent := []byte("Evidence means a requirement, revision, and observed result.")
+	if err := os.MkdirAll(filepath.Join(root, "skills/evidence/references"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(root, skill), content, 0600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(root, reference), referenceContent, 0600); err != nil {
+		t.Fatal(err)
+	}
 	contentSHA := sha256.Sum256(content)
+	referenceSHA := sha256.Sum256(referenceContent)
 	request := Request{AttemptID: "attempt-1", RepositoryURL: "https://github.com/example/repo", SourceRef: "main",
 		SourceCommit: strings.Repeat("a", 40), Runtime: Runtime{Harness: "codex",
 			Image: "example/tool@sha256:" + strings.Repeat("a", 64), Binary: binary,
 			BinarySHA256: hex.EncodeToString(programSHA[:]), Version: "0.156.1",
 			Supported: []ModelEffort{{Model: "gpt-6-luna", Effort: "xhigh"}}},
-		Profile: recipe.Profile{Harness: "codex", Model: "gpt-6-luna", Effort: "xhigh", Skills: []string{skill}},
-		Prompt:  "Frozen skill context: review the evidence", FrozenArtifacts: []ArtifactDigest{{Path: skill, SHA256: hex.EncodeToString(contentSHA[:])}},
+		Profile: recipe.Profile{Harness: "codex", Model: "gpt-6-luna", Effort: "xhigh", Skills: []string{skill, reference}},
+		Prompt:  "Frozen native skill: evidence", FrozenArtifacts: []ArtifactDigest{{Path: skill, SHA256: hex.EncodeToString(contentSHA[:])}, {Path: reference, SHA256: hex.EncodeToString(referenceSHA[:])}},
 		TimeoutSeconds: 60, MaxOutputBytes: 1024}
 	command, err := Command(request)
 	if err != nil {
@@ -137,9 +146,110 @@ func TestWorkerChecksFrozenSkillAgainstPinnedCheckout(t *testing.T) {
 	if _, err := Command(request); !errors.Is(err, ErrBlocked) {
 		t.Fatalf("unfrozen skill must block: %v", err)
 	}
-	request.FrozenArtifacts = []ArtifactDigest{{Path: skill, SHA256: hex.EncodeToString(contentSHA[:])}}
+	request.FrozenArtifacts = []ArtifactDigest{{Path: skill, SHA256: hex.EncodeToString(contentSHA[:])}, {Path: reference, SHA256: hex.EncodeToString(referenceSHA[:])}}
 	request.Prompt = strings.Repeat("x", maxTaskArg)
 	if _, err := Command(request); !errors.Is(err, ErrBlocked) {
 		t.Fatalf("oversized AX command argument must block: %v", err)
+	}
+}
+
+func TestPortableSkillMaterializesInEachHarnessAndRejectsToolGrants(t *testing.T) {
+	workdir := t.TempDir()
+	skill := "skills/evidence/SKILL.md"
+	content := []byte("---\nname: evidence\ndescription: Keep findings tied to frozen requirements and source evidence.\nmetadata:\n  owner: platform\n---\n\nReview the evidence.")
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(workdir, skill)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workdir, skill), content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(content)
+	artifacts := []ArtifactDigest{{Path: skill, SHA256: hex.EncodeToString(sum[:])}}
+	for _, tc := range []struct{ harness, file, claudeDir string }{
+		{"codex", ".agents/skills/evidence/SKILL.md", ""},
+		{"claude-code", "skill-source/.claude/skills/evidence/SKILL.md", "skill-source"},
+		{"opencode", ".config/opencode/skills/evidence/SKILL.md", ""},
+	} {
+		t.Run(tc.harness, func(t *testing.T) {
+			home := t.TempDir()
+			claudeDir, err := materializeSkills(workdir, home, tc.harness, []string{skill}, artifacts)
+			if err != nil || (tc.claudeDir != "" && claudeDir != filepath.Join(home, tc.claudeDir)) {
+				t.Fatalf("materialize %s skill: %q %v", tc.harness, claudeDir, err)
+			}
+			installed := filepath.Join(home, filepath.FromSlash(tc.file))
+			got, err := os.ReadFile(installed)
+			info, statErr := os.Stat(installed)
+			if err != nil || statErr != nil || string(got) != string(content) || info.Mode().Perm() != 0400 {
+				t.Fatalf("skill was not installed read-only: %q %v %v", got, err, statErr)
+			}
+		})
+	}
+	unsafe := []byte("---\nname: evidence\ndescription: Evidence helper.\nallowed-tools: Bash(*)\n---\nGrant tools")
+	if err := os.WriteFile(filepath.Join(workdir, skill), unsafe, 0600); err != nil {
+		t.Fatal(err)
+	}
+	unsafeSHA := sha256.Sum256(unsafe)
+	if _, err := materializeSkills(workdir, t.TempDir(), "claude-code", []string{skill}, []ArtifactDigest{{Path: skill, SHA256: hex.EncodeToString(unsafeSHA[:])}}); !errors.Is(err, ErrBlocked) {
+		t.Fatalf("skill frontmatter must not grant tools: %v", err)
+	}
+}
+
+func TestClaudeBareModeGetsOnlyDeclaredSkillDirectory(t *testing.T) {
+	workdir := t.TempDir()
+	skill := "skills/evidence/SKILL.md"
+	content := []byte("---\nname: evidence\ndescription: Review evidence.\n---\n\nReview evidence.")
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(workdir, skill)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workdir, skill), content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo '2.1.280 (Claude Code)'; exit; fi\nfound=0\nprevious=\nfor arg in \"$@\"; do if [ \"$previous\" = \"--add-dir\" ] && [ \"$arg\" = \"$HOME/skill-source\" ]; then found=1; fi; previous=\"$arg\"; done\ntest \"$found\" = 1 && test -f \"$HOME/skill-source/.claude/skills/evidence/SKILL.md\" || exit 9\nprintf ok\n")
+	binary := filepath.Join(t.TempDir(), "claude")
+	if err := os.WriteFile(binary, body, 0700); err != nil {
+		t.Fatal(err)
+	}
+	binarySHA := sha256.Sum256(body)
+	skillSHA := sha256.Sum256(content)
+	runtime := Runtime{Harness: "claude-code", Image: "example/tool@sha256:" + strings.Repeat("a", 64), Binary: binary,
+		BinarySHA256: hex.EncodeToString(binarySHA[:]), Version: "2.1.280", Supported: []ModelEffort{{Model: "claude-opus-5-5", Effort: "high"}}}
+	in, err := Prepare(runtime, recipe.Profile{Harness: "claude-code", Model: "claude-opus-5-5", Effort: "high", Skills: []string{skill}},
+		"Use the selected skill", time.Minute, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.skillArtifacts = []ArtifactDigest{{Path: skill, SHA256: hex.EncodeToString(skillSHA[:])}}
+	if output, err := Run(t.Context(), in, workdir, nil); err != nil || string(output) != "ok" {
+		t.Fatalf("Claude did not receive the scoped skill directory: %q %v", output, err)
+	}
+}
+
+func TestOpenCodeReceivesSelectedSkillWithoutNativeDelegation(t *testing.T) {
+	workdir := t.TempDir()
+	skill := "skills/evidence/SKILL.md"
+	content := []byte("---\nname: evidence\ndescription: Review evidence.\n---\n\nReview evidence.")
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(workdir, skill)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workdir, skill), content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'opencode v2.1.280'; exit; fi\nconfig=\"$XDG_CONFIG_HOME/opencode/opencode.json\"\ntest -f \"$HOME/.config/opencode/skills/evidence/SKILL.md\" || exit 9\ngrep -q '\"task\":\"deny\"' \"$config\" || exit 10\ngrep -q '\"websearch\":\"deny\"' \"$config\" || exit 11\ngrep -q '\"skill\":\"allow\"' \"$config\" || exit 12\nprintf ok\n")
+	binary := filepath.Join(t.TempDir(), "opencode")
+	if err := os.WriteFile(binary, body, 0700); err != nil {
+		t.Fatal(err)
+	}
+	binarySHA := sha256.Sum256(body)
+	skillSHA := sha256.Sum256(content)
+	runtime := Runtime{Harness: "opencode", Image: "example/tool@sha256:" + strings.Repeat("a", 64), Binary: binary,
+		BinarySHA256: hex.EncodeToString(binarySHA[:]), Version: "2.1.280", Supported: []ModelEffort{{Model: "openai/gpt-6-luna", Effort: "high"}}}
+	in, err := Prepare(runtime, recipe.Profile{Harness: "opencode", Model: "openai/gpt-6-luna", Effort: "high", Skills: []string{skill}},
+		"Use the selected skill", time.Minute, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.skillArtifacts = []ArtifactDigest{{Path: skill, SHA256: hex.EncodeToString(skillSHA[:])}}
+	if output, err := Run(t.Context(), in, workdir, nil); err != nil || string(output) != "ok" {
+		t.Fatalf("OpenCode did not receive scoped skill configuration: %q %v", output, err)
 	}
 }

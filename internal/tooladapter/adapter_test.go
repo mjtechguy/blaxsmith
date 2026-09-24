@@ -26,7 +26,7 @@ func TestPreparePinsEveryToolAndBlocksUnsupportedSelections(t *testing.T) {
 		harness, model, level string
 		args                  []string
 	}{
-		{"codex", "gpt-6-luna", "xhigh", []string{"exec", "--json", "--ephemeral", "--ignore-user-config", "--sandbox", "workspace-write", "--model", "gpt-6-luna", "--config", `approval_policy="never"`, "--config", `model_reasoning_effort="xhigh"`, "Do the work"}},
+		{"codex", "gpt-6-luna", "xhigh", []string{"exec", "--json", "--ephemeral", "--ignore-user-config", "--disable", "multi_agent", "--disable", "apps", "--disable", "plugins", "--sandbox", "workspace-write", "--model", "gpt-6-luna", "--config", `approval_policy="never"`, "--config", `model_reasoning_effort="xhigh"`, "--config", `web_search="disabled"`, "--config", `skills.bundled.enabled=false`, "Do the work"}},
 		{"claude-code", "claude-opus-5-5", "high", []string{"--bare", "--print", "--output-format", "stream-json", "--permission-prompts", "none", "--no-session-persistence", "--settings", `{"availableModels":["claude-opus-5-5"],"fallbackModel":[]}`, "--model", "claude-opus-5-5", "--effort", "high", "Do the work"}},
 		{"opencode", "openai/gpt-6-luna", "high", []string{"run", "--standalone", "--format", "json", "--model", "openai/gpt-6-luna#high", "Do the work"}},
 	}
@@ -45,8 +45,8 @@ func TestPreparePinsEveryToolAndBlocksUnsupportedSelections(t *testing.T) {
 			}
 			changed = profile
 			changed.Skills = []string{"skills/evidence/SKILL.md"}
-			if _, err := Prepare(runtime, changed, "Do the work", time.Minute, 4096); !errors.Is(err, ErrBlocked) {
-				t.Fatalf("unloaded skill must block: %v", err)
+			if in, err := Prepare(runtime, changed, "Do the work", time.Minute, 4096); err != nil || len(in.skills) != 1 {
+				t.Fatalf("portable skill must be selected for native installation: %+v %v", in, err)
 			}
 		})
 	}

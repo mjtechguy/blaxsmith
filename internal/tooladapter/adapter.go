@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -47,6 +48,8 @@ type ModelEffort struct{ Model, Effort string }
 type Invocation struct {
 	runtime        Runtime
 	args           []string
+	skills         []string
+	skillArtifacts []ArtifactDigest
 	timeout        time.Duration
 	maxOutputBytes int
 }
@@ -60,9 +63,11 @@ func Prepare(runtime Runtime, profile recipe.Profile, prompt string, timeout tim
 		!filepath.IsAbs(runtime.Binary) || !sha256Hex.MatchString(runtime.BinarySHA256) ||
 		!version.MatchString(runtime.Version) || timeout < time.Second || timeout > 24*time.Hour ||
 		maxOutputBytes < 1 || maxOutputBytes > 16<<20 || prompt == "" || len(prompt) > 1<<20 ||
-		!selection.MatchString(profile.Model) || !effort.MatchString(profile.Effort) ||
-		len(profile.Instructions) != 0 || len(profile.Skills) != 0 {
-		return Invocation{}, fmt.Errorf("%w: invalid runtime, limits, prompt, or unsupported instructions/skills", ErrBlocked)
+		!selection.MatchString(profile.Model) || !effort.MatchString(profile.Effort) || len(profile.Instructions) != 0 {
+		return Invocation{}, fmt.Errorf("%w: invalid runtime, limits, prompt, or unsupported instructions", ErrBlocked)
+	}
+	if _, err := skillFilesByRoot(profile.Skills); err != nil {
+		return Invocation{}, err
 	}
 	if profile.Harness == "opencode" {
 		provider, model, ok := strings.Cut(profile.Model, "/")
@@ -83,8 +88,9 @@ func Prepare(runtime Runtime, profile recipe.Profile, prompt string, timeout tim
 	var args []string
 	switch profile.Harness {
 	case "codex":
-		args = []string{"exec", "--json", "--ephemeral", "--ignore-user-config", "--sandbox", "workspace-write", "--model", profile.Model,
-			"--config", `approval_policy="never"`, "--config", fmt.Sprintf("model_reasoning_effort=%q", profile.Effort), prompt}
+		args = []string{"exec", "--json", "--ephemeral", "--ignore-user-config", "--disable", "multi_agent", "--disable", "apps", "--disable", "plugins",
+			"--sandbox", "workspace-write", "--model", profile.Model, "--config", `approval_policy="never"`, "--config", fmt.Sprintf("model_reasoning_effort=%q", profile.Effort),
+			"--config", `web_search="disabled"`, "--config", `skills.bundled.enabled=false`, prompt}
 	case "claude-code":
 		settings := fmt.Sprintf(`{"availableModels":[%q],"fallbackModel":[]}`, profile.Model)
 		args = []string{"--bare", "--print", "--output-format", "stream-json", "--permission-prompts", "none", "--no-session-persistence",
@@ -94,7 +100,7 @@ func Prepare(runtime Runtime, profile recipe.Profile, prompt string, timeout tim
 	default:
 		return Invocation{}, fmt.Errorf("%w: harness %q", ErrBlocked, profile.Harness)
 	}
-	return Invocation{runtime, args, timeout, maxOutputBytes}, nil
+	return Invocation{runtime: runtime, args: args, skills: append([]string(nil), profile.Skills...), timeout: timeout, maxOutputBytes: maxOutputBytes}, nil
 }
 
 // Run checks the executable bytes and version in the pod, then bounds elapsed
@@ -118,7 +124,29 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 		if err := os.MkdirAll(config, 0700); err != nil {
 			return nil, err
 		}
-		if err := os.WriteFile(filepath.Join(config, "opencode.json"), []byte(`{"update":"disable"}`), 0600); err != nil {
+		skillFiles := filepath.Join(config, "skills")
+		external := map[string]string{"*": "deny"}
+		if len(in.skills) > 0 {
+			external[skillFiles+"/*"] = "allow"
+		}
+		data, err := json.Marshal(map[string]any{"update": "disable", "permission": map[string]any{
+			"task": "deny", "question": "deny", "doom_loop": "deny", "webfetch": "deny", "websearch": "deny", "skill": "allow",
+			"external_directory": external, "edit": map[string]string{skillFiles + "/*": "deny"},
+		}})
+		if err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(filepath.Join(config, "opencode.json"), data, 0600); err != nil {
+			return nil, err
+		}
+	}
+	var claudeSkillDir string
+	if len(in.skills) > 0 {
+		if len(in.skillArtifacts) == 0 {
+			return nil, fmt.Errorf("%w: selected skills are not bound to frozen artifacts", ErrBlocked)
+		}
+		claudeSkillDir, err = materializeSkills(workdir, home, in.runtime.Harness, in.skills, in.skillArtifacts)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -157,7 +185,11 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 	}
 	runCtx, cancelRun := context.WithTimeout(ctx, in.timeout)
 	defer cancelRun()
-	cmd := exec.CommandContext(runCtx, in.runtime.Binary, in.args...) // #nosec G204 -- verified absolute executable, separate argv
+	args := in.args
+	if in.runtime.Harness == "claude-code" && claudeSkillDir != "" {
+		args = append(append(append([]string(nil), args[:len(args)-1]...), "--add-dir", claudeSkillDir), args[len(args)-1])
+	}
+	cmd := exec.CommandContext(runCtx, in.runtime.Binary, args...) // #nosec G204 -- verified absolute executable, separate argv
 	cmd.Env, cmd.Dir = toolEnv, workdir
 	cmd.WaitDelay = time.Second
 	output := &boundedOutput{buffer: limit.Buffer{Max: in.maxOutputBytes}}
