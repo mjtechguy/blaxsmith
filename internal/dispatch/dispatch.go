@@ -32,8 +32,8 @@ type Dispatcher struct {
 	// PreflightActivation verifies connector-side bootstrap transport and
 	// credential availability before an attempt is reserved.
 	PreflightActivation func(context.Context) error
-	// Activate opens the AX bootstrap gate and releases the bound model lease,
-	// only after the bound workspace has passed AX readiness checks.
+	// Activate opens the AX bootstrap gate and releases the bound model lease.
+	// A launched but unreleased tool task is not a started dispatch outcome.
 	Activate func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error
 }
 
@@ -184,13 +184,9 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
 		return outcome
 	}
-	// Keep the actor behind the bootstrap gate until AX confirms workspace setup
-	// and the bridge revalidates the same actor/runtime. Only then check bound
-	// inputs immediately before opening the model lease.
-	if err := bridge.WaitWorkspaceReady(ctx, attempt); err != nil {
-		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
-		return outcome
-	}
+	// The actor is still held behind AX's bootstrap gate here. Re-read its
+	// Workspace/Gateway immediately before release so an edit between admission
+	// and launch cannot receive model credentials under a different policy.
 	if err := bridge.CheckToolInputs(ctx, candidate.OrganizationID, frozen.RepositoryURL, provider); err != nil {
 		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
 		return outcome
@@ -199,6 +195,10 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		AttemptID: attempt.ID, BindingID: bindingID, GranteeKind: "workload", GranteeID: selection.GranteeID,
 		Provider: provider, Model: model, PolicyVersion: authority.PolicyVersion}
 	if err := d.Activate(ctx, attempt, runtime, runtimeBinding, invoke); err != nil {
+		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
+		return outcome
+	}
+	if err := bridge.WaitWorkspaceReady(ctx, attempt); err != nil {
 		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
 		return outcome
 	}

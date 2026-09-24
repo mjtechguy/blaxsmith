@@ -32,7 +32,6 @@ type dispatchAX struct {
 	invalidateGatewayAfterTask bool
 	delayWorkspaceReady        bool
 	workspaceReadyAt           time.Time
-	workspaceReadyObservedAt   time.Time
 }
 
 func (a *dispatchAX) Get(context.Context, string, string) (axbridge.Task, error) {
@@ -41,7 +40,6 @@ func (a *dispatchAX) Get(context.Context, string, string) (axbridge.Task, error)
 	}
 	if !a.workspaceReadyAt.IsZero() && !time.Now().Before(a.workspaceReadyAt) {
 		a.task.Status.Conditions = []axbridge.TaskCondition{{Type: "WorkspaceReady", Status: "True", Reason: "SetupComplete"}}
-		a.workspaceReadyObservedAt = time.Now()
 		a.workspaceReadyAt = time.Time{}
 	}
 	return *a.task, nil
@@ -67,7 +65,6 @@ func (a *dispatchAX) Apply(_ context.Context, task axbridge.Task) error {
 	readyStatus, readyReason := "True", "SetupComplete"
 	if a.delayWorkspaceReady {
 		readyStatus, readyReason = "False", "Initializing"
-		a.workspaceReadyAt = time.Now().Add(100 * time.Millisecond)
 	}
 	task.Status.Conditions = []axbridge.TaskCondition{{Type: "WorkspaceReady", Status: readyStatus, Reason: readyReason}}
 	a.task = &task
@@ -310,14 +307,14 @@ func TestDispatchBatchPostgres(t *testing.T) {
 	ax.gateway.Spec.Egress = &axbridge.GatewayEgress{Allowlist: &axbridge.GatewayAllowlist{
 		Hosts: []axbridge.GatewayHostRule{{Host: "140.82.114.3/32"}, {Host: "104.18.33.45/32"}}}}
 	ax.delayWorkspaceReady = true
-	activationSawWorkspaceReady := false
+	activationSawWorkspacePending := false
 	dispatcher.Activate = func(_ context.Context, attempt workflow.Attempt, runtime bootstrap.Runtime, binding workflow.RuntimeBinding, invoke access.ModelInvoke) error {
 		if ax.task == nil || ax.task.Status.Phase != "Running" || ax.task.Status.Actor != ax.task.Metadata.Name ||
-			ax.task.Status.Conditions[0].Status != "True" || ax.task.Status.Conditions[0].Reason != "SetupComplete" ||
-			ax.workspaceReadyObservedAt.IsZero() || time.Now().Before(ax.workspaceReadyObservedAt) {
-			return errors.New("model lease activated before AX workspace setup completed")
+			ax.task.Status.Conditions[0].Status != "False" || ax.task.Status.Conditions[0].Reason != "Initializing" {
+			return errors.New("activation ran before checking the expected pending workspace")
 		}
-		activationSawWorkspaceReady = true
+		activationSawWorkspacePending = true
+		ax.workspaceReadyAt = time.Now().Add(25 * time.Millisecond)
 		if attempt.ID == "" || runtime.Actor.UID != "actor-uid" || invoke.AttemptID != attempt.ID ||
 			binding.ActorUID != runtime.Actor.UID || binding.CommandSHA256 == "" || invoke.BindingID == "" ||
 			invoke.Provider != "openai" || invoke.Model != "gpt-6-luna" || invoke.PolicyVersion < 1 {
@@ -328,7 +325,7 @@ func TestDispatchBatchPostgres(t *testing.T) {
 	batch, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
 	if err != nil || len(batch.Outcomes) != 1 || batch.Outcomes[0].State != "started" ||
 		batch.Outcomes[0].AttemptID == "" || batch.Outcomes[0].BindingID == "" || ax.task == nil || activationPreflights != 1 ||
-		!activationSawWorkspaceReady || ax.task.Status.Conditions[0].Status != "True" || ax.task.Status.Conditions[0].Reason != "SetupComplete" {
+		!activationSawWorkspacePending || ax.task.Status.Conditions[0].Status != "True" || ax.task.Status.Conditions[0].Reason != "SetupComplete" {
 		t.Fatalf("dispatch batch: %+v, %v", batch, err)
 	}
 	workspaceName := axbridge.AttemptWorkspaceName(batch.Outcomes[0].AttemptID)
