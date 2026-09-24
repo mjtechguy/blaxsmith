@@ -434,3 +434,79 @@ func TestLaunchFromLibraryFreezesSameDigestAsFile(t *testing.T) {
 		t.Fatalf("ungranted library recipe launched: %v", err)
 	}
 }
+
+func TestRecipeGrantsAreManagedAndAudited(t *testing.T) {
+	pool := testPool(t)
+	ctx := t.Context()
+	store, err := New(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	org := organization(t, pool, "recipe-grants")
+	owner := reviewer(t, pool, org, "owner", "recipe-grants-owner")
+	member := reviewer(t, pool, org, "member", "recipe-grants-member")
+	project, err := store.CreateProject(ctx, org, "recipe-grants", "Recipe grants")
+	if err != nil {
+		t.Fatal(err)
+	}
+	orgRecipe, orgVersion, err := store.CreateRecipeAs(ctx, owner, "", "Granted", "", guildRecipe(t), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectRecipe, _, err := store.CreateRecipeAs(ctx, owner, project, "Local", "", guildRecipe(t), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.LibraryRecipeForLaunch(ctx, member, project, orgVersion.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("ungranted recipe launchable: %v", err)
+	}
+	if _, err := store.GrantRecipeAs(ctx, member, orgRecipe.ID, project, "project", ""); !errors.Is(err, ErrRecipeDenied) {
+		t.Fatalf("member granted a recipe: %v", err)
+	}
+	if _, err := store.GrantRecipeAs(ctx, owner, projectRecipe.ID, project, "project", ""); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("granted a project recipe: %v", err)
+	}
+	if _, err := store.GrantRecipeAs(ctx, owner, orgRecipe.ID, "", "role", "viewer"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("granted to viewers: %v", err)
+	}
+	grant, err := store.GrantRecipeAs(ctx, owner, orgRecipe.ID, project, "project", "")
+	if err != nil || grant.GranteeKind != "project" || grant.ProjectID != project || grant.ProjectName != "Recipe grants" {
+		t.Fatalf("project grant: %+v %v", grant, err)
+	}
+	if again, err := store.GrantRecipeAs(ctx, owner, orgRecipe.ID, project, "project", ""); err != nil || again.ID != grant.ID {
+		t.Fatalf("regrant not idempotent: %+v %v", again, err)
+	}
+	userGrant, err := store.GrantRecipeAs(ctx, owner, orgRecipe.ID, "", "user", member.PrincipalID)
+	if err != nil || userGrant.GranteeKind != "user" || userGrant.GranteeName != "recipe-grants-member" {
+		t.Fatalf("user grant: %+v %v", userGrant, err)
+	}
+	if _, err := store.LibraryRecipeForLaunch(ctx, member, project, orgVersion.ID); err != nil {
+		t.Fatalf("granted recipe not launchable: %v", err)
+	}
+	if grants, err := store.RecipeGrants(ctx, owner, orgRecipe.ID); err != nil || len(grants) != 2 {
+		t.Fatalf("owner grant list: %+v %v", grants, err)
+	}
+	if grants, err := store.RecipeGrants(ctx, member, orgRecipe.ID); err != nil || len(grants) != 0 {
+		t.Fatalf("member saw grants: %+v %v", grants, err)
+	}
+	if err := store.RevokeRecipeGrantAs(ctx, member, grant.ID); !errors.Is(err, ErrRecipeDenied) {
+		t.Fatalf("member revoked: %v", err)
+	}
+	for _, id := range []string{grant.ID, userGrant.ID} {
+		if err := store.RevokeRecipeGrantAs(ctx, owner, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.RevokeRecipeGrantAs(ctx, owner, grant.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("revoked twice: %v", err)
+	}
+	if _, err := store.LibraryRecipeForLaunch(ctx, member, project, orgVersion.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("revoked recipe launchable: %v", err)
+	}
+	var created, revoked int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE action='access.resource_grant.created'),
+		count(*) FILTER (WHERE action='access.resource_grant.revoked') FROM identity_audit_events
+		WHERE organization_id=$1 AND actor_id=$2`, org, owner.PrincipalID).Scan(&created, &revoked); err != nil || created != 2 || revoked != 2 {
+		t.Fatalf("grant audit: %d created, %d revoked, %v", created, revoked, err)
+	}
+}

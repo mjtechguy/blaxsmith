@@ -423,9 +423,12 @@ func (x *GetRecipeRequest) GetRecipeId() string {
 }
 
 type GetRecipeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Recipe        *LibraryRecipe         `protobuf:"bytes,1,opt,name=recipe,proto3" json:"recipe,omitempty"`
-	Versions      []*RecipeVersion       `protobuf:"bytes,2,rep,name=versions,proto3" json:"versions,omitempty"` // Newest first, without JSON.
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Recipe   *LibraryRecipe         `protobuf:"bytes,1,opt,name=recipe,proto3" json:"recipe,omitempty"`
+	Versions []*RecipeVersion       `protobuf:"bytes,2,rep,name=versions,proto3" json:"versions,omitempty"` // Newest first, without JSON.
+	// Standing grants on an organization recipe (the connection grant shape);
+	// only organization owners/admins see them. Empty for project recipes.
+	Grants        []*ConnectionGrant `protobuf:"bytes,3,rep,name=grants,proto3" json:"grants,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -470,6 +473,13 @@ func (x *GetRecipeResponse) GetRecipe() *LibraryRecipe {
 func (x *GetRecipeResponse) GetVersions() []*RecipeVersion {
 	if x != nil {
 		return x.Versions
+	}
+	return nil
+}
+
+func (x *GetRecipeResponse) GetGrants() []*ConnectionGrant {
+	if x != nil {
+		return x.Grants
 	}
 	return nil
 }
@@ -1471,11 +1481,206 @@ func (x *ListProjectRecipeFilesResponse) GetPromptPaths() []string {
 	return nil
 }
 
+// Grant an organization recipe to one project, one user (principal id), or
+// a minimum role (member, admin, owner). Organization owners/admins only;
+// audited as access.resource_grant.created / .revoked.
+type GrantRecipeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RecipeId      string                 `protobuf:"bytes,1,opt,name=recipe_id,json=recipeId,proto3" json:"recipe_id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	GranteeKind   string                 `protobuf:"bytes,3,opt,name=grantee_kind,json=granteeKind,proto3" json:"grantee_kind,omitempty"` // project, user, or role.
+	GranteeId     string                 `protobuf:"bytes,4,opt,name=grantee_id,json=granteeId,proto3" json:"grantee_id,omitempty"`       // Principal id or role; empty for project.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GrantRecipeRequest) Reset() {
+	*x = GrantRecipeRequest{}
+	mi := &file_blaxsmith_api_v1_recipes_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GrantRecipeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GrantRecipeRequest) ProtoMessage() {}
+
+func (x *GrantRecipeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_recipes_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GrantRecipeRequest.ProtoReflect.Descriptor instead.
+func (*GrantRecipeRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_recipes_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *GrantRecipeRequest) GetRecipeId() string {
+	if x != nil {
+		return x.RecipeId
+	}
+	return ""
+}
+
+func (x *GrantRecipeRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *GrantRecipeRequest) GetGranteeKind() string {
+	if x != nil {
+		return x.GranteeKind
+	}
+	return ""
+}
+
+func (x *GrantRecipeRequest) GetGranteeId() string {
+	if x != nil {
+		return x.GranteeId
+	}
+	return ""
+}
+
+type GrantRecipeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Grant         *ConnectionGrant       `protobuf:"bytes,1,opt,name=grant,proto3" json:"grant,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GrantRecipeResponse) Reset() {
+	*x = GrantRecipeResponse{}
+	mi := &file_blaxsmith_api_v1_recipes_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GrantRecipeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GrantRecipeResponse) ProtoMessage() {}
+
+func (x *GrantRecipeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_recipes_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GrantRecipeResponse.ProtoReflect.Descriptor instead.
+func (*GrantRecipeResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_recipes_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *GrantRecipeResponse) GetGrant() *ConnectionGrant {
+	if x != nil {
+		return x.Grant
+	}
+	return nil
+}
+
+type RevokeRecipeGrantRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GrantId       string                 `protobuf:"bytes,1,opt,name=grant_id,json=grantId,proto3" json:"grant_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeRecipeGrantRequest) Reset() {
+	*x = RevokeRecipeGrantRequest{}
+	mi := &file_blaxsmith_api_v1_recipes_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeRecipeGrantRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeRecipeGrantRequest) ProtoMessage() {}
+
+func (x *RevokeRecipeGrantRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_recipes_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeRecipeGrantRequest.ProtoReflect.Descriptor instead.
+func (*RevokeRecipeGrantRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_recipes_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *RevokeRecipeGrantRequest) GetGrantId() string {
+	if x != nil {
+		return x.GrantId
+	}
+	return ""
+}
+
+type RevokeRecipeGrantResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeRecipeGrantResponse) Reset() {
+	*x = RevokeRecipeGrantResponse{}
+	mi := &file_blaxsmith_api_v1_recipes_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeRecipeGrantResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeRecipeGrantResponse) ProtoMessage() {}
+
+func (x *RevokeRecipeGrantResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_recipes_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeRecipeGrantResponse.ProtoReflect.Descriptor instead.
+func (*RevokeRecipeGrantResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_recipes_proto_rawDescGZIP(), []int{28}
+}
+
 var File_blaxsmith_api_v1_recipes_proto protoreflect.FileDescriptor
 
 const file_blaxsmith_api_v1_recipes_proto_rawDesc = "" +
 	"\n" +
-	"\x1eblaxsmith/api/v1/recipes.proto\x12\x10blaxsmith.api.v1\"\xae\x02\n" +
+	"\x1eblaxsmith/api/v1/recipes.proto\x12\x10blaxsmith.api.v1\x1a\"blaxsmith/api/v1/connections.proto\"\xae\x02\n" +
 	"\rLibraryRecipe\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -1511,10 +1716,11 @@ const file_blaxsmith_api_v1_recipes_proto_rawDesc = "" +
 	"\x13ListRecipesResponse\x129\n" +
 	"\arecipes\x18\x01 \x03(\v2\x1f.blaxsmith.api.v1.LibraryRecipeR\arecipes\"/\n" +
 	"\x10GetRecipeRequest\x12\x1b\n" +
-	"\trecipe_id\x18\x01 \x01(\tR\brecipeId\"\x89\x01\n" +
+	"\trecipe_id\x18\x01 \x01(\tR\brecipeId\"\xc4\x01\n" +
 	"\x11GetRecipeResponse\x127\n" +
 	"\x06recipe\x18\x01 \x01(\v2\x1f.blaxsmith.api.v1.LibraryRecipeR\x06recipe\x12;\n" +
-	"\bversions\x18\x02 \x03(\v2\x1f.blaxsmith.api.v1.RecipeVersionR\bversions\"8\n" +
+	"\bversions\x18\x02 \x03(\v2\x1f.blaxsmith.api.v1.RecipeVersionR\bversions\x129\n" +
+	"\x06grants\x18\x03 \x03(\v2!.blaxsmith.api.v1.ConnectionGrantR\x06grants\"8\n" +
 	"\x17GetRecipeVersionRequest\x12\x1d\n" +
 	"\n" +
 	"version_id\x18\x01 \x01(\tR\tversionId\"U\n" +
@@ -1589,7 +1795,20 @@ const file_blaxsmith_api_v1_recipes_proto_rawDesc = "" +
 	"\x06commit\x18\x01 \x01(\tR\x06commit\x12\x1f\n" +
 	"\vskill_paths\x18\x02 \x03(\tR\n" +
 	"skillPaths\x12!\n" +
-	"\fprompt_paths\x18\x03 \x03(\tR\vpromptPaths2\xba\b\n" +
+	"\fprompt_paths\x18\x03 \x03(\tR\vpromptPaths\"\x92\x01\n" +
+	"\x12GrantRecipeRequest\x12\x1b\n" +
+	"\trecipe_id\x18\x01 \x01(\tR\brecipeId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12!\n" +
+	"\fgrantee_kind\x18\x03 \x01(\tR\vgranteeKind\x12\x1d\n" +
+	"\n" +
+	"grantee_id\x18\x04 \x01(\tR\tgranteeId\"N\n" +
+	"\x13GrantRecipeResponse\x127\n" +
+	"\x05grant\x18\x01 \x01(\v2!.blaxsmith.api.v1.ConnectionGrantR\x05grant\"5\n" +
+	"\x18RevokeRecipeGrantRequest\x12\x19\n" +
+	"\bgrant_id\x18\x01 \x01(\tR\agrantId\"\x1b\n" +
+	"\x19RevokeRecipeGrantResponse2\x84\n" +
+	"\n" +
 	"\rRecipeService\x12Z\n" +
 	"\vListRecipes\x12$.blaxsmith.api.v1.ListRecipesRequest\x1a%.blaxsmith.api.v1.ListRecipesResponse\x12T\n" +
 	"\tGetRecipe\x12\".blaxsmith.api.v1.GetRecipeRequest\x1a#.blaxsmith.api.v1.GetRecipeResponse\x12i\n" +
@@ -1600,7 +1819,9 @@ const file_blaxsmith_api_v1_recipes_proto_rawDesc = "" +
 	"\x17SetCurrentRecipeVersion\x120.blaxsmith.api.v1.SetCurrentRecipeVersionRequest\x1a1.blaxsmith.api.v1.SetCurrentRecipeVersionResponse\x12Z\n" +
 	"\vCloneRecipe\x12$.blaxsmith.api.v1.CloneRecipeRequest\x1a%.blaxsmith.api.v1.CloneRecipeResponse\x12{\n" +
 	"\x16GetRecipeEditorOptions\x12/.blaxsmith.api.v1.GetRecipeEditorOptionsRequest\x1a0.blaxsmith.api.v1.GetRecipeEditorOptionsResponse\x12{\n" +
-	"\x16ListProjectRecipeFiles\x12/.blaxsmith.api.v1.ListProjectRecipeFilesRequest\x1a0.blaxsmith.api.v1.ListProjectRecipeFilesResponseB\xc4\x01\n" +
+	"\x16ListProjectRecipeFiles\x12/.blaxsmith.api.v1.ListProjectRecipeFilesRequest\x1a0.blaxsmith.api.v1.ListProjectRecipeFilesResponse\x12Z\n" +
+	"\vGrantRecipe\x12$.blaxsmith.api.v1.GrantRecipeRequest\x1a%.blaxsmith.api.v1.GrantRecipeResponse\x12l\n" +
+	"\x11RevokeRecipeGrant\x12*.blaxsmith.api.v1.RevokeRecipeGrantRequest\x1a+.blaxsmith.api.v1.RevokeRecipeGrantResponseB\xc4\x01\n" +
 	"\x14com.blaxsmith.api.v1B\fRecipesProtoP\x01Z<github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1;apiv1\xa2\x02\x03BAX\xaa\x02\x10Blaxsmith.Api.V1\xca\x02\x10Blaxsmith\\Api\\V1\xe2\x02\x1cBlaxsmith\\Api\\V1\\GPBMetadata\xea\x02\x12Blaxsmith::Api::V1b\x06proto3"
 
 var (
@@ -1615,7 +1836,7 @@ func file_blaxsmith_api_v1_recipes_proto_rawDescGZIP() []byte {
 	return file_blaxsmith_api_v1_recipes_proto_rawDescData
 }
 
-var file_blaxsmith_api_v1_recipes_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_blaxsmith_api_v1_recipes_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_blaxsmith_api_v1_recipes_proto_goTypes = []any{
 	(*LibraryRecipe)(nil),                   // 0: blaxsmith.api.v1.LibraryRecipe
 	(*RecipeVersion)(nil),                   // 1: blaxsmith.api.v1.RecipeVersion
@@ -1642,48 +1863,59 @@ var file_blaxsmith_api_v1_recipes_proto_goTypes = []any{
 	(*GetRecipeEditorOptionsResponse)(nil),  // 22: blaxsmith.api.v1.GetRecipeEditorOptionsResponse
 	(*ListProjectRecipeFilesRequest)(nil),   // 23: blaxsmith.api.v1.ListProjectRecipeFilesRequest
 	(*ListProjectRecipeFilesResponse)(nil),  // 24: blaxsmith.api.v1.ListProjectRecipeFilesResponse
+	(*GrantRecipeRequest)(nil),              // 25: blaxsmith.api.v1.GrantRecipeRequest
+	(*GrantRecipeResponse)(nil),             // 26: blaxsmith.api.v1.GrantRecipeResponse
+	(*RevokeRecipeGrantRequest)(nil),        // 27: blaxsmith.api.v1.RevokeRecipeGrantRequest
+	(*RevokeRecipeGrantResponse)(nil),       // 28: blaxsmith.api.v1.RevokeRecipeGrantResponse
+	(*ConnectionGrant)(nil),                 // 29: blaxsmith.api.v1.ConnectionGrant
 }
 var file_blaxsmith_api_v1_recipes_proto_depIdxs = []int32{
 	0,  // 0: blaxsmith.api.v1.ListRecipesResponse.recipes:type_name -> blaxsmith.api.v1.LibraryRecipe
 	0,  // 1: blaxsmith.api.v1.GetRecipeResponse.recipe:type_name -> blaxsmith.api.v1.LibraryRecipe
 	1,  // 2: blaxsmith.api.v1.GetRecipeResponse.versions:type_name -> blaxsmith.api.v1.RecipeVersion
-	1,  // 3: blaxsmith.api.v1.GetRecipeVersionResponse.version:type_name -> blaxsmith.api.v1.RecipeVersion
-	2,  // 4: blaxsmith.api.v1.ValidateRecipeResponse.errors:type_name -> blaxsmith.api.v1.RecipeValidationError
-	0,  // 5: blaxsmith.api.v1.CreateRecipeResponse.recipe:type_name -> blaxsmith.api.v1.LibraryRecipe
-	1,  // 6: blaxsmith.api.v1.CreateRecipeResponse.version:type_name -> blaxsmith.api.v1.RecipeVersion
-	2,  // 7: blaxsmith.api.v1.CreateRecipeResponse.errors:type_name -> blaxsmith.api.v1.RecipeValidationError
-	1,  // 8: blaxsmith.api.v1.CreateRecipeVersionResponse.version:type_name -> blaxsmith.api.v1.RecipeVersion
-	2,  // 9: blaxsmith.api.v1.CreateRecipeVersionResponse.errors:type_name -> blaxsmith.api.v1.RecipeValidationError
-	0,  // 10: blaxsmith.api.v1.SetCurrentRecipeVersionResponse.recipe:type_name -> blaxsmith.api.v1.LibraryRecipe
-	0,  // 11: blaxsmith.api.v1.CloneRecipeResponse.recipe:type_name -> blaxsmith.api.v1.LibraryRecipe
-	1,  // 12: blaxsmith.api.v1.CloneRecipeResponse.version:type_name -> blaxsmith.api.v1.RecipeVersion
-	19, // 13: blaxsmith.api.v1.GetRecipeEditorOptionsResponse.harnesses:type_name -> blaxsmith.api.v1.RecipeHarnessOption
-	20, // 14: blaxsmith.api.v1.GetRecipeEditorOptionsResponse.connections:type_name -> blaxsmith.api.v1.RecipeModelConnection
-	3,  // 15: blaxsmith.api.v1.RecipeService.ListRecipes:input_type -> blaxsmith.api.v1.ListRecipesRequest
-	5,  // 16: blaxsmith.api.v1.RecipeService.GetRecipe:input_type -> blaxsmith.api.v1.GetRecipeRequest
-	7,  // 17: blaxsmith.api.v1.RecipeService.GetRecipeVersion:input_type -> blaxsmith.api.v1.GetRecipeVersionRequest
-	9,  // 18: blaxsmith.api.v1.RecipeService.ValidateRecipe:input_type -> blaxsmith.api.v1.ValidateRecipeRequest
-	11, // 19: blaxsmith.api.v1.RecipeService.CreateRecipe:input_type -> blaxsmith.api.v1.CreateRecipeRequest
-	13, // 20: blaxsmith.api.v1.RecipeService.CreateRecipeVersion:input_type -> blaxsmith.api.v1.CreateRecipeVersionRequest
-	15, // 21: blaxsmith.api.v1.RecipeService.SetCurrentRecipeVersion:input_type -> blaxsmith.api.v1.SetCurrentRecipeVersionRequest
-	17, // 22: blaxsmith.api.v1.RecipeService.CloneRecipe:input_type -> blaxsmith.api.v1.CloneRecipeRequest
-	21, // 23: blaxsmith.api.v1.RecipeService.GetRecipeEditorOptions:input_type -> blaxsmith.api.v1.GetRecipeEditorOptionsRequest
-	23, // 24: blaxsmith.api.v1.RecipeService.ListProjectRecipeFiles:input_type -> blaxsmith.api.v1.ListProjectRecipeFilesRequest
-	4,  // 25: blaxsmith.api.v1.RecipeService.ListRecipes:output_type -> blaxsmith.api.v1.ListRecipesResponse
-	6,  // 26: blaxsmith.api.v1.RecipeService.GetRecipe:output_type -> blaxsmith.api.v1.GetRecipeResponse
-	8,  // 27: blaxsmith.api.v1.RecipeService.GetRecipeVersion:output_type -> blaxsmith.api.v1.GetRecipeVersionResponse
-	10, // 28: blaxsmith.api.v1.RecipeService.ValidateRecipe:output_type -> blaxsmith.api.v1.ValidateRecipeResponse
-	12, // 29: blaxsmith.api.v1.RecipeService.CreateRecipe:output_type -> blaxsmith.api.v1.CreateRecipeResponse
-	14, // 30: blaxsmith.api.v1.RecipeService.CreateRecipeVersion:output_type -> blaxsmith.api.v1.CreateRecipeVersionResponse
-	16, // 31: blaxsmith.api.v1.RecipeService.SetCurrentRecipeVersion:output_type -> blaxsmith.api.v1.SetCurrentRecipeVersionResponse
-	18, // 32: blaxsmith.api.v1.RecipeService.CloneRecipe:output_type -> blaxsmith.api.v1.CloneRecipeResponse
-	22, // 33: blaxsmith.api.v1.RecipeService.GetRecipeEditorOptions:output_type -> blaxsmith.api.v1.GetRecipeEditorOptionsResponse
-	24, // 34: blaxsmith.api.v1.RecipeService.ListProjectRecipeFiles:output_type -> blaxsmith.api.v1.ListProjectRecipeFilesResponse
-	25, // [25:35] is the sub-list for method output_type
-	15, // [15:25] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	29, // 3: blaxsmith.api.v1.GetRecipeResponse.grants:type_name -> blaxsmith.api.v1.ConnectionGrant
+	1,  // 4: blaxsmith.api.v1.GetRecipeVersionResponse.version:type_name -> blaxsmith.api.v1.RecipeVersion
+	2,  // 5: blaxsmith.api.v1.ValidateRecipeResponse.errors:type_name -> blaxsmith.api.v1.RecipeValidationError
+	0,  // 6: blaxsmith.api.v1.CreateRecipeResponse.recipe:type_name -> blaxsmith.api.v1.LibraryRecipe
+	1,  // 7: blaxsmith.api.v1.CreateRecipeResponse.version:type_name -> blaxsmith.api.v1.RecipeVersion
+	2,  // 8: blaxsmith.api.v1.CreateRecipeResponse.errors:type_name -> blaxsmith.api.v1.RecipeValidationError
+	1,  // 9: blaxsmith.api.v1.CreateRecipeVersionResponse.version:type_name -> blaxsmith.api.v1.RecipeVersion
+	2,  // 10: blaxsmith.api.v1.CreateRecipeVersionResponse.errors:type_name -> blaxsmith.api.v1.RecipeValidationError
+	0,  // 11: blaxsmith.api.v1.SetCurrentRecipeVersionResponse.recipe:type_name -> blaxsmith.api.v1.LibraryRecipe
+	0,  // 12: blaxsmith.api.v1.CloneRecipeResponse.recipe:type_name -> blaxsmith.api.v1.LibraryRecipe
+	1,  // 13: blaxsmith.api.v1.CloneRecipeResponse.version:type_name -> blaxsmith.api.v1.RecipeVersion
+	19, // 14: blaxsmith.api.v1.GetRecipeEditorOptionsResponse.harnesses:type_name -> blaxsmith.api.v1.RecipeHarnessOption
+	20, // 15: blaxsmith.api.v1.GetRecipeEditorOptionsResponse.connections:type_name -> blaxsmith.api.v1.RecipeModelConnection
+	29, // 16: blaxsmith.api.v1.GrantRecipeResponse.grant:type_name -> blaxsmith.api.v1.ConnectionGrant
+	3,  // 17: blaxsmith.api.v1.RecipeService.ListRecipes:input_type -> blaxsmith.api.v1.ListRecipesRequest
+	5,  // 18: blaxsmith.api.v1.RecipeService.GetRecipe:input_type -> blaxsmith.api.v1.GetRecipeRequest
+	7,  // 19: blaxsmith.api.v1.RecipeService.GetRecipeVersion:input_type -> blaxsmith.api.v1.GetRecipeVersionRequest
+	9,  // 20: blaxsmith.api.v1.RecipeService.ValidateRecipe:input_type -> blaxsmith.api.v1.ValidateRecipeRequest
+	11, // 21: blaxsmith.api.v1.RecipeService.CreateRecipe:input_type -> blaxsmith.api.v1.CreateRecipeRequest
+	13, // 22: blaxsmith.api.v1.RecipeService.CreateRecipeVersion:input_type -> blaxsmith.api.v1.CreateRecipeVersionRequest
+	15, // 23: blaxsmith.api.v1.RecipeService.SetCurrentRecipeVersion:input_type -> blaxsmith.api.v1.SetCurrentRecipeVersionRequest
+	17, // 24: blaxsmith.api.v1.RecipeService.CloneRecipe:input_type -> blaxsmith.api.v1.CloneRecipeRequest
+	21, // 25: blaxsmith.api.v1.RecipeService.GetRecipeEditorOptions:input_type -> blaxsmith.api.v1.GetRecipeEditorOptionsRequest
+	23, // 26: blaxsmith.api.v1.RecipeService.ListProjectRecipeFiles:input_type -> blaxsmith.api.v1.ListProjectRecipeFilesRequest
+	25, // 27: blaxsmith.api.v1.RecipeService.GrantRecipe:input_type -> blaxsmith.api.v1.GrantRecipeRequest
+	27, // 28: blaxsmith.api.v1.RecipeService.RevokeRecipeGrant:input_type -> blaxsmith.api.v1.RevokeRecipeGrantRequest
+	4,  // 29: blaxsmith.api.v1.RecipeService.ListRecipes:output_type -> blaxsmith.api.v1.ListRecipesResponse
+	6,  // 30: blaxsmith.api.v1.RecipeService.GetRecipe:output_type -> blaxsmith.api.v1.GetRecipeResponse
+	8,  // 31: blaxsmith.api.v1.RecipeService.GetRecipeVersion:output_type -> blaxsmith.api.v1.GetRecipeVersionResponse
+	10, // 32: blaxsmith.api.v1.RecipeService.ValidateRecipe:output_type -> blaxsmith.api.v1.ValidateRecipeResponse
+	12, // 33: blaxsmith.api.v1.RecipeService.CreateRecipe:output_type -> blaxsmith.api.v1.CreateRecipeResponse
+	14, // 34: blaxsmith.api.v1.RecipeService.CreateRecipeVersion:output_type -> blaxsmith.api.v1.CreateRecipeVersionResponse
+	16, // 35: blaxsmith.api.v1.RecipeService.SetCurrentRecipeVersion:output_type -> blaxsmith.api.v1.SetCurrentRecipeVersionResponse
+	18, // 36: blaxsmith.api.v1.RecipeService.CloneRecipe:output_type -> blaxsmith.api.v1.CloneRecipeResponse
+	22, // 37: blaxsmith.api.v1.RecipeService.GetRecipeEditorOptions:output_type -> blaxsmith.api.v1.GetRecipeEditorOptionsResponse
+	24, // 38: blaxsmith.api.v1.RecipeService.ListProjectRecipeFiles:output_type -> blaxsmith.api.v1.ListProjectRecipeFilesResponse
+	26, // 39: blaxsmith.api.v1.RecipeService.GrantRecipe:output_type -> blaxsmith.api.v1.GrantRecipeResponse
+	28, // 40: blaxsmith.api.v1.RecipeService.RevokeRecipeGrant:output_type -> blaxsmith.api.v1.RevokeRecipeGrantResponse
+	29, // [29:41] is the sub-list for method output_type
+	17, // [17:29] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_blaxsmith_api_v1_recipes_proto_init() }
@@ -1691,13 +1923,14 @@ func file_blaxsmith_api_v1_recipes_proto_init() {
 	if File_blaxsmith_api_v1_recipes_proto != nil {
 		return
 	}
+	file_blaxsmith_api_v1_connections_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blaxsmith_api_v1_recipes_proto_rawDesc), len(file_blaxsmith_api_v1_recipes_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

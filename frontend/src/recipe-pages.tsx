@@ -5,13 +5,13 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, ArrowRight, BookCopy, Check, CopyPlus, FileJson, GitFork, ListTree, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { currentSession, sessionQueryKey } from "./auth";
-import { ModelSelect } from "./connection-ui";
+import { ModelSelect, ResourceGrants } from "./connection-ui";
 import { DataTable } from "./data-table";
 import { TextField } from "./form-field";
 import type { LibraryRecipe, RecipeModelConnection, RecipeValidationError, RecipeVersion } from "./gen/blaxsmith/api/v1/recipes_pb";
 import { PageHeader, PageShell } from "./page";
 import {
-  cloneRecipe, createRecipe, createRecipeVersion, emptyRecipe, formatRecipe, getRecipe, getRecipeEditorOptions,
+  cloneRecipe, createRecipe, createRecipeVersion, emptyRecipe, formatRecipe, getRecipe, getRecipeEditorOptions, grantRecipe, revokeRecipeGrant,
   getRecipeVersion, listProjectRecipeFiles, listRecipes, mayEditRecipes, parseRecipe, recipeFilesKey, recipeKey, recipeOptionsKey,
   recipesKey, recipeVersionKey, renameProfile, renameStage, setCurrentRecipeVersion, stageRows, validateRecipe,
   type RecipeDocument, type RecipeProfile, type RecipeStage, type StageRow,
@@ -140,6 +140,11 @@ export function RecipeDetailPage({ projectId, recipeId }: { projectId?: string; 
       <div className="table-heading"><div><h2 id="versions-heading">Versions</h2><p>Immutable. Runs record the exact bytes they froze; changing the current version affects only new runs.</p></div></div>
       <DataTable table={table} label="Recipe versions" empty="No versions." />
     </section> : null}
+    {current && !projectId && !current.projectId && mayEdit ? <ResourceGrants grants={recipe.data?.grants || []} label="Recipe grants" canManage canAdd
+      description="Each grant names one project, one user, or a minimum role that may use this recipe from any project. Owners and admins get no implicit use; viewers never. Project recipes need no grant."
+      revokeNote="New runs can no longer launch it there; runs already launched keep the bytes they froze."
+      grant={(kind, project, grantee) => grantRecipe(recipeId, project, kind, grantee)} revoke={revokeRecipeGrant}
+      onChanged={() => Promise.all([queryClient.invalidateQueries({ queryKey: recipeKey(org, recipeId) }), queryClient.invalidateQueries({ queryKey: ["recipes", org] })])} /> : null}
     {version.data?.version ? <StageDag doc={doc} order={validation.data?.stageOrder} title={`Stage graph · v${version.data.version.version}`} /> : null}
     {version.data?.version ? <details className="recipe-source"><summary><FileJson size={14} aria-hidden="true" /> JSON · v{version.data.version.version}</summary><pre className="mono">{version.data.version.recipeJson}</pre></details> : null}
   </PageShell>;

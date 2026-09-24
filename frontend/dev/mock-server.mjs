@@ -189,13 +189,15 @@ const rpc = {
   // RecipeService: an in-memory library seeded with the Guild recipe. The
   // mock only checks JSON syntax; the real server runs internal/recipe validation.
   ListRecipes: ({ projectId: project = "" }) => ({ recipes: recipes.filter((r) => !r.projectId || r.projectId === project).map(recipeSummary) }),
-  GetRecipe: ({ recipeId }) => { const r = recipes.find((x) => x.id === recipeId); return r ? { recipe: recipeSummary(r), versions: [...r.versions].reverse().map(({ recipeJson, ...v }) => v) } : connectError(404, "not_found", "workflow resource not found"); },
+  GetRecipe: ({ recipeId }) => { const r = recipes.find((x) => x.id === recipeId); return r ? { recipe: recipeSummary(r), versions: [...r.versions].reverse().map(({ recipeJson, ...v }) => v), grants: r.projectId ? [] : r.grants || [] } : connectError(404, "not_found", "workflow resource not found"); },
   GetRecipeVersion: ({ versionId }) => { const v = recipes.flatMap((r) => r.versions).find((x) => x.id === versionId); return v ? { version: v } : connectError(404, "not_found", "workflow resource not found"); },
   ValidateRecipe: ({ recipeJson = "" }) => { try { const doc = JSON.parse(recipeJson); return { errors: [], stageOrder: (doc.stages || []).map((x) => x.id) }; } catch (e) { return { errors: [{ path: "$", message: String(e.message) }], stageOrder: [] }; } },
   CreateRecipe: ({ projectId: project = "", name, description = "", recipeJson, frozenPath = "" }) => { const r = { id: `recipe-${recipes.length + 1}`, projectId: project, name, description, createdAt: now(), versions: [] }; recipes.push(r); addVersion(r, recipeJson, frozenPath, true); return { recipe: recipeSummary(r), version: r.versions[0] }; },
   CreateRecipeVersion: ({ recipeId, recipeJson, frozenPath = "", makeCurrent = false }) => { const r = recipes.find((x) => x.id === recipeId); return { version: addVersion(r, recipeJson, frozenPath, makeCurrent) }; },
   SetCurrentRecipeVersion: ({ recipeId, versionId }) => { const r = recipes.find((x) => x.id === recipeId); r.current = versionId; return { recipe: recipeSummary(r) }; },
   CloneRecipe: ({ sourceVersionId, projectId: project = "", name, description = "" }) => { const v = recipes.flatMap((r) => r.versions).find((x) => x.id === sourceVersionId); return rpc.CreateRecipe({ projectId: project, name, description, recipeJson: v.recipeJson, frozenPath: v.frozenPath }); },
+  GrantRecipe: ({ recipeId, projectId: pid = "", granteeKind, granteeId = "" }) => { const r = recipes.find((x) => x.id === recipeId); if (!r || r.projectId) return connectError(400, "invalid_argument", "invalid workflow request"); const grant = { id: `rgrant-${Date.now()}`, projectId: pid, projectName: pid ? "Demo project" : "", granteeKind, granteeId, granteeName: granteeKind === "user" ? "teammate" : "", createdAt: now() }; (r.grants ||= []).push(grant); return { grant }; },
+  RevokeRecipeGrant: ({ grantId }) => { for (const r of recipes) r.grants = (r.grants || []).filter((g) => g.id !== grantId); return {}; },
   GetRecipeEditorOptions: () => ({
     harnesses: [{ harness: "claude-code", provider: "anthropic", efforts: ["low", "medium", "high", "xhigh", "max"] }, { harness: "codex", provider: "openai", efforts: ["minimal", "low", "medium", "high", "xhigh"] }, { harness: "opencode", provider: "", efforts: ["provider-default", "low", "medium", "high"] }],
     stageKinds: ["plan", "interview", "research", "implement", "review", "verify", "integrate", "ui_review", "documentation", "architect_review", "human_review"],
@@ -284,6 +286,7 @@ const recipeSummary = (r) => ({ id: r.id, projectId: r.projectId, name: r.name, 
   recipes.push(seed);
   addVersion(seed, readFileSync(new URL("../../examples/guild/recipe.json", import.meta.url), "utf8"), "examples/guild/recipe.json", true);
   seed.versions[0].authorUsername = ""; seed.versions[0].authorPrincipalId = "";
+  seed.grants = [{ id: "rgrant-seed", projectId: "", projectName: "", granteeKind: "role", granteeId: "member", granteeName: "", createdAt: seed.createdAt }];
 }
 
 function minutesAgo(n) { return new Date(Date.now() - n * 60_000).toISOString(); }

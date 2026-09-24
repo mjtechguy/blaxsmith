@@ -62,6 +62,12 @@ const (
 	// RecipeServiceListProjectRecipeFilesProcedure is the fully-qualified name of the RecipeService's
 	// ListProjectRecipeFiles RPC.
 	RecipeServiceListProjectRecipeFilesProcedure = "/blaxsmith.api.v1.RecipeService/ListProjectRecipeFiles"
+	// RecipeServiceGrantRecipeProcedure is the fully-qualified name of the RecipeService's GrantRecipe
+	// RPC.
+	RecipeServiceGrantRecipeProcedure = "/blaxsmith.api.v1.RecipeService/GrantRecipe"
+	// RecipeServiceRevokeRecipeGrantProcedure is the fully-qualified name of the RecipeService's
+	// RevokeRecipeGrant RPC.
+	RecipeServiceRevokeRecipeGrantProcedure = "/blaxsmith.api.v1.RecipeService/RevokeRecipeGrant"
 )
 
 // RecipeServiceClient is a client for the blaxsmith.api.v1.RecipeService service.
@@ -76,6 +82,8 @@ type RecipeServiceClient interface {
 	CloneRecipe(context.Context, *connect.Request[v1.CloneRecipeRequest]) (*connect.Response[v1.CloneRecipeResponse], error)
 	GetRecipeEditorOptions(context.Context, *connect.Request[v1.GetRecipeEditorOptionsRequest]) (*connect.Response[v1.GetRecipeEditorOptionsResponse], error)
 	ListProjectRecipeFiles(context.Context, *connect.Request[v1.ListProjectRecipeFilesRequest]) (*connect.Response[v1.ListProjectRecipeFilesResponse], error)
+	GrantRecipe(context.Context, *connect.Request[v1.GrantRecipeRequest]) (*connect.Response[v1.GrantRecipeResponse], error)
+	RevokeRecipeGrant(context.Context, *connect.Request[v1.RevokeRecipeGrantRequest]) (*connect.Response[v1.RevokeRecipeGrantResponse], error)
 }
 
 // NewRecipeServiceClient constructs a client for the blaxsmith.api.v1.RecipeService service. By
@@ -149,6 +157,18 @@ func NewRecipeServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(recipeServiceMethods.ByName("ListProjectRecipeFiles")),
 			connect.WithClientOptions(opts...),
 		),
+		grantRecipe: connect.NewClient[v1.GrantRecipeRequest, v1.GrantRecipeResponse](
+			httpClient,
+			baseURL+RecipeServiceGrantRecipeProcedure,
+			connect.WithSchema(recipeServiceMethods.ByName("GrantRecipe")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeRecipeGrant: connect.NewClient[v1.RevokeRecipeGrantRequest, v1.RevokeRecipeGrantResponse](
+			httpClient,
+			baseURL+RecipeServiceRevokeRecipeGrantProcedure,
+			connect.WithSchema(recipeServiceMethods.ByName("RevokeRecipeGrant")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -164,6 +184,8 @@ type recipeServiceClient struct {
 	cloneRecipe             *connect.Client[v1.CloneRecipeRequest, v1.CloneRecipeResponse]
 	getRecipeEditorOptions  *connect.Client[v1.GetRecipeEditorOptionsRequest, v1.GetRecipeEditorOptionsResponse]
 	listProjectRecipeFiles  *connect.Client[v1.ListProjectRecipeFilesRequest, v1.ListProjectRecipeFilesResponse]
+	grantRecipe             *connect.Client[v1.GrantRecipeRequest, v1.GrantRecipeResponse]
+	revokeRecipeGrant       *connect.Client[v1.RevokeRecipeGrantRequest, v1.RevokeRecipeGrantResponse]
 }
 
 // ListRecipes calls blaxsmith.api.v1.RecipeService.ListRecipes.
@@ -216,6 +238,16 @@ func (c *recipeServiceClient) ListProjectRecipeFiles(ctx context.Context, req *c
 	return c.listProjectRecipeFiles.CallUnary(ctx, req)
 }
 
+// GrantRecipe calls blaxsmith.api.v1.RecipeService.GrantRecipe.
+func (c *recipeServiceClient) GrantRecipe(ctx context.Context, req *connect.Request[v1.GrantRecipeRequest]) (*connect.Response[v1.GrantRecipeResponse], error) {
+	return c.grantRecipe.CallUnary(ctx, req)
+}
+
+// RevokeRecipeGrant calls blaxsmith.api.v1.RecipeService.RevokeRecipeGrant.
+func (c *recipeServiceClient) RevokeRecipeGrant(ctx context.Context, req *connect.Request[v1.RevokeRecipeGrantRequest]) (*connect.Response[v1.RevokeRecipeGrantResponse], error) {
+	return c.revokeRecipeGrant.CallUnary(ctx, req)
+}
+
 // RecipeServiceHandler is an implementation of the blaxsmith.api.v1.RecipeService service.
 type RecipeServiceHandler interface {
 	ListRecipes(context.Context, *connect.Request[v1.ListRecipesRequest]) (*connect.Response[v1.ListRecipesResponse], error)
@@ -228,6 +260,8 @@ type RecipeServiceHandler interface {
 	CloneRecipe(context.Context, *connect.Request[v1.CloneRecipeRequest]) (*connect.Response[v1.CloneRecipeResponse], error)
 	GetRecipeEditorOptions(context.Context, *connect.Request[v1.GetRecipeEditorOptionsRequest]) (*connect.Response[v1.GetRecipeEditorOptionsResponse], error)
 	ListProjectRecipeFiles(context.Context, *connect.Request[v1.ListProjectRecipeFilesRequest]) (*connect.Response[v1.ListProjectRecipeFilesResponse], error)
+	GrantRecipe(context.Context, *connect.Request[v1.GrantRecipeRequest]) (*connect.Response[v1.GrantRecipeResponse], error)
+	RevokeRecipeGrant(context.Context, *connect.Request[v1.RevokeRecipeGrantRequest]) (*connect.Response[v1.RevokeRecipeGrantResponse], error)
 }
 
 // NewRecipeServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -297,6 +331,18 @@ func NewRecipeServiceHandler(svc RecipeServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(recipeServiceMethods.ByName("ListProjectRecipeFiles")),
 		connect.WithHandlerOptions(opts...),
 	)
+	recipeServiceGrantRecipeHandler := connect.NewUnaryHandler(
+		RecipeServiceGrantRecipeProcedure,
+		svc.GrantRecipe,
+		connect.WithSchema(recipeServiceMethods.ByName("GrantRecipe")),
+		connect.WithHandlerOptions(opts...),
+	)
+	recipeServiceRevokeRecipeGrantHandler := connect.NewUnaryHandler(
+		RecipeServiceRevokeRecipeGrantProcedure,
+		svc.RevokeRecipeGrant,
+		connect.WithSchema(recipeServiceMethods.ByName("RevokeRecipeGrant")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blaxsmith.api.v1.RecipeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case RecipeServiceListRecipesProcedure:
@@ -319,6 +365,10 @@ func NewRecipeServiceHandler(svc RecipeServiceHandler, opts ...connect.HandlerOp
 			recipeServiceGetRecipeEditorOptionsHandler.ServeHTTP(w, r)
 		case RecipeServiceListProjectRecipeFilesProcedure:
 			recipeServiceListProjectRecipeFilesHandler.ServeHTTP(w, r)
+		case RecipeServiceGrantRecipeProcedure:
+			recipeServiceGrantRecipeHandler.ServeHTTP(w, r)
+		case RecipeServiceRevokeRecipeGrantProcedure:
+			recipeServiceRevokeRecipeGrantHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -366,4 +416,12 @@ func (UnimplementedRecipeServiceHandler) GetRecipeEditorOptions(context.Context,
 
 func (UnimplementedRecipeServiceHandler) ListProjectRecipeFiles(context.Context, *connect.Request[v1.ListProjectRecipeFilesRequest]) (*connect.Response[v1.ListProjectRecipeFilesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.RecipeService.ListProjectRecipeFiles is not implemented"))
+}
+
+func (UnimplementedRecipeServiceHandler) GrantRecipe(context.Context, *connect.Request[v1.GrantRecipeRequest]) (*connect.Response[v1.GrantRecipeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.RecipeService.GrantRecipe is not implemented"))
+}
+
+func (UnimplementedRecipeServiceHandler) RevokeRecipeGrant(context.Context, *connect.Request[v1.RevokeRecipeGrantRequest]) (*connect.Response[v1.RevokeRecipeGrantResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.RecipeService.RevokeRecipeGrant is not implemented"))
 }

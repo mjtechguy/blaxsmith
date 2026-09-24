@@ -35,6 +35,13 @@ export async function createRecipeVersion(recipeId: string, recipeJson: string, 
 export async function setCurrentRecipeVersion(recipeId: string, versionId: string) {
   return client.setCurrentRecipeVersion({ recipeId, versionId }, await csrf());
 }
+// Organization recipe grants: lane U resource grants, audited server-side.
+export async function grantRecipe(recipeId: string, projectId: string, granteeKind: string, granteeId: string) {
+  return (await client.grantRecipe({ recipeId, projectId, granteeKind, granteeId }, await csrf())).grant;
+}
+export async function revokeRecipeGrant(grantId: string) {
+  return client.revokeRecipeGrant({ grantId }, await csrf());
+}
 export async function cloneRecipe(sourceVersionId: string, projectId: string, name: string, description: string) {
   return client.cloneRecipe({ sourceVersionId, projectId, name, description }, await csrf());
 }

@@ -83,7 +83,39 @@ func (s *recipeService) GetRecipe(ctx context.Context, req *connect.Request[api.
 	for _, v := range versions {
 		response.Versions = append(response.Versions, recipeVersionMessage(v))
 	}
+	if r.ProjectID == "" {
+		grants, err := s.store.RecipeGrants(ctx, caller, r.ID)
+		if err != nil {
+			return nil, recipeError(err)
+		}
+		for _, g := range grants {
+			response.Grants = append(response.Grants, grantMessage(g))
+		}
+	}
 	return connect.NewResponse(response), nil
+}
+
+func (s *recipeService) GrantRecipe(ctx context.Context, req *connect.Request[api.GrantRecipeRequest]) (*connect.Response[api.GrantRecipeResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	grant, err := s.store.GrantRecipeAs(ctx, caller, req.Msg.RecipeId, req.Msg.ProjectId, req.Msg.GranteeKind, req.Msg.GranteeId)
+	if err != nil {
+		return nil, recipeError(err)
+	}
+	return connect.NewResponse(&api.GrantRecipeResponse{Grant: grantMessage(grant)}), nil
+}
+
+func (s *recipeService) RevokeRecipeGrant(ctx context.Context, req *connect.Request[api.RevokeRecipeGrantRequest]) (*connect.Response[api.RevokeRecipeGrantResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.store.RevokeRecipeGrantAs(ctx, caller, req.Msg.GrantId); err != nil {
+		return nil, recipeError(err)
+	}
+	return connect.NewResponse(&api.RevokeRecipeGrantResponse{}), nil
 }
 
 func (s *recipeService) GetRecipeVersion(ctx context.Context, req *connect.Request[api.GetRecipeVersionRequest]) (*connect.Response[api.GetRecipeVersionResponse], error) {

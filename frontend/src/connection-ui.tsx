@@ -249,7 +249,7 @@ export function NewGit({ scope, projectId = "", returnTo, cancel, onDone }: { sc
   </div>;
 }
 
-type Pending = { kind: "grant"; grant: ConnectionGrant } | { kind: "use"; use: ConnectionUse } | { kind: "connection" };
+type Pending = { kind: "use"; use: ConnectionUse } | { kind: "connection" };
 
 // One connection's grants (organization scope), model uses, model refresh, and revocation.
 export function ConnectionDetail({ connection, scope, projectId = "", onRevoked }: { connection: Connection; scope: Scope; projectId?: string; onRevoked: () => void }) {
@@ -269,7 +269,6 @@ export function ConnectionDetail({ connection, scope, projectId = "", onRevoked 
   });
   const act = useMutation({
     mutationFn: async (p: Pending) => {
-      if (p.kind === "grant") return revokeConnectionGrant(p.grant.id);
       if (p.kind === "use") return removeConnectionUse(p.use.id);
       return revokeConnection(connection.id);
     },
@@ -284,16 +283,7 @@ export function ConnectionDetail({ connection, scope, projectId = "", onRevoked 
     { id: "created", header: "Added", cell: ({ row }) => <time dateTime={row.original.createdAt}>{ago(row.original.createdAt)}</time> },
     { id: "actions", header: "Actions", cell: ({ row }) => <button type="button" className="text-action text-action-danger" disabled={act.isPending} onClick={() => { setError(""); setPending({ kind: "use", use: row.original }); }}><Trash2 size={13} aria-hidden="true" /> Remove</button> },
   ], [act.isPending]);
-  const grantColumns = useMemo<ColumnDef<typeof features, ConnectionGrant>[]>(() => [
-    { id: "grantee", header: "Grantee", cell: ({ row }) => row.original.granteeKind === "project"
-      ? <span className="task-stage"><strong>Project</strong><small>{row.original.projectName || row.original.projectId.slice(0, 8)}</small></span>
-      : <span className="task-stage"><strong>{row.original.granteeKind === "user" ? "User" : "Minimum role"}</strong><small className="mono">{row.original.granteeName || row.original.granteeId}</small></span> },
-    { id: "reach", header: "Reach", cell: ({ row }) => row.original.granteeKind === "project" ? "That project's runs and admins" : "Every project, for matching people" },
-    { id: "created", header: "Granted", cell: ({ row }) => <time dateTime={row.original.createdAt}>{ago(row.original.createdAt)}</time> },
-    { id: "actions", header: "Actions", cell: ({ row }) => connection.canManage ? <button type="button" className="text-action text-action-danger" disabled={act.isPending} onClick={() => { setError(""); setPending({ kind: "grant", grant: row.original }); }}><Trash2 size={13} aria-hidden="true" /> Revoke</button> : null },
-  ], [act.isPending, connection.canManage]);
   const useTableModel = useTable({ features, data: uses, columns: useColumns, getRowId: (u) => u.id });
-  const grantTable = useTable({ features, data: connection.grants, columns: grantColumns, getRowId: (g) => g.id });
 
   return <>
     <section className="table-section" aria-labelledby="connection-summary-heading">
@@ -312,16 +302,15 @@ export function ConnectionDetail({ connection, scope, projectId = "", onRevoked 
       <DataTable table={useTableModel} label="Model uses" empty="Not used by any project yet." />
       {connection.state === "active" ? <AddUse connection={connection} projectId={projectId} /> : null}
     </section> : null}
-    {scope === "organization" && connection.scope === "organization" ? <section className="table-section" aria-labelledby="connection-grants-heading">
-      <div className="table-heading"><div><h2 id="connection-grants-heading">Grants</h2><p>Each grant names one project, one user, or a minimum role. Owners and admins get no implicit use; viewers never. A project grant lets that project's admins attach it to runs.</p></div><span className="fetched-time">{connection.grants.length} grants</span></div>
-      <DataTable table={grantTable} label="Connection grants" empty="Not granted to any project, user, or role." />
-      {connection.canManage && connection.state === "active" ? <AddGrant connection={connection} /> : null}
-    </section> : null}
+    {scope === "organization" && connection.scope === "organization" ? <ResourceGrants grants={connection.grants} label="Connection grants"
+      canManage={connection.canManage} canAdd={connection.canManage && connection.state === "active"}
+      description="Each grant names one project, one user, or a minimum role. Owners and admins get no implicit use; viewers never. A project grant lets that project's admins attach it to runs."
+      revokeNote="Revoking a project grant also removes that project's model uses of this connection."
+      grant={(kind, project, grantee) => grantConnection(connection.id, project, kind, grantee)} revoke={revokeConnectionGrant} onChanged={invalidate} /> : null}
     {pending ? <ConfirmDialog busy={act.isPending} error={error} onClose={() => setPending(null)} onConfirm={() => act.mutate(pending)}
-      title={pending.kind === "grant" ? "Revoke grant" : pending.kind === "use" ? "Remove model use" : "Revoke connection"}
+      title={pending.kind === "use" ? "Remove model use" : "Revoke connection"}
       confirmLabel={pending.kind === "use" ? "Remove" : "Revoke"}
-      body={pending.kind === "grant" ? <>Revoke this grant for <strong>{pending.grant.granteeKind === "project" ? pending.grant.projectName || pending.grant.projectId : pending.grant.granteeName || pending.grant.granteeId}</strong>? Revoking a project grant also removes that project's model uses of this connection.</>
-        : pending.kind === "use" ? <>Stop <strong>{pending.use.projectName}</strong> from using <strong className="mono">{pending.use.model}</strong> through this connection? Future attempts lose it; a running actor may still hold a delivered credential until stopped.</>
+      body={pending.kind === "use" ? <>Stop <strong>{pending.use.projectName}</strong> from using <strong className="mono">{pending.use.model}</strong> through this connection? Future attempts lose it; a running actor may still hold a delivered credential until stopped.</>
           : <>Revoke this {providerLabel(connection.provider)} connection? Every grant, use, and lease is revoked. Rotate the credential at the provider to invalidate copies already delivered.</>} /> : null}
   </>;
 }
@@ -345,16 +334,51 @@ function AddUse({ connection, projectId }: { connection: Connection; projectId: 
   </form>;
 }
 
-function AddGrant({ connection }: { connection: Connection }) {
-  const queryClient = useQueryClient();
-  const { org } = useOrg();
+// A standing grant as lane U stores it; ConnectionGrant is the wire shape
+// for connection and recipe grants alike.
+export type ResourceGrant = Pick<ConnectionGrant, "id" | "projectId" | "projectName" | "granteeKind" | "granteeId" | "granteeName" | "createdAt">;
+
+// Grants on one organization resource (a connection or a recipe): list,
+// add (project, user, or minimum role), and revoke behind a confirmation.
+// The server audits both through GrantResource/RevokeResourceGrant.
+export function ResourceGrants({ grants, label, description, canManage, canAdd, revokeNote = "", grant, revoke, onChanged }: {
+  grants: ResourceGrant[]; label: string; description: ReactNode; canManage: boolean; canAdd: boolean; revokeNote?: string;
+  grant: (kind: string, projectId: string, granteeId: string) => Promise<unknown>; revoke: (grantId: string) => Promise<unknown>; onChanged: () => Promise<unknown>;
+}) {
+  const [pending, setPending] = useState<ResourceGrant | null>(null);
+  const [error, setError] = useState("");
+  const remove = useMutation({
+    mutationFn: (g: ResourceGrant) => revoke(g.id),
+    onSuccess: async () => { setPending(null); await onChanged(); },
+    onError: (cause) => setError(failure(cause, "The grant could not be revoked. Please try again.")),
+  });
+  const columns = useMemo<ColumnDef<typeof features, ResourceGrant>[]>(() => [
+    { id: "grantee", header: "Grantee", cell: ({ row }) => row.original.granteeKind === "project"
+      ? <span className="task-stage"><strong>Project</strong><small>{row.original.projectName || row.original.projectId.slice(0, 8)}</small></span>
+      : <span className="task-stage"><strong>{row.original.granteeKind === "user" ? "User" : "Minimum role"}</strong><small className="mono">{row.original.granteeName || row.original.granteeId}</small></span> },
+    { id: "reach", header: "Reach", cell: ({ row }) => row.original.granteeKind === "project" ? "That project's runs and admins" : "Every project, for matching people" },
+    { id: "created", header: "Granted", cell: ({ row }) => <time dateTime={row.original.createdAt}>{ago(row.original.createdAt)}</time> },
+    { id: "actions", header: "Actions", cell: ({ row }) => canManage ? <button type="button" className="text-action text-action-danger" disabled={remove.isPending} onClick={() => { setError(""); setPending(row.original); }}><Trash2 size={13} aria-hidden="true" /> Revoke</button> : null },
+  ], [remove.isPending, canManage]);
+  const table = useTable({ features, data: grants, columns, getRowId: (g) => g.id });
+  return <section className="table-section" aria-labelledby="resource-grants-heading">
+    <div className="table-heading"><div><h2 id="resource-grants-heading">Grants</h2><p>{description}</p></div><span className="fetched-time">{grants.length} grants</span></div>
+    <DataTable table={table} label={label} empty="Not granted to any project, user, or role." />
+    {canAdd ? <AddGrant grant={grant} onChanged={onChanged} /> : null}
+    {pending ? <ConfirmDialog busy={remove.isPending} error={error} onClose={() => setPending(null)} onConfirm={() => remove.mutate(pending)}
+      title="Revoke grant" confirmLabel="Revoke"
+      body={<>Revoke this grant for <strong>{pending.granteeKind === "project" ? pending.projectName || pending.projectId : pending.granteeName || pending.granteeId}</strong>?{revokeNote ? ` ${revokeNote}` : ""}</>} /> : null}
+  </section>;
+}
+
+function AddGrant({ grant, onChanged }: { grant: (kind: string, projectId: string, granteeId: string) => Promise<unknown>; onChanged: () => Promise<unknown> }) {
   const [project, setProject] = useState("");
   const [kind, setKind] = useState("project");
   const [grantee, setGrantee] = useState("");
   const [error, setError] = useState("");
   const add = useMutation({
-    mutationFn: () => grantConnection(connection.id, kind === "project" ? project : "", kind, kind === "project" ? "" : grantee.trim()),
-    onSuccess: async () => { setGrantee(""); setError(""); await queryClient.invalidateQueries({ queryKey: ["connections", org] }); },
+    mutationFn: () => grant(kind, kind === "project" ? project : "", kind === "project" ? "" : grantee.trim()),
+    onSuccess: async () => { setGrantee(""); setError(""); await onChanged(); },
     onError: (cause) => setError(failure(cause, "The grant could not be added. Please try again.")),
   });
   const ready = kind === "project" ? Boolean(project) : Boolean(grantee.trim());

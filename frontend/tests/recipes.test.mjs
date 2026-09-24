@@ -24,6 +24,8 @@ test("recipe mutations send CSRF, launch sends the library version, and the form
     await recipes.setCurrentRecipeVersion("r1", "v2");
     await recipes.cloneRecipe("v2", "p1", "Copy", "");
     await recipes.validateRecipe("{}", "");
+    await recipes.grantRecipe("r1", "p1", "project", "");
+    await recipes.revokeRecipeGrant("g1");
     await launchRun("p1", "key", "", "spec.md", "t.md", ".", "v2");
     assert.deepEqual(requests.map((r) => [r.url, r.csrf]), [
       ["blaxsmith.api.v1.RecipeService/CreateRecipe", "C".repeat(43)],
@@ -31,10 +33,14 @@ test("recipe mutations send CSRF, launch sends the library version, and the form
       ["blaxsmith.api.v1.RecipeService/SetCurrentRecipeVersion", "C".repeat(43)],
       ["blaxsmith.api.v1.RecipeService/CloneRecipe", "C".repeat(43)],
       ["blaxsmith.api.v1.RecipeService/ValidateRecipe", null],
+      ["blaxsmith.api.v1.RecipeService/GrantRecipe", "C".repeat(43)],
+      ["blaxsmith.api.v1.RecipeService/RevokeRecipeGrant", "C".repeat(43)],
       ["blaxsmith.api.v1.WorkflowService/LaunchRun", "C".repeat(43)],
     ]);
-    assert.equal(requests[5].body.recipeVersionId, "v2");
-    assert.equal(requests[5].body.recipePath, undefined);
+    assert.deepEqual(requests[5].body, { recipeId: "r1", projectId: "p1", granteeKind: "project" });
+    assert.deepEqual(requests[6].body, { grantId: "g1" });
+    assert.equal(requests[7].body.recipeVersionId, "v2");
+    assert.equal(requests[7].body.recipePath, undefined);
 
     const guild = recipes.parseRecipe(await readFile(new URL("../../examples/guild/recipe.json", import.meta.url), "utf8"));
     assert.ok(guild);
