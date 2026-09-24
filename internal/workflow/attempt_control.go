@@ -47,18 +47,26 @@ func (s *Store) GetAttemptTerminal(ctx context.Context, orgID, attemptID string)
 	return scanAttemptTerminal(s.pool.QueryRow(ctx, `SELECT `+attemptTerminalColumns, orgID, attemptID), orgID, attemptID)
 }
 
-// takeOverAllowed is the key-disclosure rule: a takeover shows the model API
-// key in the session, so only organization owners/admins, or the principal who
-// owns every personal model connection the attempt is bound to, may take over.
-// The role must already be verified against the live membership.
-const takeOverAllowed = `SELECT $4 IN ('owner','admin') OR (
+// takeOverAllowed is the key-disclosure rule: a takeover shows the model
+// credential in the session. A personal connection (a member's own key or
+// subscription) may only ever be seen by its owner, so any binding to another
+// person's personal connection denies everyone, organization owners and admins
+// included. Otherwise owners/admins may take over, or a principal who owns
+// every connection the attempt is bound to. The role must already be verified
+// against the live membership.
+const takeOverAllowed = `SELECT NOT EXISTS (SELECT 1 FROM access_bindings b
+		JOIN access_grants g ON g.organization_id=b.organization_id AND g.id=b.grant_id
+		JOIN access_connections c ON c.organization_id=g.organization_id AND c.id=g.connection_id
+		WHERE b.organization_id=$1::text AND b.attempt_id=$2::text AND b.capability='model.invoke'
+		AND c.owner_kind='user' AND c.owner_id<>$3::text)
+	AND ($4 IN ('owner','admin') OR (
 	EXISTS (SELECT 1 FROM access_bindings b WHERE b.organization_id=$1::text AND b.attempt_id=$2::text
 		AND b.capability='model.invoke')
 	AND NOT EXISTS (SELECT 1 FROM access_bindings b
 		JOIN access_grants g ON g.organization_id=b.organization_id AND g.id=b.grant_id
 		JOIN access_connections c ON c.organization_id=g.organization_id AND c.id=g.connection_id
 		WHERE b.organization_id=$1::text AND b.attempt_id=$2::text AND b.capability='model.invoke'
-		AND NOT (c.owner_kind='user' AND c.owner_id=$3::text)))`
+		AND NOT (c.owner_kind='user' AND c.owner_id=$3::text))))`
 
 // CanTakeOverAttempt reports whether the caller's role and model connection
 // ownership allow a takeover. It does not check that the attempt is running.

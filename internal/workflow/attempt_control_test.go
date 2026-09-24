@@ -87,7 +87,8 @@ func TestAttemptControlFencePostgres(t *testing.T) {
 		t.Fatalf("handback: %+v %v", released, err)
 	}
 	// Takeover discloses the model key: a member needs to own the attempt's
-	// personal model connection; owners and admins always may.
+	// personal model connection; owners and admins may unless another
+	// member's personal connection is bound.
 	if ok, err := store.CanTakeOverAttempt(ctx, member, attempt.ID); err != nil || ok {
 		t.Fatalf("member without a personal connection may take over: %v %v", ok, err)
 	}
@@ -125,6 +126,17 @@ func TestAttemptControlFencePostgres(t *testing.T) {
 		t.Fatalf("personal owner takeover after handback: %+v %v %v", next, changed, err)
 	}
 	if _, err := store.ReleaseAttemptControl(ctx, member, attempt.ID, 3); err != nil {
+		t.Fatal(err)
+	}
+	// Another member's personal connection is visible only to its owner:
+	// owners and admins may not take over while it is bound.
+	if ok, err := store.CanTakeOverAttempt(ctx, admin, attempt.ID); err != nil || ok {
+		t.Fatalf("admin may take over a member's personal connection: %v %v", ok, err)
+	}
+	if _, _, err := store.TakeOverAttempt(ctx, admin, attempt.ID); !errors.Is(err, ErrAttemptControlDenied) {
+		t.Fatalf("admin took control over a member's personal connection: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM access_bindings WHERE organization_id=$1 AND id='binding'`, org); err != nil {
 		t.Fatal(err)
 	}
 	if next, changed, err := store.TakeOverAttempt(ctx, admin, attempt.ID); err != nil || !changed || next.ControlGeneration != 5 {

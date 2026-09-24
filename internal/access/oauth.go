@@ -19,6 +19,13 @@ import (
 // versions hold refresh material and are never delivered by native_raw.
 const CodexSubscriptionAuth = "codex_chatgpt"
 
+// ClaudeSetupTokenAuth marks a member's own `claude setup-token`: a long-lived
+// Claude subscription token with no refresh material. It is delivered like an
+// API key (native_raw), but only to runs started by its owner, and only while
+// the organization allows members' own Claude subscriptions
+// (docs/model-gateway-plan.md §6.1).
+const ClaudeSetupTokenAuth = "claude_setup_token"
+
 const (
 	codexTokenURL = "https://auth.openai.com/oauth/token"
 	codexClientID = "app_EMoamEEZ73f0CkXaXp7hrann" // Codex CLI's public client (codex-rs/login).
@@ -30,9 +37,8 @@ const (
 var (
 	// ErrClaudeSubscriptionDisabled is a policy decision, not a missing
 	// feature; see docs/subscription-auth.md.
-	ErrClaudeSubscriptionDisabled = errors.New("Claude subscription connections are disabled by policy: " +
-		"Anthropic does not permit third-party platforms to collect, store, or intermediate Claude.ai " +
-		"credentials, and the Claude Code adapter runs --bare, which ignores CLAUDE_CODE_OAUTH_TOKEN; use an Anthropic API key")
+	ErrClaudeSubscriptionDisabled = errors.New("your organization has not enabled members' own Claude subscriptions; " +
+		"ask an owner or admin, or use an Anthropic API key")
 	ErrReconnect   = errors.New("subscription login must be reconnected")
 	ErrRateLimited = errors.New("subscription token endpoint rate limited")
 )

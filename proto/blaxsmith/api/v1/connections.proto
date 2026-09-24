@@ -97,6 +97,17 @@ message CreateCodexSubscriptionRequest {
 }
 message CreateCodexSubscriptionResponse { Connection connection = 1; }
 
+// A member's own `claude setup-token`, used only for runs they start
+// (docs/model-gateway-plan.md §6.1). Requires the organization switch.
+message CreateClaudeSubscriptionRequest {
+  string setup_token = 1; // Write-only.
+}
+message CreateClaudeSubscriptionResponse { Connection connection = 1; }
+message GetClaudeSubscriptionPolicyRequest {}
+message GetClaudeSubscriptionPolicyResponse { bool allow_member_claude_subscription = 1; }
+message SetClaudeSubscriptionPolicyRequest { bool allow_member_claude_subscription = 1; }
+message SetClaudeSubscriptionPolicyResponse { bool allow_member_claude_subscription = 1; }
+
 // Codex ChatGPT sign-in through the device-code flow. The platform requests
 // the code; the user approves it at verification_url; the client polls.
 message StartCodexDeviceLoginRequest {}
@@ -227,6 +238,9 @@ service ConnectionService {
   rpc CreateApiKeyConnection(CreateApiKeyConnectionRequest) returns (CreateApiKeyConnectionResponse);
   rpc CreateGitTokenConnection(CreateGitTokenConnectionRequest) returns (CreateGitTokenConnectionResponse);
   rpc CreateCodexSubscription(CreateCodexSubscriptionRequest) returns (CreateCodexSubscriptionResponse);
+  rpc CreateClaudeSubscription(CreateClaudeSubscriptionRequest) returns (CreateClaudeSubscriptionResponse);
+  rpc GetClaudeSubscriptionPolicy(GetClaudeSubscriptionPolicyRequest) returns (GetClaudeSubscriptionPolicyResponse);
+  rpc SetClaudeSubscriptionPolicy(SetClaudeSubscriptionPolicyRequest) returns (SetClaudeSubscriptionPolicyResponse);
   rpc StartCodexDeviceLogin(StartCodexDeviceLoginRequest) returns (StartCodexDeviceLoginResponse);
   rpc PollCodexDeviceLogin(PollCodexDeviceLoginRequest) returns (PollCodexDeviceLoginResponse);
   rpc ListConnectionModels(ListConnectionModelsRequest) returns (ListConnectionModelsResponse);

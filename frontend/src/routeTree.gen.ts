@@ -39,6 +39,7 @@ import { Route as AdminExtensionsNewRouteImport } from './routes/admin.extension
 import { Route as AdminRecipesIndexRouteImport } from './routes/admin.recipes.index'
 import { Route as AdminRecipesNewRouteImport } from './routes/admin.recipes.new'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin.settings.index'
+import { Route as AdminSettingsConnectionsRouteImport } from './routes/admin.settings.connections'
 import { Route as AdminSettingsGithubAppRouteImport } from './routes/admin.settings.github-app'
 import { Route as AdminSettingsModelGatewayRouteImport } from './routes/admin.settings.model-gateway'
 import { Route as AdminSettingsPoliciesRouteImport } from './routes/admin.settings.policies'
@@ -240,6 +241,12 @@ const AdminSettingsIndexRoute = AdminSettingsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminSettingsRoute,
 } as any)
+const AdminSettingsConnectionsRoute =
+  AdminSettingsConnectionsRouteImport.update({
+    id: '/connections',
+    path: '/connections',
+    getParentRoute: () => AdminSettingsRoute,
+  } as any)
 const AdminSettingsGithubAppRoute = AdminSettingsGithubAppRouteImport.update({
   id: '/github-app',
   path: '/github-app',
@@ -531,6 +538,7 @@ export interface FileRoutesByFullPath {
   '/admin/extensions/$extensionId': typeof AdminExtensionsExtensionIdRoute
   '/admin/extensions/new': typeof AdminExtensionsNewRoute
   '/admin/recipes/new': typeof AdminRecipesNewRoute
+  '/admin/settings/connections': typeof AdminSettingsConnectionsRoute
   '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
   '/admin/settings/model-gateway': typeof AdminSettingsModelGatewayRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
@@ -606,6 +614,7 @@ export interface FileRoutesByTo {
   '/admin/extensions/$extensionId': typeof AdminExtensionsExtensionIdRoute
   '/admin/extensions/new': typeof AdminExtensionsNewRoute
   '/admin/recipes/new': typeof AdminRecipesNewRoute
+  '/admin/settings/connections': typeof AdminSettingsConnectionsRoute
   '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
   '/admin/settings/model-gateway': typeof AdminSettingsModelGatewayRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
@@ -685,6 +694,7 @@ export interface FileRoutesById {
   '/admin/extensions/$extensionId': typeof AdminExtensionsExtensionIdRoute
   '/admin/extensions/new': typeof AdminExtensionsNewRoute
   '/admin/recipes/new': typeof AdminRecipesNewRoute
+  '/admin/settings/connections': typeof AdminSettingsConnectionsRoute
   '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
   '/admin/settings/model-gateway': typeof AdminSettingsModelGatewayRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
@@ -766,6 +776,7 @@ export interface FileRouteTypes {
     | '/admin/extensions/$extensionId'
     | '/admin/extensions/new'
     | '/admin/recipes/new'
+    | '/admin/settings/connections'
     | '/admin/settings/github-app'
     | '/admin/settings/model-gateway'
     | '/admin/settings/policies'
@@ -841,6 +852,7 @@ export interface FileRouteTypes {
     | '/admin/extensions/$extensionId'
     | '/admin/extensions/new'
     | '/admin/recipes/new'
+    | '/admin/settings/connections'
     | '/admin/settings/github-app'
     | '/admin/settings/model-gateway'
     | '/admin/settings/policies'
@@ -919,6 +931,7 @@ export interface FileRouteTypes {
     | '/admin/extensions/$extensionId'
     | '/admin/extensions/new'
     | '/admin/recipes/new'
+    | '/admin/settings/connections'
     | '/admin/settings/github-app'
     | '/admin/settings/model-gateway'
     | '/admin/settings/policies'
@@ -1208,6 +1221,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/admin/settings/'
       preLoaderRoute: typeof AdminSettingsIndexRouteImport
+      parentRoute: typeof AdminSettingsRoute
+    }
+    '/admin/settings/connections': {
+      id: '/admin/settings/connections'
+      path: '/connections'
+      fullPath: '/admin/settings/connections'
+      preLoaderRoute: typeof AdminSettingsConnectionsRouteImport
       parentRoute: typeof AdminSettingsRoute
     }
     '/admin/settings/github-app': {
@@ -1543,6 +1563,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminSettingsRouteChildren {
+  AdminSettingsConnectionsRoute: typeof AdminSettingsConnectionsRoute
   AdminSettingsGithubAppRoute: typeof AdminSettingsGithubAppRoute
   AdminSettingsModelGatewayRoute: typeof AdminSettingsModelGatewayRoute
   AdminSettingsPoliciesRoute: typeof AdminSettingsPoliciesRoute
@@ -1551,6 +1572,7 @@ interface AdminSettingsRouteChildren {
 }
 
 const AdminSettingsRouteChildren: AdminSettingsRouteChildren = {
+  AdminSettingsConnectionsRoute: AdminSettingsConnectionsRoute,
   AdminSettingsGithubAppRoute: AdminSettingsGithubAppRoute,
   AdminSettingsModelGatewayRoute: AdminSettingsModelGatewayRoute,
   AdminSettingsPoliciesRoute: AdminSettingsPoliciesRoute,

@@ -20,7 +20,6 @@ const laterFlags = [
   { id: "pacing", label: "Rate-aware pacing", phase: "G2", text: "Queue stages until a pool has headroom instead of failing them, with a visible reset countdown." },
   { id: "budgets", label: "Budgets & alerts", phase: "G3", text: "Soft budgets per organization, project or user with threshold alerts. No blocking." },
   { id: "personal", label: "Personal subscription routes", phase: "G4", text: "Each member's own subscription connection as a route for their own runs only. Never pooled or shared." },
-  { id: "claude", label: "Allow members' own Claude subscriptions", phase: "G4", text: "Members may use their own claude setup-token, only for runs they start." },
   { id: "content", label: "Content capture", phase: "a later phase", text: "Store redacted, encrypted request and response bodies for a limited retention. Off: only counts and metadata are recorded." },
 ];
 

@@ -97,6 +97,18 @@ func AuthorizeModelInvoke(ctx context.Context, tx pgx.Tx, request ModelInvoke) (
 		providerKind != request.Provider || providerOrigin != modelOrigin(request.Provider) {
 		return Decision{}, ErrDenied
 	}
+	if authMethod == ClaudeSetupTokenAuth {
+		// The org switch is checked at every release, so turning it off stops
+		// existing members' Claude subscriptions, not only new connections.
+		var allowed bool
+		if err := tx.QueryRow(ctx, `SELECT allow_member_claude_subscription FROM identity_organizations
+			WHERE id::text=$1 FOR SHARE`, request.OrganizationID).Scan(&allowed); err != nil {
+			return Decision{}, deniedOrError("Claude subscription policy", err)
+		}
+		if !allowed {
+			return Decision{}, ErrDenied
+		}
+	}
 	var now time.Time
 	if err := tx.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
 		return Decision{}, fmt.Errorf("read model policy clock: %w", err)
@@ -114,15 +126,25 @@ func AuthorizeModelInvoke(ctx context.Context, tx pgx.Tx, request ModelInvoke) (
 func deliveryAllowed(mode, authMethod, provider, ownerKind, ownerID, granteeKind, granteeID string) bool {
 	switch mode {
 	case "native_raw":
+		if authMethod == ClaudeSetupTokenAuth {
+			return ownerOnly(provider, "anthropic", ownerKind, ownerID, granteeKind, granteeID)
+		}
 		return authMethod != CodexSubscriptionAuth
 	case "brokered_gateway":
 		// The same credential shapes as native_raw, but the key stays on the
 		// platform and the gateway injects it (docs/model-gateway-plan.md §3).
 		// Personal subscription routes are a later phase (§6).
-		return authMethod != CodexSubscriptionAuth
+		// ponytail: a Claude setup-token needs Bearer + the OAuth beta header,
+		// not x-api-key, so it stays native_raw until the gateway injects that.
+		return authMethod != CodexSubscriptionAuth && authMethod != ClaudeSetupTokenAuth
 	case "oauth_access":
-		return authMethod == CodexSubscriptionAuth && provider == "openai" &&
-			ownerKind == "user" && granteeKind == "user" && granteeID == ownerID
+		return authMethod == CodexSubscriptionAuth && ownerOnly(provider, "openai", ownerKind, ownerID, granteeKind, granteeID)
 	}
 	return false
+}
+
+// ownerOnly is the personal-subscription rule (plan §10.3): the connection
+// belongs to a user, and the attempt's grantee is that same user.
+func ownerOnly(provider, want, ownerKind, ownerID, granteeKind, granteeID string) bool {
+	return provider == want && ownerKind == "user" && granteeKind == "user" && ownerID != "" && granteeID == ownerID
 }

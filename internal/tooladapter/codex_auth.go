@@ -127,7 +127,7 @@ func codexAuthSecrets() [][]byte {
 // leasedSecrets are every leased credential value visible to this process.
 func leasedSecrets() [][]byte {
 	var out [][]byte
-	for _, name := range credentialEnvNames {
+	for _, name := range append(append([]string(nil), credentialEnvNames...), redactOnlyEnvNames...) {
 		if key := os.Getenv(name); len(key) >= 8 {
 			out = append(out, []byte(key))
 		}

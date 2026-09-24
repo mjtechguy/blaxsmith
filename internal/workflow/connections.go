@@ -479,7 +479,7 @@ func (s *Store) DueModelRefresh(ctx context.Context, age time.Duration, limit in
 
 func connectionKind(authMethod, provider string) string {
 	switch {
-	case authMethod == access.CodexSubscriptionAuth:
+	case authMethod == access.CodexSubscriptionAuth, authMethod == access.ClaudeSetupTokenAuth:
 		return "subscription"
 	case provider == "git":
 		return "git"
@@ -782,7 +782,11 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 		return nil, nil, "", err
 	}
 	var rows pgx.Rows
-	subscription := r.AuthMethod == access.CodexSubscriptionAuth
+	subscription := r.AuthMethod == access.CodexSubscriptionAuth || r.AuthMethod == access.ClaudeSetupTokenAuth
+	subscriptionHarness := "codex"
+	if r.AuthMethod == access.ClaudeSetupTokenAuth {
+		subscriptionHarness = "claude-code"
+	}
 	if subscription {
 		// A ChatGPT plan has no public model list, and `codex app-server`
 		// model/list would need the login materialized outside custody. Offer
@@ -790,8 +794,8 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 		// then the manifest's OpenAI models.
 		rows, err = s.pool.Query(ctx, `SELECT DISTINCT model,model,NULL::timestamptz,NULL::integer,'',
 			false,false,''::text,'{}'::text[],''::text
-			FROM workflow_tool_runtime_approvals WHERE organization_id=$1 AND harness='codex' AND revoked_at IS NULL
-			ORDER BY 1`, caller.OrganizationID)
+			FROM workflow_tool_runtime_approvals WHERE organization_id=$1 AND harness=$2 AND revoked_at IS NULL
+			ORDER BY 1`, caller.OrganizationID, subscriptionHarness)
 	} else {
 		rows, err = s.pool.Query(ctx, `SELECT model_id,display_name,released_at,context_tokens,COALESCE(capabilities::text,''),
 			is_default,legacy,COALESCE(badge,''),efforts,COALESCE(default_effort,'')
@@ -915,6 +919,11 @@ func (s *Store) AddConnectionUseAs(ctx context.Context, caller identity.Caller, 
 		mode := "native_raw"
 		if r.AuthMethod == access.CodexSubscriptionAuth {
 			mode = "oauth_access"
+		}
+		if r.AuthMethod == access.ClaudeSetupTokenAuth {
+			if err := requireClaudeSubscriptionAllowed(ctx, tx, caller.OrganizationID); err != nil {
+				return ConnectionUse{}, err
+			}
 		}
 		if err := ensurePolicyMode(ctx, tx, caller.OrganizationID, projectID, mode, projectAdmin); err != nil {
 			return ConnectionUse{}, err

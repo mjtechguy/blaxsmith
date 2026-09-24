@@ -160,6 +160,7 @@ const connectError = (status, code, message) => ({ status, body: { code, message
 const hub = [];
 let deviceStarted = 0;
 let gitHubApp = { clientId: "", configured: false };
+const claudePolicy = { allowed: process.env.MOCK_CLAUDE_SUB === "1" };
 function hubAdd(fields) {
   const connection = { id: `conn-${hub.length + 1}`, ownerName: "", label: "", state: "active", grants: [], uses: [], lastUsedAt: "", createdAt: now(), modelCount: 0, modelsCheckedAt: "", modelsError: "", canManage: true, ...fields };
   connection.health = { state: "ready", auth: fields.kind === "git" ? "unknown" : "authenticated", identity: connection.kind === "api_key" ? connection.label : connection.account,
@@ -357,6 +358,11 @@ const rpc = {
   RevokeConnection: ({ connectionId }) => { const c = hub.find((x) => x.id === connectionId); if (c) c.state = "revoked"; return {}; },
   ListGitRepositories: ({ query = "" }) => ({ repositories: [{ fullName: "example/blaxsmith-demo", cloneUrl: "https://github.com/example/blaxsmith-demo.git", defaultBranch: "main", private: true }, { fullName: "example/billing", cloneUrl: "https://github.com/example/billing.git", defaultBranch: "trunk" }].filter((r) => r.fullName.includes(query)) }),
   ListGitBranches: () => ({ branches: ["main", "develop", "release/1.0"] }),
+  CreateClaudeSubscription: (body) => claudePolicy.allowed && /^sk-ant-oat[A-Za-z0-9_-]{8,500}$/.test(body?.setupToken ?? "")
+    ? hubAdd({ scope: "personal", ownerId: principalId, kind: "subscription", provider: "anthropic", account: "claude-subscription", label: "Claude subscription", modelCount: 3, modelsCheckedAt: now() })
+    : connectError(400, "failed_precondition", "your organization has not enabled members' own Claude subscriptions"),
+  GetClaudeSubscriptionPolicy: () => ({ allowMemberClaudeSubscription: claudePolicy.allowed }),
+  SetClaudeSubscriptionPolicy: (body) => { claudePolicy.allowed = Boolean(body?.allowMemberClaudeSubscription); return { allowMemberClaudeSubscription: claudePolicy.allowed }; },
   GetGitHubApp: () => ({ clientId: gitHubApp.clientId, configured: gitHubApp.configured, callbackUrl: "http://localhost:5173/oauth/github/callback" }),
   SetGitHubApp: ({ clientId, clientSecret = "" }) => { gitHubApp = { clientId, configured: gitHubApp.configured || Boolean(clientSecret) }; return gitHubApp; },
   ListOrgMembers: () => ({ members: [{ principalId, username: "you", displayName: "You", role: "owner", state: "active", createdAt: minutesAgo(60 * 24 * 30) },

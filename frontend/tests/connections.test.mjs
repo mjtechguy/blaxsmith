@@ -21,18 +21,26 @@ test("connection mutations send CSRF and write-only secrets to ConnectionService
     await m.addConnectionUse("c1", "p1", "opencode/gpt-5.1-codex");
     await m.grantConnection("c1", "", "role", "member");
     await m.listConnections("project_available", "p1");
+    await m.createClaudeSubscription("sk-ant-oat01-write-only");
+    await m.setClaudeSubscriptionPolicy(true);
+    await m.getClaudeSubscriptionPolicy();
     assert.deepEqual(requests.map((r) => [r.url.split("/api/")[1], r.csrf]), [
       ["blaxsmith.api.v1.ConnectionService/CreateApiKeyConnection", "C".repeat(43)],
       ["blaxsmith.api.v1.ConnectionService/AddConnectionUse", "C".repeat(43)],
       ["blaxsmith.api.v1.ConnectionService/GrantConnection", "C".repeat(43)],
       ["blaxsmith.api.v1.ConnectionService/ListConnections", null],
+      ["blaxsmith.api.v1.ConnectionService/CreateClaudeSubscription", "C".repeat(43)],
+      ["blaxsmith.api.v1.ConnectionService/SetClaudeSubscriptionPolicy", "C".repeat(43)],
+      ["blaxsmith.api.v1.ConnectionService/GetClaudeSubscriptionPolicy", null],
     ]);
+    assert.deepEqual(requests[4].body, { setupToken: "sk-ant-oat01-write-only" });
     assert.deepEqual(requests[0].body, { scope: "project", projectId: "p1", provider: "opencode", apiKey: "sk-secret", label: "Zen" });
     assert.deepEqual(requests[3].body, { scope: "project_available", projectId: "p1" });
     assert.equal(m.modelsSummary(created), "valid, 3 models");
     assert.equal(m.modelsSummary({ kind: "api_key", modelCount: 0, modelsCheckedAt: "x", modelsError: "invalid x-api-key" }), "invalid x-api-key");
     assert.equal(m.modelsSummary({ kind: "git", modelCount: 0, modelsCheckedAt: "", modelsError: "" }), "—");
-    assert.match(m.CLAUDE_SUBSCRIPTION_REASON, /Anthropic does not permit/);
+    assert.match(m.CLAUDE_SUBSCRIPTION_REASON, /has not enabled members. own Claude subscriptions/);
+    assert.ok(m.claudeSetupTokenShape.test("sk-ant-oat01-" + "a".repeat(40)) && !m.claudeSetupTokenShape.test("sk-ant-api03-" + "a".repeat(40)));
     // The Connection message has no secret-bearing fields for the UI to render.
     const { ConnectionSchema } = await server.ssrLoadModule("/src/gen/blaxsmith/api/v1/connections_pb.ts");
     const names = ConnectionSchema.fields.map((f) => f.name);

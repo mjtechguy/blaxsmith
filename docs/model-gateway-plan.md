@@ -172,17 +172,16 @@ once the gateway is GA.
     percent, window minutes, resets at) are reported in the Responses stream
     and by `codex app-server` `account/rateLimits`. Parse them from gateway
     responses.
-  - **Claude subscription:** planned as a per-user, owner-only option (§6.1).
-    Not built yet.
+  - **Claude subscription:** a per-user, owner-only option (§6.1).
   - **Others:** show "Not reported by provider" rather than guessing.
 - Shown to the owner in **My usage** (§9.2). Admins see only aggregate usage
   counts for personal routes, never the account identity or tokens.
 
-### 6.1 Claude subscription for its owner (planned)
+### 6.1 Claude subscription for its owner
 
-**Status:** planned, not built. A first implementation attempt was blocked by
-Claude Code's permission check in auto mode. It will be built step by step
-with the user approving each action (default permission mode).
+**Status:** built (branch `claude-sub`), native_raw delivery. Gateway delivery
+for this auth method is a follow-up: the gateway would have to inject
+`Authorization: Bearer` plus the OAuth beta header instead of `x-api-key`.
 
 **Scope: per user, owner-only.** It's the self-hosted equivalent of putting
 your own `claude setup-token` in your own CI secrets. It's not a platform-level
@@ -410,32 +409,6 @@ A live probe per harness through the gateway, credential-free with a mock
 upstream first and then real keys, is added to the proof set like the other
 probes in `docs/`.
 
-**G1 mock-upstream results (2026-09-24,** `BLAXSMITH_HARNESS_PROBE=1 go test
-./internal/gateway -run HarnessProbe`**):**
-
-- **Claude Code 2.1.282:** `--bare` honours `ANTHROPIC_BASE_URL` and sends
-  `ANTHROPIC_AUTH_TOKEN` as `Authorization: Bearer`; `ANTHROPIC_API_KEY`
-  alone goes as `x-api-key`. Both work; the worker sets both to the token.
-  Streaming, `anthropic-beta` (prompt caching included), a streamed
-  `tool_use` round trip, and a 429 with `retry-after` (the CLI retried after
-  1 s) all passed; cache read and write tokens were metered. It also sends
-  `HEAD <base>/api/hello` (answered 404, harmless) and made no auxiliary
-  model calls.
-- **Codex 0.156.1:** ignores `OPENAI_BASE_URL`, and `codex exec` does not
-  send `OPENAI_API_KEY` for the built-in provider (only `CODEX_API_KEY`).
-  `openai_base_url` works but the built-in provider first tries Responses
-  WebSockets (about 7 s of failed upgrades, then HTTPS). The worker
-  therefore selects a named model provider (`supports_websockets=false`,
-  `env_key="OPENAI_API_KEY"`) in argv for exec and resume: one HTTPS
-  streamed request, usage metered from `response.completed`.
-- **OpenCode 1.18.30** (local; the pinned 2.0.14 was not available):
-  provider `options.baseURL` plus `apiKey: "{env:OPENCODE_API_KEY}"` works;
-  usage came from the Chat Completions final chunk. It also calls a small
-  model for titles (`gpt-5.4-nano` via `/responses`), which the gateway
-  refuses as unapproved; the run still completes.
-- Still to verify with real keys, and Codex/OpenCode tool calls and 429
-  handling through the CLIs themselves.
-
 ## 14. Rollout
 
 1. **G1, brokered pass-through** (goal 1):
@@ -479,7 +452,7 @@ exactly as today (`native_raw` delivery) when it's disabled.
 | **Rate-aware pacing** | off | Enables §5 dispatcher back-pressure |
 | **Budgets & alerts** | off | Enables §8 |
 | **Personal subscription routes** | off | Enables §6 for this org, still owner-only |
-| **Allow members' own Claude subscriptions** | off | Enables §6.1 (planned): each member may use their own `claude setup-token`, only for runs they start |
+| **Allow members' own Claude subscriptions** | off | Enables §6.1: each member may use their own `claude setup-token`, only for runs they start. Lives in Admin → Settings → Connections; it is independent of the gateway master switch |
 | **Content capture** | off | §15.2 |
 
 - **Rollout:** each flag is evaluated per request and per dispatch. Changes

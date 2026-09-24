@@ -8,7 +8,7 @@ Checked on 2026-09-24 against provider docs and source. Items marked
 | Mode | Verdict | Blaxsmith behavior |
 |---|---|---|
 | Codex with a ChatGPT-plan sign-in | Allowed with conditions: the account owner's own use, on trusted private infrastructure, with no concurrent sharing of one `auth.json`. OpenAI still recommends API keys for automation. | Enabled as `oauth_access`, owner-only. |
-| Claude Code with a Pro/Max subscription (`claude setup-token` or `/login`) | Disallowed for Blaxsmith as a platform. Anthropic: "developers may not collect, store, or intermediate Claude.ai credentials or session tokens" and may not "route requests through Free, Pro, or Max plan credentials on behalf of their users". | Disabled by policy. `access.ErrClaudeSubscriptionDisabled` returns the reason to the API and UI. Use an Anthropic API key. |
+| Claude Code with a member's own `claude setup-token` | Anthropic: "developers may not collect, store, or intermediate Claude.ai credentials or session tokens" and may not "route requests through Free, Pro, or Max plan credentials on behalf of their users". Blaxsmith therefore offers this only as a self-hosted, per-member choice: an org owner/admin must opt in after reviewing the terms, and each token is used solely for its owner's own runs (the equivalent of the owner's own CI secret), never pooled or shared. | `claude_setup_token`, `native_raw`, owner-only (`access.deliveryAllowed`), off by default behind Admin → Settings → Connections, rechecked at every release. The worker runs Claude Code non-bare with the probe-verified isolation (`internal/tooladapter/claude_subscription.go`). `/login` sessions are not supported. |
 
 Sources:
 [Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance),

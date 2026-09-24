@@ -12,7 +12,7 @@ export const connectionsKey = (organizationId: string, scope: ListScope, project
 export const connectionModelsKey = (organizationId: string, connectionId: string, harness: string) => ["connection-models", organizationId, connectionId, harness] as const;
 export const gitHubAppKey = (organizationId: string) => ["github-app", organizationId] as const;
 
-export const CLAUDE_SUBSCRIPTION_REASON = "Anthropic does not permit third-party platforms to collect, store, or intermediate Claude.ai credentials; use an Anthropic API key.";
+export const CLAUDE_SUBSCRIPTION_REASON = "Your organization has not enabled members' own Claude subscriptions. Ask an owner or admin, or add an Anthropic API key.";
 
 export const apiKeyProviders = [
   { id: "anthropic", label: "Anthropic" },
@@ -85,6 +85,23 @@ export async function createGitTokenConnection(scope: Scope, projectId: string, 
 export async function createCodexSubscription(authJson: string) {
   return (await client.createCodexSubscription({ authJson }, await csrf())).connection;
 }
+
+export async function createClaudeSubscription(setupToken: string) {
+  return (await client.createClaudeSubscription({ setupToken }, await csrf())).connection;
+}
+
+export const claudePolicyKey = (org: string) => ["claude-subscription-policy", org] as const;
+
+export async function getClaudeSubscriptionPolicy(signal?: AbortSignal) {
+  return (await client.getClaudeSubscriptionPolicy({}, { signal })).allowMemberClaudeSubscription;
+}
+
+export async function setClaudeSubscriptionPolicy(allow: boolean) {
+  return (await client.setClaudeSubscriptionPolicy({ allowMemberClaudeSubscription: allow }, await csrf())).allowMemberClaudeSubscription;
+}
+
+/** The shape `claude setup-token` prints; the server re-checks it. */
+export const claudeSetupTokenShape = /^sk-ant-oat[A-Za-z0-9_-]{8,500}$/;
 
 export async function startCodexDeviceLogin() {
   return client.startCodexDeviceLogin({}, await csrf());

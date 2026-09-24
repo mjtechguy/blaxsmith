@@ -64,6 +64,8 @@ func connectionError(err error) error {
 	switch {
 	case errors.Is(err, workflow.ErrConnectionDenied):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("connection management denied"))
+	case errors.Is(err, access.ErrClaudeSubscriptionDisabled):
+		return connect.NewError(connect.CodeFailedPrecondition, access.ErrClaudeSubscriptionDisabled)
 	case errors.Is(err, access.ErrKeyRejected):
 		return connect.NewError(connect.CodeInvalidArgument, errors.New("the provider rejected this credential"))
 	}
@@ -200,6 +202,43 @@ func (s *connectionService) CreateCodexSubscription(ctx context.Context, req *co
 		return nil, connectionError(err)
 	}
 	return connect.NewResponse(&api.CreateCodexSubscriptionResponse{Connection: s.connectionMessage(c)}), nil
+}
+
+func (s *connectionService) CreateClaudeSubscription(ctx context.Context, req *connect.Request[api.CreateClaudeSubscriptionRequest]) (*connect.Response[api.CreateClaudeSubscriptionResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	token := []byte(strings.TrimSpace(req.Msg.SetupToken))
+	defer clear(token)
+	c, err := s.store.CreateClaudeSubscriptionAs(ctx, caller, token, s.secrets)
+	if err != nil {
+		return nil, connectionError(err)
+	}
+	return connect.NewResponse(&api.CreateClaudeSubscriptionResponse{Connection: s.connectionMessage(c)}), nil
+}
+
+func (s *connectionService) GetClaudeSubscriptionPolicy(ctx context.Context, req *connect.Request[api.GetClaudeSubscriptionPolicyRequest]) (*connect.Response[api.GetClaudeSubscriptionPolicyResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	allowed, err := s.store.ClaudeSubscriptionAllowed(ctx, caller)
+	if err != nil {
+		return nil, connectionError(err)
+	}
+	return connect.NewResponse(&api.GetClaudeSubscriptionPolicyResponse{AllowMemberClaudeSubscription: allowed}), nil
+}
+
+func (s *connectionService) SetClaudeSubscriptionPolicy(ctx context.Context, req *connect.Request[api.SetClaudeSubscriptionPolicyRequest]) (*connect.Response[api.SetClaudeSubscriptionPolicyResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.store.SetClaudeSubscriptionAllowedAs(ctx, caller, req.Msg.AllowMemberClaudeSubscription); err != nil {
+		return nil, connectionError(err)
+	}
+	return connect.NewResponse(&api.SetClaudeSubscriptionPolicyResponse{AllowMemberClaudeSubscription: req.Msg.AllowMemberClaudeSubscription}), nil
 }
 
 func randomID() (string, error) {

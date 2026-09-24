@@ -4,7 +4,7 @@
 // /admin layout and every admin RPC is enforced on the server.
 import {
   Activity, BookCopy, FolderKanban, Gauge, GitBranch, GitPullRequest, House, Inbox, KeyRound, LayoutDashboard,
-  ListChecks, Package, ScrollText, Settings, ShieldCheck, Timer, Users, Waypoints, Wrench, type LucideIcon,
+  ListChecks, Package, PlugZap, ScrollText, Settings, ShieldCheck, Timer, Users, Waypoints, Wrench, type LucideIcon,
 } from "lucide-react";
 
 export type NavItem = {
@@ -74,6 +74,7 @@ export function navigation({ role, projectId, projectName, gatewayEnabled }: Nav
     { id: "admin-settings", label: "Settings", href: "/admin/settings", icon: Settings, children: [
       { id: "admin-github-app", label: "GitHub app", href: "/admin/settings/github-app", icon: GitPullRequest },
       { id: "admin-model-gateway", label: "Model gateway", href: "/admin/settings/model-gateway", icon: Waypoints },
+      { id: "admin-connection-policy", label: "Connections", href: "/admin/settings/connections", icon: PlugZap },
       { id: "admin-policies", label: "Policies", href: "/admin/settings/policies", icon: ShieldCheck, soon: true },
       { id: "admin-retention", label: "Retention", href: "/admin/settings/retention", icon: Timer, soon: true },
     ] },

@@ -45,6 +45,15 @@ const (
 	// ConnectionServiceCreateCodexSubscriptionProcedure is the fully-qualified name of the
 	// ConnectionService's CreateCodexSubscription RPC.
 	ConnectionServiceCreateCodexSubscriptionProcedure = "/blaxsmith.api.v1.ConnectionService/CreateCodexSubscription"
+	// ConnectionServiceCreateClaudeSubscriptionProcedure is the fully-qualified name of the
+	// ConnectionService's CreateClaudeSubscription RPC.
+	ConnectionServiceCreateClaudeSubscriptionProcedure = "/blaxsmith.api.v1.ConnectionService/CreateClaudeSubscription"
+	// ConnectionServiceGetClaudeSubscriptionPolicyProcedure is the fully-qualified name of the
+	// ConnectionService's GetClaudeSubscriptionPolicy RPC.
+	ConnectionServiceGetClaudeSubscriptionPolicyProcedure = "/blaxsmith.api.v1.ConnectionService/GetClaudeSubscriptionPolicy"
+	// ConnectionServiceSetClaudeSubscriptionPolicyProcedure is the fully-qualified name of the
+	// ConnectionService's SetClaudeSubscriptionPolicy RPC.
+	ConnectionServiceSetClaudeSubscriptionPolicyProcedure = "/blaxsmith.api.v1.ConnectionService/SetClaudeSubscriptionPolicy"
 	// ConnectionServiceStartCodexDeviceLoginProcedure is the fully-qualified name of the
 	// ConnectionService's StartCodexDeviceLogin RPC.
 	ConnectionServiceStartCodexDeviceLoginProcedure = "/blaxsmith.api.v1.ConnectionService/StartCodexDeviceLogin"
@@ -98,6 +107,9 @@ type ConnectionServiceClient interface {
 	CreateApiKeyConnection(context.Context, *connect.Request[v1.CreateApiKeyConnectionRequest]) (*connect.Response[v1.CreateApiKeyConnectionResponse], error)
 	CreateGitTokenConnection(context.Context, *connect.Request[v1.CreateGitTokenConnectionRequest]) (*connect.Response[v1.CreateGitTokenConnectionResponse], error)
 	CreateCodexSubscription(context.Context, *connect.Request[v1.CreateCodexSubscriptionRequest]) (*connect.Response[v1.CreateCodexSubscriptionResponse], error)
+	CreateClaudeSubscription(context.Context, *connect.Request[v1.CreateClaudeSubscriptionRequest]) (*connect.Response[v1.CreateClaudeSubscriptionResponse], error)
+	GetClaudeSubscriptionPolicy(context.Context, *connect.Request[v1.GetClaudeSubscriptionPolicyRequest]) (*connect.Response[v1.GetClaudeSubscriptionPolicyResponse], error)
+	SetClaudeSubscriptionPolicy(context.Context, *connect.Request[v1.SetClaudeSubscriptionPolicyRequest]) (*connect.Response[v1.SetClaudeSubscriptionPolicyResponse], error)
 	StartCodexDeviceLogin(context.Context, *connect.Request[v1.StartCodexDeviceLoginRequest]) (*connect.Response[v1.StartCodexDeviceLoginResponse], error)
 	PollCodexDeviceLogin(context.Context, *connect.Request[v1.PollCodexDeviceLoginRequest]) (*connect.Response[v1.PollCodexDeviceLoginResponse], error)
 	ListConnectionModels(context.Context, *connect.Request[v1.ListConnectionModelsRequest]) (*connect.Response[v1.ListConnectionModelsResponse], error)
@@ -148,6 +160,24 @@ func NewConnectionServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			httpClient,
 			baseURL+ConnectionServiceCreateCodexSubscriptionProcedure,
 			connect.WithSchema(connectionServiceMethods.ByName("CreateCodexSubscription")),
+			connect.WithClientOptions(opts...),
+		),
+		createClaudeSubscription: connect.NewClient[v1.CreateClaudeSubscriptionRequest, v1.CreateClaudeSubscriptionResponse](
+			httpClient,
+			baseURL+ConnectionServiceCreateClaudeSubscriptionProcedure,
+			connect.WithSchema(connectionServiceMethods.ByName("CreateClaudeSubscription")),
+			connect.WithClientOptions(opts...),
+		),
+		getClaudeSubscriptionPolicy: connect.NewClient[v1.GetClaudeSubscriptionPolicyRequest, v1.GetClaudeSubscriptionPolicyResponse](
+			httpClient,
+			baseURL+ConnectionServiceGetClaudeSubscriptionPolicyProcedure,
+			connect.WithSchema(connectionServiceMethods.ByName("GetClaudeSubscriptionPolicy")),
+			connect.WithClientOptions(opts...),
+		),
+		setClaudeSubscriptionPolicy: connect.NewClient[v1.SetClaudeSubscriptionPolicyRequest, v1.SetClaudeSubscriptionPolicyResponse](
+			httpClient,
+			baseURL+ConnectionServiceSetClaudeSubscriptionPolicyProcedure,
+			connect.WithSchema(connectionServiceMethods.ByName("SetClaudeSubscriptionPolicy")),
 			connect.WithClientOptions(opts...),
 		),
 		startCodexDeviceLogin: connect.NewClient[v1.StartCodexDeviceLoginRequest, v1.StartCodexDeviceLoginResponse](
@@ -245,25 +275,28 @@ func NewConnectionServiceClient(httpClient connect.HTTPClient, baseURL string, o
 
 // connectionServiceClient implements ConnectionServiceClient.
 type connectionServiceClient struct {
-	listConnections          *connect.Client[v1.ListConnectionsRequest, v1.ListConnectionsResponse]
-	createApiKeyConnection   *connect.Client[v1.CreateApiKeyConnectionRequest, v1.CreateApiKeyConnectionResponse]
-	createGitTokenConnection *connect.Client[v1.CreateGitTokenConnectionRequest, v1.CreateGitTokenConnectionResponse]
-	createCodexSubscription  *connect.Client[v1.CreateCodexSubscriptionRequest, v1.CreateCodexSubscriptionResponse]
-	startCodexDeviceLogin    *connect.Client[v1.StartCodexDeviceLoginRequest, v1.StartCodexDeviceLoginResponse]
-	pollCodexDeviceLogin     *connect.Client[v1.PollCodexDeviceLoginRequest, v1.PollCodexDeviceLoginResponse]
-	listConnectionModels     *connect.Client[v1.ListConnectionModelsRequest, v1.ListConnectionModelsResponse]
-	refreshConnectionModels  *connect.Client[v1.RefreshConnectionModelsRequest, v1.RefreshConnectionModelsResponse]
-	grantConnection          *connect.Client[v1.GrantConnectionRequest, v1.GrantConnectionResponse]
-	revokeConnectionGrant    *connect.Client[v1.RevokeConnectionGrantRequest, v1.RevokeConnectionGrantResponse]
-	addConnectionUse         *connect.Client[v1.AddConnectionUseRequest, v1.AddConnectionUseResponse]
-	removeConnectionUse      *connect.Client[v1.RemoveConnectionUseRequest, v1.RemoveConnectionUseResponse]
-	revokeConnection         *connect.Client[v1.RevokeConnectionRequest, v1.RevokeConnectionResponse]
-	setRecommendedModels     *connect.Client[v1.SetRecommendedModelsRequest, v1.SetRecommendedModelsResponse]
-	listGitRepositories      *connect.Client[v1.ListGitRepositoriesRequest, v1.ListGitRepositoriesResponse]
-	listGitBranches          *connect.Client[v1.ListGitBranchesRequest, v1.ListGitBranchesResponse]
-	getGitHubApp             *connect.Client[v1.GetGitHubAppRequest, v1.GetGitHubAppResponse]
-	setGitHubApp             *connect.Client[v1.SetGitHubAppRequest, v1.SetGitHubAppResponse]
-	startGitHubConnect       *connect.Client[v1.StartGitHubConnectRequest, v1.StartGitHubConnectResponse]
+	listConnections             *connect.Client[v1.ListConnectionsRequest, v1.ListConnectionsResponse]
+	createApiKeyConnection      *connect.Client[v1.CreateApiKeyConnectionRequest, v1.CreateApiKeyConnectionResponse]
+	createGitTokenConnection    *connect.Client[v1.CreateGitTokenConnectionRequest, v1.CreateGitTokenConnectionResponse]
+	createCodexSubscription     *connect.Client[v1.CreateCodexSubscriptionRequest, v1.CreateCodexSubscriptionResponse]
+	createClaudeSubscription    *connect.Client[v1.CreateClaudeSubscriptionRequest, v1.CreateClaudeSubscriptionResponse]
+	getClaudeSubscriptionPolicy *connect.Client[v1.GetClaudeSubscriptionPolicyRequest, v1.GetClaudeSubscriptionPolicyResponse]
+	setClaudeSubscriptionPolicy *connect.Client[v1.SetClaudeSubscriptionPolicyRequest, v1.SetClaudeSubscriptionPolicyResponse]
+	startCodexDeviceLogin       *connect.Client[v1.StartCodexDeviceLoginRequest, v1.StartCodexDeviceLoginResponse]
+	pollCodexDeviceLogin        *connect.Client[v1.PollCodexDeviceLoginRequest, v1.PollCodexDeviceLoginResponse]
+	listConnectionModels        *connect.Client[v1.ListConnectionModelsRequest, v1.ListConnectionModelsResponse]
+	refreshConnectionModels     *connect.Client[v1.RefreshConnectionModelsRequest, v1.RefreshConnectionModelsResponse]
+	grantConnection             *connect.Client[v1.GrantConnectionRequest, v1.GrantConnectionResponse]
+	revokeConnectionGrant       *connect.Client[v1.RevokeConnectionGrantRequest, v1.RevokeConnectionGrantResponse]
+	addConnectionUse            *connect.Client[v1.AddConnectionUseRequest, v1.AddConnectionUseResponse]
+	removeConnectionUse         *connect.Client[v1.RemoveConnectionUseRequest, v1.RemoveConnectionUseResponse]
+	revokeConnection            *connect.Client[v1.RevokeConnectionRequest, v1.RevokeConnectionResponse]
+	setRecommendedModels        *connect.Client[v1.SetRecommendedModelsRequest, v1.SetRecommendedModelsResponse]
+	listGitRepositories         *connect.Client[v1.ListGitRepositoriesRequest, v1.ListGitRepositoriesResponse]
+	listGitBranches             *connect.Client[v1.ListGitBranchesRequest, v1.ListGitBranchesResponse]
+	getGitHubApp                *connect.Client[v1.GetGitHubAppRequest, v1.GetGitHubAppResponse]
+	setGitHubApp                *connect.Client[v1.SetGitHubAppRequest, v1.SetGitHubAppResponse]
+	startGitHubConnect          *connect.Client[v1.StartGitHubConnectRequest, v1.StartGitHubConnectResponse]
 }
 
 // ListConnections calls blaxsmith.api.v1.ConnectionService.ListConnections.
@@ -284,6 +317,21 @@ func (c *connectionServiceClient) CreateGitTokenConnection(ctx context.Context, 
 // CreateCodexSubscription calls blaxsmith.api.v1.ConnectionService.CreateCodexSubscription.
 func (c *connectionServiceClient) CreateCodexSubscription(ctx context.Context, req *connect.Request[v1.CreateCodexSubscriptionRequest]) (*connect.Response[v1.CreateCodexSubscriptionResponse], error) {
 	return c.createCodexSubscription.CallUnary(ctx, req)
+}
+
+// CreateClaudeSubscription calls blaxsmith.api.v1.ConnectionService.CreateClaudeSubscription.
+func (c *connectionServiceClient) CreateClaudeSubscription(ctx context.Context, req *connect.Request[v1.CreateClaudeSubscriptionRequest]) (*connect.Response[v1.CreateClaudeSubscriptionResponse], error) {
+	return c.createClaudeSubscription.CallUnary(ctx, req)
+}
+
+// GetClaudeSubscriptionPolicy calls blaxsmith.api.v1.ConnectionService.GetClaudeSubscriptionPolicy.
+func (c *connectionServiceClient) GetClaudeSubscriptionPolicy(ctx context.Context, req *connect.Request[v1.GetClaudeSubscriptionPolicyRequest]) (*connect.Response[v1.GetClaudeSubscriptionPolicyResponse], error) {
+	return c.getClaudeSubscriptionPolicy.CallUnary(ctx, req)
+}
+
+// SetClaudeSubscriptionPolicy calls blaxsmith.api.v1.ConnectionService.SetClaudeSubscriptionPolicy.
+func (c *connectionServiceClient) SetClaudeSubscriptionPolicy(ctx context.Context, req *connect.Request[v1.SetClaudeSubscriptionPolicyRequest]) (*connect.Response[v1.SetClaudeSubscriptionPolicyResponse], error) {
+	return c.setClaudeSubscriptionPolicy.CallUnary(ctx, req)
 }
 
 // StartCodexDeviceLogin calls blaxsmith.api.v1.ConnectionService.StartCodexDeviceLogin.
@@ -367,6 +415,9 @@ type ConnectionServiceHandler interface {
 	CreateApiKeyConnection(context.Context, *connect.Request[v1.CreateApiKeyConnectionRequest]) (*connect.Response[v1.CreateApiKeyConnectionResponse], error)
 	CreateGitTokenConnection(context.Context, *connect.Request[v1.CreateGitTokenConnectionRequest]) (*connect.Response[v1.CreateGitTokenConnectionResponse], error)
 	CreateCodexSubscription(context.Context, *connect.Request[v1.CreateCodexSubscriptionRequest]) (*connect.Response[v1.CreateCodexSubscriptionResponse], error)
+	CreateClaudeSubscription(context.Context, *connect.Request[v1.CreateClaudeSubscriptionRequest]) (*connect.Response[v1.CreateClaudeSubscriptionResponse], error)
+	GetClaudeSubscriptionPolicy(context.Context, *connect.Request[v1.GetClaudeSubscriptionPolicyRequest]) (*connect.Response[v1.GetClaudeSubscriptionPolicyResponse], error)
+	SetClaudeSubscriptionPolicy(context.Context, *connect.Request[v1.SetClaudeSubscriptionPolicyRequest]) (*connect.Response[v1.SetClaudeSubscriptionPolicyResponse], error)
 	StartCodexDeviceLogin(context.Context, *connect.Request[v1.StartCodexDeviceLoginRequest]) (*connect.Response[v1.StartCodexDeviceLoginResponse], error)
 	PollCodexDeviceLogin(context.Context, *connect.Request[v1.PollCodexDeviceLoginRequest]) (*connect.Response[v1.PollCodexDeviceLoginResponse], error)
 	ListConnectionModels(context.Context, *connect.Request[v1.ListConnectionModelsRequest]) (*connect.Response[v1.ListConnectionModelsResponse], error)
@@ -413,6 +464,24 @@ func NewConnectionServiceHandler(svc ConnectionServiceHandler, opts ...connect.H
 		ConnectionServiceCreateCodexSubscriptionProcedure,
 		svc.CreateCodexSubscription,
 		connect.WithSchema(connectionServiceMethods.ByName("CreateCodexSubscription")),
+		connect.WithHandlerOptions(opts...),
+	)
+	connectionServiceCreateClaudeSubscriptionHandler := connect.NewUnaryHandler(
+		ConnectionServiceCreateClaudeSubscriptionProcedure,
+		svc.CreateClaudeSubscription,
+		connect.WithSchema(connectionServiceMethods.ByName("CreateClaudeSubscription")),
+		connect.WithHandlerOptions(opts...),
+	)
+	connectionServiceGetClaudeSubscriptionPolicyHandler := connect.NewUnaryHandler(
+		ConnectionServiceGetClaudeSubscriptionPolicyProcedure,
+		svc.GetClaudeSubscriptionPolicy,
+		connect.WithSchema(connectionServiceMethods.ByName("GetClaudeSubscriptionPolicy")),
+		connect.WithHandlerOptions(opts...),
+	)
+	connectionServiceSetClaudeSubscriptionPolicyHandler := connect.NewUnaryHandler(
+		ConnectionServiceSetClaudeSubscriptionPolicyProcedure,
+		svc.SetClaudeSubscriptionPolicy,
+		connect.WithSchema(connectionServiceMethods.ByName("SetClaudeSubscriptionPolicy")),
 		connect.WithHandlerOptions(opts...),
 	)
 	connectionServiceStartCodexDeviceLoginHandler := connect.NewUnaryHandler(
@@ -515,6 +584,12 @@ func NewConnectionServiceHandler(svc ConnectionServiceHandler, opts ...connect.H
 			connectionServiceCreateGitTokenConnectionHandler.ServeHTTP(w, r)
 		case ConnectionServiceCreateCodexSubscriptionProcedure:
 			connectionServiceCreateCodexSubscriptionHandler.ServeHTTP(w, r)
+		case ConnectionServiceCreateClaudeSubscriptionProcedure:
+			connectionServiceCreateClaudeSubscriptionHandler.ServeHTTP(w, r)
+		case ConnectionServiceGetClaudeSubscriptionPolicyProcedure:
+			connectionServiceGetClaudeSubscriptionPolicyHandler.ServeHTTP(w, r)
+		case ConnectionServiceSetClaudeSubscriptionPolicyProcedure:
+			connectionServiceSetClaudeSubscriptionPolicyHandler.ServeHTTP(w, r)
 		case ConnectionServiceStartCodexDeviceLoginProcedure:
 			connectionServiceStartCodexDeviceLoginHandler.ServeHTTP(w, r)
 		case ConnectionServicePollCodexDeviceLoginProcedure:
@@ -568,6 +643,18 @@ func (UnimplementedConnectionServiceHandler) CreateGitTokenConnection(context.Co
 
 func (UnimplementedConnectionServiceHandler) CreateCodexSubscription(context.Context, *connect.Request[v1.CreateCodexSubscriptionRequest]) (*connect.Response[v1.CreateCodexSubscriptionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.ConnectionService.CreateCodexSubscription is not implemented"))
+}
+
+func (UnimplementedConnectionServiceHandler) CreateClaudeSubscription(context.Context, *connect.Request[v1.CreateClaudeSubscriptionRequest]) (*connect.Response[v1.CreateClaudeSubscriptionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.ConnectionService.CreateClaudeSubscription is not implemented"))
+}
+
+func (UnimplementedConnectionServiceHandler) GetClaudeSubscriptionPolicy(context.Context, *connect.Request[v1.GetClaudeSubscriptionPolicyRequest]) (*connect.Response[v1.GetClaudeSubscriptionPolicyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.ConnectionService.GetClaudeSubscriptionPolicy is not implemented"))
+}
+
+func (UnimplementedConnectionServiceHandler) SetClaudeSubscriptionPolicy(context.Context, *connect.Request[v1.SetClaudeSubscriptionPolicyRequest]) (*connect.Response[v1.SetClaudeSubscriptionPolicyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.ConnectionService.SetClaudeSubscriptionPolicy is not implemented"))
 }
 
 func (UnimplementedConnectionServiceHandler) StartCodexDeviceLogin(context.Context, *connect.Request[v1.StartCodexDeviceLoginRequest]) (*connect.Response[v1.StartCodexDeviceLoginResponse], error) {

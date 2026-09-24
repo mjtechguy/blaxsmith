@@ -287,8 +287,10 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 		runCtx, cancelRun = context.WithTimeout(ctx, in.maxRuntime)
 	}
 	defer cancelRun()
-	args := in.args
-	resume := append([]string(nil), in.resume...)
+	args, resume, toolEnv, err := claudeSubscriptionMode(in.runtime.Harness, workdir, home, in.args, append([]string(nil), in.resume...), toolEnv)
+	if err != nil {
+		return nil, err
+	}
 	switch in.runtime.Harness {
 	case "claude-code":
 		if in.extension != nil {

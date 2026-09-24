@@ -76,8 +76,9 @@ export function LoadError({ label, retry }: { label: string; retry: () => void }
 }
 
 // App confirmation for destructive decisions; creation stays on routed pages.
-export function ConfirmDialog({ title, body, confirmLabel, busy, error, onConfirm, onClose }: {
+export function ConfirmDialog({ title, body, confirmLabel, busy, error, onConfirm, onClose, tone = "danger" }: {
   title: string; body: ReactNode; confirmLabel: string; busy: boolean; error: string; onConfirm: () => void; onClose: () => void;
+  tone?: "danger" | "primary";
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { dialog.current?.showModal(); }, []);
@@ -88,7 +89,7 @@ export function ConfirmDialog({ title, body, confirmLabel, busy, error, onConfir
     {error ? <p className="auth-alert" role="alert">{error}</p> : null}
     <div className="review-confirm-actions">
       <button type="button" className="secondary-button" disabled={busy} onClick={onClose}>Cancel</button>
-      <button type="button" className="primary-button danger-button" disabled={busy} onClick={onConfirm}>{busy ? "Working…" : confirmLabel}</button>
+      <button type="button" className={tone === "danger" ? "primary-button danger-button" : "primary-button"} disabled={busy} onClick={onConfirm}>{busy ? "Working…" : confirmLabel}</button>
     </div>
   </dialog>;
 }

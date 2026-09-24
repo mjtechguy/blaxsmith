@@ -272,6 +272,11 @@ func prepareInteractive(l launch) {
 	case "claude-code":
 		// Skip onboarding, the custom-key confirmation, and the trust dialog.
 		name := filepath.Join(home, ".claude.json")
+		// Subscription mode sets CLAUDE_CONFIG_DIR, which moves the state file.
+		if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+			_ = os.MkdirAll(dir, 0700)
+			name = filepath.Join(dir, ".claude.json")
+		}
 		state := map[string]any{}
 		if data, err := os.ReadFile(name); err == nil {
 			_ = json.Unmarshal(data, &state)
