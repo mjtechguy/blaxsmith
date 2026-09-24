@@ -25,6 +25,14 @@ The [pinned task-tombstone patch](ax-task-tombstones.md) is a tested proposal
 for that contract; it is not deployed, and the current ephemeral AX Redis
 would lose its tombstones on restart.
 
+`RecoverySweep` now pages current `reserved` and `reconciling` owners after a
+connector restart. It fences interrupted reservations, then performs one
+bounded, read-only reconciliation per attempt. Missing or not-yet-running
+actors remain visible as waiting and cannot stall the rest of the page. This
+kernel is PostgreSQL/fake-AX tested, but no long-running connector invokes it
+yet. A missing task remains an operator-resolution case because AX cannot prove
+that an uncertain upsert will never arrive.
+
 The dedicated node proof on 2026-09-23 used the existing dev PostgreSQL
 database with a temporary schema and the authorized k3s node. The first run
 exposed a missing `KUBECONFIG` in the probe environment; its deferred cleanup

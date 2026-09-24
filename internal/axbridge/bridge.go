@@ -205,6 +205,14 @@ func (b *Bridge) reconcileUnknown(ctx context.Context, a workflow.Attempt) (boot
 func (b *Bridge) confirm(ctx context.Context, a workflow.Attempt, want Task, recovered bool) (bootstrap.Runtime, error) {
 	for {
 		got, err := b.AX.Get(ctx, want.Metadata.Atespace, want.Metadata.Name)
+		if recovered {
+			if errors.Is(err, ErrNotFound) {
+				return bootstrap.Runtime{}, ErrPending
+			}
+			if err != nil {
+				return bootstrap.Runtime{}, err
+			}
+		}
 		if err == nil && !sameTask(got, want) {
 			return bootstrap.Runtime{}, b.uncertain(a, ErrMismatch)
 		}
@@ -218,6 +226,14 @@ func (b *Bridge) confirm(ctx context.Context, a workflow.Attempt, want Task, rec
 			runtime, observeErr := b.Actor.Current(ctx, want.Metadata.Atespace, want.Metadata.Name)
 			if errors.Is(observeErr, ErrMismatch) {
 				return bootstrap.Runtime{}, b.uncertain(a, ErrMismatch)
+			}
+			if recovered {
+				if errors.Is(observeErr, ErrPending) || errors.Is(observeErr, ErrNotFound) {
+					return bootstrap.Runtime{}, ErrPending
+				}
+				if observeErr != nil {
+					return bootstrap.Runtime{}, observeErr
+				}
 			}
 			if observeErr == nil {
 				if !b.validRuntime(runtime, want) {

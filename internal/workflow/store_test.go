@@ -127,6 +127,10 @@ func TestWorkflowPostgres(t *testing.T) {
 	if winners != 1 || conflicts != 11 || first.OwnerGeneration != 1 {
 		t.Fatalf("reservation race: %d winners, %d conflicts, generation %d", winners, conflicts, first.OwnerGeneration)
 	}
+	unresolved, err := store.ListUnresolvedAttempts(ctx, "", "", 100)
+	if err != nil || len(unresolved) != 1 || unresolved[0].ID != first.ID || unresolved[0].State != "reserved" {
+		t.Fatalf("reserved owner missing from recovery scan: %+v, %v", unresolved, err)
+	}
 	if _, err := store.AddTask(ctx, org, run.ID, "late", in.BundleSHA256, 1); !errors.Is(err, ErrConflict) {
 		t.Fatalf("changed active graph accepted: %v", err)
 	}

@@ -217,6 +217,21 @@ func TestAttemptDispatchAndUncertainReadBack(t *testing.T) {
 	if _, state, _, err := store.CurrentAttempt(ctx, missing); err != nil || state != "reconciling" {
 		t.Fatalf("missing task unfenced: %q %v", state, err)
 	}
+	batch, err := (&RecoverySweep{Workflow: store, Bridge: func(_ context.Context, attempt workflow.Attempt) (*Bridge, error) {
+		if attempt.ID == missing.ID {
+			return bridge, nil
+		}
+		if attempt.ID == replacement.ID {
+			return makeBridge(attempt, &fakeAX{}), nil
+		}
+		return nil, workflow.ErrNotFound
+	}}).Sweep(ctx, "", "", 10)
+	if err != nil || batch.Examined != 2 || batch.Waiting != 2 || batch.Recovered != 0 {
+		t.Fatalf("bounded recovery sweep: %+v, %v", batch, err)
+	}
+	if _, state, _, err := store.CurrentAttempt(ctx, replacement); err != nil || state != "reconciling" {
+		t.Fatalf("interrupted reservation was not fenced for reconciliation: %q %v", state, err)
+	}
 }
 
 func bridgePool(t *testing.T) *pgxpool.Pool {
