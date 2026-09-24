@@ -39,3 +39,10 @@ export async function renderInRouter(node: ReactNode, path = "/") {
   await router.load();
   return renderToString(<QueryClientProvider client={queryClient}><RouterProvider router={router as never} /></QueryClientProvider>);
 }
+
+// A setup checklist with the given steps (done: true, false, or undefined while loading).
+export async function renderChecklist(items: Array<{ id: string; done: boolean | undefined }>) {
+  const { SetupChecklist } = await import("../src/setup-checklist");
+  return renderInRouter(<SetupChecklist title="Set up this project" storageKey="test-checklist"
+    items={items.map((i) => ({ ...i, label: `Step ${i.id}`, hint: `Do ${i.id}`, to: "/" }))} />);
+}

@@ -52,7 +52,7 @@ test("moved pages redirect from their old URLs", async () => {
 });
 
 test("templates: settings sections, create flow steps, detail tabs, and account menu", async () => {
-  await withApp(async ({ renderApp, renderDetailFixture }) => {
+  await withApp(async ({ renderApp, renderDetailFixture, renderChecklist }) => {
     const owner = session("owner");
     const settings = await renderApp("/projects/p1/settings/source", owner);
     assert.match(settings, /<nav class="settings-nav" aria-label="Settings sections">/);
@@ -73,6 +73,18 @@ test("templates: settings sections, create flow steps, detail tabs, and account 
       assert.doesNotMatch(page, /<input(?![^>]*type="(search|checkbox)")/, `${section} has no editable form`);
     }
     assert.match(await renderApp("/me/settings/preferences", owner), /type="radio"/);
+
+    // Setup checklists list what is left and fold finished steps into one disclosure.
+    const partial = await renderChecklist([{ id: "a", done: true }, { id: "b", done: false }, { id: "c", done: true }]);
+    assert.match(partial, /2 of 3 done · 1 step left/);
+    assert.match(partial, /Step b/);
+    assert.doesNotMatch(partial, /Step a|Step c/, "finished steps start collapsed");
+    assert.match(partial, /aria-expanded="false"[^>]*>.*?2<!-- --> done · <!-- -->Show/s);
+    const complete = await renderChecklist([{ id: "a", done: true }, { id: "b", done: true }]);
+    assert.match(complete, /Setup complete/);
+    assert.match(complete, /aria-label="Dismiss Set up this project"/);
+    assert.doesNotMatch(complete, /Step a|<ol/, "a finished checklist is one compact line");
+    assert.doesNotMatch(await renderChecklist([{ id: "a", done: true }, { id: "b", done: undefined }]), /Setup complete/, "not complete while loading");
 
     const detail = await renderDetailFixture();
     assert.match(detail, /<nav class="route-tabs" aria-label="Run sections">/);

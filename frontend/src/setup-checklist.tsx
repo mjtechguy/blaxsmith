@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, CircleCheck, CircleDashed, ListChecks, X } from "lucide-react";
+import { ArrowRight, ChevronRight, CircleCheck, CircleDashed, ListChecks, X } from "lucide-react";
 import { listAuditEvents } from "./admin";
 import { currentSession, sessionQueryKey } from "./auth";
 import { listConnections } from "./connections";
@@ -41,23 +41,39 @@ function useSession() {
   return { org: session.data?.organizationId || "", principal: session.data?.principalId || "" };
 }
 
+function ChecklistStep({ item }: { item: ChecklistItem }) {
+  return <li className={item.done ? "is-done" : undefined}>
+    {item.done ? <CircleCheck size={17} aria-hidden="true" /> : <CircleDashed size={17} aria-hidden="true" />}
+    <span><strong>{item.label}</strong><small>{item.done === undefined ? "Checking…" : item.done ? "Done" : item.hint}</small></span>
+    {item.done ? null : <Link className="text-action" to={item.to as "/"}>{item.done === undefined ? "Open" : "Set up"} <ArrowRight size={13} aria-hidden="true" /></Link>}
+    <span className="sr-only">{item.done ? "complete" : "incomplete"}</span>
+  </li>;
+}
+
+// Remaining steps are listed; finished ones fold into one "N done · Show"
+// disclosure. When everything is done a single dismissible line remains.
 export function SetupChecklist({ title, items, storageKey }: { title: string; items: ChecklistItem[]; storageKey: string }) {
   const [dismissed, setDismissed] = useDismissed(storageKey);
-  const { done, loading, complete, label } = checklistProgress(items);
-  if (!loading && complete) return null;
-  if (dismissed) return <button type="button" className="text-action checklist-restore" onClick={() => setDismissed(false)}><ListChecks size={14} aria-hidden="true" /> Show setup checklist ({done} of {items.length})</button>;
-  return <section className="table-section checklist" aria-labelledby={`${storageKey}-heading`}>
-    <div className="table-heading"><div><h2 id={`${storageKey}-heading`}><ListChecks size={15} aria-hidden="true" /> {title}</h2>
-      <p>{loading ? "Checking what is set up…" : `${label}. Each step links to where you do it.`}</p></div>
-      <button type="button" className="secondary-button" onClick={() => setDismissed(true)} aria-label={`Dismiss ${title}`}><X size={15} aria-hidden="true" /> Dismiss</button></div>
-    <ol className="checklist-items">
-      {items.map((item) => <li key={item.id} className={item.done ? "is-done" : undefined}>
-        {item.done ? <CircleCheck size={17} aria-hidden="true" /> : <CircleDashed size={17} aria-hidden="true" />}
-        <span><strong>{item.label}</strong><small>{item.done === undefined ? "Checking…" : item.done ? "Done" : item.hint}</small></span>
-        {item.done ? null : <Link className="text-action" to={item.to as "/"}>{item.done === undefined ? "Open" : "Set up"} <ArrowRight size={13} aria-hidden="true" /></Link>}
-        <span className="sr-only">{item.done ? "complete" : "incomplete"}</span>
-      </li>)}
-    </ol>
+  const [showDone, setShowDone] = useState(false);
+  const { done, total, loading, complete, label, leftLabel } = checklistProgress(items);
+  const headingId = `${storageKey}-heading`;
+  const doneId = `${storageKey}-done`;
+  const dismiss = <button type="button" className="secondary-button" onClick={() => setDismissed(true)} aria-label={`Dismiss ${title}`}><X size={15} aria-hidden="true" /> Dismiss</button>;
+  if (dismissed) return complete ? null
+    : <button type="button" className="text-action checklist-restore" onClick={() => setDismissed(false)}><ListChecks size={14} aria-hidden="true" /> Show setup checklist ({label})</button>;
+  if (complete) return <section className="checklist-complete" aria-label={title}>
+    <CircleCheck size={17} aria-hidden="true" /><p><strong>Setup complete</strong> <span>All {total} steps done.</span></p>{dismiss}
+  </section>;
+  const finished = items.filter((item) => item.done);
+  return <section className="table-section checklist" aria-labelledby={headingId}>
+    <div className="table-heading"><div><h2 id={headingId}><ListChecks size={15} aria-hidden="true" /> {title}</h2>
+      <p>{loading ? "Checking what is set up…" : `${label} · ${leftLabel}. Each step links to where you do it.`}</p></div>{dismiss}</div>
+    <ol className="checklist-items">{items.filter((item) => !item.done).map((item) => <ChecklistStep key={item.id} item={item} />)}</ol>
+    {done ? <div className="checklist-done">
+      <button type="button" className="disclosure-toggle" aria-expanded={showDone} aria-controls={doneId} onClick={() => setShowDone(!showDone)}>
+        <ChevronRight size={14} aria-hidden="true" className={showDone ? "is-open" : undefined} />{done} done · {showDone ? "Hide" : "Show"}</button>
+      {showDone ? <ol id={doneId} className="checklist-items" aria-label="Completed steps">{finished.map((item) => <ChecklistStep key={item.id} item={item} />)}</ol> : null}
+    </div> : null}
   </section>;
 }
 

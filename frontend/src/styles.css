@@ -930,6 +930,14 @@ a.row-title:hover { color: var(--primary); text-decoration: underline; }
 .checklist-items li.is-done strong { color: var(--muted); text-decoration: line-through; }
 .checklist .table-heading h2 { display: flex; align-items: center; gap: 6px; }
 .checklist-restore { align-self: flex-start; }
+.checklist-done { padding: 0 20px 14px; border-top: 1px solid var(--line); }
+.checklist-done > .disclosure-toggle { padding-top: 10px; }
+.checklist-done .checklist-items { padding: 0; }
+.checklist-complete { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.checklist-complete > svg { flex: none; color: var(--success-text); }
+.checklist-complete p { display: flex; flex: 1; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; margin: 0; min-width: 0; font-size: 13px; }
+.checklist-complete p strong { font-weight: 650; }
+.checklist-complete p span { color: var(--muted); font-size: 12px; }
 
 /* Command palette. */
 .command-palette { width: min(640px, calc(100vw - 32px)); max-height: min(560px, calc(100vh - 96px)); margin: 12vh auto auto; padding: 0; overflow: hidden;
