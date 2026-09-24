@@ -53,7 +53,7 @@ func totalsMessage(t workflow.UsageTotals) *api.UsageTotals {
 func slicesMessage(items []workflow.UsageSlice) []*api.UsageSlice {
 	out := make([]*api.UsageSlice, 0, len(items))
 	for _, item := range items {
-		out = append(out, &api.UsageSlice{Key: item.Key, Label: item.Label, Detail: item.Detail, Totals: totalsMessage(item.Totals)})
+		out = append(out, &api.UsageSlice{Key: item.Key, Label: item.Label, Detail: item.Detail, ProjectId: item.ProjectID, Totals: totalsMessage(item.Totals)})
 	}
 	return out
 }

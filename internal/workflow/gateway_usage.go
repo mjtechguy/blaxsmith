@@ -241,8 +241,8 @@ type UsageTotals struct {
 }
 
 type UsageSlice struct {
-	Key, Label, Detail string
-	Totals             UsageTotals
+	Key, Label, Detail, ProjectID string
+	Totals                        UsageTotals
 }
 
 type UsagePoint struct {
@@ -395,12 +395,25 @@ func firstString(values ...string) string {
 }
 
 func (s *Store) topRuns(ctx context.Context, tx pgx.Tx, org, principal string, since time.Time) ([]UsageSlice, error) {
-	return s.slices(ctx, tx, `SELECT u.run_id::text,r.launch_key,COALESCE(p.name,''),
+	rows, err := tx.Query(ctx, `SELECT r.project_id::text,u.run_id::text,r.launch_key,COALESCE(p.name,''),
 		u.requests,u.errors,0,u.input_tokens,u.output_tokens,u.cache_read_tokens,u.cache_write_tokens,u.reasoning_tokens,u.cost_usd_micros
 		FROM gateway_run_usage u JOIN workflow_runs r ON r.organization_id=u.organization_id AND r.id=u.run_id
 		LEFT JOIN workflow_projects p ON p.organization_id=r.organization_id AND p.id=r.project_id
 		WHERE u.organization_id=$1 AND ($2='' OR u.principal_id=$2) AND u.last_request_at>=$3
 		ORDER BY u.cost_usd_micros DESC, u.run_id LIMIT 10`, org, principal, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []UsageSlice{}
+	for rows.Next() {
+		var item UsageSlice
+		if item.Totals, err = scanTotals(rows, &item.ProjectID, &item.Key, &item.Label, &item.Detail); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
 }
 
 type MyUsage struct {

@@ -54,6 +54,7 @@ message UsageSlice {
   string label = 2; // Display name.
   string detail = 3; // Secondary text, e.g. a run's project.
   UsageTotals totals = 4;
+  string project_id = 5; // Set for runs, so the row links to the run page.
 }
 
 // One day of spend for one series key (project or model).

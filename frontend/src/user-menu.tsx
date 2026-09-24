@@ -3,10 +3,11 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Cable, Check, Command, LogOut, Monitor, Moon, Settings, Sun } from "lucide-react";
+import { Cable, Check, Command, Gauge, LogOut, Monitor, Moon, Settings, Sun } from "lucide-react";
 import { initials, useAccount } from "./account";
 import { announceSessionChange, clearWorkspaceCache, logout, sessionQueryKey } from "./auth";
 import { setPrefs, usePrefs, type Theme } from "./preferences";
+import { useGatewayEnabled } from "./gateway";
 import { hasSlot } from "./slots";
 
 const roleLabel: Record<string, string> = { owner: "Owner", admin: "Admin", member: "Member", viewer: "Viewer" };
@@ -23,6 +24,7 @@ export function UserMenu() {
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const id = useId();
+  const gatewayEnabled = useGatewayEnabled();
   const name = account?.displayName || account?.username || "Your account";
 
   const items = () => [...(menu.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([aria-disabled="true"])') ?? [])];
@@ -65,7 +67,7 @@ export function UserMenu() {
       setSigningOut(false);
     }
   }
-  const go = (to: "/me/settings" | "/me/connections") => { close(false); void navigate({ to }); };
+  const go = (to: "/me/settings" | "/me/connections" | "/me/usage") => { close(false); void navigate({ to }); };
 
   return <div className="user-menu">
     <button ref={button} type="button" className="avatar-button" id={`${id}-button`} aria-haspopup="menu" aria-expanded={isOpen} aria-controls={`${id}-menu`}
@@ -84,6 +86,7 @@ export function UserMenu() {
       <div className="user-menu-separator" role="separator" />
       <button type="button" role="menuitem" tabIndex={-1} className="user-menu-item" onClick={() => go("/me/settings")}><Settings size={15} aria-hidden="true" /> Account settings</button>
       <button type="button" role="menuitem" tabIndex={-1} className="user-menu-item" onClick={() => go("/me/connections")}><Cable size={15} aria-hidden="true" /> My connections</button>
+      {gatewayEnabled ? <button type="button" role="menuitem" tabIndex={-1} className="user-menu-item" onClick={() => go("/me/usage")}><Gauge size={15} aria-hidden="true" /> My usage</button> : null}
       <div className="user-menu-separator" role="separator" />
       <div role="group" aria-label="Theme" className="user-menu-group">
         <span className="user-menu-label" aria-hidden="true">Theme</span>

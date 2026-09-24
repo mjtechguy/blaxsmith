@@ -423,6 +423,7 @@ type UsageSlice struct {
 	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`   // Display name.
 	Detail        string                 `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"` // Secondary text, e.g. a run's project.
 	Totals        *UsageTotals           `protobuf:"bytes,4,opt,name=totals,proto3" json:"totals,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,5,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"` // Set for runs, so the row links to the run page.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -483,6 +484,13 @@ func (x *UsageSlice) GetTotals() *UsageTotals {
 		return x.Totals
 	}
 	return nil
+}
+
+func (x *UsageSlice) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
 }
 
 // One day of spend for one series key (project or model).
@@ -1800,13 +1808,15 @@ const file_blaxsmith_api_v1_gateway_proto_rawDesc = "" +
 	"\x11cache_read_tokens\x18\x06 \x01(\x03R\x0fcacheReadTokens\x12,\n" +
 	"\x12cache_write_tokens\x18\a \x01(\x03R\x10cacheWriteTokens\x12)\n" +
 	"\x10reasoning_tokens\x18\b \x01(\x03R\x0freasoningTokens\x12&\n" +
-	"\x0fcost_usd_micros\x18\t \x01(\x03R\rcostUsdMicros\"\x83\x01\n" +
+	"\x0fcost_usd_micros\x18\t \x01(\x03R\rcostUsdMicros\"\xa2\x01\n" +
 	"\n" +
 	"UsageSlice\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x16\n" +
 	"\x06detail\x18\x03 \x01(\tR\x06detail\x125\n" +
-	"\x06totals\x18\x04 \x01(\v2\x1d.blaxsmith.api.v1.UsageTotalsR\x06totals\"p\n" +
+	"\x06totals\x18\x04 \x01(\v2\x1d.blaxsmith.api.v1.UsageTotalsR\x06totals\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x05 \x01(\tR\tprojectId\"p\n" +
 	"\n" +
 	"UsagePoint\x12\x10\n" +
 	"\x03day\x18\x01 \x01(\tR\x03day\x12\x10\n" +
