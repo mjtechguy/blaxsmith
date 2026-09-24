@@ -30,8 +30,7 @@ type LeaseRequest struct {
 }
 
 // ModelLeaseRequest is prepared for a single provider credential in an
-// attested bootstrap release. The current schema permits only one lease per
-// challenge, so model and private-Git credentials cannot share a release.
+// attested bootstrap release.
 type ModelLeaseRequest struct {
 	OrganizationID  string
 	BindingID       string

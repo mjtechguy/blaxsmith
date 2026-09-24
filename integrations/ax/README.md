@@ -73,8 +73,10 @@ provenance](provenance-encrypted-git.json), [task-tombstone
 provenance](provenance-task-tombstones.json), [Redis connection
 provenance](provenance-redis-ha.json), [consumer-recovery
 provenance](provenance-consumer-recovery.json), and [resource-contract
-provenance](provenance-task-resources.json) are evidence of tested Linux
-builds, not signatures.
+provenance](provenance-task-resources.json) document incremental checks. The
+[composite capability bundle provenance](provenance-multicapability.json)
+records a full current overlay test, vet, and Linux/AMD64 build. These records
+are evidence of tested builds, not signatures.
 
 ## Synthetic bootstrap gate
 
@@ -127,16 +129,19 @@ The [live private-Git probe](../../docs/bootstrap-private-git-probe.json) and
 Product grants, complete egress, full-snapshot behavior, and revocation remain
 open; do not use this slice for sensitive work.
 
-The provider credential overlay accepts a separate `model_api_key` payload
-through the same signed X25519 envelope. It requires the exact
-`/usr/local/bin/blaxsmith-tool-worker` task command, matches the encrypted
-attempt and provider to its public selection, and writes only
-`/run/blaxsmith/agent-credential.json` (0600) in a pre-owned private directory.
-The runner removes that file on command exit. The product must supply a
-combined immutable runner/CLI/worker image and current model grant, binding,
-secret and lease callbacks. The existing one-lease-per-challenge schema blocks
-simultaneous private Git and provider-key delivery. Revocation after a raw key
-has entered the pod must stop that actor and rotate the provider key if needed.
+The provider credential overlay reads a versioned capability bundle inside the
+same signed X25519 envelope as private Git setup. It can carry one Git binding
+and one model binding; each retains its own lease and revocation record. The AX
+runner checks the task's declared Git workspace before using that credential,
+requires the exact `/usr/local/bin/blaxsmith-tool-worker` command for model
+keys, matches the encrypted attempt and provider to its public selection, and
+writes only `/run/blaxsmith/agent-credential.json` (0600) in a pre-owned private
+directory. The runner removes that file on command exit. The product must
+supply a combined immutable runner/CLI/worker image and current grant, binding,
+secret, lease, and frozen Workspace inputs. The library can authorize and seal
+both capabilities, but the dispatcher does not yet build the AX Workspace from
+the approved Git binding. Revocation after a raw credential has entered the
+pod must stop that actor and rotate the provider credential if needed.
 
 The initial launch regression tests were also run against unmodified upstream
 production code. They failed on template fallback, policy failure, hidden stop failure,

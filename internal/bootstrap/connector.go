@@ -43,9 +43,10 @@ func (r Runtime) DataOnlySnapshots() bool {
 		r.ResumeFromData == "RESUME_SOURCE_GOLDEN" && r.SnapshotStorage != ""
 }
 
-// Connector opens the pre-workspace gate and can deliver one authorized Git
-// setup or model credential. The caller must authenticate the scheduler assignment and
-// implement Current and Authorize against trusted control-plane/policy state.
+// Connector opens the pre-workspace gate and can deliver authorized Git setup
+// and model credentials in one encrypted release. The caller must authenticate
+// the scheduler assignment and implement Current and Authorize against trusted
+// control-plane/policy state.
 type Connector struct {
 	Ledger    *Ledger
 	Client    *http.Client
@@ -64,8 +65,8 @@ type Connector struct {
 	// GitSetup runs only after proof, owner fencing, runtime check, and policy.
 	// The returned token byte slice is consumed and cleared by Open.
 	GitSetup func(context.Context, pgx.Tx, Runtime) (GitSetup, error)
-	// ModelCredential is mutually exclusive with GitSetup until the durable
-	// lease schema can record multiple capabilities per challenge.
+	// ModelCredential may accompany GitSetup. Each capability has its own
+	// binding and lease even though both are sealed to the same actor challenge.
 	ModelCredential func(context.Context, pgx.Tx, Runtime) (ModelCredential, error)
 }
 
@@ -94,7 +95,6 @@ func validGitCommit(commit string) bool {
 func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) error {
 	if c.Ledger == nil || c.Client == nil || c.Token == nil || c.Roots == nil ||
 		len(c.Signer) != ed25519.PrivateKeySize || c.Current == nil || c.Authorize == nil ||
-		(c.GitSetup != nil && c.ModelCredential != nil) ||
 		((c.GitSetup != nil || c.ModelCredential != nil) != (c.Reserve != nil && c.Delivered != nil)) ||
 		((c.Reserve == nil) != (c.Delivered == nil)) ||
 		expected.Actor.Atespace == "" || expected.Actor.Name == "" || expected.Actor.UID == "" ||
@@ -144,38 +144,26 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 		message := []byte("blaxsmith/bootstrap/release/v1\n" + challenge.Nonce + "\n" +
 			strconv.FormatInt(challenge.ExpiresAt, 10) + "\n" + challenge.Atespace + "\n" + challenge.Task + "\n")
 		var envelope *Envelope
+		var git *GitSetup
 		if c.GitSetup != nil {
 			setup, err := c.GitSetup(sendCtx, tx, current)
 			if err != nil {
 				return err
 			}
 			defer clear(setup.Token)
-			u, err := url.Parse(setup.RepoURL)
-			if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.Path == "" || u.Path == "/" || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || !validGitCommit(setup.Commit) || setup.Username == "" || len(setup.Username) > 128 || len(setup.Token) == 0 || len(setup.Token) > 8192 || strings.ContainsAny(setup.RepoURL+setup.Username+string(setup.Token), "\r\n\x00") {
-				return ErrDenied
-			}
-			payload, err := json.Marshal(struct {
-				RepoURL  string `json:"repo_url"`
-				Commit   string `json:"commit"`
-				Username string `json:"username"`
-				Token    string `json:"token"`
-			}{setup.RepoURL, setup.Commit, setup.Username, string(setup.Token)})
-			if err != nil {
-				return err
-			}
-			sealed, err := Seal(challenge, payload)
-			clear(payload)
-			if err != nil {
-				return err
-			}
-			envelope = &sealed
-		} else if c.ModelCredential != nil {
+			git = &setup
+		}
+		var model *ModelCredential
+		if c.ModelCredential != nil {
 			credential, err := c.ModelCredential(sendCtx, tx, current)
 			if err != nil {
 				return err
 			}
 			defer clear(credential.APIKey)
-			sealed, err := sealModelCredential(challenge, redeemed.Scope.AttemptID, credential)
+			model = &credential
+		}
+		if git != nil || model != nil {
+			sealed, err := sealCredentials(challenge, redeemed.Scope.AttemptID, git, model)
 			if err != nil {
 				return err
 			}
@@ -212,22 +200,52 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 	return err
 }
 
-func sealModelCredential(challenge Challenge, attemptID string, credential ModelCredential) (Envelope, error) {
-	now := time.Now()
-	if credential.AttemptID != attemptID ||
-		(credential.Provider != "openai" && credential.Provider != "anthropic") ||
-		!credential.ExpiresAt.After(now) || credential.ExpiresAt.After(now.Add(time.Hour)) ||
-		len(credential.APIKey) == 0 || len(credential.APIKey) > 8192 ||
-		strings.ContainsAny(string(credential.APIKey), "\r\n\x00") {
+type gitCredentialPayload struct {
+	RepoURL  string `json:"repo_url"`
+	Commit   string `json:"commit"`
+	Username string `json:"username"`
+	Token    string `json:"token"`
+}
+
+type modelCredentialPayload struct {
+	Kind      string `json:"kind"`
+	AttemptID string `json:"attempt_id"`
+	Provider  string `json:"provider"`
+	ExpiresAt int64  `json:"expires_at"`
+	APIKey    string `json:"api_key"`
+}
+
+func sealCredentials(challenge Challenge, attemptID string, git *GitSetup, model *ModelCredential) (Envelope, error) {
+	if attemptID == "" || git == nil && model == nil {
 		return Envelope{}, ErrDenied
 	}
+	var gitPayload *gitCredentialPayload
+	if git != nil {
+		u, err := url.Parse(git.RepoURL)
+		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.Path == "" || u.Path == "/" ||
+			u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || !validGitCommit(git.Commit) ||
+			git.Username == "" || len(git.Username) > 128 || len(git.Token) == 0 || len(git.Token) > 8192 ||
+			strings.ContainsAny(git.RepoURL+git.Username+string(git.Token), "\r\n\x00") {
+			return Envelope{}, ErrDenied
+		}
+		gitPayload = &gitCredentialPayload{git.RepoURL, git.Commit, git.Username, string(git.Token)}
+	}
+	var modelPayload *modelCredentialPayload
+	if model != nil {
+		now := time.Now()
+		if model.AttemptID != attemptID || (model.Provider != "openai" && model.Provider != "anthropic") ||
+			!model.ExpiresAt.After(now) || model.ExpiresAt.After(now.Add(time.Hour)) ||
+			len(model.APIKey) == 0 || len(model.APIKey) > 8192 || strings.ContainsAny(string(model.APIKey), "\r\n\x00") {
+			return Envelope{}, ErrDenied
+		}
+		modelPayload = &modelCredentialPayload{"model_api_key", model.AttemptID, model.Provider, model.ExpiresAt.Unix(), string(model.APIKey)}
+	}
 	payload, err := json.Marshal(struct {
-		Kind      string `json:"kind"`
-		AttemptID string `json:"attempt_id"`
-		Provider  string `json:"provider"`
-		ExpiresAt int64  `json:"expires_at"`
-		APIKey    string `json:"api_key"`
-	}{"model_api_key", credential.AttemptID, credential.Provider, credential.ExpiresAt.Unix(), string(credential.APIKey)})
+		Schema    string                  `json:"schema"`
+		AttemptID string                  `json:"attempt_id"`
+		Git       *gitCredentialPayload   `json:"git,omitempty"`
+		Model     *modelCredentialPayload `json:"model,omitempty"`
+	}{"blaxsmith.bootstrap-capabilities/v1alpha1", attemptID, gitPayload, modelPayload})
 	if err != nil {
 		return Envelope{}, err
 	}

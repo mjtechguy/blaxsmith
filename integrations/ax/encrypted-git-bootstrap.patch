@@ -470,7 +470,7 @@ index bc201ab..ac142f4 100644
 +		Envelope  *bootstrapEnvelope `json:"envelope,omitempty"`
  	}
 -	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2048))
-+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 25000))
++	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 50000))
  	decoder.DisallowUnknownFields()
  	if err := decoder.Decode(&request); err != nil {
  		http.Error(w, "invalid release", http.StatusBadRequest)
@@ -540,12 +540,12 @@ index bc201ab..ac142f4 100644
 +		return nil, fmt.Errorf("invalid envelope nonce")
 +	}
 +	ciphertext, err := base64.RawURLEncoding.DecodeString(envelope.Ciphertext)
-+	if err != nil || len(ciphertext) > 16400 {
++	if err != nil || len(ciphertext) > 32800 {
 +		return nil, fmt.Errorf("invalid envelope ciphertext")
 +	}
 +	context, _ := json.Marshal([]string{g.nonce, strconv.FormatInt(g.expires.Unix(), 10), g.atespace, g.task, base64.RawURLEncoding.EncodeToString(g.recipient.PublicKey().Bytes())})
 +	plain, err := aead.Open(nil, nonce, ciphertext, context)
-+	if err != nil || len(plain) == 0 || len(plain) > 16384 {
++	if err != nil || len(plain) == 0 || len(plain) > 32768 {
 +		return nil, fmt.Errorf("invalid envelope plaintext")
 +	}
 +	return plain, nil

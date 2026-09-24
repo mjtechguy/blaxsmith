@@ -1,0 +1,23 @@
+{
+  "upstream_commit": "d8ed0fe38bceb7842d3c47817d53d16ccdfcb601",
+  "patch_sha256": "293bc3de4586fd2c4f9425b62aee0c2666ef3fdccb1377bcc193970161ccb9ee",
+  "egress_patch_sha256": "7fe6304da1195d78d5bfaa66280cc0c9308199159937ebee55edb1d63c359b31",
+  "bootstrap_patch_sha256": "581e555785e44a1656fd2c801889a2d387b5b178134140f2ea78da12221d7a75",
+  "platform_key_patch_sha256": "bab9de307caeb75fd3a855ccfec2acc4661bfbd67558789cd6b1ab4fffb60f5b",
+  "encrypted_git_patch_sha256": "a024563f228ef55c186419c95ff70114f5951a1077a8ce93ea9a22d87514002d",
+  "command_exit_patch_sha256": "7e62be52ce0910d6011a8db6bc682574477605281365a2f829831b71f76c0907",
+  "task_tombstones_patch_sha256": "319f4a7ac03d5df79fa1a6409534c535846e29330c9ca2f54c810da63c224ef1",
+  "redis_ha_patch_sha256": "cb7f6d2c4f03c7ad4cb24e559921779da6b6167f467cd2405314135a8c095da7",
+  "consumer_recovery_patch_sha256": "f945ddffcc4b06dfa6f96d7fa4e831c4ebddb77ddf45accc7890f5f5952dc8f9",
+  "provider_credential_patch_sha256": "f1f04eaedfa3369632dfe5f67de552a8462011b17f8b58d3542bfcb60688aeb6",
+  "task_resources_patch_sha256": "35d3c19a36ef35193a449fbf68872cef238e59527d85466d1c528b22f3435332",
+  "askpass_sha256": "3c5b14494a6a80147507a3d802ca3a4c29714b4b330e63ae27350cda32f2237e",
+  "go_version": "go version go1.27.1 darwin/arm64",
+  "platform": "linux/amd64",
+  "binaries": {
+    "ax": "91435374643d5b3a294c7b02bef04ce05d706087b13bd8ed4e5ffa15d5fd1992",
+    "ax-server": "aaf275c13eceba91d0a4423947db6237558cd80d828d68aa16112326e1d6a9b7",
+    "ax-controller": "4a8aab7fc421f4c9385b0c839c2f9d0215ee40cec068021ae237575b70651764",
+    "ax-task-runner": "dba240f622785aa1fa25d8074e7ba5688d239cd817cfda88c7149c7db4869e6b"
+  }
+}

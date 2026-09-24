@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,7 +20,15 @@ type ModelAttempt struct {
 	Attempt workflow.Attempt
 	Runtime workflow.RuntimeBinding
 	Invoke  access.ModelInvoke
+	Git     *GitAttempt
 	TTL     time.Duration
+}
+
+// GitAttempt adds one frozen private-repository input to the same actor
+// release. Its grant is independently checked and leased.
+type GitAttempt struct {
+	Read     access.GitRead
+	Username string
 }
 
 // NewModelAttemptConnector adds fail-closed model callbacks to a host-owned
@@ -41,13 +50,22 @@ func NewModelAttemptConnector(base Connector, db *pgxpool.Pool, secrets *access.
 		model.Runtime.CommandSHA256 == "" || model.TTL <= 0 || model.TTL > time.Hour {
 		return Connector{}, ErrDenied
 	}
+	if model.Git != nil && (model.Git.Read.OrganizationID != model.Attempt.OrganizationID ||
+		model.Git.Read.ProjectID != model.Invoke.ProjectID || model.Git.Read.AttemptID != model.Attempt.ID ||
+		model.Git.Read.BindingID == "" || model.Git.Read.GranteeKind != model.Invoke.GranteeKind ||
+		model.Git.Read.GranteeID != model.Invoke.GranteeID || model.Git.Read.PolicyVersion <= 0 ||
+		model.Git.Username == "" || len(model.Git.Username) > 128 ||
+		strings.ContainsAny(model.Git.Username, "\r\n\x00")) {
+		return Connector{}, ErrDenied
+	}
 	var mu sync.Mutex
 	var leaseID string
+	var gitLeaseID string
 	var expiresAt time.Time
 	base.Reserve = func(ctx context.Context, tx pgx.Tx, redeemed Redeemed) error {
 		mu.Lock()
 		defer mu.Unlock()
-		if leaseID != "" || redeemed.Scope != model.Scope ||
+		if leaseID != "" || gitLeaseID != "" || redeemed.Scope != model.Scope ||
 			redeemed.ActorAtespace != model.Runtime.AXAtespace ||
 			redeemed.ActorName != model.Runtime.AXTask || redeemed.ActorUID != model.Runtime.ActorUID {
 			return ErrDenied
@@ -65,7 +83,19 @@ func NewModelAttemptConnector(base Connector, db *pgxpool.Pool, secrets *access.
 		if err != nil {
 			return err
 		}
-		leaseID, expiresAt = id, expiry
+		var gitID string
+		if model.Git != nil {
+			gitID, err = access.ReserveGitLease(ctx, tx, access.LeaseRequest{
+				OrganizationID: model.Git.Read.OrganizationID, BindingID: model.Git.Read.BindingID,
+				ChallengeID: redeemed.ID, ClusterID: redeemed.Scope.ClusterID,
+				AttemptID: redeemed.Scope.AttemptID, OwnerGeneration: redeemed.Scope.OwnerGeneration,
+				ActorUID: redeemed.ActorUID, RepoURL: model.Git.Read.RepoURL,
+				GuestExpiresAt: time.Unix(redeemed.Challenge.ExpiresAt, 0)})
+			if err != nil {
+				return err
+			}
+		}
+		leaseID, gitLeaseID, expiresAt = id, gitID, expiry
 		return nil
 	}
 	base.Authorize = func(ctx context.Context, tx pgx.Tx, runtime Runtime) error {
@@ -77,8 +107,14 @@ func NewModelAttemptConnector(base Connector, db *pgxpool.Pool, secrets *access.
 		if err := checkModelWorkflow(ctx, tx, model); err != nil {
 			return err
 		}
-		_, err := access.AuthorizeModelInvoke(ctx, tx, model.Invoke)
-		return err
+		if _, err := access.AuthorizeModelInvoke(ctx, tx, model.Invoke); err != nil {
+			return err
+		}
+		if model.Git != nil {
+			_, err := access.AuthorizeGitRead(ctx, tx, model.Git.Read)
+			return err
+		}
+		return nil
 	}
 	base.ModelCredential = func(ctx context.Context, tx pgx.Tx, runtime Runtime) (ModelCredential, error) {
 		mu.Lock()
@@ -108,14 +144,51 @@ func NewModelAttemptConnector(base Connector, db *pgxpool.Pool, secrets *access.
 		return ModelCredential{AttemptID: model.Attempt.ID, Provider: model.Invoke.Provider,
 			ExpiresAt: expiry, APIKey: secret.Bytes}, nil
 	}
+	if model.Git != nil {
+		base.GitSetup = func(ctx context.Context, tx pgx.Tx, runtime Runtime) (GitSetup, error) {
+			mu.Lock()
+			id := gitLeaseID
+			mu.Unlock()
+			if id == "" ||
+				runtime.Actor != (Actor{model.Runtime.AXAtespace, model.Runtime.AXTask, model.Runtime.ActorUID}) ||
+				runtime.TemplateUID != model.Runtime.TemplateUID || runtime.Image != model.Runtime.Image ||
+				runtime.WorkerPool != model.Runtime.WorkerPool {
+				return GitSetup{}, ErrDenied
+			}
+			if err := checkModelWorkflow(ctx, tx, model); err != nil {
+				return GitSetup{}, err
+			}
+			decision, err := access.AuthorizeGitRead(ctx, tx, model.Git.Read)
+			if err != nil {
+				return GitSetup{}, err
+			}
+			secret, err := secrets.ReadCurrent(ctx, tx, model.Git.Read.OrganizationID, decision.ConnectionID)
+			if err != nil {
+				return GitSetup{}, err
+			}
+			if err := access.MarkLeaseAttempt(ctx, tx, model.Git.Read.OrganizationID, id,
+				decision.ConnectionID, secret.Version); err != nil {
+				secret.Clear()
+				return GitSetup{}, err
+			}
+			return GitSetup{RepoURL: model.Git.Read.RepoURL, Commit: model.Git.Read.Commit,
+				Username: model.Git.Username, Token: secret.Bytes}, nil
+		}
+	}
 	base.Delivered = func(ctx context.Context, tx pgx.Tx, redeemed Redeemed) error {
 		mu.Lock()
-		id := leaseID
+		id, gitID := leaseID, gitLeaseID
 		mu.Unlock()
-		if id == "" || redeemed.Scope != model.Scope {
+		if id == "" || (model.Git != nil && gitID == "") || redeemed.Scope != model.Scope {
 			return ErrDenied
 		}
-		return access.MarkLeaseDelivered(ctx, tx, model.Invoke.OrganizationID, id)
+		if err := access.MarkLeaseDelivered(ctx, tx, model.Invoke.OrganizationID, id); err != nil {
+			return err
+		}
+		if gitID != "" {
+			return access.MarkLeaseDelivered(ctx, tx, model.Git.Read.OrganizationID, gitID)
+		}
+		return nil
 	}
 	return base, nil
 }

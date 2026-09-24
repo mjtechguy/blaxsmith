@@ -52,9 +52,12 @@ preflight requires a private, certificate-verified router transport, a bounded
 client timeout, a projected Substrate token, and a matching bootstrap signer.
 `RevokeOwner` deactivates the stored owner and revokes all platform leases for
 the attempt before actor deletion. Local lease revocation cannot invalidate a
-raw API key already inside the worker; deleting the actor is required to stop
-its use. The assignment is still not atomic with workflow reservation, and the
-activator has not been wired into a long-running connector or proven on AX.
+raw credential already inside the worker; deleting the actor is required to
+stop its use. The bootstrap connector can bundle a model grant with one exact
+Git binding in the same release, but the dispatcher still does not build the AX
+Workspace input from that binding. Assignment is not atomic with workflow
+reservation, and the activator has not been wired into a long-running
+connector or proven with product credentials on AX.
 
 The dedicated node proof on 2026-09-23 used the existing dev PostgreSQL
 database with a temporary schema and the authorized k3s node. The first run

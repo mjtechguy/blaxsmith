@@ -21,13 +21,16 @@ or backups require them.
 
 `0006_access_leases.sql` records an attempt, actor UID, owner generation,
 binding, connection, audience, resource, secret version, expiry, and delivery
-state. `ReserveGitLease` runs in the transaction that commits bootstrap release
-intent, before network delivery. The send transaction checks current authority,
-reads the secret, and marks that lease attempted and delivered only after the
-guest acknowledges release. If the send outcome or commit is uncertain, the
-reservation and bootstrap challenge's durable attempted state remain for
-reconciliation; the same challenge cannot be retried. Resume gets a new
-challenge and lease. `RevokeGrant` and `RevokeConnection` block later decisions
+state. `0025_multi_capability_leases.sql` permits one lease per capability on a
+challenge, so Git and model credentials can share one signed encrypted release
+while retaining separate bindings and revocation. Each lease is reserved in
+the transaction that commits bootstrap release intent, before network delivery.
+The send transaction checks current authority, reads each secret, and marks
+each lease attempted and delivered only after the guest acknowledges release.
+If the send outcome or commit is uncertain, the reservations and bootstrap
+challenge's durable attempted state remain for reconciliation; the same
+challenge cannot be retried. Resume gets a new challenge and leases.
+`RevokeGrant` and `RevokeConnection` block later decisions
 and mark their recorded leases revoked under the same database transaction;
 revocation waits for an in-progress release holding the relevant row locks.
 **Lease expiry or revocation does not invalidate a raw bearer
@@ -42,9 +45,10 @@ Git provider at the repository origin, an active connection, matching project
 and grantee, an unrevoked/unexpired grant, unchanged grant and policy versions,
 and a delivery mode allowed by both provider and project. It returns only
 non-secret account metadata. The bootstrap connector's authorization callback
-now calls it for the synthetic private-Git probe using the transaction held
-through release delivery. `GitSetup` reads the current encrypted secret under
-that same transaction; the runner receives it only in its signed envelope.
+calls it for Git alongside the model authorization, using the transaction held
+through release delivery. `GitSetup` and `ModelCredential` read their encrypted
+secrets under that same transaction; the runner receives them only in its
+signed envelope.
 
 The [real PostgreSQL test](../internal/access/policy_test.go) covers a valid
 decision, cross-tenant references, wrong project/attempt/grantee/repository/

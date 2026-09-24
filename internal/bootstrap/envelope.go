@@ -21,7 +21,7 @@ type Envelope struct {
 }
 
 func Seal(challenge Challenge, plaintext []byte) (Envelope, error) {
-	if len(plaintext) == 0 || len(plaintext) > 16384 {
+	if len(plaintext) == 0 || len(plaintext) > 32768 {
 		return Envelope{}, ErrDenied
 	}
 	recipientBytes, err := base64.RawURLEncoding.DecodeString(challenge.RecipientKey)
@@ -104,11 +104,11 @@ func Open(challenge Challenge, recipient *ecdh.PrivateKey, envelope Envelope) ([
 		return nil, ErrDenied
 	}
 	ciphertext, err := base64.RawURLEncoding.DecodeString(envelope.Ciphertext)
-	if err != nil || len(ciphertext) > 16400 {
+	if err != nil || len(ciphertext) > 32800 {
 		return nil, ErrDenied
 	}
 	plaintext, err := aead.Open(nil, nonce, ciphertext, context)
-	if err != nil || len(plaintext) == 0 || len(plaintext) > 16384 {
+	if err != nil || len(plaintext) == 0 || len(plaintext) > 32768 {
 		return nil, ErrDenied
 	}
 	return plaintext, nil
