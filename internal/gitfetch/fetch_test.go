@@ -10,10 +10,10 @@ import (
 
 func TestPublicIP(t *testing.T) {
 	for raw, want := range map[string]bool{
-		"140.82.114.3": true, "2606:50c0:8000::154": true,
+		"140.82.114.3": true, "2606:50c0:8000::154": false,
 		"127.0.0.1": false, "10.42.0.1": false, "100.64.0.1": false,
 		"169.254.169.254": false, "192.0.2.1": false, "198.18.0.1": false,
-		"::1": false, "fd00::1": false, "2001:db8::1": false,
+		"::1": false, "fd00::1": false, "2001:db8::1": false, "64:ff9b::a2a:1": false,
 	} {
 		if got := publicIP(netip.MustParseAddr(raw)); got != want {
 			t.Errorf("publicIP(%s) = %v, want %v", raw, got, want)

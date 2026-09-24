@@ -244,12 +244,14 @@ func newProxy(ctx context.Context, host string) (*proxyServer, error) {
 
 func publicIP(address netip.Addr) bool {
 	address = address.Unmap()
-	if !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() {
+	// This first release uses IPv4 only. IPv6 transition/NAT64 ranges can
+	// tunnel a public-looking address into a private IPv4 destination.
+	if !address.Is4() || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() {
 		return false
 	}
 	for _, block := range []string{"0.0.0.0/8", "100.64.0.0/10", "169.254.0.0/16", "192.0.0.0/24",
 		"192.0.2.0/24", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4",
-		"240.0.0.0/4", "2001::/32", "2001:db8::/32", "2002::/16"} {
+		"240.0.0.0/4"} {
 		if netip.MustParsePrefix(block).Contains(address) {
 			return false
 		}
