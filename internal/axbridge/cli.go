@@ -91,7 +91,10 @@ func (c CLI) ApplyWorkspace(ctx context.Context, workspace Workspace) error {
 		return err
 	}
 	_, err = c.ax(ctx, manifest, "apply", "-f", "-")
-	return err
+	if err != nil {
+		return fmt.Errorf("AX Workspace apply: %w", err)
+	}
+	return nil
 }
 
 func (c CLI) DeleteWorkspace(ctx context.Context, space, name string) error {
@@ -117,7 +120,10 @@ func (c CLI) ApplyGateway(ctx context.Context, gateway Gateway) error {
 		return err
 	}
 	_, err = c.ax(ctx, manifest, "apply", "-f", "-")
-	return err
+	if err != nil {
+		return fmt.Errorf("AX Gateway apply: %w", err)
+	}
+	return nil
 }
 
 func (c CLI) DeleteGateway(ctx context.Context, space, name string) error {
@@ -136,7 +142,10 @@ func (c CLI) Apply(ctx context.Context, task Task) error {
 		return err
 	}
 	_, err = c.ax(ctx, manifest, "apply", "-f", "-")
-	return err
+	if err != nil {
+		return fmt.Errorf("AX Task apply: %w", err)
+	}
+	return nil
 }
 
 func (c CLI) Delete(ctx context.Context, space, name string) error {

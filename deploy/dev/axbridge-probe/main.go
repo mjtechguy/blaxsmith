@@ -154,6 +154,8 @@ func run(database, server, image, signer, poolName, storage string, toolInputs b
 		}
 		bridge.Tool, bridge.Workspace = &request, axbridge.AttemptWorkspaceName(a.ID)
 		bridge.Gateway, bridge.GatewayTemplate, bridge.LookupIPv4 = axbridge.AttemptGatewayName(a.ID), templateGateway, lookup
+		fmt.Fprintf(os.Stderr, "probe resources atespace=%s task=%s workspace=%s gateway=%s template_gateway=%s\n",
+			space, name, bridge.Workspace, bridge.Gateway, templateGateway)
 	}
 	stopped := false
 	defer func() {
@@ -163,7 +165,7 @@ func run(database, server, image, signer, poolName, storage string, toolInputs b
 	}()
 	runtime, err := bridge.Launch(ctx, a)
 	if err != nil {
-		return err
+		return fmt.Errorf("launch AX probe attempt: %w", err)
 	}
 	if toolInputs {
 		if err := bridge.CheckToolInputs(ctx, org, repositoryURL, "openai"); err != nil {
