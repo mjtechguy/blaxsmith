@@ -47,6 +47,15 @@ func (c CLI) ax(ctx context.Context, input []byte, args ...string) ([]byte, erro
 		if errors.As(err, &exit) && strings.Contains(string(exit.Stderr), "code = NotFound") {
 			return nil, ErrNotFound
 		}
+		if errors.As(err, &exit) {
+			detail := strings.Join(strings.Fields(string(exit.Stderr)), " ")
+			if len(detail) > 512 {
+				detail = detail[:512]
+			}
+			if detail != "" {
+				return nil, fmt.Errorf("AX %s: %w: %s", args[0], err, detail)
+			}
+		}
 		return nil, fmt.Errorf("AX %s: %w", args[0], err)
 	}
 	return out, nil

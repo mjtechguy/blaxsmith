@@ -2,9 +2,22 @@ package axbridge
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestAXCLIErrorIncludesBoundedSanitizedDiagnostic(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ax")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf 'validation failed\\n' >&2\nexit 1\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	_, err := (CLI{AXPath: path, Server: "http://127.0.0.1:8080"}).ax(t.Context(), nil, "apply", "-f", "-")
+	if err == nil || !strings.Contains(err.Error(), "validation failed") || strings.Contains(err.Error(), "\n") {
+		t.Fatalf("AX failure lost its concise diagnostic: %v", err)
+	}
+}
 
 func TestAteCommandUsesExplicitDirectAuth(t *testing.T) {
 	t.Setenv("KUBECTL_ATE_CA_FILE", "/stale/ca.pem")
