@@ -115,12 +115,16 @@ func (d *Dispatcher) toolRequest(ctx context.Context, orgID, runID, taskID, hand
 	if err != nil {
 		return tooladapter.Request{}, frozen, approved, err
 	}
+	mount, _, err := extensionMount(frozen.Bundle, frozen.Stage)
+	if err != nil {
+		return tooladapter.Request{}, frozen, approved, err
+	}
 	timeout := min(frozen.Bundle.Recipe.Limits.TimeoutSeconds, approved.MaxTimeoutSeconds)
 	request := tooladapter.Request{AttemptID: "preflight", RepositoryURL: frozen.RepositoryURL,
 		SourceRef: frozen.SourceRef, SourceCommit: input,
 		Runtime: approved.Runtime, Profile: frozen.Profile,
 		Prompt: prompt, FrozenArtifacts: artifacts, TimeoutSeconds: timeout,
-		MaxRuntimeSeconds: frozen.Bundle.Recipe.Limits.MaxRuntimeSeconds, MaxOutputBytes: approved.MaxOutputBytes}
+		MaxRuntimeSeconds: frozen.Bundle.Recipe.Limits.MaxRuntimeSeconds, MaxOutputBytes: approved.MaxOutputBytes, Extension: mount}
 	if _, err := tooladapter.Command(request); err != nil {
 		return tooladapter.Request{}, frozen, approved, err
 	}
