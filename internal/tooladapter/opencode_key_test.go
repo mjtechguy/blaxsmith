@@ -24,6 +24,9 @@ func TestOpenCodeZenKeyReachesOnlyOpenCodeEnv(t *testing.T) {
 		CredentialEnv("opencode-go") != "OPENCODE_API_KEY" || CredentialEnv("gemini") != "" {
 		t.Fatalf("OpenCode provider credential mapping: %q %v", provider, err)
 	}
+	if provider, err := credentialProvider(recipe.Profile{Harness: "opencode", Model: "opencode-go/kimi-k2", Effort: "high"}); err != nil || provider != "opencode-go" {
+		t.Fatalf("OpenCode Go provider credential mapping: %q %v", provider, err)
+	}
 	if _, err := credentialProvider(recipe.Profile{Harness: "opencode", Model: "gemini/pro", Effort: "high"}); !errors.Is(err, ErrBlocked) {
 		t.Fatalf("unknown OpenCode provider must block: %v", err)
 	}

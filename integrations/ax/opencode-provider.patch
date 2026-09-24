@@ -6,21 +6,21 @@ diff --git a/runner/model_credential.go b/runner/model_credential.go
  	if credential.Kind != "model_api_key" || credential.AttemptID == "" ||
  		credential.AttemptID != request.AttemptID || credential.Provider != provider ||
 -		(provider != "openai" && provider != "anthropic") ||
-+		(provider != "openai" && provider != "anthropic" && provider != "opencode") ||
++		(provider != "openai" && provider != "anthropic" && provider != "opencode" && provider != "opencode-go") ||
  		!time.Unix(credential.ExpiresAt, 0).After(now) || time.Unix(credential.ExpiresAt, 0).After(now.Add(time.Hour)) ||
  		len(credential.APIKey) == 0 || len(credential.APIKey) > 8192 ||
  		strings.ContainsAny(credential.APIKey, "\r\n\x00") {
 diff --git a/runner/model_credential_test.go b/runner/model_credential_test.go
 --- a/runner/model_credential_test.go
 +++ b/runner/model_credential_test.go
-@@ -85,3 +85,37 @@
+@@ -85,3 +85,43 @@
  		t.Fatal("existing credential file was replaced")
  	}
  }
 +
-+// OpenCode Zen keys (provider "opencode") are API keys of the same kind and
-+// take the same path as OpenAI and Anthropic keys. Other OpenCode providers
-+// stay rejected.
++// OpenCode Zen (provider "opencode") and OpenCode Go (provider "opencode-go")
++// keys are API keys of the same kind and take the same path as OpenAI and
++// Anthropic keys. Other OpenCode providers stay rejected.
 +func TestOpenCodeModelKeyMatchesItsProviderPrefix(t *testing.T) {
 +	bundle := func(provider string) []byte {
 +		t.Helper()
@@ -36,12 +36,15 @@ diff --git a/runner/model_credential_test.go b/runner/model_credential_test.go
 +	command := func(model string) []string {
 +		return []string{"/usr/local/bin/blaxsmith-tool-worker", `{"attempt_id":"attempt-a","profile":{"harness":"opencode","model":"` + model + `"}}`}
 +	}
-+	_, data, err := decodeBootstrapPayload(bundle("opencode"), nil, command("opencode/big-pickle"), modelPhase)
-+	if err != nil || !strings.Contains(string(data), `"provider":"opencode"`) || !strings.Contains(string(data), "zen-key") {
-+		t.Fatalf("opencode key: data=%q err=%v", data, err)
++	for _, c := range []struct{ provider, model string }{{"opencode", "opencode/big-pickle"}, {"opencode-go", "opencode-go/kimi-k2"}} {
++		_, data, err := decodeBootstrapPayload(bundle(c.provider), nil, command(c.model), modelPhase)
++		if err != nil || !strings.Contains(string(data), `"provider":"`+c.provider+`"`) || !strings.Contains(string(data), "zen-key") {
++			t.Fatalf("%s key: data=%q err=%v", c.provider, data, err)
++		}
 +	}
 +	for _, c := range []struct{ provider, model string }{
-+		{"opencode", "openai/gpt-6-luna"}, {"openai", "opencode/big-pickle"}, {"opencode-go", "opencode-go/kimi-k2"}, {"gemini", "gemini/pro"},
++		{"opencode", "openai/gpt-6-luna"}, {"openai", "opencode/big-pickle"}, {"opencode-go", "opencode/big-pickle"},
++		{"opencode", "opencode-go/kimi-k2"}, {"opencode-go", "anthropic/claude-x"}, {"gemini", "gemini/pro"},
 +	} {
 +		if _, _, err := decodeBootstrapPayload(bundle(c.provider), nil, command(c.model), modelPhase); err == nil {
 +			t.Fatalf("%s key accepted for %s", c.provider, c.model)
@@ -49,5 +52,8 @@ diff --git a/runner/model_credential_test.go b/runner/model_credential_test.go
 +	}
 +	if _, _, err := decodeBootstrapPayload(bundle("opencode"), nil, command("opencode/big-pickle"), setupPhase); err == nil {
 +		t.Fatal("opencode key accepted during workspace setup")
++	}
++	if _, _, err := decodeBootstrapPayload(bundle("opencode-go"), nil, command("opencode-go/kimi-k2"), setupPhase); err == nil {
++		t.Fatal("opencode-go key accepted during workspace setup")
 +	}
 +}

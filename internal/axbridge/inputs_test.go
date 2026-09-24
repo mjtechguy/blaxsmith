@@ -72,6 +72,35 @@ func TestToolInputsRequireNarrowNativeWorkspaceAndGateway(t *testing.T) {
 	check(false)
 }
 
+// OpenCode Go (https://opencode.ai/zen/go/v1) shares Zen's host, so an exact
+// Gateway for an opencode-go attempt admits Git plus opencode.ai only.
+func TestOpenCodeGoGatewayAllowsOnlyOpenCodeHost(t *testing.T) {
+	const space = "blaxsmith-engineering"
+	gateway := Gateway{APIVersion: "ax.io/v1alpha1", Kind: "Gateway", Metadata: TaskMetadata{Name: "public-egress", Atespace: space},
+		Spec: GatewaySpec{Egress: &GatewayEgress{Allowlist: &GatewayAllowlist{Hosts: []GatewayHostRule{
+			{Host: "140.82.114.3/32"}, {Host: "104.21.0.10/32"}}}}}}
+	bridge := Bridge{GatewayEgressMode: "exact", LookupIPv4: func(_ context.Context, host string) ([]netip.Addr, error) {
+		switch host {
+		case "github.com":
+			return []netip.Addr{netip.MustParseAddr("140.82.114.3")}, nil
+		case "opencode.ai":
+			return []netip.Addr{netip.MustParseAddr("104.21.0.10")}, nil
+		case "api.openai.com":
+			return []netip.Addr{netip.MustParseAddr("104.18.33.45")}, nil
+		}
+		return nil, errors.New("unapproved hostname")
+	}}
+	if providerHost("opencode-go") != "opencode.ai" || providerHost("opencode-go") != providerHost("opencode") {
+		t.Fatalf("OpenCode Go egress host: %q", providerHost("opencode-go"))
+	}
+	for provider, want := range map[string]bool{"opencode-go": true, "opencode": true, "openai": false, "opencode-zen": false} {
+		err := bridge.checkGateway(t.Context(), gateway, "public-egress", space, "https://github.com/owner/repo", provider)
+		if (err == nil) != want {
+			t.Fatalf("%s gateway check = %v, want pass %t", provider, err, want)
+		}
+	}
+}
+
 func TestOpenGatewayRequiresExplicitDevelopmentMode(t *testing.T) {
 	const repo = "https://github.com/owner/repo"
 	const space = "blaxsmith-engineering"
