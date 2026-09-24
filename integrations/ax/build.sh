@@ -47,17 +47,15 @@ git apply --check --whitespace=error-all "$integration/task-resources.patch"
 git apply "$integration/task-resources.patch"
 git apply --check --whitespace=error-all "$integration/upstream-refresh-f009cc8.patch"
 git apply "$integration/upstream-refresh-f009cc8.patch"
-git apply --check --whitespace=error-all "$integration/opencode-provider.patch"
-git apply "$integration/opencode-provider.patch"
 go test ./...
 go vet ./...
 for component in ax ax-server ax-controller ax-task-runner; do
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
     -ldflags='-s -w' -o "$output/$component" "./cmd/$component"
 done
-python3 - "$output" "$integration/fail-closed.patch" "$integration/egress-policy.patch" "$integration/bootstrap-gate.patch" "$integration/platform-bootstrap-key.patch" "$integration/encrypted-git-bootstrap.patch" "$integration/command-exit-readback.patch" "$integration/task-tombstones.patch" "$integration/redis-ha.patch" "$integration/consumer-recovery.patch" "$integration/provider-credential.patch" "$integration/post-ready-model.patch" "$integration/task-resources.patch" "$integration/upstream-refresh-f009cc8.patch" "$integration/opencode-provider.patch" "$integration/blaxsmith-git-askpass" "$expected" "$overlay_base" <<'PY'
+python3 - "$output" "$integration/fail-closed.patch" "$integration/egress-policy.patch" "$integration/bootstrap-gate.patch" "$integration/platform-bootstrap-key.patch" "$integration/encrypted-git-bootstrap.patch" "$integration/command-exit-readback.patch" "$integration/task-tombstones.patch" "$integration/redis-ha.patch" "$integration/consumer-recovery.patch" "$integration/provider-credential.patch" "$integration/post-ready-model.patch" "$integration/task-resources.patch" "$integration/upstream-refresh-f009cc8.patch" "$integration/blaxsmith-git-askpass" "$expected" "$overlay_base" <<'PY'
 import hashlib, json, pathlib, subprocess, sys
-output, patch, egress_patch, bootstrap_patch, platform_key_patch, encrypted_git_patch, command_exit_patch, tombstone_patch, redis_ha_patch, recovery_patch, provider_patch, post_ready_patch, resources_patch, refresh_patch, opencode_patch, askpass, revision, overlay_base = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5]), pathlib.Path(sys.argv[6]), pathlib.Path(sys.argv[7]), pathlib.Path(sys.argv[8]), pathlib.Path(sys.argv[9]), pathlib.Path(sys.argv[10]), pathlib.Path(sys.argv[11]), pathlib.Path(sys.argv[12]), pathlib.Path(sys.argv[13]), pathlib.Path(sys.argv[14]), pathlib.Path(sys.argv[15]), pathlib.Path(sys.argv[16]), sys.argv[17], sys.argv[18]
+output, patch, egress_patch, bootstrap_patch, platform_key_patch, encrypted_git_patch, command_exit_patch, tombstone_patch, redis_ha_patch, recovery_patch, provider_patch, post_ready_patch, resources_patch, refresh_patch, askpass, revision, overlay_base = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5]), pathlib.Path(sys.argv[6]), pathlib.Path(sys.argv[7]), pathlib.Path(sys.argv[8]), pathlib.Path(sys.argv[9]), pathlib.Path(sys.argv[10]), pathlib.Path(sys.argv[11]), pathlib.Path(sys.argv[12]), pathlib.Path(sys.argv[13]), pathlib.Path(sys.argv[14]), pathlib.Path(sys.argv[15]), sys.argv[16], sys.argv[17]
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 record = {
     'upstream_commit': revision,
@@ -75,7 +73,6 @@ record = {
     'provider_credential_patch_sha256': sha(provider_patch),
     'post_ready_model_patch_sha256': sha(post_ready_patch),
     'task_resources_patch_sha256': sha(resources_patch),
-    'opencode_provider_patch_sha256': sha(opencode_patch),
     'askpass_sha256': sha(askpass),
     'go_version': subprocess.check_output(['go', 'version'], text=True).strip(),
     'platform': 'linux/amd64',
