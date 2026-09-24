@@ -1,0 +1,81 @@
+diff --git a/internal/atunnel/ingress.go b/internal/atunnel/ingress.go
+--- a/internal/atunnel/ingress.go
++++ b/internal/atunnel/ingress.go
+@@ -553,9 +553,14 @@
+ 		http.Error(w, "invalid bootstrap nonce", http.StatusBadRequest)
+ 		return
+ 	}
++	phase := r.URL.Query().Get("phase")
++	if phase != "setup" && phase != "model" {
++		http.Error(w, "invalid bootstrap phase", http.StatusBadRequest)
++		return
++	}
+ 	upstream := *s.upstream
+ 	upstream.Path = bootstrapChallengePath
+-	upstream.RawQuery = ""
++	upstream.RawQuery = url.Values{"phase": []string{phase}}.Encode()
+ 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, upstream.String(), nil)
+ 	if err != nil {
+ 		http.Error(w, "bootstrap unavailable", http.StatusBadGateway)
+diff --git a/internal/atunnel/bootstrap_test.go b/internal/atunnel/bootstrap_test.go
+--- a/internal/atunnel/bootstrap_test.go
++++ b/internal/atunnel/bootstrap_test.go
+@@ -36,8 +36,9 @@
+ 
+ func TestBootstrapProofRoutesOnlyCurrentActor(t *testing.T) {
+ 	guest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+-		if r.URL.Path != bootstrapChallengePath || r.Header.Get(BootstrapChallengeHeader) != "" {
+-			t.Errorf("unexpected guest request: %s %s", r.Method, r.URL.Path)
++		if r.URL.Path != bootstrapChallengePath || r.Header.Get(BootstrapChallengeHeader) != "" ||
++			(r.URL.Query().Get("phase") != "setup" && r.URL.Query().Get("phase") != "model") {
++			t.Errorf("unexpected guest request: %s %s?%s", r.Method, r.URL.Path, r.URL.RawQuery)
+ 		}
+ 		_, _ = w.Write([]byte(`{"nonce":"guest","expires_at":123,"atespace":"team-a","task":"actor-1"}`))
+ 	}))
+@@ -53,8 +54,8 @@
+ 	if _, err := rand.Read(nonce[:]); err != nil {
+ 		t.Fatal(err)
+ 	}
+-	request := func(actor, uid, challenge string) *httptest.ResponseRecorder {
+-		r := httptest.NewRequest(http.MethodGet, "https://worker"+bootstrapChallengePath, nil)
++	request := func(actor, uid, phase, challenge string) *httptest.ResponseRecorder {
++		r := httptest.NewRequest(http.MethodGet, "https://worker"+bootstrapChallengePath+"?phase="+phase, nil)
+ 		r.Header.Set(atenet.TargetActorHeader, actor)
+ 		r.Header.Set(BootstrapActorUIDHeader, uid)
+ 		r.Header.Set(BootstrapChallengeHeader, challenge)
+@@ -63,24 +64,31 @@
+ 		return w
+ 	}
+ 	validNonce := base64.RawURLEncoding.EncodeToString(nonce[:])
+-	if got := request("team-a/other", "uid-1", validNonce).Code; got != http.StatusMisdirectedRequest {
++	if got := request("team-a/other", "uid-1", "setup", validNonce).Code; got != http.StatusMisdirectedRequest {
+ 		t.Fatalf("wrong actor status = %d", got)
+ 	}
+ 	for _, uid := range []string{"", "uid-2"} {
+-		if got := request("team-a/actor-1", uid, validNonce).Code; got != http.StatusMisdirectedRequest {
++		if got := request("team-a/actor-1", uid, "setup", validNonce).Code; got != http.StatusMisdirectedRequest {
+ 			t.Fatalf("wrong actor UID status = %d", got)
+ 		}
+ 	}
+-	if got := request("team-a/actor-1", "uid-1", "bad").Code; got != http.StatusBadRequest {
++	if got := request("team-a/actor-1", "uid-1", "setup", "bad").Code; got != http.StatusBadRequest {
+ 		t.Fatalf("malformed nonce status = %d", got)
+ 	}
+-	response := request("team-a/actor-1", "uid-1", validNonce)
++	response := request("team-a/actor-1", "uid-1", "setup", validNonce)
+ 	if response.Code != http.StatusOK || !bytes.Equal(attestor.nonce, nonce[:]) || !bytes.Equal(attestor.body, response.Body.Bytes()) {
+ 		t.Fatalf("proof response = %d, nonce/body mismatch", response.Code)
+ 	}
+ 	if response.Header().Get(BootstrapCertificateHeader) != base64.StdEncoding.EncodeToString([]byte("certificate")) ||
+ 		response.Header().Get(BootstrapSignatureHeader) != base64.StdEncoding.EncodeToString([]byte("signature")) {
+ 		t.Fatal("signed proof headers missing")
++	}
++	modelResponse := request("team-a/actor-1", "uid-1", "model", validNonce)
++	if modelResponse.Code != http.StatusOK || !bytes.Equal(attestor.nonce, nonce[:]) {
++		t.Fatalf("model-phase proof response = %d", modelResponse.Code)
++	}
++	if got := request("team-a/actor-1", "uid-1", "other", validNonce).Code; got != http.StatusBadRequest {
++		t.Fatalf("unknown bootstrap phase status = %d", got)
+ 	}
+ }
+ 

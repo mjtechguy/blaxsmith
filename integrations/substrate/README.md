@@ -8,6 +8,8 @@ Upstream: `github.com/agent-substrate/substrate`, commit
 `bootstrap-actor-fence.patch` pins bootstrap routing to the actor UID.
 `command-exit-router-auth.patch` applies the same connector authentication and
 current-actor UID fence to the read-only command-exit route. The
+`bootstrap-phase-route.patch` forwards only the allowlisted `setup` or `model`
+phase through `atunnel` when it signs the guest challenge. The
 `direct-ate-ca.patch` lets a connector use the pinned `kubectl-ate` over the
 direct Substrate service with an explicit bearer-token file and mounted server
 CA, without loading kubeconfig or querying the Kubernetes API. The build now
@@ -18,7 +20,7 @@ The reference checkout stays untouched. Rebuild with:
 bash integrations/substrate/build.sh ../reference/substrate /tmp/blaxsmith-substrate-build
 ```
 
-The build exports the pinned commit, applies all six patches, runs focused tests
+The build exports the pinned commit, applies all seven patches, runs focused tests
 and `go vet`, builds Linux/AMD64 `atenet`, `ateom-gvisor`, and `kubectl-ate`,
 and records source/patch/binary hashes.
 On the prepared development node, `deploy/dev/publish-atenet.sh` adds that binary
