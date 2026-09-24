@@ -385,9 +385,12 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := newAppHandler(pool, manager, origin, staticDir, nil)
+	handler, product, err := newAppHandler(ctx, pool, manager, origin, staticDir, nil, dispatchConfig{})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if product != nil {
+		product.Close()
 	}
 	pool.Close()
 	unavailable := httptest.NewRecorder()

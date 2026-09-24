@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	api "github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1"
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/dispatch"
 	"github.com/mjtechguy/blaxsmith/internal/gitfetch"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
@@ -24,6 +26,8 @@ type workflowService struct {
 	guard         *identity.BrowserGuard
 	store         *workflow.Store
 	secrets       *access.SecretStore
+	dispatcher    *dispatch.Dispatcher
+	dispatchReady func(context.Context) error
 	launchEnabled bool
 }
 
@@ -227,7 +231,7 @@ func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[ap
 	if err != nil {
 		return nil, err
 	}
-	if !s.launchEnabled {
+	if err := s.requireDispatch(ctx); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("run dispatcher is not connected on this installation"))
 	}
 	if caller.Role != "owner" && caller.Role != "admin" && caller.Role != "member" {
@@ -250,10 +254,18 @@ func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[ap
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("repository fetch failed; check the URL, ref, and public access"))
 	}
 	defer fetched.Close()
+	sourceInput := recipe.Input{Repo: fetched.Directory, Ref: fetched.Commit, Recipe: req.Msg.RecipePath,
+		Spec: req.Msg.SpecPath, Transcript: req.Msg.TranscriptPath, Scope: req.Msg.Scope}
+	bundle, err := recipe.Freeze(ctx, sourceInput)
+	if err != nil {
+		return nil, workflowError(fmt.Errorf("%w: %v", workflow.ErrRecipe, err))
+	}
+	if err := s.preflightFrozenRun(ctx, caller.OrganizationID, req.Msg.ProjectId, repositoryURL, bundle); err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("run recipe, model access, worker image, or AX egress is not ready"))
+	}
 	run, err := s.store.CreateFrozenRun(ctx, workflow.FrozenRunInput{
 		OrganizationID: caller.OrganizationID, ProjectID: req.Msg.ProjectId, LaunchKey: req.Msg.LaunchKey,
-		Source: recipe.Input{Repo: fetched.Directory, Ref: fetched.Commit, Recipe: req.Msg.RecipePath,
-			Spec: req.Msg.SpecPath, Transcript: req.Msg.TranscriptPath, Scope: req.Msg.Scope},
+		Source:       sourceInput,
 		Verification: verification.Policy, Caller: &caller, SourceRepositoryURL: source.RepositoryURL,
 		SourceRef: source.Ref, VerificationVersion: verification.Version,
 	})
@@ -272,7 +284,7 @@ func (s *workflowService) GetLaunchAvailability(ctx context.Context, req *connec
 		return nil, workflowError(err)
 	}
 	response := &api.GetLaunchAvailabilityResponse{}
-	if !s.launchEnabled {
+	if err := s.requireDispatch(ctx); err != nil {
 		response.Reason = "Run dispatcher is not connected on this installation."
 	} else if _, err := s.store.GetProjectSource(ctx, caller.OrganizationID, req.Msg.ProjectId); errors.Is(err, workflow.ErrNotFound) {
 		response.Reason = "Add a Git source before launching a run."
@@ -286,6 +298,75 @@ func (s *workflowService) GetLaunchAvailability(ctx context.Context, req *connec
 		response.Enabled = true
 	}
 	return connect.NewResponse(response), nil
+}
+
+func (s *workflowService) requireDispatch(ctx context.Context) error {
+	if s == nil || !s.launchEnabled || s.dispatcher == nil || s.dispatchReady == nil {
+		return dispatch.ErrNotReady
+	}
+	checkCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	return s.dispatchReady(checkCtx)
+}
+
+func (s *workflowService) preflightFrozenRun(ctx context.Context, orgID, projectID, repositoryURL string, bundle *recipe.Bundle) error {
+	if s == nil || s.dispatcher == nil || s.dispatcher.Bridge == nil || bundle == nil {
+		return dispatch.ErrNotReady
+	}
+	seen := map[string]bool{}
+	for _, stage := range bundle.Recipe.Stages {
+		if stage.Kind == "human_review" {
+			continue
+		}
+		profile, ok := bundle.Recipe.Profiles[stage.Profile]
+		if !ok {
+			return workflow.ErrRecipe
+		}
+		key := profile.Harness + "\x00" + profile.Model + "\x00" + profile.Effort
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		provider, model, err := launchProviderModel(profile)
+		if err != nil {
+			return err
+		}
+		selection, err := s.store.GetProjectModelGrant(ctx, orgID, projectID, provider, model)
+		if err != nil {
+			return err
+		}
+		if err := s.dispatcher.PreflightModel(ctx, access.ModelGrant{OrganizationID: orgID, ProjectID: projectID,
+			GrantID: selection.GrantID, GranteeKind: "workload", GranteeID: selection.GranteeID,
+			Provider: provider, Model: model}); err != nil {
+			return err
+		}
+		approved, err := s.store.GetApprovedToolRuntime(ctx, orgID, profile.Harness, profile.Model, profile.Effort)
+		if err != nil {
+			return err
+		}
+		if err := s.dispatcher.PreflightWorker(ctx, approved, repositoryURL, provider); err != nil {
+			return err
+		}
+		if err := s.dispatcher.Bridge.CheckToolInputs(ctx, orgID, repositoryURL, provider); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func launchProviderModel(profile recipe.Profile) (string, string, error) {
+	switch profile.Harness {
+	case "codex":
+		return "openai", profile.Model, nil
+	case "claude-code":
+		return "anthropic", profile.Model, nil
+	case "opencode":
+		provider, model, ok := strings.Cut(profile.Model, "/")
+		if ok && (provider == "openai" || provider == "anthropic") && model != "" && !strings.Contains(model, "/") {
+			return provider, model, nil
+		}
+	}
+	return "", "", workflow.ErrRecipe
 }
 
 func (s *workflowService) ListRunTasks(ctx context.Context, req *connect.Request[api.ListRunTasksRequest]) (*connect.Response[api.ListRunTasksResponse], error) {

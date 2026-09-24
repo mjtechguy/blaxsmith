@@ -31,6 +31,9 @@ import (
 type appConfig struct {
 	listen, origin, certFile, keyFile, signerFile, previousSignerFile, databaseURL, staticDir, migrations string
 	allowLocalDatabase                                                                                    bool
+	enableDispatch                                                                                        bool
+	allowOpenEgressDev                                                                                    bool
+	dispatchConfig                                                                                        dispatchConfig
 }
 
 func serveApp(args []string) error {
@@ -115,9 +118,12 @@ func serveAppContext(ctx context.Context, args []string) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	handler, err := newAppHandler(pool, manager, config.origin, config.staticDir, activity)
+	handler, product, err := newAppHandler(startupCtx, pool, manager, config.origin, config.staticDir, activity, config.dispatchConfig)
 	if err != nil {
 		return err
+	}
+	if product != nil {
+		defer product.Close()
 	}
 	limits, err := identity.NewLoginLimit(pool)
 	if err != nil {
@@ -158,11 +164,21 @@ func serveAppContext(ctx context.Context, args []string) error {
 			}
 		}
 	}()
+	dispatchDone := make(chan struct{})
+	if product != nil {
+		go func() {
+			defer close(dispatchDone)
+			runDispatchCoordinator(serveCtx, pool, product.Dispatcher)
+		}()
+	} else {
+		close(dispatchDone)
+	}
 	fmt.Fprintf(os.Stderr, "Blaxsmith HTTPS API on %s\n", listener.Addr())
 	err = server.ServeTLS(listener, "", "")
 	stopServing()
 	shutdownErr := <-shutdownDone
 	<-pruneDone
+	<-dispatchDone
 	if errors.Is(err, http.ErrServerClosed) {
 		return shutdownErr
 	}
@@ -181,6 +197,8 @@ func parseAppConfig(args []string) (appConfig, error) {
 	flags.StringVar(&c.staticDir, "static-dir", "", "built frontend directory containing index.html")
 	flags.StringVar(&c.migrations, "migrations", "apply", "apply or verify embedded database migrations before serving")
 	flags.BoolVar(&c.allowLocalDatabase, "allow-insecure-local-database", false, "allow plaintext PostgreSQL only over a literal loopback address or Unix socket")
+	flags.BoolVar(&c.enableDispatch, "enable-dispatch", false, "enable AX run dispatch after validating pinned runtime and credential configuration")
+	flags.BoolVar(&c.allowOpenEgressDev, "allow-open-egress-dev", false, "permit an explicitly configured open AX Gateway for development")
 	if err := flags.Parse(args); err != nil {
 		return c, err
 	}
@@ -189,6 +207,10 @@ func parseAppConfig(args []string) (appConfig, error) {
 	if flags.NArg() != 0 || (c.migrations != "apply" && c.migrations != "verify") || c.listen == "" || c.certFile == "" || c.keyFile == "" || c.signerFile == "" || c.databaseURL == "" ||
 		err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.String() != c.origin {
 		return c, errors.New("serve-app requires --listen, exact HTTPS --origin, --tls-cert-file, --tls-key-file, --signer-file, and BLAXSMITH_DATABASE_URL")
+	}
+	c.dispatchConfig, err = parseDispatchConfig(c.enableDispatch, c.allowOpenEgressDev, os.LookupEnv)
+	if err != nil {
+		return c, err
 	}
 	return c, nil
 }
@@ -221,31 +243,40 @@ func validateDatabaseTransport(config *pgxpool.Config, allowLocal bool) error {
 	return nil
 }
 
-func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin, staticDir string, activity *activityHub) (http.Handler, error) {
+func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.SessionManager,
+	origin, staticDir string, activity *activityHub, dispatchConfig dispatchConfig) (http.Handler, *productDispatch, error) {
 	authPath, authHandler, err := identity.NewBrowserHandler(manager, origin)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	guard, err := identity.NewBrowserGuard(manager, origin)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	store, err := workflow.New(pool)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	secrets, err := appSecretStore(pool)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	var product *productDispatch
+	if dispatchConfig.axServer != "" {
+		product, err = newProductDispatch(ctx, dispatchConfig, pool, store, secrets)
+		if err != nil {
+			return nil, nil, fmt.Errorf("initialize run dispatcher: %w", err)
+		}
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/api"+authPath, http.StripPrefix("/api", authHandler))
-	workflowPath, workflowHandler := apiv1connect.NewWorkflowServiceHandler(&workflowService{
-		guard: guard, store: store, secrets: secrets,
-		// Run creation remains unavailable until the separate AX connector and
-		// durable dispatch/reconciliation loops are wired into this installation.
-		launchEnabled: false,
-	}, connect.WithReadMaxBytes(1<<20))
+	service := &workflowService{guard: guard, store: store, secrets: secrets}
+	if product != nil {
+		service.dispatcher = product.Dispatcher
+		service.dispatchReady = product.Preflight
+		service.launchEnabled = true
+	}
+	workflowPath, workflowHandler := apiv1connect.NewWorkflowServiceHandler(service, connect.WithReadMaxBytes(1<<20))
 	mux.Handle("/api"+workflowPath, http.StripPrefix("/api", guard.Wrap(workflowHandler)))
 	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity}))
 	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(&catalogService{client: &http.Client{Timeout: 30 * time.Second}})
@@ -280,7 +311,10 @@ func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin,
 	if staticDir != "" {
 		index := filepath.Join(staticDir, "index.html")
 		if info, err := os.Stat(index); err != nil || !info.Mode().IsRegular() {
-			return nil, errors.New("static directory must contain a regular index.html")
+			if product != nil {
+				product.Close()
+			}
+			return nil, nil, errors.New("static directory must contain a regular index.html")
 		}
 		files := http.FileServer(http.Dir(staticDir))
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -296,7 +330,7 @@ func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin,
 			files.ServeHTTP(w, r)
 		})
 	}
-	return mux, nil
+	return mux, product, nil
 }
 
 func appSecretStore(pool *pgxpool.Pool) (*access.SecretStore, error) {

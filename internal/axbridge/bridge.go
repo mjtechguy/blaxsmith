@@ -65,18 +65,19 @@ type Inspector interface {
 }
 
 type Bridge struct {
-	Workflow        *workflow.Store
-	AX              Client
-	Actor           Inspector
-	Image           string // exact digest-pinned AX runner image
-	Pool            string
-	Signer          string                                              // enrolled bootstrap public key, base64
-	Storage         string                                              // approved data-only snapshot location
-	Tool            *tooladapter.Request                                // frozen, public CLI selection; nil runs the synthetic probe
-	Workspace       string                                              // approved AX Workspace bound at /workspace for tool tasks
-	Gateway         string                                              // attempt-scoped AX Gateway with exact public-IP egress rules
-	GatewayTemplate string                                              // statically configured Gateway copied after validation
-	LookupIPv4      func(context.Context, string) ([]netip.Addr, error) // nil uses system DNS
+	Workflow          *workflow.Store
+	AX                Client
+	Actor             Inspector
+	Image             string // exact digest-pinned AX runner image
+	Pool              string
+	Signer            string                                              // enrolled bootstrap public key, base64
+	Storage           string                                              // approved data-only snapshot location
+	Tool              *tooladapter.Request                                // frozen, public CLI selection; nil runs the synthetic probe
+	Workspace         string                                              // approved AX Workspace bound at /workspace for tool tasks
+	Gateway           string                                              // attempt-scoped AX Gateway with exact public-IP egress rules
+	GatewayTemplate   string                                              // statically configured Gateway copied after validation
+	GatewayEgressMode string                                              // "exact" (default) or explicitly selected "open-dev"
+	LookupIPv4        func(context.Context, string) ([]netip.Addr, error) // nil uses system DNS
 	// RevokeOwner must fence the bootstrap owner and any access lease before
 	// deletion. A nil revoker fails closed.
 	RevokeOwner func(context.Context, workflow.Attempt) error

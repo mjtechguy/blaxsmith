@@ -209,6 +209,17 @@ func (b *Bridge) checkGateway(ctx context.Context, gateway Gateway, name, space,
 		gateway.Spec.Egress.Allowlist == nil || len(gateway.Spec.Egress.Allowlist.Other) != 0 {
 		return ErrInputs
 	}
+	if b.GatewayEgressMode == "open-dev" {
+		hosts := gateway.Spec.Egress.Allowlist.Hosts
+		if gitfetch.Validate(repositoryURL, "") == nil && (provider == "openai" || provider == "anthropic") &&
+			len(hosts) == 1 && hosts[0].Host == "*" && hosts[0].Port == 0 && len(hosts[0].Other) == 0 {
+			return nil
+		}
+		return ErrInputs
+	}
+	if b.GatewayEgressMode != "" && b.GatewayEgressMode != "exact" {
+		return ErrInputs
+	}
 	if gitfetch.Validate(repositoryURL, "") != nil {
 		return ErrInputs
 	}

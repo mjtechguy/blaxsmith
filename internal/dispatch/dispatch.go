@@ -85,6 +85,17 @@ func (d *Dispatcher) DispatchBatch(ctx context.Context, afterOrganizationID stri
 	return batch, nil
 }
 
+// PreflightModel validates current project authority and credential material
+// before a run is persisted as launchable. Dispatch repeats this check while
+// reserving the actual attempt.
+func (d *Dispatcher) PreflightModel(ctx context.Context, grant access.ModelGrant) error {
+	if d == nil || d.DB == nil || d.Secrets == nil {
+		return ErrNotReady
+	}
+	_, err := d.preflightAuthority(ctx, grant)
+	return err
+}
+
 func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTask) Outcome {
 	outcome := Outcome{Task: candidate, State: "blocked"}
 	frozen, err := d.Workflow.LoadFrozenTask(ctx, candidate.OrganizationID, candidate.RunID, candidate.TaskID)

@@ -72,6 +72,51 @@ func TestToolInputsRequireNarrowNativeWorkspaceAndGateway(t *testing.T) {
 	check(false)
 }
 
+func TestOpenGatewayRequiresExplicitDevelopmentMode(t *testing.T) {
+	const repo = "https://github.com/owner/repo"
+	const space = "blaxsmith-engineering"
+	gateway := Gateway{APIVersion: "ax.io/v1alpha1", Kind: "Gateway",
+		Metadata: TaskMetadata{Name: "public-egress", Atespace: space},
+		Spec:     GatewaySpec{Egress: &GatewayEgress{Allowlist: &GatewayAllowlist{Hosts: []GatewayHostRule{{Host: "*"}}}}}}
+	bridge := Bridge{GatewayEgressMode: "open-dev"}
+	if err := bridge.checkGateway(t.Context(), gateway, "public-egress", space, repo, "openai"); err != nil {
+		t.Fatalf("explicit development open Gateway rejected: %v", err)
+	}
+	bridge.GatewayEgressMode = "exact"
+	if err := bridge.checkGateway(t.Context(), gateway, "public-egress", space, repo, "openai"); !errors.Is(err, ErrInputs) {
+		t.Fatalf("open Gateway accepted in exact mode: %v", err)
+	}
+	bridge.GatewayEgressMode = "open-dev"
+	gateway.Spec.Egress.Allowlist.Hosts[0].Port = 443
+	if err := bridge.checkGateway(t.Context(), gateway, "public-egress", space, repo, "openai"); !errors.Is(err, ErrInputs) {
+		t.Fatalf("port-restricted wildcard unexpectedly accepted: %v", err)
+	}
+	gateway.Spec.Egress.Allowlist.Hosts = []GatewayHostRule{{Host: "*"}, {Host: "8.8.8.8/32"}}
+	if err := bridge.checkGateway(t.Context(), gateway, "public-egress", space, repo, "openai"); !errors.Is(err, ErrInputs) {
+		t.Fatalf("wildcard mixed with extra egress rules accepted: %v", err)
+	}
+}
+
+func TestOpenDevGatewayDoesNotRelaxWorkspaceValidation(t *testing.T) {
+	const org = "11111111-1111-1111-1111-111111111111"
+	space := Space(org)
+	workspace := Workspace{APIVersion: "ax.io/v1alpha1", Kind: "Workspace",
+		Metadata: TaskMetadata{Name: "source", Atespace: space}, Spec: map[string]any{"git": []any{}, "mcp": nil, "skills": nil}}
+	gateway := Gateway{APIVersion: "ax.io/v1alpha1", Kind: "Gateway",
+		Metadata: TaskMetadata{Name: "public-egress", Atespace: space},
+		Spec:     GatewaySpec{Egress: &GatewayEgress{Allowlist: &GatewayAllowlist{Hosts: []GatewayHostRule{{Host: "*"}}}}}}
+	bridge := Bridge{AX: &inputAX{workspace: workspace, gateway: gateway}, Workspace: "source",
+		Gateway: "public-egress", GatewayEgressMode: "open-dev"}
+	if err := bridge.CheckToolInputs(t.Context(), org, "https://github.com/owner/repo", "openai"); err != nil {
+		t.Fatal(err)
+	}
+	workspace.Spec["ambient"] = true
+	bridge.AX = &inputAX{workspace: workspace, gateway: gateway}
+	if err := bridge.CheckToolInputs(t.Context(), org, "https://github.com/owner/repo", "openai"); !errors.Is(err, ErrInputs) {
+		t.Fatalf("open-dev mode bypassed Workspace checks: %v", err)
+	}
+}
+
 func TestAXResourceYAMLReadback(t *testing.T) {
 	var workspace Workspace
 	if err := yaml.Unmarshal([]byte(`apiVersion: ax.io/v1alpha1
