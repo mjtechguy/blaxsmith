@@ -93,18 +93,26 @@ const modelId = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/;
 // harness fixes the harness filter (a recipe profile already chose one);
 // without a connection only the Advanced free-text field is offered. fieldId
 // keeps element ids unique when several selects share a connection.
+// One connection's models for a harness; shared by pickers and effort lists.
+export function useConnectionModels(connectionId: string, harness: string) {
+  const { org } = useOrg();
+  return useQuery({ queryKey: connectionModelsKey(org, connectionId, harness), enabled: Boolean(org && connectionId),
+    queryFn: ({ signal }) => listConnectionModels(connectionId, harness, signal) });
+}
+
 export function ModelSelect({ connectionId, value, onChange, harness: fixedHarness, fieldId, error }: {
   connectionId: string; value: string; onChange: (model: string) => void; harness?: string; fieldId?: string; error?: string;
 }) {
-  const { org } = useOrg();
   const [chosenHarness, setHarness] = useState("");
   const harness = fixedHarness ?? chosenHarness;
   const [search, setSearch] = useState("");
-  const models = useQuery({ queryKey: connectionModelsKey(org, connectionId, harness), enabled: Boolean(org && connectionId),
-    queryFn: ({ signal }) => listConnectionModels(connectionId, harness, signal) });
+  const [showLegacy, setShowLegacy] = useState(false);
+  const models = useConnectionModels(connectionId, harness);
   const list = connectionId ? models.data?.models ?? [] : [];
+  const legacyCount = list.filter((m) => m.legacy).length;
   const needle = search.trim().toLowerCase();
-  const shown = needle ? list.filter((m) => m.id.toLowerCase().includes(needle) || m.displayName.toLowerCase().includes(needle)) : list;
+  const shown = list.filter((m) => (showLegacy || !m.legacy || m.id === value) &&
+    (!needle || m.id.toLowerCase().includes(needle) || m.displayName.toLowerCase().includes(needle)));
   const listed = list.some((m) => m.id === value);
   const id = fieldId || connectionId || "none";
   return <div className="editor-form">
@@ -116,8 +124,9 @@ export function ModelSelect({ connectionId, value, onChange, harness: fixedHarne
     {connectionId ? <div className="form-field"><label htmlFor={`model-${id}`}>Model</label>
       <select id={`model-${id}`} value={listed ? value : ""} onChange={(event) => onChange(event.target.value)} disabled={models.isPending} aria-invalid={error ? true : undefined}>
         <option value="">{models.isPending ? "Loading models…" : list.length ? "Choose a model" : "No models available"}</option>
-        {shown.map((m) => <option key={m.id} value={m.id}>{m.displayName && m.displayName !== m.id ? `${m.displayName} (${m.id})` : m.id}{m.contextTokens ? ` · ${Math.round(m.contextTokens / 1000)}k` : ""}</option>)}
+        {shown.map((m) => <option key={m.id} value={m.id}>{m.displayName && m.displayName !== m.id ? `${m.displayName} (${m.id})` : m.id}{m.contextTokens ? ` · ${Math.round(m.contextTokens / 1000)}k` : ""}{m.isDefault ? " · default" : ""}{m.badge ? ` · ${m.badge}` : ""}{m.legacy ? " · legacy" : ""}</option>)}
       </select>
+      {legacyCount ? <label className="recipe-check"><input type="checkbox" checked={showLegacy} onChange={(event) => setShowLegacy(event.target.checked)} /> Show legacy models ({legacyCount})</label> : null}
       {models.data?.error ? <span className="form-field-error">{models.data.error}</span> : null}
       {models.isError ? <span className="form-field-error">Models could not be loaded.</span> : null}
       {error && listed ? <span className="form-field-error">{error}</span> : null}

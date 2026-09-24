@@ -286,7 +286,8 @@ func (s *connectionService) ListConnectionModels(ctx context.Context, req *conne
 	out := &api.ListConnectionModelsResponse{CheckedAt: optionalTime(checked), Error: modelsErr}
 	for _, m := range models {
 		out.Models = append(out.Models, &api.ConnectionModel{Id: m.ID, DisplayName: m.DisplayName, CreatedAt: optionalTime(m.ReleasedAt),
-			ContextTokens: m.ContextTokens, CapabilitiesJson: m.Capabilities, Harnesses: m.Harnesses})
+			ContextTokens: m.ContextTokens, CapabilitiesJson: m.Capabilities, Harnesses: m.Harnesses,
+			IsDefault: m.IsDefault, Legacy: m.Legacy, Badge: m.Badge, Efforts: m.Efforts, DefaultEffort: m.DefaultEffort})
 	}
 	return connect.NewResponse(out), nil
 }

@@ -105,6 +105,14 @@ message ConnectionModel {
   int32 context_tokens = 4; // 0 if unknown.
   string capabilities_json = 5; // Provider capability object, when returned.
   repeated string harnesses = 6; // Pinned harnesses that accept this model.
+  // Provider-reported metadata overlaid with the bundled model manifest.
+  bool is_default = 7; // The provider's (or manifest's) default model.
+  bool legacy = 8; // Superseded; pickers hide it behind a toggle.
+  string badge = 9; // "new" or empty.
+  // Reasoning efforts this model accepts, low to high, limited to the
+  // harness filter when one is given. Empty: unknown, use the harness list.
+  repeated string efforts = 10;
+  string default_effort = 11; // Empty when unknown.
 }
 message ListConnectionModelsRequest {
   string connection_id = 1;

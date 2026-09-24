@@ -21,6 +21,7 @@ type CatalogModel struct {
 	ReleasedAt      *time.Time
 	ContextTokens   int
 	Capabilities    json.RawMessage
+	Meta            ModelMeta // What the provider itself reported; see ResolveModel.
 }
 
 // ModelCatalog lists a provider's models with a key, which also validates it.
@@ -167,6 +168,7 @@ func (c ModelCatalog) anthropicList(ctx context.Context, key []byte) ([]CatalogM
 			}
 			if len(m.Capabilities) > 0 && string(m.Capabilities) != "null" {
 				item.Capabilities = m.Capabilities
+				item.Meta.Efforts = anthropicEfforts(m.Capabilities)
 			}
 			out = append(out, item)
 		}

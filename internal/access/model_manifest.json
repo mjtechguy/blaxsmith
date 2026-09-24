@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "updatedAt": "2026-09-24",
+  "providers": {
+    "anthropic": {
+      "default": "claude-opus-5",
+      "models": [
+        {"slug": "claude-opus-5-5", "name": "Claude Opus 5.5", "badge": "new", "efforts": ["low", "medium", "high", "xhigh", "max"], "defaultEffort": "medium"},
+        {"slug": "claude-fable-5-1", "name": "Claude Fable 5.1", "efforts": ["low", "medium", "high", "xhigh", "max"], "defaultEffort": "medium"},
+        {"slug": "claude-opus-5", "name": "Claude Opus 5", "efforts": ["low", "medium", "high", "xhigh", "max"], "defaultEffort": "high"},
+        {"slug": "claude-sonnet-5", "name": "Claude Sonnet 5", "efforts": ["low", "medium", "high", "xhigh", "max"], "defaultEffort": "high"},
+        {"slug": "claude-fable-5", "name": "Claude Fable 5", "legacy": true, "efforts": ["low", "medium", "high", "xhigh", "max"], "defaultEffort": "medium"},
+        {"slug": "claude-opus-4-8", "name": "Claude Opus 4.8", "legacy": true, "efforts": ["low", "medium", "high", "xhigh", "max"], "defaultEffort": "high"},
+        {"slug": "claude-opus-4-7", "name": "Claude Opus 4.7", "legacy": true, "efforts": ["low", "medium", "high", "xhigh", "max"], "defaultEffort": "high"},
+        {"slug": "claude-opus-4-6", "name": "Claude Opus 4.6", "legacy": true, "efforts": ["low", "medium", "high", "max"], "defaultEffort": "high"},
+        {"slug": "claude-opus-4-5", "name": "Claude Opus 4.5", "legacy": true, "efforts": ["low", "medium", "high"], "defaultEffort": "high"},
+        {"slug": "claude-sonnet-4-6", "name": "Claude Sonnet 4.6", "legacy": true, "efforts": ["low", "medium", "high", "max"], "defaultEffort": "high"},
+        {"slug": "claude-haiku-4-5", "name": "Claude Haiku 4.5", "legacy": true}
+      ]
+    },
+    "openai": {
+      "default": "gpt-6-luna",
+      "models": [
+        {"slug": "gpt-6-sol", "name": "GPT-6 Sol", "badge": "new", "efforts": ["low", "medium", "high", "xhigh"], "defaultEffort": "medium"},
+        {"slug": "gpt-6-luna", "name": "GPT-6 Luna", "efforts": ["low", "medium", "high", "xhigh"], "defaultEffort": "medium"},
+        {"slug": "gpt-6-astra", "name": "GPT-6 Astra", "efforts": ["low", "medium", "high", "xhigh"], "defaultEffort": "medium"},
+        {"slug": "gpt-5.1-codex", "name": "GPT-5.1 Codex", "legacy": true, "efforts": ["low", "medium", "high"], "defaultEffort": "medium"},
+        {"slug": "gpt-5", "name": "GPT-5", "legacy": true, "efforts": ["minimal", "low", "medium", "high"], "defaultEffort": "medium"}
+      ]
+    }
+  }
+}

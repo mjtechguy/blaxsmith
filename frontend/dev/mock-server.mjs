@@ -290,7 +290,8 @@ const rpc = {
   CreateCodexSubscription: () => hubAdd({ scope: "personal", ownerId: principalId, kind: "subscription", provider: "codex", account: "acct-demo", modelCount: 2, modelsCheckedAt: now() }),
   StartCodexDeviceLogin: () => { deviceStarted = Date.now(); return { loginId: "login-1", verificationUrl: "https://auth.openai.com/codex/device", userCode: "ABCD-1234", intervalSeconds: 2, expiresAt: new Date(Date.now() + 900_000).toISOString() }; },
   PollCodexDeviceLogin: () => Date.now() - deviceStarted < 6_000 ? { state: "pending" } : { state: "connected", connection: rpc.CreateCodexSubscription().connection },
-  ListConnectionModels: ({ harness = "" }) => ({ checkedAt: now(), models: [{ id: "gpt-5.6-luna", displayName: "GPT 5.6 Luna", contextTokens: 400000, harnesses: ["codex", "opencode"] }, { id: "claude-opus-5-5", displayName: "Claude Opus 5.5", contextTokens: 200000, harnesses: ["claude-code", "opencode"] }].filter((m) => !harness || m.harnesses.includes(harness)) }),
+  ListConnectionModels: ({ harness = "" }) => ({ checkedAt: now(), models: mockModels.filter((m) => !harness || m.harnesses.includes(harness))
+    .map((m) => ({ ...m, efforts: harness === "codex" ? m.efforts.filter((e) => e !== "max") : m.efforts })) }),
   RefreshConnectionModels: () => ({ valid: true, modelCount: 2, checkedAt: now() }),
   GrantConnection: ({ connectionId, projectId: pid = "", granteeKind, granteeId = "" }) => { const grant = { id: `grant-${hub.length}-${Date.now()}`, projectId: pid, projectName: pid ? "Demo project" : "", granteeKind, granteeId, createdAt: now() }; hub.find((c) => c.id === connectionId)?.grants.push(grant); return { grant }; },
   RevokeConnectionGrant: ({ grantId }) => { for (const c of hub) c.grants = c.grants.filter((g) => g.id !== grantId); return {}; },
@@ -304,6 +305,16 @@ const rpc = {
   StartGitHubConnect: ({ returnTo = "/admin/connections" }) => { hubAdd({ scope: "organization", ownerId: "org-demo", kind: "git", provider: "github", account: "octocat" }); return { authorizeUrl: `${returnTo}?github=connected` }; },
 };
 
+const mockModel = (id, displayName, harnesses, efforts, defaultEffort, extra = {}) => ({ id, displayName, contextTokens: 400000, harnesses, efforts, defaultEffort, isDefault: false, legacy: false, badge: "", ...extra });
+const mockModels = [
+  mockModel("gpt-6-sol", "GPT-6 Sol", ["codex", "opencode"], ["low", "medium", "high", "xhigh"], "medium", { badge: "new" }),
+  mockModel("gpt-6-luna", "GPT-6 Luna", ["codex", "opencode"], ["low", "medium", "high", "xhigh"], "medium", { isDefault: true }),
+  mockModel("gpt-5", "GPT-5", ["codex", "opencode"], ["minimal", "low", "medium", "high"], "medium", { legacy: true }),
+  mockModel("claude-opus-5-5", "Claude Opus 5.5", ["claude-code", "opencode"], ["low", "medium", "high", "xhigh", "max"], "medium", { badge: "new" }),
+  mockModel("claude-opus-5", "Claude Opus 5", ["claude-code", "opencode"], ["low", "medium", "high", "xhigh", "max"], "high", { isDefault: true }),
+  mockModel("claude-opus-4-6", "Claude Opus 4.6", ["claude-code", "opencode"], ["low", "medium", "high", "max"], "high", { legacy: true }),
+  mockModel("claude-haiku-4-5", "Claude Haiku 4.5", ["claude-code", "opencode"], [], "", { legacy: true, contextTokens: 200000 }),
+];
 const recipes = [];
 function addVersion(r, recipeJson, frozenPath, makeCurrent) {
   const doc = (() => { try { return JSON.parse(recipeJson); } catch { return {}; } })();

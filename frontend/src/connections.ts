@@ -1,6 +1,6 @@
 import { createClient } from "@connectrpc/connect";
 import { browserTransport, csrfToken } from "./auth";
-import { ConnectionService, type Connection } from "./gen/blaxsmith/api/v1/connections_pb";
+import { ConnectionService, type Connection, type ConnectionModel } from "./gen/blaxsmith/api/v1/connections_pb";
 
 const client = createClient(ConnectionService, browserTransport);
 const csrf = async () => ({ headers: { "X-Blaxsmith-CSRF": await csrfToken() } });
@@ -35,6 +35,20 @@ export function modelsSummary(c: Pick<Connection, "kind" | "modelCount" | "model
   if (c.modelsError) return c.modelsError;
   if (!c.modelsCheckedAt) return "Not checked";
   return `valid, ${c.modelCount} ${c.modelCount === 1 ? "model" : "models"}`;
+}
+
+// Efforts the chosen model accepts (the server already limited them to the
+// harness); an unknown model falls back to the harness's own list.
+export function effortChoices(model: Pick<ConnectionModel, "efforts"> | undefined, harnessEfforts: readonly string[]): string[] {
+  return model?.efforts.length ? [...model.efforts] : [...harnessEfforts];
+}
+
+// The effort after choosing a model: its default, else the current effort
+// when still allowed, else the first allowed one.
+export function effortForModel(model: Pick<ConnectionModel, "efforts" | "defaultEffort"> | undefined, harnessEfforts: readonly string[], current: string): string {
+  const choices = effortChoices(model, harnessEfforts);
+  if (model?.defaultEffort && choices.includes(model.defaultEffort)) return model.defaultEffort;
+  return choices.includes(current) ? current : choices[0] ?? current;
 }
 
 export async function listConnections(scope: ListScope, projectId = "", signal?: AbortSignal) {

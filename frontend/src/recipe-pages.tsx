@@ -5,7 +5,8 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, ArrowRight, BookCopy, Check, CopyPlus, FileJson, GitFork, ListTree, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { currentSession, sessionQueryKey } from "./auth";
-import { ModelSelect, ResourceGrants } from "./connection-ui";
+import { ModelSelect, ResourceGrants, useConnectionModels } from "./connection-ui";
+import { effortChoices, effortForModel } from "./connections";
 import { DataTable } from "./data-table";
 import { TextField } from "./form-field";
 import type { LibraryRecipe, RecipeModelConnection, RecipeValidationError, RecipeVersion } from "./gen/blaxsmith/api/v1/recipes_pb";
@@ -364,7 +365,12 @@ function ProfileCard({ id, profile, errors, harnesses, allHarnesses, connections
   // OpenCode records provider/model; the connection lists provider-native ids.
   const prefix = profile.harness === "opencode" && connection ? `${connection.provider}/` : "";
   const shownModel = prefix && profile.model.startsWith(prefix) ? profile.model.slice(prefix.length) : profile.model;
-  const setModel = (model: string) => onChange({ ...profile, model: prefix && model && !model.includes("/") ? prefix + model : model });
+  // The effort list is the chosen model's (manifest or provider), else the harness's.
+  const models = useConnectionModels(connectionId, harness ? profile.harness : "");
+  const modelInfo = (id: string) => models.data?.models.find((m) => m.id === id);
+  const efforts = effortChoices(modelInfo(shownModel), harness?.efforts || []);
+  const setModel = (model: string) => onChange({ ...profile, model: prefix && model && !model.includes("/") ? prefix + model : model,
+    effort: effortForModel(modelInfo(model), harness?.efforts || [], profile.effort) });
   const skills = profile.skills || [];
   const at = `profiles.${id}`;
   return <div className="verification-check">
@@ -375,7 +381,7 @@ function ProfileCard({ id, profile, errors, harnesses, allHarnesses, connections
       <Select label="Harness" value={profile.harness} choices={harnesses.map((h) => [h.harness, h.harness])}
         onChange={(value) => onChange({ ...profile, harness: value, effort: allHarnesses.find((h) => h.harness === value)?.efforts.includes(profile.effort) ? profile.effort : allHarnesses.find((h) => h.harness === value)?.efforts[0] || profile.effort })} />
       <Select label="Connection" value={connectionId} choices={eligible.map((c) => [c.id, `${c.provider} · ${c.account}`])} onChange={setConnectionId} />
-      <Select label="Effort" value={profile.effort} choices={(harness?.efforts || []).map((e) => [e, e])} onChange={(effort) => onChange({ ...profile, effort })} />
+      <Select label="Effort" value={profile.effort} choices={efforts.map((e) => [e, e === modelInfo(shownModel)?.defaultEffort ? `${e} (model default)` : e])} onChange={(effort) => onChange({ ...profile, effort })} />
     </div>
     <ModelSelect connectionId={connectionId} harness={harness ? profile.harness : ""} fieldId={`${at}-model`} value={shownModel} onChange={setModel} error={fieldError(errors, `${at}.model`)} />
     {!eligible.length ? <p className="form-hint">No active {harness?.provider || "model"} connection lists models yet; type the model ID under Advanced.</p> : null}

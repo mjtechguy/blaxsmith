@@ -12,7 +12,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/recipe"
 )
+
+func manifestName(provider, model string) string {
+	for _, m := range access.ManifestModels(provider) {
+		if m.Slug == model {
+			return m.Name
+		}
+	}
+	return ""
+}
 
 // Connections hub (plan §10.2–10.3). Organization connections are managed by
 // org owners/admins and reach projects only through standing grants; project
@@ -56,6 +66,7 @@ type ConnectionModel struct {
 	ContextTokens   int32
 	Capabilities    string
 	Harnesses       []string
+	access.ModelMeta
 }
 
 // ponytail: which models each pinned harness accepts is a static rule table.
@@ -162,6 +173,7 @@ func commitAudited(ctx context.Context, tx pgx.Tx, caller identity.Caller, actio
 }
 
 var catalogModelID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+var effortName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 
 func knownHarness(harness string) bool {
 	for _, rule := range harnessRules {
@@ -347,9 +359,25 @@ func replaceModels(ctx context.Context, tx pgx.Tx, orgID, connectionID string, m
 			if len(m.Capabilities) > 0 && len(m.Capabilities) < 16<<10 && json.Valid(m.Capabilities) {
 				capabilities = m.Capabilities
 			}
+			efforts := slices.DeleteFunc(slices.Clone(m.Meta.Efforts), func(e string) bool { return !effortName.MatchString(e) })
+			if len(efforts) > 16 {
+				efforts = efforts[:16]
+			}
+			if efforts == nil {
+				efforts = []string{}
+			}
+			var badge, defaultEffort *string
+			if m.Meta.Badge == "new" {
+				badge = &m.Meta.Badge
+			}
+			if slices.Contains(efforts, m.Meta.DefaultEffort) {
+				defaultEffort = &m.Meta.DefaultEffort
+			}
 			if _, err := tx.Exec(ctx, `INSERT INTO access_connection_models
-				(organization_id,connection_id,model_id,display_name,released_at,context_tokens,capabilities)
-				VALUES ($1,$2,$3,$4,$5,$6,$7)`, orgID, connectionID, m.ID, name, m.ReleasedAt, context, capabilities); err != nil {
+				(organization_id,connection_id,model_id,display_name,released_at,context_tokens,capabilities,
+				is_default,legacy,badge,efforts,default_effort)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, orgID, connectionID, m.ID, name, m.ReleasedAt, context, capabilities,
+				m.Meta.IsDefault, m.Meta.Legacy, badge, efforts, defaultEffort); err != nil {
 				return err
 			}
 		}
@@ -724,14 +752,19 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 		return nil, nil, "", err
 	}
 	var rows pgx.Rows
-	if r.AuthMethod == access.CodexSubscriptionAuth {
-		// A ChatGPT plan has no public model list; offer the models the
-		// organization approved for the pinned Codex runtime.
-		rows, err = s.pool.Query(ctx, `SELECT DISTINCT model,model,NULL::timestamptz,NULL::integer,''
+	subscription := r.AuthMethod == access.CodexSubscriptionAuth
+	if subscription {
+		// A ChatGPT plan has no public model list, and `codex app-server`
+		// model/list would need the login materialized outside custody. Offer
+		// the models the organization approved for the pinned Codex runtime,
+		// then the manifest's OpenAI models.
+		rows, err = s.pool.Query(ctx, `SELECT DISTINCT model,model,NULL::timestamptz,NULL::integer,'',
+			false,false,''::text,'{}'::text[],''::text
 			FROM workflow_tool_runtime_approvals WHERE organization_id=$1 AND harness='codex' AND revoked_at IS NULL
 			ORDER BY 1`, caller.OrganizationID)
 	} else {
-		rows, err = s.pool.Query(ctx, `SELECT model_id,display_name,released_at,context_tokens,COALESCE(capabilities::text,'')
+		rows, err = s.pool.Query(ctx, `SELECT model_id,display_name,released_at,context_tokens,COALESCE(capabilities::text,''),
+			is_default,legacy,COALESCE(badge,''),efforts,COALESCE(default_effort,'')
 			FROM access_connection_models WHERE organization_id=$1 AND connection_id=$2
 			ORDER BY released_at DESC NULLS LAST,model_id`, caller.OrganizationID, connectionID)
 	}
@@ -741,7 +774,8 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 	all, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ConnectionModel, error) {
 		var m ConnectionModel
 		var context *int32
-		err := row.Scan(&m.ID, &m.DisplayName, &m.ReleasedAt, &context, &m.Capabilities)
+		err := row.Scan(&m.ID, &m.DisplayName, &m.ReleasedAt, &context, &m.Capabilities,
+			&m.IsDefault, &m.Legacy, &m.Badge, &m.Efforts, &m.DefaultEffort)
 		if context != nil {
 			m.ContextTokens = *context
 		}
@@ -750,12 +784,28 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 	if err != nil {
 		return nil, nil, "", err
 	}
+	if subscription {
+		for _, entry := range access.ManifestModels(r.Provider) {
+			if !slices.ContainsFunc(all, func(m ConnectionModel) bool { return m.ID == entry.Slug }) {
+				all = append(all, ConnectionModel{ID: entry.Slug, DisplayName: entry.Name})
+			}
+		}
+	}
+	var harnessEfforts []string
+	if harness != "" {
+		harnessEfforts = recipe.Efforts[harness]
+	}
 	out := all[:0]
 	for _, m := range all {
 		m.Harnesses = HarnessesFor(r.Provider, m.ID)
-		if harness == "" || slices.Contains(m.Harnesses, harness) {
-			out = append(out, m)
+		if harness != "" && !slices.Contains(m.Harnesses, harness) {
+			continue
 		}
+		m.ModelMeta = access.ResolveModel(r.Provider, m.ID, m.ModelMeta, harnessEfforts)
+		if name := manifestName(r.Provider, m.ID); name != "" && m.DisplayName == m.ID {
+			m.DisplayName = name
+		}
+		out = append(out, m)
 	}
 	return out, checked, modelsErr, nil
 }

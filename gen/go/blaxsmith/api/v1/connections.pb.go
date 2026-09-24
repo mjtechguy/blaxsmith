@@ -1025,8 +1025,16 @@ type ConnectionModel struct {
 	ContextTokens    int32                  `protobuf:"varint,4,opt,name=context_tokens,json=contextTokens,proto3" json:"context_tokens,omitempty"`         // 0 if unknown.
 	CapabilitiesJson string                 `protobuf:"bytes,5,opt,name=capabilities_json,json=capabilitiesJson,proto3" json:"capabilities_json,omitempty"` // Provider capability object, when returned.
 	Harnesses        []string               `protobuf:"bytes,6,rep,name=harnesses,proto3" json:"harnesses,omitempty"`                                       // Pinned harnesses that accept this model.
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Provider-reported metadata overlaid with the bundled model manifest.
+	IsDefault bool   `protobuf:"varint,7,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"` // The provider's (or manifest's) default model.
+	Legacy    bool   `protobuf:"varint,8,opt,name=legacy,proto3" json:"legacy,omitempty"`                        // Superseded; pickers hide it behind a toggle.
+	Badge     string `protobuf:"bytes,9,opt,name=badge,proto3" json:"badge,omitempty"`                           // "new" or empty.
+	// Reasoning efforts this model accepts, low to high, limited to the
+	// harness filter when one is given. Empty: unknown, use the harness list.
+	Efforts       []string `protobuf:"bytes,10,rep,name=efforts,proto3" json:"efforts,omitempty"`
+	DefaultEffort string   `protobuf:"bytes,11,opt,name=default_effort,json=defaultEffort,proto3" json:"default_effort,omitempty"` // Empty when unknown.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ConnectionModel) Reset() {
@@ -1099,6 +1107,41 @@ func (x *ConnectionModel) GetHarnesses() []string {
 		return x.Harnesses
 	}
 	return nil
+}
+
+func (x *ConnectionModel) GetIsDefault() bool {
+	if x != nil {
+		return x.IsDefault
+	}
+	return false
+}
+
+func (x *ConnectionModel) GetLegacy() bool {
+	if x != nil {
+		return x.Legacy
+	}
+	return false
+}
+
+func (x *ConnectionModel) GetBadge() string {
+	if x != nil {
+		return x.Badge
+	}
+	return ""
+}
+
+func (x *ConnectionModel) GetEfforts() []string {
+	if x != nil {
+		return x.Efforts
+	}
+	return nil
+}
+
+func (x *ConnectionModel) GetDefaultEffort() string {
+	if x != nil {
+		return x.DefaultEffort
+	}
+	return ""
 }
 
 type ListConnectionModelsRequest struct {
@@ -2450,7 +2493,7 @@ const file_blaxsmith_api_v1_connections_proto_rawDesc = "" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12<\n" +
 	"\n" +
 	"connection\x18\x03 \x01(\v2\x1c.blaxsmith.api.v1.ConnectionR\n" +
-	"connection\"\xd5\x01\n" +
+	"connection\"\xe3\x02\n" +
 	"\x0fConnectionModel\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x1d\n" +
@@ -2458,7 +2501,14 @@ const file_blaxsmith_api_v1_connections_proto_rawDesc = "" +
 	"created_at\x18\x03 \x01(\tR\tcreatedAt\x12%\n" +
 	"\x0econtext_tokens\x18\x04 \x01(\x05R\rcontextTokens\x12+\n" +
 	"\x11capabilities_json\x18\x05 \x01(\tR\x10capabilitiesJson\x12\x1c\n" +
-	"\tharnesses\x18\x06 \x03(\tR\tharnesses\"\\\n" +
+	"\tharnesses\x18\x06 \x03(\tR\tharnesses\x12\x1d\n" +
+	"\n" +
+	"is_default\x18\a \x01(\bR\tisDefault\x12\x16\n" +
+	"\x06legacy\x18\b \x01(\bR\x06legacy\x12\x14\n" +
+	"\x05badge\x18\t \x01(\tR\x05badge\x12\x18\n" +
+	"\aefforts\x18\n" +
+	" \x03(\tR\aefforts\x12%\n" +
+	"\x0edefault_effort\x18\v \x01(\tR\rdefaultEffort\"\\\n" +
 	"\x1bListConnectionModelsRequest\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12\x18\n" +
 	"\aharness\x18\x02 \x01(\tR\aharness\"\x8e\x01\n" +
