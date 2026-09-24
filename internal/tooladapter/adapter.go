@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +49,7 @@ type Invocation struct {
 	runtime        Runtime
 	args           []string
 	skills         []string
+	skillNames     []string
 	skillArtifacts []ArtifactDigest
 	timeout        time.Duration
 	maxOutputBytes int
@@ -65,9 +67,15 @@ func Prepare(runtime Runtime, profile recipe.Profile, prompt string, timeout tim
 		!selection.MatchString(profile.Model) || !effort.MatchString(profile.Effort) || len(profile.Instructions) != 0 {
 		return Invocation{}, fmt.Errorf("%w: invalid runtime, limits, prompt, or unsupported instructions", ErrBlocked)
 	}
-	if _, err := skillFilesByRoot(profile.Skills); err != nil {
+	skillRoots, err := skillFilesByRoot(profile.Skills)
+	if err != nil {
 		return Invocation{}, err
 	}
+	skillNames := make([]string, 0, len(skillRoots))
+	for root := range skillRoots {
+		skillNames = append(skillNames, filepath.Base(filepath.FromSlash(root)))
+	}
+	sort.Strings(skillNames)
 	if profile.Harness == "opencode" {
 		provider, model, ok := strings.Cut(profile.Model, "/")
 		if !ok || provider == "" || model == "" || strings.Contains(model, "/") || profile.Effort == "provider-default" {
@@ -92,14 +100,14 @@ func Prepare(runtime Runtime, profile recipe.Profile, prompt string, timeout tim
 			"--config", `web_search="disabled"`, "--config", `skills.bundled.enabled=false`, prompt}
 	case "claude-code":
 		settings := fmt.Sprintf(`{"availableModels":[%q],"fallbackModel":[]}`, profile.Model)
-		args = []string{"--bare", "--print", "--output-format", "stream-json", "--permission-prompts", "none", "--no-session-persistence",
+		args = []string{"--bare", "--print", "--output-format", "stream-json", "--verbose", "--permission-prompts", "none", "--no-session-persistence",
 			"--settings", string(settings), "--model", profile.Model, "--effort", profile.Effort, prompt}
 	case "opencode":
 		args = []string{"run", "--standalone", "--format", "json", "--model", profile.Model + "#" + profile.Effort, prompt}
 	default:
 		return Invocation{}, fmt.Errorf("%w: harness %q", ErrBlocked, profile.Harness)
 	}
-	return Invocation{runtime: runtime, args: args, skills: append([]string(nil), profile.Skills...), timeout: timeout, maxOutputBytes: maxOutputBytes}, nil
+	return Invocation{runtime: runtime, args: args, skills: append([]string(nil), profile.Skills...), skillNames: skillNames, timeout: timeout, maxOutputBytes: maxOutputBytes}, nil
 }
 
 // Run checks the executable bytes and version in the pod, then bounds elapsed
@@ -124,14 +132,35 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 			return nil, err
 		}
 		skillFiles := filepath.Join(config, "skills")
-		external := map[string]string{"*": "deny"}
-		if len(in.skills) > 0 {
-			external[skillFiles+"/*"] = "allow"
+		permissions := []map[string]string{
+			{"action": "*", "resource": "*", "effect": "allow"},
+			{"action": "subagent", "resource": "*", "effect": "deny"},
+			{"action": "question", "resource": "*", "effect": "deny"},
+			{"action": "webfetch", "resource": "*", "effect": "deny"},
+			{"action": "websearch", "resource": "*", "effect": "deny"},
+			{"action": "execute", "resource": "*", "effect": "deny"},
+			{"action": "skill", "resource": "*", "effect": "deny"},
+			{"action": "external_directory", "resource": "*", "effect": "deny"},
 		}
-		data, err := json.Marshal(map[string]any{"update": "disable", "permission": map[string]any{
-			"task": "deny", "question": "deny", "doom_loop": "deny", "webfetch": "deny", "websearch": "deny", "skill": "allow",
-			"external_directory": external, "edit": map[string]string{skillFiles + "/*": "deny"},
-		}})
+		if len(in.skillNames) > 0 {
+			for _, name := range in.skillNames {
+				root := filepath.ToSlash(filepath.Join(skillFiles, name, "*"))
+				permissions = append(permissions,
+					map[string]string{"action": "external_directory", "resource": root, "effect": "allow"},
+					map[string]string{"action": "read", "resource": root, "effect": "allow"},
+					map[string]string{"action": "edit", "resource": root, "effect": "deny"},
+					map[string]string{"action": "skill", "resource": name, "effect": "allow"},
+				)
+			}
+		}
+		// OpenCode uses the last matching rule, so keep env protection after
+		// selected-skill read grants.
+		permissions = append(permissions,
+			map[string]string{"action": "read", "resource": "*.env", "effect": "deny"},
+			map[string]string{"action": "read", "resource": "*.env.*", "effect": "deny"},
+			map[string]string{"action": "read", "resource": "*.env.example", "effect": "allow"},
+		)
+		data, err := json.Marshal(map[string]any{"update": "disable", "permissions": permissions})
 		if err != nil {
 			return nil, err
 		}

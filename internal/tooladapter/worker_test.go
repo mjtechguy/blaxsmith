@@ -304,29 +304,89 @@ func TestClaudeBareModeGetsOnlyDeclaredSkillDirectory(t *testing.T) {
 func TestOpenCodeReceivesSelectedSkillWithoutNativeDelegation(t *testing.T) {
 	workdir := t.TempDir()
 	skill := "skills/evidence/SKILL.md"
+	reference := "skills/evidence/references/evidence.md"
 	content := []byte("---\nname: evidence\ndescription: Review evidence.\n---\n\nReview evidence.")
+	referenceContent := []byte("Use this selected reference.")
 	if err := os.MkdirAll(filepath.Dir(filepath.Join(workdir, skill)), 0700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(workdir, skill), content, 0600); err != nil {
 		t.Fatal(err)
 	}
-	body := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'opencode v2.1.280'; exit; fi\nconfig=\"$XDG_CONFIG_HOME/opencode/opencode.json\"\ntest -f \"$HOME/.config/opencode/skills/evidence/SKILL.md\" || exit 9\ngrep -q '\"task\":\"deny\"' \"$config\" || exit 10\ngrep -q '\"websearch\":\"deny\"' \"$config\" || exit 11\ngrep -q '\"skill\":\"allow\"' \"$config\" || exit 12\nprintf ok\n")
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(workdir, reference)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workdir, reference), referenceContent, 0600); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'opencode v2.0.14'; exit; fi\ntest -f \"$HOME/.config/opencode/skills/evidence/SKILL.md\" || exit 9\ntest -f \"$HOME/.config/opencode/skills/evidence/references/evidence.md\" || exit 10\ncat \"$XDG_CONFIG_HOME/opencode/opencode.json\"\n")
 	binary := filepath.Join(t.TempDir(), "opencode")
 	if err := os.WriteFile(binary, body, 0700); err != nil {
 		t.Fatal(err)
 	}
 	binarySHA := sha256.Sum256(body)
 	skillSHA := sha256.Sum256(content)
+	referenceSHA := sha256.Sum256(referenceContent)
 	runtime := Runtime{Harness: "opencode", Image: "example/tool@sha256:" + strings.Repeat("a", 64), Binary: binary,
-		BinarySHA256: hex.EncodeToString(binarySHA[:]), Version: "2.1.280", Supported: []ModelEffort{{Model: "openai/gpt-6-luna", Effort: "high"}}}
-	in, err := Prepare(runtime, recipe.Profile{Harness: "opencode", Model: "openai/gpt-6-luna", Effort: "high", Skills: []string{skill}},
-		"Use the selected skill", time.Minute, 1024)
+		BinarySHA256: hex.EncodeToString(binarySHA[:]), Version: "2.0.14", Supported: []ModelEffort{{Model: "openai/gpt-6-luna", Effort: "high"}}}
+	in, err := Prepare(runtime, recipe.Profile{Harness: "opencode", Model: "openai/gpt-6-luna", Effort: "high", Skills: []string{skill, reference}},
+		"Use the selected skill", time.Minute, 8192)
 	if err != nil {
 		t.Fatal(err)
 	}
-	in.skillArtifacts = []ArtifactDigest{{Path: skill, SHA256: hex.EncodeToString(skillSHA[:])}}
-	if output, err := Run(t.Context(), in, workdir, nil); err != nil || string(output) != "ok" {
+	in.skillArtifacts = []ArtifactDigest{{Path: skill, SHA256: hex.EncodeToString(skillSHA[:])}, {Path: reference, SHA256: hex.EncodeToString(referenceSHA[:])}}
+	output, err := Run(t.Context(), in, workdir, nil)
+	if err != nil {
 		t.Fatalf("OpenCode did not receive scoped skill configuration: %q %v", output, err)
+	}
+	var config struct {
+		Permissions []struct{ Action, Resource, Effect string } `json:"permissions"`
+		Legacy      json.RawMessage                             `json:"permission"`
+	}
+	if err := json.Unmarshal(output, &config); err != nil || config.Legacy != nil {
+		t.Fatalf("OpenCode v2 permissions config: %s %v", output, err)
+	}
+	hasRule := func(action, resource, effect string) bool {
+		for _, rule := range config.Permissions {
+			if rule.Action == action && rule.Resource == resource && rule.Effect == effect {
+				return true
+			}
+		}
+		return false
+	}
+	if !hasRule("subagent", "*", "deny") || !hasRule("execute", "*", "deny") ||
+		!hasRule("external_directory", "*", "deny") || !hasRule("read", "*.env", "deny") ||
+		!hasRule("read", "*.env.*", "deny") || !hasRule("read", "*.env.example", "allow") ||
+		!hasRule("skill", "*", "deny") || !hasRule("skill", "evidence", "allow") || hasRule("skill", "references", "allow") {
+		t.Fatalf("OpenCode v2 policy must deny ambient capabilities and allow only the selected skill: %+v", config.Permissions)
+	}
+	lastIndex := func(action, resource string) int {
+		index := -1
+		for i, rule := range config.Permissions {
+			if rule.Action == action && rule.Resource == resource {
+				index = i
+			}
+		}
+		return index
+	}
+	skillReadIndex := -1
+	for i, rule := range config.Permissions {
+		if rule.Action == "read" && rule.Effect == "allow" && strings.HasSuffix(rule.Resource, "/skills/evidence/*") {
+			skillReadIndex = i
+		}
+	}
+	if skillReadIndex < 0 || lastIndex("read", "*.env") <= skillReadIndex ||
+		lastIndex("read", "*.env.*") <= skillReadIndex ||
+		lastIndex("read", "*.env.example") <= lastIndex("read", "*.env.*") {
+		t.Fatalf("OpenCode env denials must follow skill grants, with only .env.example exempted: %+v", config.Permissions)
+	}
+	protectedSkill, readableSkill, allowedSkillDir := false, false, false
+	for _, rule := range config.Permissions {
+		protectedSkill = protectedSkill || rule.Action == "edit" && rule.Effect == "deny" && strings.HasSuffix(rule.Resource, "/skills/evidence/*")
+		readableSkill = readableSkill || rule.Action == "read" && rule.Effect == "allow" && strings.HasSuffix(rule.Resource, "/skills/evidence/*")
+		allowedSkillDir = allowedSkillDir || rule.Action == "external_directory" && rule.Effect == "allow" && strings.HasSuffix(rule.Resource, "/skills/evidence/*")
+	}
+	if !protectedSkill || !readableSkill || !allowedSkillDir {
+		t.Fatalf("OpenCode v2 skill access must be read-only and narrowly scoped: %+v", config.Permissions)
 	}
 }

@@ -1,0 +1,33 @@
+{
+  "schema_version": "blaxsmith.native-skill-probe/v1",
+  "run_date_utc": "2026-09-24",
+  "runtime_image": "localhost/blaxsmith-runtime-proof:0.1.0",
+  "tool_image_versions": {
+    "codex": "0.156.1",
+    "claude_code": "2.1.280",
+    "opencode": "2.0.14"
+  },
+  "provider": "loopback mock; fake key; external container networking disabled",
+  "skill_sha256": "0bb3cc68b4faa4b0bcfb254487c7336227360417f07a03fb5838c5cff46b27c2",
+  "launches_per_harness": 2,
+  "reports": [
+    { "harness": "codex", "restart": 1, "native_skill_loaded": true, "skill_tool_discovered": false, "model_requests": 2 },
+    { "harness": "codex", "restart": 2, "native_skill_loaded": true, "skill_tool_discovered": false, "model_requests": 2 },
+    { "harness": "claude", "restart": 1, "native_skill_loaded": true, "skill_tool_discovered": false, "model_requests": 1 },
+    { "harness": "claude", "restart": 2, "native_skill_loaded": true, "skill_tool_discovered": false, "model_requests": 1 },
+    { "harness": "opencode", "restart": 1, "native_skill_loaded": true, "skill_tool_discovered": true, "model_requests": 2 },
+    { "harness": "opencode", "restart": 2, "native_skill_loaded": true, "skill_tool_discovered": true, "model_requests": 2 }
+  ],
+  "proves": [
+    "Each pinned CLI discovers and loads the selected skill body.",
+    "The skill body digest is identical across two fresh HOME directories per CLI.",
+    "OpenCode exposes and invokes its native skill tool under the generated v2 config."
+  ],
+  "does_not_prove": [
+    "Real provider authentication, inference quality, or billing behavior.",
+    "Every native permission denial under hostile prompts.",
+    "MCP server setup, allowed and denied calls, grant revocation, or credential isolation.",
+    "AX workspace readiness, checkout isolation, dataplane enforcement, or actor lifecycle."
+  ],
+  "reproduction": "Run node deploy/runtime-proof/skill-probe.mjs inside the pinned image using buildah run --network none; see deploy/runtime-proof/README.md."
+}

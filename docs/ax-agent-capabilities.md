@@ -32,6 +32,14 @@ Run details now expose the frozen harness/model/effort and selected instruction
 and skill file digests from the validated recipe bundle. This is configured-input
 provenance; it does not yet prove a native CLI loaded the files.
 
+The credential-free [native skill probe](native-skill-probe.json) now proves
+that the pinned Codex, Claude Code, and OpenCode CLIs each discover and load the
+selected skill body with the same SHA-256 across two fresh launches. It uses a
+loopback mock model endpoint, a fake key, and a container with external
+networking disabled. It does not prove real-provider authentication, every
+permission denial against hostile requests, MCP calls or revocation, or AX
+workspace/lifecycle behavior.
+
 After bootstrap activation, dispatch now waits for AX's exact
 `WorkspaceReady=True/SetupComplete` condition and rechecks the actor against
 the frozen runtime binding before reporting `started`. This closes the
@@ -49,18 +57,24 @@ home for native discovery: Codex uses `$HOME/.agents/skills`, Claude Code uses
 uses `$XDG_CONFIG_HOME/opencode/skills`. Only recipe-selected files are
 copied. Harness-specific frontmatter that could grant tools, load hooks,
 delegate subagents, or change model settings is rejected. Codex disables its
-bundled unselected skills, native multi-agent, apps, plugins, and web-search features; OpenCode denies
-its task, question, loop-recovery, web, and external-directory tools except
-read-only access to selected skill files. Claude stays in bare mode, where
+bundled unselected skills, native multi-agent, apps, plugins, and web-search
+features. OpenCode v2 denies subagents, questions, web fetch/search, Code Mode
+`execute`, unselected skills, and external-directory access. In-workspace shell
+execution remains available for coding inside AX's sandbox and network policy.
+Final `.env` denials follow selected-skill read grants because OpenCode v2
+[uses the last matching permission rule](https://opencode.ai/v2/docs/permissions).
+Claude stays in bare mode, where
 the scoped added directory is the only skill source. The worker rejects
 ambient project CLI/MCP configuration and unlisted `AGENTS.md`. The command
 contains no provider credential; a separate scoped bootstrap lease supplies
 that at execution.
 
-This implements resource forwarding, content materialization, and local adapter controls, not a live
-proof that each pinned CLI discovers and loads the skill/support files or
-rejects native delegation as configured. P1-28 stays blocked on those runtime
-proofs and UI-visible provenance. AX creates the Task,
+This implements resource forwarding, content materialization, and local
+adapter controls. The native probe establishes selected-skill discovery/load
+for the pinned versions, while P1-28 remains open for MCP transport/grants,
+allowed and denied MCP calls, server revocation, and UI-visible effective
+permission sources. It also does not prove every native delegation or tool
+denial against hostile requests. AX creates the Task,
 mounts the Workspace, and applies its Gateway; the runner's Workspace
 `skills` field alone does not install skill content. MCP still needs a granted
 server identity, endpoint/command policy, egress, secret binding, native CLI

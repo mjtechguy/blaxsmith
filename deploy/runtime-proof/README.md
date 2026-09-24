@@ -61,8 +61,27 @@ published to a registry. The manifest digest is for that archive, not a
 registry pull reference. A release build must record its newly pushed digest
 and pass the separate license/distribution review.
 
-This proof says nothing about model login, native delegation controls,
-structured events, cancellation/resume, AX launch, or safe self-update
-suppression. The selected versions do not follow moving `latest` at launch.
+## Native skill discovery/load probe
+
+`skill-probe.mjs` runs each pinned CLI twice with a fresh home directory, a
+single selected skill, and a loopback mock provider. The fake key is local to
+the process, and `buildah run --network none` prevents container egress. From
+the repository root on the node holding the built image:
+
+```sh
+probe_container=$(buildah from --name blaxsmith-native-skill-probe localhost/blaxsmith-runtime-proof:0.1.0)
+trap 'buildah rm "$probe_container" >/dev/null' EXIT
+buildah copy "$probe_container" deploy/runtime-proof/skill-probe.mjs /tmp/skill-probe.mjs
+buildah run --network none "$probe_container" -- node /tmp/skill-probe.mjs
+```
+
+The recorded result is [`docs/native-skill-probe.json`](../../docs/native-skill-probe.json).
+It proves native discovery/load and identical frozen content across fresh CLI
+launches. Mock inference does not prove real provider authentication, hostile
+permission denials, MCP calls/revocation, AX startup, or lifecycle behavior.
+
+The packaging proof says nothing about live model login, structured events,
+cancellation/resume, AX launch, or safe self-update suppression. The selected
+versions do not follow moving `latest` at launch.
 OpenCode's optimized x64 binary was verified on AVX2 hardware; baseline and
 other platform variants need separate evidence before scheduling them.
