@@ -6,6 +6,7 @@ import { connectionModelsKey, listConnectionModels } from "./connections";
 import { TextField } from "./form-field";
 import type { ConnectionModel } from "./gen/blaxsmith/api/v1/connections_pb";
 import { pickerGroups, providerModelKey, type PickerModel } from "./model-picker";
+import { Disclosure } from "./ui";
 
 const harnesses = [["", "Any harness"], ["codex", "Codex"], ["claude-code", "Claude Code"], ["opencode", "OpenCode"]] as const;
 const modelId = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/;
@@ -94,9 +95,9 @@ export function ModelSelect({ connectionId, connections, value, onChange, harnes
       {queries.some((q) => q.isError) ? <span className="form-field-error">Models could not be loaded.</span> : null}
       {error && listed ? <span className="form-field-error">{error}</span> : null}
     </div> : null}
-    <details className="advanced-disclosure" open={!sources.length || (Boolean(value) && !listed && !pending) || undefined}><summary>Advanced: type a model id</summary>
+    <Disclosure key={`${id}:${pending ? "loading" : "ready"}`} summary="Advanced: type a model id" defaultOpen={!sources.length || (Boolean(value) && !listed && !pending)}>
       <TextField label="Model id" name={`model-free-text-${id}`} autoComplete="off" placeholder="Exact provider model id" value={listed ? "" : value} onChange={(v) => onChange(v, connectionId)} onBlur={() => {}} required={false}
         error={value && !listed && !modelId.test(value) ? "Use up to 128 letters, numbers, periods, underscores, slashes, or hyphens." : !listed ? error : undefined} />
-    </details>
+    </Disclosure>
   </div>;
 }

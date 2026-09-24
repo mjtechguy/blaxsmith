@@ -4,12 +4,13 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { ArrowRight, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowRight, Pin, RefreshCw, Trash2 } from "lucide-react";
+import { AccessExplanation } from "./access-explain";
 import { ago } from "./admin";
-import { AddUse, ConfirmDialog, failure, ResourceGrants, StateBadge, useOrg } from "./connection-ui";
+import { AddUse, ConfirmDialog, failure, HealthLine, RedactedText, ResourceGrants, StateBadge, useOrg } from "./connection-ui";
 import {
   connectionModelsKey, grantConnection, kindLabel, listConnectionModels, modelsSummary, providerLabel, refreshConnectionModels,
-  removeConnectionUse, revokeConnection, revokeConnectionGrant, scopeLabel, type Scope,
+  removeConnectionUse, revokeConnection, revokeConnectionGrant, scopeLabel, setRecommendedModels, type Scope,
 } from "./connections";
 import { CollectionTable, DataTable, inSet, useLocalView, useUrlView, type GridColumn } from "./data-table";
 import type { Connection, ConnectionModel, ConnectionUse } from "./gen/blaxsmith/api/v1/connections_pb";
@@ -22,8 +23,9 @@ const providerOptions = (rows: Connection[]) => [...new Set(rows.map((c) => c.pr
 const stateOptions = [{ value: "active", label: "Active" }, { value: "reconnect_required", label: "Reconnect required" }, { value: "disabled", label: "Disabled" }, { value: "revoked", label: "Revoked" }];
 const kindOptions = [{ value: "api_key", label: "API key" }, { value: "git", label: "Git" }, { value: "subscription", label: "Subscription" }];
 
-export function ConnectionCollection({ id, label, connections, empty, href, action = "Manage", urlState = false }: {
-  id: string; label: string; connections: Connection[]; empty: ReactNode; href: (c: Connection) => string; action?: string; urlState?: boolean;
+// explainIn adds a "Where from" column: the access chain in that project.
+export function ConnectionCollection({ id, label, connections, empty, href, action = "Manage", urlState = false, explainIn }: {
+  id: string; label: string; connections: Connection[]; empty: ReactNode; href: (c: Connection) => string; action?: string; urlState?: boolean; explainIn?: string;
 }) {
   const url = useUrlView({ size: 20 });
   const local = useLocalView({ size: 20 });
@@ -33,13 +35,14 @@ export function ConnectionCollection({ id, label, connections, empty, href, acti
       <span className="task-stage"><strong>{providerLabel(row.original.provider)}{row.original.label ? ` · ${row.original.label}` : ""}</strong><small>{kindLabel(row.original.kind)}</small></span></Link> },
     { id: "kind", accessorKey: "kind", header: "Kind", filterFn: inSet, cell: ({ row }) => kindLabel(row.original.kind) },
     { id: "scope", accessorKey: "scope", header: "Scope", filterFn: inSet, cell: ({ row }) => <span className="task-stage"><strong>{scopeLabel(row.original.scope)}</strong><small>{row.original.ownerName || row.original.ownerId.slice(0, 8)}</small></span> },
-    { id: "account", accessorKey: "account", header: "Account", cell: ({ row }) => <span className="mono">{row.original.account || "—"}</span> },
-    { id: "state", accessorKey: "state", header: "State", filterFn: inSet, cell: ({ row }) => <StateBadge state={row.original.state} /> },
+    { id: "account", accessorKey: "account", header: "Account", cell: ({ row }) => row.original.account ? <span className="mono"><RedactedText text={row.original.account} label="account" /></span> : "—" },
+    { id: "state", accessorKey: "state", header: "Health", filterFn: inSet, cell: ({ row }) => <HealthLine connection={row.original} compact /> },
     { id: "models", accessorKey: "modelCount", header: "Models", cell: ({ row }) => <span className={row.original.modelsError ? "form-field-error" : undefined}>{row.original.kind === "git" ? "—" : modelsSummary(row.original)}</span> },
     { id: "grants", accessorFn: (c) => c.grants.length + c.uses.length, header: "Grants · uses", cell: ({ row }) => `${row.original.grants.length} · ${row.original.uses.length}` },
     { id: "used", accessorKey: "lastUsedAt", header: "Last used", cell: ({ row }) => row.original.lastUsedAt ? <Timestamp value={row.original.lastUsedAt} /> : <span className="muted">Never</span> },
+    ...(explainIn ? [{ id: "source", header: "Where from", enableSorting: false, cell: ({ row }) => <AccessExplanation projectId={explainIn} kind="connection" resourceId={row.original.id} /> } satisfies GridColumn<Connection>] : []),
     { id: "action", header: "", enableSorting: false, enableHiding: false, cell: ({ row }) => <Link className="text-action" to={href(row.original) as "/"}>{action} <ArrowRight size={13} aria-hidden="true" /></Link> },
-  ], [href, action]);
+  ], [href, action, explainIn]);
   return <CollectionTable id={id} label={label} noun="connections" columns={columns} data={connections} getRowId={(c) => c.id} view={view} onView={setView} pinFirst
     searchLabel="Search connections" facets={[{ id: "provider", label: "Provider", options: providerOptions(connections) }, { id: "kind", label: "Kind", options: kindOptions },
       { id: "state", label: "State", options: stateOptions }, ...(new Set(connections.map((c) => c.scope)).size > 1 ? [{ id: "scope", label: "Scope", options: [{ value: "organization", label: "Organization" }, { value: "project", label: "Project" }, { value: "personal", label: "Personal" }] }] : [])]}
@@ -55,6 +58,9 @@ function ConnectionRowSummary({ connection: c, href }: { connection: Connection;
     <Link className="text-action" to={href as "/"}>Open <ArrowRight size={13} aria-hidden="true" /></Link>
   </div>;
 }
+
+// Distinct projects with a model use, at most three, for the access chain.
+const projectsUsing = (c: Connection) => [...new Map(c.uses.map((u) => [u.projectId, { id: u.projectId, name: u.projectName || "Project" }])).values()].slice(0, 3);
 
 const connectionTabs = (c: Connection, scope: Scope): TabSpec[] => [
   { id: "overview", label: "Overview" },
@@ -88,7 +94,7 @@ export function ConnectionDetailPage({ connection, scope, projectId = "", back, 
     facts={[
       { label: "Kind", value: kindLabel(c.kind) },
       { label: "Scope", value: `${scopeLabel(c.scope)}${c.ownerName ? ` · ${c.ownerName}` : ""}` },
-      { label: "Account", value: <span className="mono">{c.account || "—"}</span> },
+      { label: "Account", value: c.account ? <span className="mono"><RedactedText text={c.account} label="account" /></span> : "—" },
       { label: "Last used", value: c.lastUsedAt ? <Timestamp value={c.lastUsedAt} /> : "Never" },
     ]}
     slot={<Slot name="connection.health" connectionId={c.id} scope={scope} projectId={projectId || undefined} />}
@@ -106,6 +112,13 @@ export function ConnectionDetailPage({ connection, scope, projectId = "", back, 
           <SummaryList items={[{ label: "Connection ID", value: <CopyValue value={c.id} label="Connection ID" chars={13} /> }, { label: "Owner ID", value: <CopyValue value={c.ownerId} label="Owner ID" chars={13} /> }]} />
         </Disclosure></div>
       </Card>
+      <Card title="Where this comes from" className="dash-main" description={projectId ? "Why runs in this project may use it." : "Why the projects that use it may."}>
+        <div className="card-body access-list">
+          {projectId ? <AccessExplanation projectId={projectId} kind="connection" resourceId={c.id} />
+            : projectsUsing(c).length ? projectsUsing(c).map((u) => <div key={u.id}><strong>{u.name}</strong><AccessExplanation projectId={u.id} kind="connection" resourceId={c.id} /></div>)
+            : <p className="muted">No project uses it yet.{!tabs.find((t) => t.id === "grants")?.hidden ? <> Check a project and member on the {tabLink("grants", "Grants tab")}</> : null}</p>}
+        </div>
+      </Card>
       <Card title="Where it is used" className="dash-side">
         <ul className="link-list">
           {c.kind !== "git" ? <li>{tabLink("models", `${c.modelCount} ${c.modelCount === 1 ? "model" : "models"} available`)}</li> : null}
@@ -116,7 +129,7 @@ export function ConnectionDetailPage({ connection, scope, projectId = "", back, 
       </Card>
     </div> : null}
     {tab === "models" ? <ModelsTab connection={c} /> : null}
-    {tab === "grants" ? <ResourceGrants grants={c.grants} label="Connection grants" canManage={c.canManage} canAdd={c.canManage && c.state === "active"}
+    {tab === "grants" ? <ResourceGrants grants={c.grants} label="Connection grants" canManage={c.canManage} canAdd={c.canManage && c.state === "active"} explain={{ kind: "connection", resourceId: c.id }}
       description="Each grant names one project, one user, or a minimum role. Owners and admins get no implicit use; viewers never. A project grant lets that project's admins attach it to runs."
       revokeNote="Revoking a project grant also removes that project's model uses of this connection."
       grant={(kind, project, grantee) => grantConnection(c.id, project, kind, grantee)} revoke={revokeConnectionGrant} onChanged={invalidate} /> : null}
@@ -150,15 +163,28 @@ function ModelsTab({ connection }: { connection: Connection }) {
     },
     onError: (cause) => setNote(failure(cause, "Models could not be refreshed.")),
   });
+  // Managers pin recommended models; every model picker lists them first.
+  const pinned = (models.data?.models ?? []).filter((m) => m.recommended).map((m) => m.id);
+  const recommend = useMutation({
+    mutationFn: (next: string[]) => setRecommendedModels(connection.id, next),
+    onSuccess: async () => { setNote(""); await queryClient.invalidateQueries({ queryKey: ["connection-models", org, connection.id] }); },
+    onError: (cause) => setNote(failure(cause, "Recommended models could not be saved.")),
+  });
+  const manage = connection.canManage && connection.state === "active";
   const columns = useMemo<GridColumn<ConnectionModel>[]>(() => [
     { id: "id", accessorKey: "id", header: "Model", enableHiding: false, cell: ({ row }) => <span className="task-stage"><strong className="mono">{row.original.id}</strong>{row.original.displayName && row.original.displayName !== row.original.id ? <small>{row.original.displayName}</small> : null}</span> },
+    { id: "status", accessorFn: (m) => (m.recommended ? 0 : 1), header: "Status", cell: ({ row }) => [row.original.recommended ? "Recommended" : "", row.original.isDefault ? "Provider default" : "", row.original.legacy ? "Legacy" : "", row.original.badge].filter(Boolean).join(" · ") || "—" },
+    { id: "efforts", accessorFn: (m) => m.efforts.join(","), header: "Efforts", enableSorting: false, cell: ({ row }) => row.original.efforts.length ? <span className="mono">{row.original.efforts.join(", ")}{row.original.defaultEffort ? ` (default ${row.original.defaultEffort})` : ""}</span> : "Harness default" },
     { id: "harnesses", accessorFn: (m) => m.harnesses, header: "Harnesses", filterFn: inSet, enableSorting: false, cell: ({ row }) => row.original.harnesses.join(", ") || "—" },
     { id: "context", accessorKey: "contextTokens", header: "Context", cell: ({ row }) => row.original.contextTokens ? `${Math.round(row.original.contextTokens / 1000)}k tokens` : "—" },
     { id: "created", accessorKey: "createdAt", header: "Released", cell: ({ row }) => row.original.createdAt ? <Timestamp value={row.original.createdAt} /> : "—" },
-  ], []);
+    ...(manage ? [{ id: "recommend", header: "", enableSorting: false, enableHiding: false, cell: ({ row }) => <button type="button" className="text-action" disabled={recommend.isPending} aria-pressed={row.original.recommended}
+      onClick={() => recommend.mutate(row.original.recommended ? pinned.filter((id) => id !== row.original.id) : [...pinned, row.original.id])}>
+      <Pin size={13} aria-hidden="true" /> {row.original.recommended ? "Unpin" : "Recommend"}</button> } satisfies GridColumn<ConnectionModel>] : []),
+  ], [manage, pinned.join(","), recommend.isPending]);
   const harnessOptions = [...new Set((models.data?.models ?? []).flatMap((m) => m.harnesses))].map((h) => ({ value: h, label: h }));
   return <section className="table-section" aria-labelledby="models-heading">
-    <div className="table-heading"><div><h2 id="models-heading">Models</h2><p>{models.data?.error ? <span className="form-field-error">{models.data.error}</span> : note || `Models this connection can use${models.data?.checkedAt ? `, checked ${ago(models.data.checkedAt)}` : ""}.`}</p></div>
+    <div className="table-heading"><div><h2 id="models-heading">Models</h2><p>{models.data?.error ? <span className="form-field-error">{models.data.error}</span> : note || `Models this connection can use${models.data?.checkedAt ? `, checked ${ago(models.data.checkedAt)}` : ""}. ${pinned.length} recommended; pickers list recommended models first and hide legacy ones behind a toggle.`}</p></div>
       {connection.canManage ? <button type="button" className="secondary-button" disabled={refresh.isPending} onClick={() => refresh.mutate()}><RefreshCw size={15} className={refresh.isPending ? "spin" : undefined} aria-hidden="true" /> Refresh models</button> : null}</div>
     <CollectionTable id="connection-models" label="Models" noun="models" columns={columns} data={models.data?.models ?? []} getRowId={(m) => m.id} view={view} onView={setView}
       searchLabel="Search models" facets={harnessOptions.length ? [{ id: "harnesses", label: "Harness", options: harnessOptions }] : []}

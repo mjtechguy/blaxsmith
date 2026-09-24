@@ -4,26 +4,23 @@ import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, GitBranch, KeyRound, Pin, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowRight, GitBranch, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { AccessCheck } from "./access-explain";
 import { ago } from "./admin";
 import { currentSession, sessionQueryKey } from "./auth";
 import {
   addConnectionUse, apiKeyProviders, authLabel, connectionModelsKey, connectionsKey, createApiKeyConnection, createGitTokenConnection,
-  getGitHubApp, gitHubAppKey, grantConnection, healthFix, kindLabel, listConnectionModels, listConnections, modelsSummary, providerLabel,
-  refreshConnectionModels, removeConnectionUse, revokeConnection, setRecommendedModels, revokeConnectionGrant, scopeLabel, startGitHubConnect,
+  getGitHubApp, gitHubAppKey, healthFix, listConnectionModels, listConnections, modelsSummary, providerLabel, startGitHubConnect,
   type ListScope, type Scope,
 } from "./connections";
 import { DataTable } from "./data-table";
-import { CreateFlow, type FlowStep } from "./layouts";
-import { Disclosure } from "./ui";
 import { TextField } from "./form-field";
-import { AccessCheck, AccessExplanation } from "./access-explain";
+import type { Connection, ConnectionGrant } from "./gen/blaxsmith/api/v1/connections_pb";
+import { CreateFlow, type FlowStep } from "./layouts";
 import { ModelSelect } from "./model-select";
-
-export { ModelSelect };
 import { isBusy, type SignInState } from "./sign-in";
 import { SignInStatus, useSignIn } from "./sign-in-flow";
-import type { Connection, ConnectionGrant, ConnectionModel, ConnectionUse } from "./gen/blaxsmith/api/v1/connections_pb";
+import { Disclosure } from "./ui";
 import { listProjects } from "./workflow";
 
 export function useOrg() {
@@ -98,26 +95,6 @@ export function ConfirmDialog({ title, body, confirmLabel, busy, error, onConfir
 
 const features = tableFeatures({});
 
-// explainIn adds a "Where from" column: the access chain in that project.
-export function ConnectionTable({ connections, label, empty, manage, explainIn }: {
-  connections: Connection[]; label: string; empty: string; manage: (c: Connection) => ReactNode; explainIn?: string;
-}) {
-  const columns = useMemo<ColumnDef<typeof features, Connection>[]>(() => [
-    { id: "provider", header: "Provider", cell: ({ row }) => <span className="task-stage"><strong>{providerLabel(row.original.provider)}</strong><small>{kindLabel(row.original.kind)}{row.original.label ? ` · ${row.original.label}` : ""}</small></span> },
-    { id: "scope", header: "Scope / owner", cell: ({ row }) => <span className="task-stage"><strong>{scopeLabel(row.original.scope)}</strong><small>{row.original.ownerName || row.original.ownerId.slice(0, 8)}</small></span> },
-    { id: "account", header: "Account", cell: ({ row }) => row.original.account ? <span className="mono admin-wrap"><RedactedText text={row.original.account} label="account" /></span> : "—" },
-    { id: "state", header: "Health", cell: ({ row }) => <HealthLine connection={row.original} compact /> },
-    { id: "models", header: "Models", cell: ({ row }) => <span className={row.original.modelsError ? "form-field-error" : undefined}>{modelsSummary(row.original)}</span> },
-    { id: "grants", header: "Grants / uses", cell: ({ row }) => `${row.original.grants.length} / ${row.original.uses.length}` },
-    { id: "used", header: "Last used", cell: ({ row }) => row.original.lastUsedAt ? <time dateTime={row.original.lastUsedAt}>{ago(row.original.lastUsedAt)}</time> : "Never" },
-    ...(explainIn ? [{ id: "source", header: "Where from", cell: ({ row }: { row: { original: Connection } }) =>
-      <AccessExplanation projectId={explainIn} kind="connection" resourceId={row.original.id} /> } satisfies ColumnDef<typeof features, Connection>] : []),
-    { id: "actions", header: "Actions", cell: ({ row }) => manage(row.original) },
-  ], [manage, explainIn]);
-  const table = useTable({ features, data: connections, columns, getRowId: (c) => c.id });
-  return <DataTable table={table} label={label} empty={empty} />;
-}
-
 export function useConnections(scope: ListScope, projectId = "", enabled = true) {
   const { org } = useOrg();
   return useQuery({ queryKey: connectionsKey(org, scope, projectId), enabled: Boolean(org) && enabled,
@@ -150,16 +127,19 @@ export function ProjectSelect({ value, onChange, idPrefix = "project" }: { value
 export type ConnectionFlowInfo = { title: string; description: string; back: { href: string; label: string }; typeHref?: string };
 
 // Type → Details → Validate → Grants (organization) or Use (project, personal).
-function connectionSteps(flow: ConnectionFlowInfo, scope: Scope, created: boolean): FlowStep[] {
+// The sign-in state machine (sign-in.ts) drives it: once a key, device code,
+// or GitHub sign-in starts, Validate is the current step until it resolves.
+export function connectionSteps(flow: Pick<ConnectionFlowInfo, "typeHref">, scope: Scope, signIn: SignInState, detailsLabel = "Details"): FlowStep[] {
+  const validating = signIn.phase !== "idle";
   return [
     { id: "type", label: "Type", state: "done", href: flow.typeHref },
-    { id: "details", label: "Details", state: created ? "done" : "current" },
-    { id: "validate", label: "Validate", state: created ? "current" : "todo" },
+    { id: "details", label: detailsLabel, state: validating ? "done" : "current" },
+    { id: "validate", label: "Validate", state: validating ? "current" : "todo" },
     { id: "access", label: scope === "organization" ? "Grants" : "Use in a project", state: "todo" },
   ];
 }
 
-const scopeNote = (scope: Scope) => scope === "personal" ? "A personal connection serves only runs you launch." : scope === "project" ? "A project connection serves only this project's runs." : "An organization connection serves the projects, users, and roles you grant it to.";
+export const scopeNote = (scope: Scope) => scope === "personal" ? "A personal connection serves only runs you launch." : scope === "project" ? "A project connection serves only this project's runs." : "An organization connection serves the projects, users, and roles you grant it to.";
 
 export function NewApiKey({ scope, projectId = "", cancel, onDone, flow }: { scope: Scope; projectId?: string; cancel: ReactNode; onDone: (c: Connection) => void; flow: ConnectionFlowInfo }) {
   const queryClient = useQueryClient();
@@ -198,12 +178,12 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone, flow }: { sco
   };
   const summary = <><h2>Summary</h2><p className="form-hint">{scopeNote(scope)} The key is sent once, checked with the provider, and never returned.</p>
     <p className="form-hint">OpenCode Zen and OpenCode Go are OpenCode’s own providers; OpenCode Go is its subscription and also uses an API key.</p></>;
-  if (created) return <CreateFlow {...flow} steps={connectionSteps(flow, scope, true)} summary={summary}><section className="editor-card" aria-labelledby="api-key-created-heading">
+  if (created) return <CreateFlow {...flow} steps={connectionSteps(flow, scope, signIn)} summary={summary}><section className="editor-card" aria-labelledby="api-key-created-heading">
     <div className="editor-card-heading"><span className="project-symbol"><KeyRound size={18} aria-hidden="true" /></span><div><h2 id="api-key-created-heading">{providerLabel(created.provider)} key added</h2>
       <p className={created.modelsError ? "form-field-error" : undefined}>{created.modelsError ? `The provider check failed: ${modelsSummary(created)}` : `Validated with the provider: ${modelsSummary(created)}.`}</p></div></div>
     <div className="editor-actions"><button type="button" className="primary-button" onClick={() => onDone(created)}>{scope === "organization" ? "Continue to grants" : "Continue to use it"}</button></div>
   </section></CreateFlow>;
-  return <CreateFlow {...flow} steps={connectionSteps(flow, scope, false)} summary={summary}>
+  return <CreateFlow {...flow} steps={connectionSteps(flow, scope, signIn)} summary={summary}>
     <section className="editor-card" aria-labelledby="api-key-heading">
       <div className="editor-card-heading"><span className="project-symbol"><KeyRound size={18} aria-hidden="true" /></span><div><h2 id="api-key-heading">Provider API key</h2><p>The platform checks the key with the provider and loads the models it can use.</p></div></div>
       <SignInStatus state={signIn} onCancel={cancelCheck} onRetry={() => dispatch({ type: "retry" })}
@@ -258,7 +238,7 @@ export function NewGit({ scope, projectId = "", returnTo, cancel, onDone, flow }
     },
   });
   const configured = app.data?.configured ?? false;
-  return <CreateFlow {...flow} steps={connectionSteps(flow, scope, false)}
+  return <CreateFlow {...flow} steps={connectionSteps(flow, scope, signIn)}
     summary={<><h2>Summary</h2><p className="form-hint">{scopeNote(scope)} The platform uses the Git credential to fetch sources and push run branches; agents never receive it. Tokens are write-only.</p></>}>
     <section className="editor-card" aria-labelledby="git-heading">
       <div className="editor-card-heading"><span className="project-symbol"><GitBranch size={18} aria-hidden="true" /></span><div><h2 id="git-heading">Connect Git</h2><p>Sign in with GitHub, then pick repositories and branches on the project source page.</p></div></div>
@@ -282,104 +262,6 @@ export function NewGit({ scope, projectId = "", returnTo, cancel, onDone, flow }
       </Disclosure>
     </section>
   </CreateFlow>;
-}
-
-type Pending = { kind: "use"; use: ConnectionUse } | { kind: "connection" };
-
-// One connection's grants (organization scope), model uses, model refresh, and revocation.
-export function ConnectionDetail({ connection, scope, projectId = "", onRevoked }: { connection: Connection; scope: Scope; projectId?: string; onRevoked: () => void }) {
-  const queryClient = useQueryClient();
-  const { org } = useOrg();
-  const [pending, setPending] = useState<Pending | null>(null);
-  const [error, setError] = useState("");
-  const [refreshNote, setRefreshNote] = useState("");
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["connections", org] });
-  const refresh = useMutation({
-    mutationFn: () => refreshConnectionModels(connection.id),
-    onSuccess: async (r) => {
-      setRefreshNote(r.valid ? `valid, ${r.modelCount} ${r.modelCount === 1 ? "model" : "models"}` : r.error || "The provider rejected this connection.");
-      await Promise.all([invalidate(), queryClient.invalidateQueries({ queryKey: ["connection-models", org, connection.id] })]);
-    },
-    onError: (cause) => setRefreshNote(failure(cause, "Models could not be refreshed.")),
-  });
-  const act = useMutation({
-    mutationFn: async (p: Pending) => {
-      if (p.kind === "use") return removeConnectionUse(p.use.id);
-      return revokeConnection(connection.id);
-    },
-    onSuccess: async (_, p) => { setPending(null); await invalidate(); if (p.kind === "connection") onRevoked(); },
-    onError: (cause) => setError(failure(cause, "The change could not be made. Please try again.")),
-  });
-  const uses = projectId && scope !== "organization" ? connection.uses.filter((u) => u.projectId === projectId) : connection.uses;
-  const useColumns = useMemo<ColumnDef<typeof features, ConnectionUse>[]>(() => [
-    { id: "project", header: "Project", cell: ({ row }) => <strong>{row.original.projectName || row.original.projectId.slice(0, 8)}</strong> },
-    { id: "model", header: "Model", cell: ({ row }) => <span className="mono">{row.original.model}</span> },
-    { id: "for", header: "Serves", cell: ({ row }) => row.original.granteeKind === "user" ? "Your runs only" : "Project runs" },
-    { id: "created", header: "Added", cell: ({ row }) => <time dateTime={row.original.createdAt}>{ago(row.original.createdAt)}</time> },
-    { id: "actions", header: "Actions", cell: ({ row }) => <button type="button" className="text-action text-action-danger" disabled={act.isPending} onClick={() => { setError(""); setPending({ kind: "use", use: row.original }); }}><Trash2 size={13} aria-hidden="true" /> Remove</button> },
-  ], [act.isPending]);
-  const useTableModel = useTable({ features, data: uses, columns: useColumns, getRowId: (u) => u.id });
-
-  return <>
-    <section className="table-section" aria-labelledby="connection-summary-heading">
-      <div className="table-heading"><div><h2 id="connection-summary-heading">{providerLabel(connection.provider)} · {kindLabel(connection.kind)}</h2>
-        <p>{scopeLabel(connection.scope)} connection{connection.ownerName ? ` owned by ${connection.ownerName}` : ""}. Account {connection.account ? <RedactedText text={connection.account} label="account" /> : "—"}. Credentials are never shown.</p></div>
-        <span className="admin-actions">
-          {connection.kind !== "git" && connection.canManage ? <button type="button" className="secondary-button" disabled={refresh.isPending} onClick={() => refresh.mutate()}><RefreshCw size={15} className={refresh.isPending ? "spin" : undefined} aria-hidden="true" /> Refresh models</button> : null}
-          {connection.canManage && connection.state !== "revoked" ? <button type="button" className="secondary-button" onClick={() => { setError(""); setPending({ kind: "connection" }); }}><Trash2 size={15} aria-hidden="true" /> Revoke</button> : null}
-        </span></div>
-      <div className="source-summary"><HealthLine connection={connection} />
-        <span className={connection.modelsError ? "form-field-error" : undefined}>Models: {refreshNote || modelsSummary(connection)}{connection.modelsCheckedAt ? ` · checked ${ago(connection.modelsCheckedAt)}` : ""}</span>
-        <span>Last used: {connection.lastUsedAt ? ago(connection.lastUsedAt) : "never"}</span>
-        {projectId ? <AccessExplanation projectId={projectId} kind="connection" resourceId={connection.id} /> : null}</div>
-    </section>
-    {connection.kind !== "git" ? <section className="table-section" aria-labelledby="connection-uses-heading">
-      <div className="table-heading"><div><h2 id="connection-uses-heading">Model uses</h2><p>{connection.scope === "personal" ? "Projects where your own runs use this connection." : "Models project runs may use through this connection."}</p></div><span className="fetched-time">{uses.length} uses</span></div>
-      <DataTable table={useTableModel} label="Model uses" empty="Not used by any project yet." />
-      {connection.state === "active" ? <AddUse connection={connection} projectId={projectId} /> : null}
-    </section> : null}
-    {connection.kind !== "git" && connection.canManage && connection.state === "active" ? <RecommendedModels connection={connection} /> : null}
-    {scope === "organization" && connection.scope === "organization" ? <ResourceGrants grants={connection.grants} label="Connection grants"
-      canManage={connection.canManage} canAdd={connection.canManage && connection.state === "active"}
-      description="Each grant names one project, one user, or a minimum role. Owners and admins get no implicit use; viewers never. A project grant lets that project's admins attach it to runs."
-      revokeNote="Revoking a project grant also removes that project's model uses of this connection."
-      grant={(kind, project, grantee) => grantConnection(connection.id, project, kind, grantee)} revoke={revokeConnectionGrant} onChanged={invalidate}
-      explain={{ kind: "connection", resourceId: connection.id }} /> : null}
-    {pending ? <ConfirmDialog busy={act.isPending} error={error} onClose={() => setPending(null)} onConfirm={() => act.mutate(pending)}
-      title={pending.kind === "use" ? "Remove model use" : "Revoke connection"}
-      confirmLabel={pending.kind === "use" ? "Remove" : "Revoke"}
-      body={pending.kind === "use" ? <>Stop <strong>{pending.use.projectName}</strong> from using <strong className="mono">{pending.use.model}</strong> through this connection? Future attempts lose it; a running actor may still hold a delivered credential until stopped.</>
-          : <>Revoke this {providerLabel(connection.provider)} connection? Every grant, use, and lease is revoked. Rotate the credential at the provider to invalidate copies already delivered.</>} /> : null}
-  </>;
-}
-
-// Managers pin recommended models; every picker lists them first.
-function RecommendedModels({ connection }: { connection: Connection }) {
-  const queryClient = useQueryClient();
-  const { org } = useOrg();
-  const models = useConnectionModels(connection.id, "");
-  const [error, setError] = useState("");
-  const pinned = (models.data?.models ?? []).filter((m) => m.recommended).map((m) => m.id);
-  const save = useMutation({
-    mutationFn: (next: string[]) => setRecommendedModels(connection.id, next),
-    onSuccess: async () => { setError(""); await queryClient.invalidateQueries({ queryKey: ["connection-models", org, connection.id] }); },
-    onError: (cause) => setError(failure(cause, "Recommended models could not be saved.")),
-  });
-  const columns = useMemo<ColumnDef<typeof features, ConnectionModel>[]>(() => [
-    { id: "model", header: "Model", cell: ({ row }) => <span className="task-stage"><strong>{row.original.displayName || row.original.id}</strong><small className="mono">{row.original.id}</small></span> },
-    { id: "flags", header: "Status", cell: ({ row }) => [row.original.recommended ? "Recommended" : "", row.original.isDefault ? "Provider default" : "", row.original.legacy ? "Legacy" : "", row.original.badge].filter(Boolean).join(" · ") || "—" },
-    { id: "efforts", header: "Efforts", cell: ({ row }) => row.original.efforts.length ? <span className="mono">{row.original.efforts.join(", ")}</span> : "Harness default" },
-    { id: "actions", header: "Actions", cell: ({ row }) => <button type="button" className="text-action" disabled={save.isPending} aria-pressed={row.original.recommended}
-      onClick={() => save.mutate(row.original.recommended ? pinned.filter((id) => id !== row.original.id) : [...pinned, row.original.id])}>
-      <Pin size={13} aria-hidden="true" /> {row.original.recommended ? "Unpin" : "Recommend"}</button> },
-  ], [pinned.join(","), save.isPending]);
-  const table = useTable({ features, data: models.data?.models ?? [], columns, getRowId: (m) => m.id });
-  return <section className="table-section" aria-labelledby="recommended-models-heading">
-    <div className="table-heading"><div><h2 id="recommended-models-heading">Models</h2><p>Recommend models to list them first in every model picker. Legacy models stay hidden behind a toggle there.</p></div>
-      <span className="fetched-time">{pinned.length} recommended</span></div>
-    {error ? <p className="auth-alert" role="alert">{error}</p> : null}
-    <DataTable table={table} label="Connection models" empty={models.isPending ? undefined : "No models listed yet. Refresh models."} />
-  </section>;
 }
 
 export function AddUse({ connection, projectId }: { connection: Connection; projectId: string }) {

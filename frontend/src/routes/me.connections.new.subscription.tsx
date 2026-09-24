@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, Ban, KeyRound, LogIn, Plus, UserRound } from "lucide-react";
-import { failure, useOrg } from "../connection-ui";
+import { ArrowRight, Ban, KeyRound, LogIn, Plus, UserRound } from "lucide-react";
+import { connectionSteps, failure, scopeNote, useOrg } from "../connection-ui";
 import { CLAUDE_SUBSCRIPTION_REASON, createCodexSubscription, pollCodexDeviceLogin, startCodexDeviceLogin } from "../connections";
 import { TextField } from "../form-field";
-import { PageHeader, PageShell } from "../page";
+import { CreateFlow } from "../layouts";
 import { SignInStatus, useSignIn } from "../sign-in-flow";
+import { Disclosure } from "../ui";
 
 export const Route = createFileRoute("/me/connections/new/subscription")({ component: NewSubscription });
 
@@ -54,10 +55,18 @@ function NewSubscription() {
     onError: (cause) => setError(failure(cause, "That is not a ChatGPT sign-in auth.json with a refresh token.")),
   });
 
-  return <PageShell>
-    <PageHeader eyebrow="Personal / Connections" title="Connect a subscription" description="Coding-plan logins are always personal: only runs you launch can use them, whichever page you started from." />
-    <Link to="/me/connections" className="text-action"><ArrowLeft size={15} aria-hidden="true" /> Back to my connections</Link>
-    <div className="editor-layout">
+  // Sign in → Validate (the device code and its poll) → Use in a project.
+  return <CreateFlow title="Connect a subscription" description="Coding-plan logins are always personal: only runs you launch can use them, whichever page you started from."
+    back={{ href: "/me/connections", label: "My connections" }} steps={connectionSteps({}, "personal", signIn, "Sign in")}
+    summary={<>
+      <h2>Summary</h2>
+      <p className="form-hint">{scopeNote("personal")} The platform keeps the refresh token and gives each run a short-lived access token.</p>
+      <h2>OpenCode</h2>
+      <p className="form-hint">OpenCode Zen and OpenCode Go (its subscription) use API keys; OpenCode offers no OAuth sign-in for its own provider. <Link to="/me/connections/new/api-key" className="text-action"><KeyRound size={13} aria-hidden="true" /> Add an OpenCode key <ArrowRight size={13} aria-hidden="true" /></Link></p>
+      <h2>Claude (Pro/Max)</h2>
+      <p><button type="button" className="secondary-button" disabled aria-describedby="claude-reason"><Ban size={15} aria-hidden="true" /> Claude subscription unavailable</button></p>
+      <p id="claude-reason" className="form-hint">{CLAUDE_SUBSCRIPTION_REASON}</p>
+    </>}>
       <section className="editor-card" aria-labelledby="codex-heading">
         <div className="editor-card-heading"><span className="project-symbol"><UserRound size={18} aria-hidden="true" /></span><div><h2 id="codex-heading">Codex (ChatGPT plan)</h2><p>Sign in with your ChatGPT account. The platform keeps the refresh token and gives each run a short-lived access token.</p></div></div>
         <div className="editor-form">
@@ -69,7 +78,7 @@ function NewSubscription() {
               verifying: "Storing the sign-in…", succeeded: "Connected. Opening the connection…" }} />
           {error ? <p className="auth-alert" role="alert">{error}</p> : null}
         </div>
-        <details className="advanced-disclosure"><summary>Advanced: paste auth.json</summary>
+        <Disclosure summary="Advanced: paste auth.json">
           <form className="editor-form" noValidate onSubmit={(event) => {
             event.preventDefault();
             const value = authJson.trim();
@@ -81,15 +90,7 @@ function NewSubscription() {
             <TextField label="auth.json contents" name="auth-json" type="password" autoComplete="new-password" placeholder="Paste ~/.codex/auth.json" value={authJson} onChange={setAuthJson} onBlur={() => {}} />
             <div className="editor-actions"><button type="submit" className="secondary-button" disabled={!authJson.trim() || paste.isPending}><Plus size={15} aria-hidden="true" /> {paste.isPending ? "Connecting…" : "Connect with auth.json"}</button></div>
           </form>
-        </details>
+        </Disclosure>
       </section>
-      <aside className="editor-note">
-        <h2>OpenCode</h2>
-        <p>OpenCode Zen and OpenCode Go (its subscription) use API keys; OpenCode offers no OAuth sign-in for its own provider. <Link to="/me/connections/new/api-key" className="text-action"><KeyRound size={13} aria-hidden="true" /> Add an OpenCode key <ArrowRight size={13} aria-hidden="true" /></Link></p>
-        <h2>Claude (Pro/Max)</h2>
-        <p><button type="button" className="secondary-button" disabled aria-describedby="claude-reason"><Ban size={15} aria-hidden="true" /> Claude subscription unavailable</button></p>
-        <p id="claude-reason">{CLAUDE_SUBSCRIPTION_REASON}</p>
-      </aside>
-    </div>
-  </PageShell>;
+  </CreateFlow>;
 }
