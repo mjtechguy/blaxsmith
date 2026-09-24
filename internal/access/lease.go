@@ -69,7 +69,7 @@ func ReserveModelLease(ctx context.Context, tx pgx.Tx, request ModelLeaseRequest
 		JOIN access_secret_versions sv ON sv.organization_id=ac.organization_id AND sv.connection_id=ac.id
 			AND sv.version=ac.active_secret_version
 		WHERE c.id=$6 AND c.cluster_id=$7 AND c.attempt_id=$8 AND c.owner_generation=$9
-		AND c.actor_uid=$10 AND c.consumed_at IS NOT NULL AND c.release_attempted_at IS NOT NULL
+		AND c.actor_uid=$10 AND c.phase='model' AND c.consumed_at IS NOT NULL AND c.release_attempted_at IS NOT NULL
 		AND c.cancelled_at IS NULL AND c.superseded_at IS NULL AND c.released_at IS NULL
 		AND c.expires_at>clock_timestamp() AND $4::timestamptz>clock_timestamp()
 		AND $4::timestamptz<=clock_timestamp()+interval '1 hour'
@@ -112,7 +112,7 @@ func ReserveGitLease(ctx context.Context, tx pgx.Tx, request LeaseRequest) (stri
 		JOIN access_bindings b ON b.organization_id=$1 AND b.id=$5 AND b.attempt_id=c.attempt_id
 		JOIN access_grants g ON g.organization_id=b.organization_id AND g.id=b.grant_id
 		WHERE c.id=$6 AND c.cluster_id=$7 AND c.attempt_id=$8 AND c.owner_generation=$9
-		AND c.actor_uid=$10 AND c.consumed_at IS NOT NULL AND c.release_attempted_at IS NOT NULL
+		AND c.actor_uid=$10 AND c.phase='setup' AND c.consumed_at IS NOT NULL AND c.release_attempted_at IS NOT NULL
 		AND c.cancelled_at IS NULL AND c.superseded_at IS NULL AND c.released_at IS NULL
 		AND b.capability='git.read' AND b.resource=$11
 		AND c.expires_at>clock_timestamp() AND $4::timestamptz>clock_timestamp()

@@ -90,6 +90,29 @@ the expected repository URL and commit, but is not a signed provenance record. F
 snapshot and memory/alternate-egress/recovery-generation tests remain open.
 Restored database state must not resurrect old authority.
 
+## Staged model release
+
+Migration 0028 adds a `setup`/`model` phase to each challenge. `IssuePhase`
+stores that phase; AX actor proofs, release v3 signatures, and encrypted-envelope
+associated data all bind it. Git leases can reserve only against a `setup`
+challenge, and model leases only against a `model` challenge. The connector's
+setup callback cannot request a model credential, and the model callback cannot
+request Git material.
+
+The model-attempt connector permits setup while the workflow attempt is
+`starting`, then permits model authorization and lease reservation only after
+the bridge observes AX `WorkspaceReady=True/SetupComplete` and commits the
+attempt to `running`. It opens a new challenge for that phase, so the model key
+is not decrypted in runner memory while private checkout or other Workspace
+setup runs. The pinned AX runner holds the worker command until that second
+release arrives. PostgreSQL integration tests cover phase-bound challenge
+redeem, authorization, and lease reservation; `integrations/ax/build.sh` covers
+the runner phase fence and cross-compiles the four AX binaries. The live probes
+in this document predate this protocol and prove only the setup/Git path; a live
+post-ready model release still needs a synthetic model credential and updated
+AX runner deployment. This remains ordinary runner isolation, not protection
+against a compromised runner or worker.
+
 The focused test uses a real PostgreSQL instance. Set
 `BLAXSMITH_TEST_DATABASE_URL` to a disposable database where the test user can
 create schemas, then run `go test -race -count=1 -run TestLedgerPostgres

@@ -49,7 +49,7 @@ func TestVerifyActorProof(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	challenge := Challenge{Nonce: base64.RawURLEncoding.EncodeToString(guestNonce[:]), ExpiresAt: now.Add(time.Minute).Unix(), Atespace: "team", Task: "task", RecipientKey: base64.RawURLEncoding.EncodeToString(recipient.PublicKey().Bytes())}
+	challenge := Challenge{Nonce: base64.RawURLEncoding.EncodeToString(guestNonce[:]), ExpiresAt: now.Add(time.Minute).Unix(), Phase: PhaseSetup, Atespace: "team", Task: "task", RecipientKey: base64.RawURLEncoding.EncodeToString(recipient.PublicKey().Bytes())}
 	body, _ := json.Marshal(challenge)
 	sign := func(body []byte) []byte {
 		h := sha256.New()
@@ -65,6 +65,12 @@ func TestVerifyActorProof(t *testing.T) {
 	expected := Expected{Roots: roots, Atespace: "team", ActorName: "task", ActorUID: "uid-1", Nonce: requestNonce, Now: now}
 	if got, err := Verify(expected, body, chain, sign(body)); err != nil || got != challenge {
 		t.Fatalf("valid actor proof = %+v, %v", got, err)
+	}
+	wrongPhase := challenge
+	wrongPhase.Phase = "publish"
+	wrongBody, _ := json.Marshal(wrongPhase)
+	if _, err := Verify(expected, wrongBody, chain, sign(wrongBody)); err == nil {
+		t.Fatal("unsupported credential phase accepted")
 	}
 	wrongActor := expected
 	wrongActor.ActorUID = "uid-2"

@@ -29,7 +29,7 @@ func TestConnectorRequiresCompleteCredentialDelivery(t *testing.T) {
 	connector := Connector{Ledger: &Ledger{}, Client: http.DefaultClient, RouterURL: "https://router.example",
 		Token: func(context.Context) (string, error) { return "token", nil }, Roots: x509.NewCertPool(), Signer: signer,
 		Current:   func(context.Context) (Runtime, error) { return expected, nil },
-		Authorize: func(context.Context, pgx.Tx, Runtime) error { return nil }}
+		Authorize: func(context.Context, pgx.Tx, Runtime, Challenge) error { return nil }}
 	connector.GitSetup = func(context.Context, pgx.Tx, Runtime) (GitSetup, error) { return GitSetup{}, nil }
 	if err := connector.Open(t.Context(), Scope{}, expected); !errors.Is(err, ErrDenied) {
 		t.Fatalf("credential delivery without lease reservation accepted: %v", err)

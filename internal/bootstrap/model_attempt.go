@@ -13,8 +13,8 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
-// ModelAttempt joins one running workflow owner, its approved model binding,
-// and the exact AX runtime that received the task. A connector is single-use.
+// ModelAttempt joins a workflow owner, its approved model binding, and the
+// exact AX runtime that received the task.
 type ModelAttempt struct {
 	Scope   Scope
 	Attempt workflow.Attempt
@@ -24,8 +24,7 @@ type ModelAttempt struct {
 	TTL     time.Duration
 }
 
-// GitAttempt adds one frozen private-repository input to the same actor
-// release. Its grant is independently checked and leased.
+// GitAttempt adds one frozen private-repository input to the setup release.
 type GitAttempt struct {
 	Read     access.GitRead
 	Username string
@@ -65,56 +64,70 @@ func NewModelAttemptConnector(base Connector, db *pgxpool.Pool, secrets *access.
 	base.Reserve = func(ctx context.Context, tx pgx.Tx, redeemed Redeemed) error {
 		mu.Lock()
 		defer mu.Unlock()
-		if leaseID != "" || gitLeaseID != "" || redeemed.Scope != model.Scope ||
+		if redeemed.Scope != model.Scope ||
 			redeemed.ActorAtespace != model.Runtime.AXAtespace ||
 			redeemed.ActorName != model.Runtime.AXTask || redeemed.ActorUID != model.Runtime.ActorUID {
 			return ErrDenied
 		}
-		if err := checkModelWorkflow(ctx, tx, model); err != nil {
-			return err
-		}
-		expiry := time.Now().Add(model.TTL)
-		id, err := access.ReserveModelLease(ctx, tx, access.ModelLeaseRequest{
-			OrganizationID: model.Invoke.OrganizationID, BindingID: model.Invoke.BindingID,
-			ChallengeID: redeemed.ID, ClusterID: redeemed.Scope.ClusterID,
-			AttemptID: redeemed.Scope.AttemptID, OwnerGeneration: redeemed.Scope.OwnerGeneration,
-			ActorUID: redeemed.ActorUID, Provider: model.Invoke.Provider,
-			Model: model.Invoke.Model, ExpiresAt: expiry})
-		if err != nil {
-			return err
-		}
-		var gitID string
-		if model.Git != nil {
-			gitID, err = access.ReserveGitLease(ctx, tx, access.LeaseRequest{
+		switch redeemed.Challenge.Phase {
+		case PhaseSetup:
+			if err := checkModelWorkflow(ctx, tx, model, PhaseSetup); err != nil {
+				return err
+			}
+			if model.Git == nil || gitLeaseID != "" {
+				return nil
+			}
+			id, err := access.ReserveGitLease(ctx, tx, access.LeaseRequest{
 				OrganizationID: model.Git.Read.OrganizationID, BindingID: model.Git.Read.BindingID,
 				ChallengeID: redeemed.ID, ClusterID: redeemed.Scope.ClusterID,
 				AttemptID: redeemed.Scope.AttemptID, OwnerGeneration: redeemed.Scope.OwnerGeneration,
 				ActorUID: redeemed.ActorUID, RepoURL: model.Git.Read.RepoURL,
 				GuestExpiresAt: time.Unix(redeemed.Challenge.ExpiresAt, 0)})
-			if err != nil {
+			gitLeaseID = id
+			return err
+		case PhaseModel:
+			if leaseID != "" {
+				return ErrDenied
+			}
+			if err := checkModelWorkflow(ctx, tx, model, PhaseModel); err != nil {
 				return err
 			}
+			expiry := time.Now().Add(model.TTL)
+			id, err := access.ReserveModelLease(ctx, tx, access.ModelLeaseRequest{
+				OrganizationID: model.Invoke.OrganizationID, BindingID: model.Invoke.BindingID,
+				ChallengeID: redeemed.ID, ClusterID: redeemed.Scope.ClusterID,
+				AttemptID: redeemed.Scope.AttemptID, OwnerGeneration: redeemed.Scope.OwnerGeneration,
+				ActorUID: redeemed.ActorUID, Provider: model.Invoke.Provider,
+				Model: model.Invoke.Model, ExpiresAt: expiry})
+			if err == nil {
+				leaseID, expiresAt = id, expiry
+			}
+			return err
+		default:
+			return ErrDenied
 		}
-		leaseID, gitLeaseID, expiresAt = id, gitID, expiry
-		return nil
 	}
-	base.Authorize = func(ctx context.Context, tx pgx.Tx, runtime Runtime) error {
+	base.Authorize = func(ctx context.Context, tx pgx.Tx, runtime Runtime, challenge Challenge) error {
 		if runtime.Actor != (Actor{model.Runtime.AXAtespace, model.Runtime.AXTask, model.Runtime.ActorUID}) ||
 			runtime.TemplateUID != model.Runtime.TemplateUID || runtime.Image != model.Runtime.Image ||
 			runtime.WorkerPool != model.Runtime.WorkerPool {
 			return ErrDenied
 		}
-		if err := checkModelWorkflow(ctx, tx, model); err != nil {
+		if err := checkModelWorkflow(ctx, tx, model, challenge.Phase); err != nil {
 			return err
 		}
-		if _, err := access.AuthorizeModelInvoke(ctx, tx, model.Invoke); err != nil {
+		if challenge.Phase == PhaseSetup {
+			if model.Git != nil {
+				_, err := access.AuthorizeGitRead(ctx, tx, model.Git.Read)
+				return err
+			}
+			return nil
+		}
+		if challenge.Phase == PhaseModel {
+			_, err := access.AuthorizeModelInvoke(ctx, tx, model.Invoke)
 			return err
 		}
-		if model.Git != nil {
-			_, err := access.AuthorizeGitRead(ctx, tx, model.Git.Read)
-			return err
-		}
-		return nil
+		return ErrDenied
 	}
 	base.ModelCredential = func(ctx context.Context, tx pgx.Tx, runtime Runtime) (ModelCredential, error) {
 		mu.Lock()
@@ -126,7 +139,7 @@ func NewModelAttemptConnector(base Connector, db *pgxpool.Pool, secrets *access.
 			runtime.WorkerPool != model.Runtime.WorkerPool {
 			return ModelCredential{}, ErrDenied
 		}
-		if err := checkModelWorkflow(ctx, tx, model); err != nil {
+		if err := checkModelWorkflow(ctx, tx, model, PhaseModel); err != nil {
 			return ModelCredential{}, err
 		}
 		decision, err := access.AuthorizeModelInvoke(ctx, tx, model.Invoke)
@@ -155,7 +168,7 @@ func NewModelAttemptConnector(base Connector, db *pgxpool.Pool, secrets *access.
 				runtime.WorkerPool != model.Runtime.WorkerPool {
 				return GitSetup{}, ErrDenied
 			}
-			if err := checkModelWorkflow(ctx, tx, model); err != nil {
+			if err := checkModelWorkflow(ctx, tx, model, PhaseSetup); err != nil {
 				return GitSetup{}, err
 			}
 			decision, err := access.AuthorizeGitRead(ctx, tx, model.Git.Read)
@@ -179,23 +192,33 @@ func NewModelAttemptConnector(base Connector, db *pgxpool.Pool, secrets *access.
 		mu.Lock()
 		id, gitID := leaseID, gitLeaseID
 		mu.Unlock()
-		if id == "" || (model.Git != nil && gitID == "") || redeemed.Scope != model.Scope {
+		if redeemed.Scope != model.Scope {
 			return ErrDenied
 		}
-		if err := access.MarkLeaseDelivered(ctx, tx, model.Invoke.OrganizationID, id); err != nil {
-			return err
-		}
-		if gitID != "" {
+		switch redeemed.Challenge.Phase {
+		case PhaseSetup:
+			if model.Git == nil {
+				return nil
+			}
+			if gitID == "" {
+				return ErrDenied
+			}
 			return access.MarkLeaseDelivered(ctx, tx, model.Git.Read.OrganizationID, gitID)
+		case PhaseModel:
+			if id == "" {
+				return ErrDenied
+			}
+			return access.MarkLeaseDelivered(ctx, tx, model.Invoke.OrganizationID, id)
+		default:
+			return ErrDenied
 		}
-		return nil
 	}
 	return base, nil
 }
 
 // checkModelWorkflow holds the live owner and immutable runtime row through
 // reservation or release, fencing cancellation and actor replacement.
-func checkModelWorkflow(ctx context.Context, tx pgx.Tx, model ModelAttempt) error {
+func checkModelWorkflow(ctx context.Context, tx pgx.Tx, model ModelAttempt, phase string) error {
 	if tx == nil {
 		return ErrDenied
 	}
@@ -224,7 +247,16 @@ func checkModelWorkflow(ctx context.Context, tx pgx.Tx, model ModelAttempt) erro
 	if err != nil {
 		return err
 	}
-	if runState != "active" || !sealed || (taskState != "starting" && taskState != "running") || taskState != attemptState ||
+	state := ""
+	switch phase {
+	case PhaseSetup:
+		state = "starting"
+	case PhaseModel:
+		state = "running"
+	default:
+		return ErrDenied
+	}
+	if runState != "active" || !sealed || taskState != state || attemptState != state ||
 		activeID == nil || *activeID != model.Attempt.ID || token != model.Attempt.FenceToken ||
 		generation != model.Attempt.OwnerGeneration || runtime != model.Runtime {
 		return ErrDenied

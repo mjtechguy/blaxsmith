@@ -415,7 +415,7 @@ func signedProof(t *testing.T, offer Offer) (Proof, *x509.CertPool) {
 		t.Fatal(err)
 	}
 	guest, _ := json.Marshal(Challenge{Nonce: base64.RawURLEncoding.EncodeToString(guestNonce[:]),
-		ExpiresAt: now.Add(time.Minute).Unix(), Atespace: offer.ActorAtespace, Task: offer.ActorName})
+		ExpiresAt: now.Add(time.Minute).Unix(), Phase: offer.Phase, Atespace: offer.ActorAtespace, Task: offer.ActorName})
 	hash := sha256.New()
 	hash.Write([]byte("blaxsmith/actor-proof/v1\x00"))
 	hash.Write(offer.Nonce[:])

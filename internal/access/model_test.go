@@ -28,8 +28,8 @@ func TestModelAuthorityAndAttemptLeasePostgres(t *testing.T) {
 			(cluster_id,attempt_id,owner_generation,actor_atespace,actor_name,actor_uid,active)
 			VALUES ('cluster','attempt',1,'space','task','actor',true)`,
 		`INSERT INTO bootstrap_challenges
-			(id,cluster_id,attempt_id,owner_generation,actor_atespace,actor_name,actor_uid,nonce_sha256,expires_at,consumed_at,release_attempted_at)
-			VALUES ('challenge','cluster','attempt',1,'space','task','actor',decode(repeat('01',32),'hex'),clock_timestamp()+interval '1 minute',clock_timestamp(),clock_timestamp())`,
+			(id,cluster_id,attempt_id,owner_generation,actor_atespace,actor_name,actor_uid,nonce_sha256,expires_at,consumed_at,release_attempted_at,phase)
+			VALUES ('challenge','cluster','attempt',1,'space','task','actor',decode(repeat('01',32),'hex'),clock_timestamp()+interval '1 minute',clock_timestamp(),clock_timestamp(),'model')`,
 	} {
 		if _, err := pool.Exec(ctx, statement); err != nil {
 			t.Fatal(err)

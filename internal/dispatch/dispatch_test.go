@@ -287,11 +287,19 @@ func TestDispatchBatchPostgres(t *testing.T) {
 				t.Fatal("unexpected model lease activation input")
 			}
 			return nil
+		},
+		ReleaseModel: func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error {
+			return nil
 		}}
 	withoutActivation := dispatcher
 	withoutActivation.Activate = nil
 	if _, err := withoutActivation.DispatchBatch(ctx, "", 1, 1); err != ErrNotReady {
 		t.Fatalf("missing bootstrap activator must block dispatch: %v", err)
+	}
+	withoutModelRelease := dispatcher
+	withoutModelRelease.ReleaseModel = nil
+	if _, err := withoutModelRelease.DispatchBatch(ctx, "", 1, 1); err != ErrNotReady {
+		t.Fatalf("missing post-readiness model release must block dispatch: %v", err)
 	}
 	blocked, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
 	if err != nil || len(blocked.Outcomes) != 1 || blocked.Outcomes[0].State != "blocked" ||
@@ -310,6 +318,7 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		Hosts: []axbridge.GatewayHostRule{{Host: "140.82.114.3/32"}, {Host: "104.18.33.45/32"}}}}
 	ax.delayWorkspaceReady = true
 	activationSawWorkspacePending := false
+	modelReleaseSawWorkspaceReady := false
 	dispatcher.Activate = func(ctx context.Context, attempt workflow.Attempt, runtime bootstrap.Runtime, binding workflow.RuntimeBinding, invoke access.ModelInvoke) error {
 		_, state, _, stateErr := store.CurrentAttempt(ctx, attempt)
 		var startedEvents int
@@ -333,10 +342,21 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		}
 		return nil
 	}
+	dispatcher.ReleaseModel = func(ctx context.Context, attempt workflow.Attempt, _ bootstrap.Runtime,
+		_ workflow.RuntimeBinding, _ access.ModelInvoke) error {
+		_, state, _, stateErr := store.CurrentAttempt(ctx, attempt)
+		if stateErr != nil || state != "running" || ax.task == nil ||
+			ax.task.Status.Conditions[0].Status != "True" || ax.task.Status.Conditions[0].Reason != "SetupComplete" {
+			return errors.New("model credential release ran before workspace readiness")
+		}
+		modelReleaseSawWorkspaceReady = true
+		return nil
+	}
 	batch, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
 	if err != nil || len(batch.Outcomes) != 1 || batch.Outcomes[0].State != "started" ||
 		batch.Outcomes[0].AttemptID == "" || batch.Outcomes[0].BindingID == "" || ax.task == nil || activationPreflights != 1 ||
-		!activationSawWorkspacePending || ax.task.Status.Conditions[0].Status != "True" || ax.task.Status.Conditions[0].Reason != "SetupComplete" {
+		!activationSawWorkspacePending || !modelReleaseSawWorkspaceReady ||
+		ax.task.Status.Conditions[0].Status != "True" || ax.task.Status.Conditions[0].Reason != "SetupComplete" {
 		t.Fatalf("dispatch batch: %+v, %v", batch, err)
 	}
 	workspaceName := axbridge.AttemptWorkspaceName(batch.Outcomes[0].AttemptID)

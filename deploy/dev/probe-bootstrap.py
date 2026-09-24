@@ -160,21 +160,27 @@ def until_challenge():
     deadline = time.monotonic() + 150
     last = None
     while time.monotonic() < deadline:
-        status, body = request("/blaxsmith/bootstrap/challenge")
+        status, body = request("/blaxsmith/bootstrap/challenge?phase=setup")
         if status == 200:
-            return json.loads(body)
+            challenge = json.loads(body)
+            if challenge.get("phase") != "setup":
+                raise RuntimeError("setup probe received a non-setup challenge")
+            return challenge
         last = (status, body.decode(errors="replace")[:100])
         time.sleep(2)
     raise RuntimeError(f"challenge unavailable: {last}")
 
 
 def signed_release(challenge):
+    phase = challenge["phase"]
     message = (
-        "blaxsmith/bootstrap/release/v1\n"
+        "blaxsmith/bootstrap/release/v3\n"
+        f"{phase}\n"
         f"{challenge['nonce']}\n{challenge['expires_at']}\n"
         f"{challenge['atespace']}\n{challenge['task']}\n"
     ).encode()
     return json.dumps({
+        "phase": phase,
         "nonce": challenge["nonce"],
         "expires_at": challenge["expires_at"],
         "signature": base64.b64encode(signer.sign(message)).decode(),
@@ -282,7 +288,7 @@ try:
     activate_initial()
     current_uid = ate("get", "actor", task, "-a", space, "-o", "json")["actors"][0]["metadata"]["uid"]
     first = until_challenge()
-    if request("/blaxsmith/bootstrap/challenge", uid="stale-actor-uid")[0] != 409:
+    if request("/blaxsmith/bootstrap/challenge?phase=setup", uid="stale-actor-uid")[0] != 409:
         raise RuntimeError("stale actor UID was routed to the guest")
     report["checks"].append("stale actor UID denied before challenge")
     status, _ = request("/readyz")

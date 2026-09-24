@@ -18,7 +18,7 @@ func TestEnvelopeBindsRecipientAndChallenge(t *testing.T) {
 	if _, err := rand.Read(nonce[:]); err != nil {
 		t.Fatal(err)
 	}
-	challenge := Challenge{Nonce: base64.RawURLEncoding.EncodeToString(nonce[:]), ExpiresAt: time.Now().Add(time.Minute).Unix(),
+	challenge := Challenge{Nonce: base64.RawURLEncoding.EncodeToString(nonce[:]), ExpiresAt: time.Now().Add(time.Minute).Unix(), Phase: PhaseSetup,
 		Atespace: "team", Task: "task", RecipientKey: base64.RawURLEncoding.EncodeToString(recipient.PublicKey().Bytes())}
 	secret := []byte("synthetic-private-git-token")
 	envelope, err := Seal(challenge, secret)

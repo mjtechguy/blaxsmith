@@ -116,9 +116,11 @@ func Open(challenge Challenge, recipient *ecdh.PrivateKey, envelope Envelope) ([
 
 func envelopeContext(challenge Challenge) ([]byte, []byte, error) {
 	nonce, err := base64.RawURLEncoding.DecodeString(challenge.Nonce)
-	if err != nil || len(nonce) != 32 || challenge.ExpiresAt <= 0 || challenge.Atespace == "" || challenge.Task == "" || challenge.RecipientKey == "" {
+	if err != nil || len(nonce) != 32 || challenge.ExpiresAt <= 0 ||
+		(challenge.Phase != PhaseSetup && challenge.Phase != PhaseModel) ||
+		challenge.Atespace == "" || challenge.Task == "" || challenge.RecipientKey == "" {
 		return nil, nil, ErrDenied
 	}
-	context, _ := json.Marshal([]string{challenge.Nonce, strconv.FormatInt(challenge.ExpiresAt, 10), challenge.Atespace, challenge.Task, challenge.RecipientKey})
+	context, _ := json.Marshal([]string{challenge.Phase, challenge.Nonce, strconv.FormatInt(challenge.ExpiresAt, 10), challenge.Atespace, challenge.Task, challenge.RecipientKey})
 	return context, nonce, nil
 }

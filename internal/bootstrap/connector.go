@@ -43,8 +43,7 @@ func (r Runtime) DataOnlySnapshots() bool {
 		r.ResumeFromData == "RESUME_SOURCE_GOLDEN" && r.SnapshotStorage != ""
 }
 
-// Connector opens the pre-workspace gate and can deliver authorized Git setup
-// and model credentials in one encrypted release. The caller must authenticate
+// Connector opens an actor-attested setup or post-readiness model gate. The caller must authenticate
 // the scheduler assignment and implement Current and Authorize against trusted
 // control-plane/policy state.
 type Connector struct {
@@ -55,9 +54,9 @@ type Connector struct {
 	Roots     *x509.CertPool
 	Signer    ed25519.PrivateKey
 	Current   func(context.Context) (Runtime, error)
-	// Authorize and GitSetup must use the supplied release transaction for
+	// Authorize and credential callbacks must use the supplied release transaction for
 	// policy/credential reads whose revocation must fence delivery.
-	Authorize func(context.Context, pgx.Tx, Runtime) error
+	Authorize func(context.Context, pgx.Tx, Runtime, Challenge) error
 	// Reserve commits an access-delivery intent before send; Delivered records
 	// an acknowledged send in the release transaction.
 	Reserve   func(context.Context, pgx.Tx, Redeemed) error
@@ -65,8 +64,7 @@ type Connector struct {
 	// GitSetup runs only after proof, owner fencing, runtime check, and policy.
 	// The returned token byte slice is consumed and cleared by Open.
 	GitSetup func(context.Context, pgx.Tx, Runtime) (GitSetup, error)
-	// ModelCredential may accompany GitSetup. Each capability has its own
-	// binding and lease even though both are sealed to the same actor challenge.
+	// ModelCredential is only used by OpenModel, after AX workspace readiness.
 	ModelCredential func(context.Context, pgx.Tx, Runtime) (ModelCredential, error)
 }
 
@@ -93,8 +91,17 @@ func validGitCommit(commit string) bool {
 }
 
 func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) error {
+	return c.OpenPhase(ctx, scope, expected, PhaseSetup)
+}
+
+func (c *Connector) OpenModel(ctx context.Context, scope Scope, expected Runtime) error {
+	return c.OpenPhase(ctx, scope, expected, PhaseModel)
+}
+
+func (c *Connector) OpenPhase(ctx context.Context, scope Scope, expected Runtime, phase string) error {
 	if c.Ledger == nil || c.Client == nil || c.Token == nil || c.Roots == nil ||
 		len(c.Signer) != ed25519.PrivateKeySize || c.Current == nil || c.Authorize == nil ||
+		(phase != PhaseSetup && phase != PhaseModel) || (phase == PhaseModel && c.ModelCredential == nil) ||
 		((c.GitSetup != nil || c.ModelCredential != nil) != (c.Reserve != nil && c.Delivered != nil)) ||
 		((c.Reserve == nil) != (c.Delivered == nil)) ||
 		expected.Actor.Atespace == "" || expected.Actor.Name == "" || expected.Actor.UID == "" ||
@@ -109,14 +116,15 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 	if err != nil || router.Scheme != "https" || router.Host == "" || router.User != nil || router.RawQuery != "" || router.Fragment != "" || router.Path != "" {
 		return ErrDenied
 	}
-	offer, err := c.Ledger.Issue(ctx, scope)
+	offer, err := c.Ledger.IssuePhase(ctx, scope, phase)
 	if err != nil {
 		return err
 	}
 	if offer.ActorAtespace != expected.Actor.Atespace || offer.ActorName != expected.Actor.Name || offer.ActorUID != expected.Actor.UID {
 		return ErrDenied
 	}
-	body, cert, signature, err := c.request(ctx, router, offer, http.MethodGet, "/blaxsmith/bootstrap/challenge", nil)
+	path := "/blaxsmith/bootstrap/challenge?phase=" + phase
+	body, cert, signature, err := c.request(ctx, router, offer, http.MethodGet, path, nil)
 	if err != nil {
 		return err
 	}
@@ -137,15 +145,18 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 		if current != expected {
 			return ErrDenied
 		}
-		if err := c.Authorize(sendCtx, tx, current); err != nil {
+		challenge := redeemed.Challenge
+		if challenge.Phase != phase || offer.Phase != phase {
+			return ErrDenied
+		}
+		if err := c.Authorize(sendCtx, tx, current, challenge); err != nil {
 			return err
 		}
-		challenge := redeemed.Challenge
-		message := []byte("blaxsmith/bootstrap/release/v1\n" + challenge.Nonce + "\n" +
+		message := []byte("blaxsmith/bootstrap/release/v3\n" + phase + "\n" + challenge.Nonce + "\n" +
 			strconv.FormatInt(challenge.ExpiresAt, 10) + "\n" + challenge.Atespace + "\n" + challenge.Task + "\n")
 		var envelope *Envelope
 		var git *GitSetup
-		if c.GitSetup != nil {
+		if phase == PhaseSetup && c.GitSetup != nil {
 			setup, err := c.GitSetup(sendCtx, tx, current)
 			if err != nil {
 				return err
@@ -154,7 +165,7 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 			git = &setup
 		}
 		var model *ModelCredential
-		if c.ModelCredential != nil {
+		if phase == PhaseModel {
 			credential, err := c.ModelCredential(sendCtx, tx, current)
 			if err != nil {
 				return err
@@ -172,16 +183,17 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 		if envelope != nil {
 			encoded, _ := json.Marshal(envelope)
 			digest := sha256.Sum256(encoded)
-			message = []byte("blaxsmith/bootstrap/release/v2\n" + challenge.Nonce + "\n" +
+			message = []byte("blaxsmith/bootstrap/release/v3\n" + phase + "\n" + challenge.Nonce + "\n" +
 				strconv.FormatInt(challenge.ExpiresAt, 10) + "\n" + challenge.Atespace + "\n" + challenge.Task + "\n" +
 				base64.RawURLEncoding.EncodeToString(digest[:]) + "\n")
 		}
 		release, err := json.Marshal(struct {
+			Phase     string    `json:"phase"`
 			Nonce     string    `json:"nonce"`
 			ExpiresAt int64     `json:"expires_at"`
 			Signature string    `json:"signature"`
 			Envelope  *Envelope `json:"envelope,omitempty"`
-		}{challenge.Nonce, challenge.ExpiresAt, base64.StdEncoding.EncodeToString(ed25519.Sign(c.Signer, message)), envelope})
+		}{phase, challenge.Nonce, challenge.ExpiresAt, base64.StdEncoding.EncodeToString(ed25519.Sign(c.Signer, message)), envelope})
 		if err != nil {
 			return err
 		}
@@ -217,6 +229,11 @@ type modelCredentialPayload struct {
 
 func sealCredentials(challenge Challenge, attemptID string, git *GitSetup, model *ModelCredential) (Envelope, error) {
 	if attemptID == "" || git == nil && model == nil {
+		return Envelope{}, ErrDenied
+	}
+	if challenge.Phase == PhaseSetup && model != nil ||
+		challenge.Phase == PhaseModel && (git != nil || model == nil) ||
+		(challenge.Phase != PhaseSetup && challenge.Phase != PhaseModel) {
 		return Envelope{}, ErrDenied
 	}
 	var gitPayload *gitCredentialPayload

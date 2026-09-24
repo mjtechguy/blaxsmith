@@ -40,20 +40,21 @@ networking disabled. It does not prove real-provider authentication, every
 permission denial against hostile requests, MCP calls or revocation, or AX
 workspace/lifecycle behavior.
 
-AX activation opens the signed bootstrap gate that permits its runner to set up
-the Workspace. The runner writes the model key file only after local setup
-succeeds, then starts the CLI; the current release does decrypt the model
-payload into trusted runner-process memory before setup. Dispatch waits for
-AX's exact `WorkspaceReady=True/SetupComplete` condition and rechecks the actor
-against the frozen runtime binding before reporting `started`. If setup fails
-or times out, it revokes the owner and requires Task and actor absence before
-making the task retryable. The PostgreSQL-backed test covers delayed readiness
-and failed-setup cleanup. The authenticated
-[workspace-ready probe](ax-workspace-ready-probe.json) intentionally leaves
-the bootstrap gate closed, so AX remains pending and no credentials are
-released; successful activated setup on the live cluster remains unproved. A
-policy that forbids plaintext model bytes in runner memory until AX-observed
-readiness needs a separate post-ready model challenge, which is still open.
+AX activation opens a signed, phase-bound setup gate. That phase can release
+only the Git capability needed to materialize a private Workspace. After setup,
+the runner reports `WorkspaceReady=True/SetupComplete` and waits before
+launching the CLI. Dispatch rechecks the same actor and frozen runtime, moves
+the attempt to `running`, and opens a second actor-attested challenge with a
+fresh nonce. Only that model phase can reserve and release the model lease;
+phase is covered by both the signature and encrypted-envelope context. The
+runner decrypts the model key only after AX-observed readiness, writes the
+0600 credential file, and then launches the worker. The PostgreSQL-backed
+dispatch test covers delayed readiness and failed-setup cleanup, and the full
+pinned AX overlay test/vet/Linux build now covers phase separation. The
+authenticated [workspace-ready probe](ax-workspace-ready-probe.json)
+intentionally leaves the setup gate closed, so successful activated setup on
+the live cluster remains unproved. This boundary still trusts the runner and
+guest process after release; it is not confidential-computing protection.
 
 Blaxsmith delivers declared `instructions`, applicable `AGENTS.md`, Forge
 specification, decision transcript, and stage prompt as bounded instruction

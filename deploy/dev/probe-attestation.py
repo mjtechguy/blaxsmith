@@ -67,7 +67,7 @@ def request(nonce, token=None, target=task, uid=None):
         headers["Authorization"] = "Bearer " + token
     connection = RouterConnection(router_host, context=ssl.create_default_context(cadata=service_ca()), timeout=15)
     try:
-        connection.request("GET", "/blaxsmith/bootstrap/challenge", headers=headers)
+        connection.request("GET", "/blaxsmith/bootstrap/challenge?phase=setup", headers=headers)
         response = connection.getresponse()
         return response.status, response.headers, response.read()
     finally:
@@ -91,7 +91,7 @@ try:
         report["checks"].append(f"{label} connector identity rejected before actor resume")
     if actor().get("status", {}).get("state") != "ACTOR_STATE_SUSPENDED":
         raise RuntimeError("denied bootstrap request changed actor state")
-    req = urllib.request.Request("http://" + router_ip + "/blaxsmith/bootstrap/challenge", headers={
+    req = urllib.request.Request("http://" + router_ip + "/blaxsmith/bootstrap/challenge?phase=setup", headers={
         "ate-target-actor": f"{space}/{task}", "x-forwarded-proto": "https",
         "X-Blaxsmith-Request-Nonce": nonce,
     })

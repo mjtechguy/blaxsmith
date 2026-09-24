@@ -32,9 +32,11 @@ type Dispatcher struct {
 	// PreflightActivation verifies connector-side bootstrap transport and
 	// credential availability before an attempt is reserved.
 	PreflightActivation func(context.Context) error
-	// Activate opens the AX bootstrap gate and releases the bound model lease.
-	// A launched but unreleased tool task is not a started dispatch outcome.
+	// Activate opens the setup gate and may release the private Git lease.
 	Activate func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error
+	// ReleaseModel runs only after AX reports WorkspaceReady and the attempt
+	// has moved to running.
+	ReleaseModel func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error
 }
 
 type Outcome struct {
@@ -56,7 +58,8 @@ type Batch struct {
 func (d *Dispatcher) DispatchBatch(ctx context.Context, afterOrganizationID string, organizationLimit, taskLimit int) (Batch, error) {
 	if d == nil || d.Workflow == nil || d.DB == nil || d.Secrets == nil || d.Bridge == nil ||
 		d.Bridge.AX == nil || d.Bridge.Actor == nil || d.Bridge.Signer == "" || d.Bridge.Storage == "" ||
-		d.Bridge.RevokeOwner == nil || d.PreflightWorker == nil || d.PreflightActivation == nil || d.Activate == nil {
+		d.Bridge.RevokeOwner == nil || d.PreflightWorker == nil || d.PreflightActivation == nil ||
+		d.Activate == nil || d.ReleaseModel == nil {
 		return Batch{}, ErrNotReady
 	}
 	organizations, err := d.Workflow.ListReadyOrganizationIDs(ctx, afterOrganizationID, organizationLimit)
@@ -199,6 +202,17 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		return outcome
 	}
 	if err := bridge.WaitWorkspaceReady(ctx, attempt); err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 45*time.Second)
+		stopErr := bridge.StopKnown(cleanupCtx, attempt)
+		cancel()
+		if stopErr == nil {
+			outcome.State, outcome.Err = "stopped", err
+		} else {
+			outcome.State, outcome.Err = "unresolved", errors.Join(err, stopErr)
+		}
+		return outcome
+	}
+	if err := d.ReleaseModel(ctx, attempt, runtime, runtimeBinding, invoke); err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 45*time.Second)
 		stopErr := bridge.StopKnown(cleanupCtx, attempt)
 		cancel()

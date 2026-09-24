@@ -172,7 +172,10 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 	connector := &bootstrap.Connector{Ledger: ledger, Client: &http.Client{Transport: transport, Timeout: 20 * time.Second},
 		RouterURL: "https://atenet-router.ate-system.svc", Roots: actorRoots, Signer: signer,
 		Token: func(context.Context) (string, error) { return token, nil }, Current: current,
-		Authorize: func(ctx context.Context, tx pgx.Tx, runtime bootstrap.Runtime) error {
+		Authorize: func(ctx context.Context, tx pgx.Tx, runtime bootstrap.Runtime, challenge bootstrap.Challenge) error {
+			if challenge.Phase != bootstrap.PhaseSetup {
+				return bootstrap.ErrDenied
+			}
 			if runtime.Image != image || runtime.WorkerPool != pool || runtime.SandboxClass != "SANDBOX_CLASS_GVISOR" || !dataSnapshots(runtime) {
 				return bootstrap.ErrDenied
 			}

@@ -30,6 +30,7 @@ type Expected struct {
 type Challenge struct {
 	Nonce        string `json:"nonce"`
 	ExpiresAt    int64  `json:"expires_at"`
+	Phase        string `json:"phase"`
 	Atespace     string `json:"atespace"`
 	Task         string `json:"task"`
 	RecipientKey string `json:"recipient_key,omitempty"`
@@ -115,7 +116,9 @@ func Verify(expected Expected, body, chainPEM, signature []byte) (Challenge, err
 		return Challenge{}, fmt.Errorf("invalid guest challenge")
 	}
 	guestNonce, err := base64.RawURLEncoding.DecodeString(challenge.Nonce)
-	if err != nil || len(guestNonce) != 32 || challenge.Atespace != expected.Atespace || challenge.Task != expected.ActorName ||
+	if err != nil || len(guestNonce) != 32 ||
+		(challenge.Phase != PhaseSetup && challenge.Phase != PhaseModel) ||
+		challenge.Atespace != expected.Atespace || challenge.Task != expected.ActorName ||
 		!time.Unix(challenge.ExpiresAt, 0).After(expected.Now) || time.Unix(challenge.ExpiresAt, 0).After(expected.Now.Add(2*time.Minute)) {
 		return Challenge{}, fmt.Errorf("guest challenge is stale or mismatched")
 	}

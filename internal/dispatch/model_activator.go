@@ -60,6 +60,33 @@ func (a *ModelActivator) ready() bool {
 
 func (a *ModelActivator) Activate(ctx context.Context, attempt workflow.Attempt, runtime bootstrap.Runtime,
 	binding workflow.RuntimeBinding, invoke access.ModelInvoke) error {
+	connector, scope, ledger, err := a.attemptConnector(ctx, attempt, runtime, binding, invoke, true)
+	if err != nil {
+		return err
+	}
+	err = connector.Open(ctx, scope, runtime)
+	if err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		_, _ = ledger.Deactivate(cleanupCtx, scope)
+		cancel()
+	}
+	return err
+}
+
+// ReleaseModel creates a fresh, actor-attested challenge only after the
+// dispatcher has observed AX workspace readiness and moved the attempt to
+// running.
+func (a *ModelActivator) ReleaseModel(ctx context.Context, attempt workflow.Attempt, runtime bootstrap.Runtime,
+	binding workflow.RuntimeBinding, invoke access.ModelInvoke) error {
+	connector, scope, _, err := a.attemptConnector(ctx, attempt, runtime, binding, invoke, false)
+	if err != nil {
+		return err
+	}
+	return connector.OpenModel(ctx, scope, runtime)
+}
+
+func (a *ModelActivator) attemptConnector(ctx context.Context, attempt workflow.Attempt, runtime bootstrap.Runtime,
+	binding workflow.RuntimeBinding, invoke access.ModelInvoke, assign bool) (bootstrap.Connector, bootstrap.Scope, *bootstrap.Ledger, error) {
 	if !a.ready() ||
 		attempt.OrganizationID == "" || attempt.RunID == "" || attempt.TaskID == "" || attempt.ID == "" ||
 		attempt.OwnerGeneration <= 0 || attempt.FenceToken == "" ||
@@ -71,12 +98,23 @@ func (a *ModelActivator) Activate(ctx context.Context, attempt workflow.Attempt,
 		invoke.ProjectID == "" || invoke.GranteeKind == "" || invoke.GranteeID == "" ||
 		invoke.Provider == "" || invoke.Model == "" || invoke.PolicyVersion <= 0 ||
 		runtime.BootstrapPublicKey != base64.StdEncoding.EncodeToString(a.Base.Signer.Public().(ed25519.PublicKey)) {
-		return bootstrap.ErrDenied
+		return bootstrap.Connector{}, bootstrap.Scope{}, nil, bootstrap.ErrDenied
 	}
 	ledger := bootstrap.NewLedger(a.DB)
-	scope, err := ledger.Assign(ctx, a.ClusterID, attempt.ID, 0, runtime.Actor)
+	var err error
+	var scope bootstrap.Scope
+	if assign {
+		scope, err = ledger.Assign(ctx, a.ClusterID, attempt.ID, 0, runtime.Actor)
+	} else {
+		var actor bootstrap.Actor
+		var active, exists bool
+		scope, actor, active, exists, err = ledger.CurrentOwner(ctx, a.ClusterID, attempt.ID)
+		if err == nil && (!exists || !active || actor != runtime.Actor) {
+			err = bootstrap.ErrDenied
+		}
+	}
 	if err != nil {
-		return err
+		return bootstrap.Connector{}, bootstrap.Scope{}, nil, err
 	}
 	base := a.Base
 	base.Ledger = ledger
@@ -87,12 +125,14 @@ func (a *ModelActivator) Activate(ctx context.Context, attempt workflow.Attempt,
 		Scope: scope, Attempt: attempt, Runtime: binding, Invoke: invoke, TTL: a.LeaseTTL,
 	})
 	if err != nil {
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		_, _ = ledger.Deactivate(cleanupCtx, scope) // No challenge or credential has been issued yet.
-		cancel()
-		return err
+		if assign {
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			_, _ = ledger.Deactivate(cleanupCtx, scope) // No challenge or credential has been issued yet.
+			cancel()
+		}
+		return bootstrap.Connector{}, bootstrap.Scope{}, nil, err
 	}
-	return connector.Open(ctx, scope, runtime)
+	return connector, scope, ledger, nil
 }
 
 // RevokeOwner fences bootstrap delivery and all platform leases before the

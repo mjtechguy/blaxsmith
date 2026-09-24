@@ -5,7 +5,8 @@ Upstream: `github.com/google/ax`, commit
 `fail-closed.patch`, `egress-policy.patch`, `bootstrap-gate.patch`,
 `platform-bootstrap-key.patch`, `encrypted-git-bootstrap.patch`,
 `command-exit-readback.patch`, `task-tombstones.patch`, `redis-ha.patch`,
-`consumer-recovery.patch`, `provider-credential.patch`, and `task-resources.patch` change the files named in their
+`consumer-recovery.patch`, `provider-credential.patch`, `post-ready-model.patch`,
+and `task-resources.patch` change the files named in their
 diffs; the reference checkout stays untouched. This is a temporary integration overlay, not a claim that AX
 has accepted these changes or that secure bootstrap is finished.
 
@@ -22,6 +23,9 @@ The patch closes observed launch failures at their source:
 - Missing/duplicate workspace definitions, failed Git checkout, missing required
   bootstrap, failed skills/state setup, and marker-write errors stop the runner
   before command launch. A Git failure also prevents bootstrap execution.
+- Bootstrap setup and model credentials use distinct signed phases and fresh
+  challenges. Setup can carry Git only; the runner reports workspace readiness
+  before it asks for the model phase and starts the worker.
 - Resume probes the current runner instead of trusting an old Ready condition.
 - The egress follow-up rejects hostname and port rules the pinned Substrate
   gateway cannot enforce, keeps `0.0.0.0/0` as IPv4 CIDR rather than treating it
@@ -58,7 +62,7 @@ it ran on the Linux development node.
 bash integrations/ax/build.sh ../reference/ax /tmp/blaxsmith-ax-build
 ```
 
-The script exports committed source into a temporary directory, applies all eleven
+The script exports committed source into a temporary directory, applies all twelve
 patches without changing the checkout, runs the full AX test suite and `go vet`,
 and builds the CLI, server, controller and runner. It records source/patch/binary
 hashes in `provenance.json`. The pinned `ax` CLI is for the isolated connector
@@ -75,16 +79,19 @@ provenance](provenance-redis-ha.json), [consumer-recovery
 provenance](provenance-consumer-recovery.json), and [resource-contract
 provenance](provenance-task-resources.json) document incremental checks. The
 [composite capability bundle provenance](provenance-multicapability.json)
-records a full current overlay test, vet, and Linux/AMD64 build. These records
+records the earlier full overlay test, vet, and Linux/AMD64 build. The
+[post-ready model provenance](provenance-post-ready-model.json) records the same
+checks with the staged credential protocol. These records
 are evidence of tested builds, not signatures.
 
 ## Synthetic bootstrap gate
 
 When the controller supplies `BLAXSMITH_BOOTSTRAP_PUBLIC_KEY` as a base64 Ed25519
 public key, the runner serves a short-lived random challenge at
-`/blaxsmith/bootstrap/challenge` and waits **before workspace setup and command
-launch**. A release signed over the challenge, expiry, atespace, and task name
-opens setup once. An invalid configured key or any Task-level override fails closed;
+`/blaxsmith/bootstrap/challenge?phase=setup` and waits **before workspace setup and command
+launch**. A release signed over the phase, challenge, expiry, atespace, and task
+name opens that phase once. The model worker later requests `phase=model` only
+after Workspace setup. An invalid configured key or any Task-level override fails closed;
 the Blaxsmith deployment must enable the controller flag for every Task.
 The challenge is generated on demand after activation; normal AX data-snapshot
 resumes restore the pre-bootstrap golden runner and need a new release. The
@@ -129,19 +136,20 @@ The [live private-Git probe](../../docs/bootstrap-private-git-probe.json) and
 Product grants, complete egress, full-snapshot behavior, and revocation remain
 open; do not use this slice for sensitive work.
 
-The provider credential overlay reads a versioned capability bundle inside the
-same signed X25519 envelope as private Git setup. It can carry one Git binding
-and one model binding; each retains its own lease and revocation record. The AX
-runner checks the task's declared Git workspace before using that credential,
-requires the exact `/usr/local/bin/blaxsmith-tool-worker` command for model
-keys, matches the encrypted attempt and provider to its public selection, and
-writes only `/run/blaxsmith/agent-credential.json` (0600) in a pre-owned private
-directory. The runner removes that file on command exit. The product must
-supply a combined immutable runner/CLI/worker image and current grant, binding,
-secret, lease, and frozen Workspace inputs. The library can authorize and seal
-both capabilities, but the dispatcher does not yet build the AX Workspace from
-the approved Git binding. Revocation after a raw credential has entered the
-pod must stop that actor and rotate the provider credential if needed.
+The provider credential overlay reads a versioned capability bundle. Setup
+releases can contain only one Git binding; after AX reports WorkspaceReady and
+the database records the attempt as `running`, the connector opens a fresh
+actor-attested model challenge and releases only the selected model binding.
+The phase is signed and included in envelope associated data, and leases are
+reserved only for their matching phase. The AX runner requires the exact
+`/usr/local/bin/blaxsmith-tool-worker` command for model keys, matches the
+encrypted attempt and provider to its public selection, and writes the model
+key only after setup to `/run/blaxsmith/agent-credential.json` (0600) in a
+pre-owned private directory. The runner removes that file on command exit.
+The product must supply a combined immutable runner/CLI/worker image and
+current grant, binding, secret, lease, and frozen Workspace inputs. Revocation
+after a raw credential has entered the pod must stop that actor and rotate the
+provider credential if needed.
 
 The initial launch regression tests were also run against unmodified upstream
 production code. They failed on template fallback, policy failure, hidden stop failure,

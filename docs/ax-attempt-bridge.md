@@ -48,13 +48,16 @@ persisted runtime binding and exact model grant to the activation callback. A
 changed input fences the actor without releasing credentials. This removes the
 shared-name dependency for a running attempt, but AX still permits privileged
 writers to mutate those attempt resources and the readback does not prove the
-Substrate dataplane. The signed release opens AX workspace setup; the runner
-creates the model credential file only after local setup completes, though the
-model payload is currently plaintext in runner memory during setup. The
-workflow remains `starting` while that happens. Dispatch waits for AX
-`WorkspaceReady=True/SetupComplete`, rechecks the same actor/runtime, and only
-then commits `attempt.started`. A setup failure or timeout triggers owner
-revocation and Task/actor-gone proof before retry. Stop removes the
+Substrate dataplane. The signed setup phase opens Workspace setup and can
+release only private-Git capability. The runner reports
+`WorkspaceReady=True/SetupComplete` and blocks before launching the worker.
+Dispatch rechecks the same actor/runtime and commits `attempt.started`; only
+then does it issue a fresh actor-attested model challenge and release the
+selected model lease. Phase is bound into the signed release, encrypted-envelope
+context, challenge row, and lease reservation. The runner decrypts the model
+key only after readiness and writes the credential file immediately before
+worker launch. A setup failure or timeout triggers owner revocation and
+Task/actor-gone proof before retry. Stop removes the
 Workspace and Gateway only after AX Task absence and Substrate actor absence
 are proved. An uncertain activation remains fenced for reconciliation. The
 callback is still not composed in the application or a connector process, so

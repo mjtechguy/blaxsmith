@@ -1,0 +1,654 @@
+diff --git a/runner/bootstrap.go b/runner/bootstrap.go
+index fed06ec..83d8e9c 100644
+--- a/runner/bootstrap.go
++++ b/runner/bootstrap.go
+@@ -28,20 +28,27 @@ import (
+ 
+ const bootstrapKeyEnv = "BLAXSMITH_BOOTSTRAP_PUBLIC_KEY"
+ const challengeTTL = 2 * time.Minute
++const (
++	setupPhase = "setup"
++	modelPhase = "model"
++)
+ 
+ // bootstrapGate only releases startup. It never accepts or stores credentials.
+ // The signer must independently verify the live actor before signing a release.
+ type bootstrapGate struct {
+-	key       ed25519.PublicKey
+-	atespace  string
+-	task      string
+-	mu        sync.Mutex
+-	nonce     string
+-	expires   time.Time
+-	recipient *ecdh.PrivateKey
+-	payload   []byte
+-	released  chan struct{}
+-	done      bool
++	key           ed25519.PublicKey
++	atespace      string
++	task          string
++	phase         string
++	requiresModel bool
++	mu            sync.Mutex
++	nonce         string
++	expires       time.Time
++	recipient     *ecdh.PrivateKey
++	payload       []byte
++	released      chan struct{}
++	phaseDone     bool
++	done          bool
+ }
+ 
+ func newBootstrapGate(task *v1alpha1.Task) (*bootstrapGate, error) {
+@@ -62,7 +69,9 @@ func newBootstrapGate(task *v1alpha1.Task) (*bootstrapGate, error) {
+ 	if meta.GetAtespace() == "" || meta.GetName() == "" {
+ 		return nil, fmt.Errorf("bootstrap task reference is required")
+ 	}
+-	return &bootstrapGate{key: key, atespace: meta.GetAtespace(), task: meta.GetName(), released: make(chan struct{})}, nil
++	requiresModel := requiresModelCredential(task.GetSpec().GetCommand())
++	return &bootstrapGate{key: key, atespace: meta.GetAtespace(), task: meta.GetName(), phase: setupPhase,
++		requiresModel: requiresModel, released: make(chan struct{})}, nil
+ }
+ 
+ func (g *bootstrapGate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+@@ -72,7 +81,7 @@ func (g *bootstrapGate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+ 			http.Error(w, "GET required", http.StatusMethodNotAllowed)
+ 			return
+ 		}
+-		g.challenge(w)
++		g.challenge(w, r)
+ 	case "/blaxsmith/bootstrap/release":
+ 		if r.Method != http.MethodPost {
+ 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+@@ -84,13 +93,18 @@ func (g *bootstrapGate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+ 	}
+ }
+ 
+-func (g *bootstrapGate) challenge(w http.ResponseWriter) {
++func (g *bootstrapGate) challenge(w http.ResponseWriter, r *http.Request) {
+ 	g.mu.Lock()
+-	if g.done {
++	if g.done || g.phaseDone {
+ 		g.mu.Unlock()
+ 		http.Error(w, "already released", http.StatusGone)
+ 		return
+ 	}
++	if r.URL.Query().Get("phase") != g.phase {
++		g.mu.Unlock()
++		http.Error(w, "bootstrap phase mismatch", http.StatusConflict)
++		return
++	}
+ 	if g.nonce == "" || !time.Now().Before(g.expires) {
+ 		var random [32]byte
+ 		if _, err := rand.Read(random[:]); err != nil {
+@@ -111,10 +125,11 @@ func (g *bootstrapGate) challenge(w http.ResponseWriter) {
+ 	response := struct {
+ 		Nonce        string `json:"nonce"`
+ 		ExpiresAt    int64  `json:"expires_at"`
++		Phase        string `json:"phase"`
+ 		Atespace     string `json:"atespace"`
+ 		Task         string `json:"task"`
+ 		RecipientKey string `json:"recipient_key"`
+-	}{g.nonce, g.expires.Unix(), g.atespace, g.task,
++	}{g.nonce, g.expires.Unix(), g.phase, g.atespace, g.task,
+ 		base64.RawURLEncoding.EncodeToString(g.recipient.PublicKey().Bytes())}
+ 	g.mu.Unlock()
+ 	w.Header().Set("Content-Type", "application/json")
+@@ -123,6 +138,7 @@ func (g *bootstrapGate) challenge(w http.ResponseWriter) {
+ 
+ func (g *bootstrapGate) release(w http.ResponseWriter, r *http.Request) {
+ 	var request struct {
++		Phase     string             `json:"phase"`
+ 		Nonce     string             `json:"nonce"`
+ 		ExpiresAt int64              `json:"expires_at"`
+ 		Signature string             `json:"signature"`
+@@ -144,13 +160,14 @@ func (g *bootstrapGate) release(w http.ResponseWriter, r *http.Request) {
+ 		return
+ 	}
+ 	g.mu.Lock()
+-	message := []byte("blaxsmith/bootstrap/release/v1\n" + request.Nonce + "\n" + strconv.FormatInt(request.ExpiresAt, 10) + "\n" + g.atespace + "\n" + g.task + "\n")
++	message := []byte("blaxsmith/bootstrap/release/v3\n" + request.Phase + "\n" + request.Nonce + "\n" + strconv.FormatInt(request.ExpiresAt, 10) + "\n" + g.atespace + "\n" + g.task + "\n")
+ 	if request.Envelope != nil {
+ 		encoded, _ := json.Marshal(request.Envelope)
+ 		digest := sha256.Sum256(encoded)
+-		message = []byte("blaxsmith/bootstrap/release/v2\n" + request.Nonce + "\n" + strconv.FormatInt(request.ExpiresAt, 10) + "\n" + g.atespace + "\n" + g.task + "\n" + base64.RawURLEncoding.EncodeToString(digest[:]) + "\n")
++		message = []byte("blaxsmith/bootstrap/release/v3\n" + request.Phase + "\n" + request.Nonce + "\n" + strconv.FormatInt(request.ExpiresAt, 10) + "\n" + g.atespace + "\n" + g.task + "\n" + base64.RawURLEncoding.EncodeToString(digest[:]) + "\n")
+ 	}
+-	if g.done || g.nonce == "" || request.Nonce != g.nonce || request.ExpiresAt != g.expires.Unix() || !time.Now().Before(g.expires) || !ed25519.Verify(g.key, message, signature) {
++	if g.done || g.phaseDone || request.Phase != g.phase || g.nonce == "" || request.Nonce != g.nonce ||
++		request.ExpiresAt != g.expires.Unix() || !time.Now().Before(g.expires) || !ed25519.Verify(g.key, message, signature) {
+ 		g.mu.Unlock()
+ 		http.Error(w, "release denied", http.StatusForbidden)
+ 		return
+@@ -164,7 +181,7 @@ func (g *bootstrapGate) release(w http.ResponseWriter, r *http.Request) {
+ 		}
+ 		g.payload = payload
+ 	}
+-	g.done = true
++	g.phaseDone = true
+ 	close(g.released)
+ 	g.mu.Unlock()
+ 	w.WriteHeader(http.StatusNoContent)
+@@ -210,7 +227,7 @@ func (g *bootstrapGate) open(envelope bootstrapEnvelope) ([]byte, error) {
+ 	if err != nil || len(ciphertext) > 32800 {
+ 		return nil, fmt.Errorf("invalid envelope ciphertext")
+ 	}
+-	context, _ := json.Marshal([]string{g.nonce, strconv.FormatInt(g.expires.Unix(), 10), g.atespace, g.task, base64.RawURLEncoding.EncodeToString(g.recipient.PublicKey().Bytes())})
++	context, _ := json.Marshal([]string{g.phase, g.nonce, strconv.FormatInt(g.expires.Unix(), 10), g.atespace, g.task, base64.RawURLEncoding.EncodeToString(g.recipient.PublicKey().Bytes())})
+ 	plain, err := aead.Open(nil, nonce, ciphertext, context)
+ 	if err != nil || len(plain) == 0 || len(plain) > 32768 {
+ 		return nil, fmt.Errorf("invalid envelope plaintext")
+@@ -218,13 +235,25 @@ func (g *bootstrapGate) open(envelope bootstrapEnvelope) ([]byte, error) {
+ 	return plain, nil
+ }
+ 
+-func (g *bootstrapGate) takePayload() []byte {
++func (g *bootstrapGate) takePayload(phase string) ([]byte, error) {
+ 	g.mu.Lock()
+ 	defer g.mu.Unlock()
++	if g.phase != phase || !g.phaseDone {
++		return nil, fmt.Errorf("bootstrap phase not released")
++	}
+ 	payload := g.payload
+ 	g.payload = nil
+ 	g.recipient = nil
+-	return payload
++	g.phaseDone = false
++	if phase == setupPhase && g.requiresModel {
++		g.phase = modelPhase
++		g.nonce = ""
++		g.expires = time.Time{}
++		g.released = make(chan struct{})
++	} else {
++		g.done = true
++	}
++	return payload, nil
+ }
+ 
+ func decodeGitPayload(payload []byte, workspaces []*v1alpha1.Workspace) (*workspace.GitCredential, error) {
+diff --git a/runner/bootstrap_stage_test.go b/runner/bootstrap_stage_test.go
+new file mode 100644
+index 0000000..22ff7fe
+--- /dev/null
++++ b/runner/bootstrap_stage_test.go
+@@ -0,0 +1,100 @@
++package runner
++
++import (
++	"crypto/ed25519"
++	"crypto/rand"
++	"encoding/base64"
++	"encoding/json"
++	"fmt"
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++
++	"github.com/google/ax/pkg/apis/v1alpha1"
++)
++
++func TestBootstrapGateSeparatesSetupAndModelPhases(t *testing.T) {
++	public, private, err := ed25519.GenerateKey(rand.Reader)
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv(bootstrapKeyEnv, base64.StdEncoding.EncodeToString(public))
++	task := &v1alpha1.Task{Metadata: &v1alpha1.ObjectMeta{Atespace: "space", Name: "task"},
++		Spec: &v1alpha1.TaskSpec{Command: []string{modelWorkerPath, `{"attempt_id":"a","profile":{"harness":"codex","model":"gpt-6-luna"}}`}}}
++	gate, err := newBootstrapGate(task)
++	if err != nil || gate == nil || !gate.requiresModel {
++		t.Fatalf("model bootstrap gate: %+v %v", gate, err)
++	}
++	server := httptest.NewServer(gate)
++	defer server.Close()
++	challenge := func(phase string) map[string]any {
++		t.Helper()
++		response, err := http.Get(server.URL + "/blaxsmith/bootstrap/challenge?phase=" + phase)
++		if err != nil {
++			t.Fatal(err)
++		}
++		defer response.Body.Close()
++		if response.StatusCode != http.StatusOK {
++			t.Fatalf("%s challenge status: %d", phase, response.StatusCode)
++		}
++		var body map[string]any
++		if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
++			t.Fatal(err)
++		}
++		if body["phase"] != phase || body["nonce"] == "" {
++			t.Fatalf("invalid %s challenge: %#v", phase, body)
++		}
++		return body
++	}
++	release := func(phase string, challenge map[string]any) int {
++		t.Helper()
++		nonce := challenge["nonce"].(string)
++		expires := int64(challenge["expires_at"].(float64))
++		message := []byte(fmt.Sprintf("blaxsmith/bootstrap/release/v3\n%s\n%s\n%d\nspace\ntask\n", phase, nonce, expires))
++		body, _ := json.Marshal(map[string]any{"phase": phase, "nonce": nonce, "expires_at": expires,
++			"signature": base64.StdEncoding.EncodeToString(ed25519.Sign(private, message))})
++		response, err := http.Post(server.URL+"/blaxsmith/bootstrap/release", "application/json", strings.NewReader(string(body)))
++		if err != nil {
++			t.Fatal(err)
++		}
++		defer response.Body.Close()
++		return response.StatusCode
++	}
++	setup := challenge(setupPhase)
++	if status := challengeStatus(t, server.URL, modelPhase); status != http.StatusConflict {
++		t.Fatalf("model phase opened before setup: %d", status)
++	}
++	if status := release(setupPhase, setup); status != http.StatusNoContent {
++		t.Fatalf("setup release status: %d", status)
++	}
++	if payload, err := gate.takePayload(setupPhase); err != nil || len(payload) != 0 {
++		t.Fatalf("empty public-Git setup payload: %q %v", payload, err)
++	}
++	if status := challengeStatus(t, server.URL, setupPhase); status != http.StatusConflict {
++		t.Fatalf("setup phase replayed: %d", status)
++	}
++	model := challenge(modelPhase)
++	if model["nonce"] == setup["nonce"] {
++		t.Fatal("setup and model phases reused a nonce")
++	}
++	if status := release(setupPhase, model); status != http.StatusForbidden {
++		t.Fatalf("setup signature opened model phase: %d", status)
++	}
++	if status := release(modelPhase, model); status != http.StatusNoContent {
++		t.Fatalf("model release status: %d", status)
++	}
++	if payload, err := gate.takePayload(modelPhase); err != nil || len(payload) != 0 {
++		t.Fatalf("empty model payload: %q %v", payload, err)
++	}
++}
++
++func challengeStatus(t *testing.T, baseURL, phase string) int {
++	t.Helper()
++	response, err := http.Get(baseURL + "/blaxsmith/bootstrap/challenge?phase=" + phase)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer response.Body.Close()
++	return response.StatusCode
++}
+diff --git a/runner/bootstrap_test.go b/runner/bootstrap_test.go
+index e5fb9c8..52739a4 100644
+--- a/runner/bootstrap_test.go
++++ b/runner/bootstrap_test.go
+@@ -51,7 +51,7 @@ func TestBlaxsmithBootstrapGatesWorkspaceAndCommand(t *testing.T) {
+ 	h.task.Spec.Command = []string{"touch", started}
+ 	h.start(t)
+ 	waitHealthy(t, h.cfg.Port)
+-	first := readChallenge(t, h.cfg.Port)
++	first := readChallenge(t, h.cfg.Port, "setup")
+ 	if _, err := os.Stat(filepath.Join(workspace.AXDir, workspace.MarkerName(h.wsPath))); !os.IsNotExist(err) {
+ 		t.Fatalf("workspace set up before release: %v", err)
+ 	}
+@@ -81,7 +81,7 @@ func TestBlaxsmithBootstrapGatesWorkspaceAndCommand(t *testing.T) {
+ 	clone.task.Spec.Command = []string{"touch", cloneStarted}
+ 	clone.start(t)
+ 	waitHealthy(t, clone.cfg.Port)
+-	second := readChallenge(t, clone.cfg.Port)
++	second := readChallenge(t, clone.cfg.Port, "setup")
+ 	if second.Nonce == first.Nonce {
+ 		t.Fatal("two runner instances reused the challenge")
+ 	}
+@@ -98,13 +98,21 @@ func TestBlaxsmithBootstrapGatesWorkspaceAndCommand(t *testing.T) {
+ type bootstrapChallenge struct {
+ 	Nonce     string `json:"nonce"`
+ 	ExpiresAt int64  `json:"expires_at"`
++	Phase     string `json:"phase"`
+ 	Atespace  string `json:"atespace"`
+ 	Task      string `json:"task"`
+ }
+ 
+-func readChallenge(t *testing.T, port int) bootstrapChallenge {
++func readChallenge(t *testing.T, port int, phases ...string) bootstrapChallenge {
+ 	t.Helper()
+-	response, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/blaxsmith/bootstrap/challenge", port))
++	phase := "setup"
++	if len(phases) > 1 {
++		t.Fatal("readChallenge accepts one phase")
++	}
++	if len(phases) == 1 {
++		phase = phases[0]
++	}
++	response, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/blaxsmith/bootstrap/challenge?phase=%s", port, phase))
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+@@ -116,16 +124,16 @@ func readChallenge(t *testing.T, port int) bootstrapChallenge {
+ 	if err := json.NewDecoder(response.Body).Decode(&challenge); err != nil {
+ 		t.Fatal(err)
+ 	}
+-	if challenge.Nonce == "" || challenge.ExpiresAt == 0 {
++	if challenge.Nonce == "" || challenge.ExpiresAt == 0 || challenge.Phase != phase {
+ 		t.Fatalf("invalid challenge: %+v", challenge)
+ 	}
+ 	return challenge
+ }
+ 
+ func signedRelease(c bootstrapChallenge, key ed25519.PrivateKey, task string) []byte {
+-	message := []byte(fmt.Sprintf("blaxsmith/bootstrap/release/v1\n%s\n%d\n%s\n%s\n", c.Nonce, c.ExpiresAt, c.Atespace, task))
++	message := []byte(fmt.Sprintf("blaxsmith/bootstrap/release/v3\n%s\n%s\n%d\n%s\n%s\n", c.Phase, c.Nonce, c.ExpiresAt, c.Atespace, task))
+ 	body, _ := json.Marshal(map[string]any{
+-		"nonce": c.Nonce, "expires_at": c.ExpiresAt,
++		"phase": c.Phase, "nonce": c.Nonce, "expires_at": c.ExpiresAt,
+ 		"signature": base64.StdEncoding.EncodeToString(ed25519.Sign(key, message)),
+ 	})
+ 	return body
+diff --git a/runner/model_credential.go b/runner/model_credential.go
+index 6b7a6b7..1dd2a5a 100644
+--- a/runner/model_credential.go
++++ b/runner/model_credential.go
+@@ -17,70 +17,61 @@ import (
+ )
+ 
+ const modelCredentialFile = "/run/blaxsmith/agent-credential.json"
++const modelWorkerPath = "/usr/local/bin/blaxsmith-tool-worker"
+ 
+-// A signed release may bundle independently authorized capabilities. Legacy
+-// single-capability payloads remain readable during a rolling upgrade.
+-func decodeBootstrapPayload(payload []byte, workspaces []*v1alpha1.Workspace, command []string) (*workspace.GitCredential, []byte, error) {
+-	var selector struct {
+-		Schema string `json:"schema"`
+-		Kind   string `json:"kind"`
+-	}
+-	if err := json.Unmarshal(payload, &selector); err != nil {
+-		return nil, nil, errors.New("invalid bootstrap payload")
+-	}
+-	if selector.Schema != "" {
+-		var bundle struct {
+-			Schema    string          `json:"schema"`
+-			AttemptID string          `json:"attempt_id"`
+-			Git       json.RawMessage `json:"git"`
+-			Model     json.RawMessage `json:"model"`
++func requiresModelCredential(command []string) bool {
++	return len(command) == 2 && command[0] == modelWorkerPath
++}
++
++// Setup and model credentials use distinct actor-attested phases. Git access
++// can prepare the frozen checkout; a model key is accepted only after AX has
++// reported workspace readiness.
++func decodeBootstrapPayload(payload []byte, workspaces []*v1alpha1.Workspace, command []string, phase string) (*workspace.GitCredential, []byte, error) {
++	if len(payload) == 0 {
++		return nil, nil, nil
++	}
++	var bundle struct {
++		Schema    string          `json:"schema"`
++		AttemptID string          `json:"attempt_id"`
++		Git       json.RawMessage `json:"git"`
++		Model     json.RawMessage `json:"model"`
++	}
++	d := json.NewDecoder(bytes.NewReader(payload))
++	d.DisallowUnknownFields()
++	if err := d.Decode(&bundle); err != nil || d.Decode(new(any)) != io.EOF ||
++		bundle.Schema != "blaxsmith.bootstrap-capabilities/v1alpha1" || bundle.AttemptID == "" {
++		return nil, nil, errors.New("invalid bootstrap capability bundle")
++	}
++	switch phase {
++	case setupPhase:
++		if len(bundle.Git) == 0 || len(bundle.Model) != 0 {
++			return nil, nil, errors.New("setup phase accepts only Git credentials")
+ 		}
+-		d := json.NewDecoder(bytes.NewReader(payload))
+-		d.DisallowUnknownFields()
+-		if err := d.Decode(&bundle); err != nil || d.Decode(new(any)) != io.EOF ||
+-			bundle.Schema != "blaxsmith.bootstrap-capabilities/v1alpha1" || bundle.AttemptID == "" ||
+-			len(bundle.Git) == 0 && len(bundle.Model) == 0 {
+-			return nil, nil, errors.New("invalid bootstrap capability bundle")
++		git, err := decodeGitPayload(bundle.Git, workspaces)
++		return git, nil, err
++	case modelPhase:
++		if len(bundle.Git) != 0 || len(bundle.Model) == 0 {
++			return nil, nil, errors.New("model phase accepts only model credentials")
+ 		}
+-		var git *workspace.GitCredential
+-		if len(bundle.Git) != 0 {
+-			var err error
+-			git, err = decodeGitPayload(bundle.Git, workspaces)
+-			if err != nil {
+-				return nil, nil, err
+-			}
++		model, err := decodeModelCredential(bundle.Model, command)
++		if err != nil {
++			return nil, nil, err
+ 		}
+-		var model []byte
+-		if len(bundle.Model) != 0 {
+-			var err error
+-			model, err = decodeModelCredential(bundle.Model, command)
+-			if err != nil {
+-				return nil, nil, err
+-			}
+-			var selected struct {
+-				AttemptID string `json:"attempt_id"`
+-			}
+-			if json.Unmarshal(model, &selected) != nil || selected.AttemptID != bundle.AttemptID {
+-				clear(model)
+-				return nil, nil, errors.New("bootstrap capabilities target different attempts")
+-			}
++		var selected struct {
++			AttemptID string `json:"attempt_id"`
+ 		}
+-		return git, model, nil
+-	}
+-	switch selector.Kind {
+-	case "":
+-		git, err := decodeGitPayload(payload, workspaces)
+-		return git, nil, err
+-	case "model_api_key":
+-		model, err := decodeModelCredential(payload, command)
+-		return nil, model, err
++		if json.Unmarshal(model, &selected) != nil || selected.AttemptID != bundle.AttemptID {
++			clear(model)
++			return nil, nil, errors.New("bootstrap capability targets another attempt")
++		}
++		return nil, model, nil
+ 	default:
+-		return nil, nil, errors.New("unsupported bootstrap capability")
++		return nil, nil, errors.New("unsupported bootstrap phase")
+ 	}
+ }
+ 
+ func decodeModelCredential(payload []byte, command []string) ([]byte, error) {
+-	if len(command) != 2 || command[0] != "/usr/local/bin/blaxsmith-tool-worker" {
++	if len(command) != 2 || command[0] != modelWorkerPath {
+ 		return nil, errors.New("model credential requires the pinned worker command")
+ 	}
+ 	var request struct {
+diff --git a/runner/model_credential_test.go b/runner/model_credential_test.go
+index a33fff0..125157a 100644
+--- a/runner/model_credential_test.go
++++ b/runner/model_credential_test.go
+@@ -13,38 +13,61 @@ import (
+ 
+ func TestModelCredentialNeedsMatchingPinnedCommandAndPrivateFile(t *testing.T) {
+ 	command := []string{"/usr/local/bin/blaxsmith-tool-worker", `{"attempt_id":"attempt-a","profile":{"harness":"codex","model":"gpt-6-luna"}}`}
+-	payload := func(attempt, provider string) []byte {
++	model := func(attempt, provider string) json.RawMessage {
+ 		t.Helper()
+ 		body, _ := json.Marshal(map[string]any{"kind": "model_api_key", "attempt_id": attempt,
+ 			"provider": provider, "expires_at": time.Now().Add(10 * time.Minute).Unix(), "api_key": "private-key"})
+ 		return body
+ 	}
+-	git, data, err := decodeBootstrapPayload(payload("attempt-a", "openai"), nil, command)
++	modelBundle, err := json.Marshal(map[string]any{"schema": "blaxsmith.bootstrap-capabilities/v1alpha1",
++		"attempt_id": "attempt-a", "model": model("attempt-a", "openai")})
++	if err != nil {
++		t.Fatal(err)
++	}
++	git, data, err := decodeBootstrapPayload(modelBundle, nil, command, modelPhase)
+ 	if err != nil || git != nil || strings.Contains(string(data), `"kind"`) || !strings.Contains(string(data), "private-key") {
+-		t.Fatalf("model payload decode: git=%v data=%q err=%v", git, data, err)
++		t.Fatalf("post-ready model payload decode: git=%v data=%q err=%v", git, data, err)
+ 	}
+ 	for _, candidate := range [][]string{{"/bin/sh", "-c", "true"}, {command[0], `{"attempt_id":"other","profile":{"harness":"codex","model":"gpt-6-luna"}}`}} {
+-		if _, _, err := decodeBootstrapPayload(payload("attempt-a", "openai"), nil, candidate); err == nil {
++		if _, _, err := decodeBootstrapPayload(modelBundle, nil, candidate, modelPhase); err == nil {
+ 			t.Fatalf("mismatched command accepted: %q", candidate)
+ 		}
+ 	}
+-	if _, _, err := decodeBootstrapPayload(payload("attempt-a", "anthropic"), nil, command); err == nil {
++	wrongProvider, _ := json.Marshal(map[string]any{"schema": "blaxsmith.bootstrap-capabilities/v1alpha1",
++		"attempt_id": "attempt-a", "model": model("attempt-a", "anthropic")})
++	if _, _, err := decodeBootstrapPayload(wrongProvider, nil, command, modelPhase); err == nil {
+ 		t.Fatal("wrong provider accepted")
+ 	}
++	if _, _, err := decodeBootstrapPayload(modelBundle, nil, command, setupPhase); err == nil {
++		t.Fatal("model credential accepted during workspace setup")
++	}
++	if !requiresModelCredential(command) || requiresModelCredential([]string{"sh", "-c", "true"}) {
++		t.Fatal("model-worker command gate is incorrect")
++	}
+ 	ws := &v1alpha1.Workspace{Spec: &v1alpha1.WorkspaceSpec{Git: []*v1alpha1.GitRepo{{
+ 		Repo: "https://github.com/owner/repo.git", Branch: "main",
+ 	}}}}
+-	bundle, err := json.Marshal(map[string]any{"schema": "blaxsmith.bootstrap-capabilities/v1alpha1",
++	setupBundle, err := json.Marshal(map[string]any{"schema": "blaxsmith.bootstrap-capabilities/v1alpha1",
+ 		"attempt_id": "attempt-a", "git": map[string]string{"repo_url": "https://github.com/owner/repo.git",
+-			"commit": strings.Repeat("a", 40), "username": "blaxsmith", "token": "private-git-token"},
+-		"model": json.RawMessage(payload("attempt-a", "openai"))})
++			"commit": strings.Repeat("a", 40), "username": "blaxsmith", "token": "private-git-token"}})
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+-	git, data, err = decodeBootstrapPayload(bundle, []*v1alpha1.Workspace{ws}, command)
+-	if err != nil || git == nil || git.RepoURL != "https://github.com/owner/repo.git" ||
+-		!strings.Contains(string(data), "private-key") {
+-		t.Fatalf("combined capabilities: git=%+v model=%q err=%v", git, data, err)
++	git, data, err = decodeBootstrapPayload(setupBundle, []*v1alpha1.Workspace{ws}, command, setupPhase)
++	if err != nil || git == nil || git.RepoURL != "https://github.com/owner/repo.git" || data != nil {
++		t.Fatalf("setup Git payload: git=%+v model=%q err=%v", git, data, err)
++	}
++	if _, _, err := decodeBootstrapPayload(setupBundle, []*v1alpha1.Workspace{ws}, command, modelPhase); err == nil {
++		t.Fatal("Git credential accepted during model release")
++	}
++	combined, _ := json.Marshal(map[string]any{"schema": "blaxsmith.bootstrap-capabilities/v1alpha1",
++		"attempt_id": "attempt-a", "git": json.RawMessage(`{"repo_url":"https://github.com/owner/repo.git","commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","username":"u","token":"t"}`),
++		"model": model("attempt-a", "openai")})
++	if _, _, err := decodeBootstrapPayload(combined, []*v1alpha1.Workspace{ws}, command, setupPhase); err == nil {
++		t.Fatal("combined capability phases accepted during setup")
++	}
++	if _, _, err := decodeBootstrapPayload(combined, []*v1alpha1.Workspace{ws}, command, modelPhase); err == nil {
++		t.Fatal("combined capability phases accepted during model release")
+ 	}
+ 	root := t.TempDir()
+ 	if err := os.Chmod(root, 0700); err != nil {
+diff --git a/runner/runner.go b/runner/runner.go
+index f8d7706..1f8edaa 100644
+--- a/runner/runner.go
++++ b/runner/runner.go
+@@ -147,11 +147,14 @@ func Run(ctx context.Context, cfg Config) error {
+ 
+ 	metadataURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+ 	_ = os.Setenv("AX_METADATA_URL", metadataURL)
++	cmdArgs := cfg.Task.GetSpec().GetCommand()
+ 	gate, err := newBootstrapGate(cfg.Task)
+ 	if err != nil {
+ 		return fmt.Errorf("configuring bootstrap gate: %w", err)
+ 	}
+-	cmdArgs := cfg.Task.GetSpec().GetCommand()
++	if requiresModelCredential(cmdArgs) && gate == nil {
++		return fmt.Errorf("model worker requires the platform bootstrap gate")
++	}
+ 	exitObserver := newCommandExitObserver(gate, cmdArgs)
+ 	for _, e := range cfg.Task.GetSpec().GetEnv() {
+ 		_ = os.Setenv(e.GetName(), e.GetValue())
+@@ -177,11 +180,13 @@ func Run(ctx context.Context, cfg Config) error {
+ 		}
+ 	}
+ 	var credential *workspace.GitCredential
+-	var modelCredential []byte
+ 	if gate != nil {
+-		payload := gate.takePayload()
++		payload, err := gate.takePayload(setupPhase)
++		if err != nil {
++			return err
++		}
+ 		if len(payload) != 0 {
+-			credential, modelCredential, err = decodeBootstrapPayload(payload, workspaces, cmdArgs)
++			credential, _, err = decodeBootstrapPayload(payload, workspaces, cmdArgs, setupPhase)
+ 			clear(payload)
+ 			if err != nil {
+ 				return fmt.Errorf("invalid bootstrap payload: %w", err)
+@@ -189,7 +194,6 @@ func Run(ctx context.Context, cfg Config) error {
+ 			if credential != nil {
+ 				defer credential.Clear()
+ 			}
+-			defer clear(modelCredential)
+ 		}
+ 	}
+ 
+@@ -213,6 +217,27 @@ func Run(ctx context.Context, cfg Config) error {
+ 		<-ctx.Done()
+ 		return nil
+ 	}
++	var modelCredential []byte
++	if gate != nil && gate.requiresModel {
++		select {
++		case <-gate.released:
++		case <-ctx.Done():
++			return nil
++		}
++		payload, err := gate.takePayload(modelPhase)
++		if err != nil {
++			return err
++		}
++		_, modelCredential, err = decodeBootstrapPayload(payload, workspaces, cmdArgs, modelPhase)
++		clear(payload)
++		if err != nil {
++			return fmt.Errorf("invalid post-readiness model credential: %w", err)
++		}
++		if modelCredential == nil {
++			return fmt.Errorf("post-readiness model credential missing")
++		}
++		defer clear(modelCredential)
++	}
+ 	hasModelCredential := modelCredential != nil
+ 	if hasModelCredential {
+ 		if err := writeModelCredential(modelCredentialFile, modelCredential); err != nil {
+
+diff --git a/runner/bootstrap_payload_test.go b/runner/bootstrap_payload_test.go
+--- a/runner/bootstrap_payload_test.go
++++ b/runner/bootstrap_payload_test.go
+@@ -34,7 +34,7 @@
+ 			t.Fatal(err)
+ 		}
+ 		server := httptest.NewServer(gate)
+-		response, err := http.Get(server.URL + "/blaxsmith/bootstrap/challenge")
++		response, err := http.Get(server.URL + "/blaxsmith/bootstrap/challenge?phase=setup")
+ 		if err != nil {
+ 			t.Fatal(err)
+ 		}
+@@ -55,8 +55,8 @@
+ 		expiry := int64(challenge["expires_at"].(float64))
+ 		encoded, _ := json.Marshal(envelope)
+ 		digest := sha256.Sum256(encoded)
+-		message := []byte(fmt.Sprintf("blaxsmith/bootstrap/release/v2\n%s\n%d\n%s\n%s\n%s\n", nonce, expiry, "team", "task", base64.RawURLEncoding.EncodeToString(digest[:])))
+-		body, _ := json.Marshal(map[string]any{"nonce": nonce, "expires_at": expiry, "signature": base64.StdEncoding.EncodeToString(ed25519.Sign(signer, message)), "envelope": envelope})
++		message := []byte(fmt.Sprintf("blaxsmith/bootstrap/release/v3\n%s\n%s\n%d\n%s\n%s\n%s\n", challenge["phase"].(string), nonce, expiry, "team", "task", base64.RawURLEncoding.EncodeToString(digest[:])))
++		body, _ := json.Marshal(map[string]any{"phase": challenge["phase"], "nonce": nonce, "expires_at": expiry, "signature": base64.StdEncoding.EncodeToString(ed25519.Sign(signer, message)), "envelope": envelope})
+ 		response, err := http.Post(server.URL+"/blaxsmith/bootstrap/release", "application/json", bytes.NewReader(body))
+ 		if err != nil {
+ 			t.Fatal(err)
+@@ -68,8 +68,8 @@
+ 	if status := release(server, challenge, envelope); status != http.StatusNoContent {
+ 		t.Fatalf("encrypted release status = %d", status)
+ 	}
+-	if got := gate.takePayload(); !bytes.Equal(got, plaintext) {
+-		t.Fatal("guest did not receive plaintext")
++	if got, err := gate.takePayload(setupPhase); err != nil || !bytes.Equal(got, plaintext) {
++		t.Fatalf("guest did not receive plaintext: %v", err)
+ 	}
+ 	if status := release(server, challenge, envelope); status != http.StatusForbidden {
+ 		t.Fatalf("replay status = %d", status)
+@@ -129,6 +129,6 @@
+ 	if _, err := rand.Read(iv); err != nil {
+ 		t.Fatal(err)
+ 	}
+-	context, _ := json.Marshal([]string{challenge["nonce"].(string), strconv.FormatInt(int64(challenge["expires_at"].(float64)), 10), "team", "task", challenge["recipient_key"].(string)})
++	context, _ := json.Marshal([]string{challenge["phase"].(string), challenge["nonce"].(string), strconv.FormatInt(int64(challenge["expires_at"].(float64)), 10), "team", "task", challenge["recipient_key"].(string)})
+ 	return bootstrapEnvelope{base64.RawURLEncoding.EncodeToString(eph.PublicKey().Bytes()), base64.RawURLEncoding.EncodeToString(iv), base64.RawURLEncoding.EncodeToString(aead.Seal(nil, iv, plaintext, context))}
+ }

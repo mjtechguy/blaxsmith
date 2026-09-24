@@ -177,8 +177,29 @@ func modelAttemptFixture(t *testing.T) (*pgxpool.Pool, *Ledger, *access.SecretSt
 	return pool, ledger, secrets, model, runtime, redeemed
 }
 
+func modelPhaseFixture(t *testing.T, pool *pgxpool.Pool, ledger *Ledger, model ModelAttempt) Redeemed {
+	t.Helper()
+	store, err := workflow.New(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ConfirmStarted(t.Context(), model.Attempt); err != nil {
+		t.Fatal(err)
+	}
+	offer, err := ledger.IssuePhase(t.Context(), model.Scope, PhaseModel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof, roots := signedProof(t, offer)
+	redeemed, err := ledger.Redeem(t.Context(), model.Scope, offer.ID, offer.Nonce, proof, roots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return redeemed
+}
+
 func TestModelAttemptCallbacksPostgres(t *testing.T) {
-	t.Run("model and git share one release", func(t *testing.T) {
+	t.Run("git setup precedes post-ready model release", func(t *testing.T) {
 		pool, ledger, secrets, model, runtime, redeemed := modelAttemptFixture(t)
 		const repoURL = "https://github.com/owner/repo.git"
 		commit := strings.Repeat("a", 40)
@@ -225,7 +246,7 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 		}
 		reserve := func(ctx context.Context, tx pgx.Tx) error { return connector.Reserve(ctx, tx, redeemed) }
 		_, err = ledger.Release(t.Context(), redeemed, reserve, func(ctx context.Context, tx pgx.Tx) error {
-			if err := connector.Authorize(ctx, tx, runtime); err != nil {
+			if err := connector.Authorize(ctx, tx, runtime, redeemed.Challenge); err != nil {
 				return err
 			}
 			git, err := connector.GitSetup(ctx, tx, runtime)
@@ -233,14 +254,12 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 				return err
 			}
 			defer clear(git.Token)
-			credential, err := connector.ModelCredential(ctx, tx, runtime)
-			if err != nil {
-				return err
-			}
-			defer clear(credential.APIKey)
 			if git.RepoURL != repoURL || git.Commit != commit || git.Username != "blaxsmith-test" ||
-				string(git.Token) != "private-git-token" || string(credential.APIKey) != "private-provider-key" {
+				string(git.Token) != "private-git-token" {
 				return ErrDenied
+			}
+			if _, err := connector.ModelCredential(ctx, tx, runtime); !errors.Is(err, ErrDenied) {
+				return errors.New("model credential was available during setup phase")
 			}
 			if err := ledger.BindActivation(ctx, tx, redeemed, runtime); err != nil {
 				return err
@@ -252,20 +271,49 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 		}
 		var count, delivered int
 		if err := pool.QueryRow(t.Context(), `SELECT count(*),count(*) FILTER (WHERE delivered_at IS NOT NULL)
-			FROM access_leases WHERE bootstrap_challenge_id=$1`, redeemed.ID).Scan(&count, &delivered); err != nil || count != 2 || delivered != 2 {
-			t.Fatalf("combined capability leases: count=%d delivered=%d err=%v", count, delivered, err)
+			FROM access_leases WHERE bootstrap_challenge_id=$1`, redeemed.ID).Scan(&count, &delivered); err != nil || count != 1 || delivered != 1 {
+			t.Fatalf("setup capability leases: count=%d delivered=%d err=%v", count, delivered, err)
+		}
+		modelRedeemed := modelPhaseFixture(t, pool, ledger, model)
+		reserveModel := func(ctx context.Context, tx pgx.Tx) error { return connector.Reserve(ctx, tx, modelRedeemed) }
+		_, err = ledger.Release(t.Context(), modelRedeemed, reserveModel, func(ctx context.Context, tx pgx.Tx) error {
+			if err := connector.Authorize(ctx, tx, runtime, modelRedeemed.Challenge); err != nil {
+				return err
+			}
+			credential, err := connector.ModelCredential(ctx, tx, runtime)
+			if err != nil {
+				return err
+			}
+			defer clear(credential.APIKey)
+			if string(credential.APIKey) != "private-provider-key" {
+				return ErrDenied
+			}
+			if err := ledger.BindActivation(ctx, tx, modelRedeemed, runtime); err != nil {
+				return err
+			}
+			return connector.Delivered(ctx, tx, modelRedeemed)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var phase string
+		if err := pool.QueryRow(t.Context(), `SELECT c.phase FROM access_leases l JOIN bootstrap_challenges c
+			ON c.id=l.bootstrap_challenge_id WHERE l.attempt_id=$1 AND l.capability='model.invoke'`,
+			model.Attempt.ID).Scan(&phase); err != nil || phase != PhaseModel {
+			t.Fatalf("model lease was not bound to model phase: %q %v", phase, err)
 		}
 	})
 
 	t.Run("same attempt release", func(t *testing.T) {
 		pool, ledger, secrets, model, runtime, redeemed := modelAttemptFixture(t)
+		redeemed = modelPhaseFixture(t, pool, ledger, model)
 		connector, err := NewModelAttemptConnector(Connector{Ledger: ledger}, pool, secrets, model)
 		if err != nil {
 			t.Fatal(err)
 		}
 		reserve := func(ctx context.Context, tx pgx.Tx) error { return connector.Reserve(ctx, tx, redeemed) }
 		_, err = ledger.Release(t.Context(), redeemed, reserve, func(ctx context.Context, tx pgx.Tx) error {
-			if err := connector.Authorize(ctx, tx, runtime); err != nil {
+			if err := connector.Authorize(ctx, tx, runtime, redeemed.Challenge); err != nil {
 				return err
 			}
 			credential, err := connector.ModelCredential(ctx, tx, runtime)
@@ -294,6 +342,7 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 	})
 	t.Run("grant revoked after intent", func(t *testing.T) {
 		pool, ledger, secrets, model, runtime, redeemed := modelAttemptFixture(t)
+		redeemed = modelPhaseFixture(t, pool, ledger, model)
 		connector, err := NewModelAttemptConnector(Connector{Ledger: ledger}, pool, secrets, model)
 		if err != nil {
 			t.Fatal(err)
@@ -303,7 +352,7 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 			if err := access.RevokeGrant(ctx, pool, model.Invoke.OrganizationID, "grant"); err != nil {
 				return err
 			}
-			return connector.Authorize(ctx, tx, runtime)
+			return connector.Authorize(ctx, tx, runtime, redeemed.Challenge)
 		})
 		if !errors.Is(err, access.ErrDenied) {
 			t.Fatalf("revocation before release was not fenced: %v", err)
@@ -317,6 +366,7 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 	})
 	t.Run("binding belongs to another attempt", func(t *testing.T) {
 		pool, ledger, secrets, model, _, redeemed := modelAttemptFixture(t)
+		redeemed = modelPhaseFixture(t, pool, ledger, model)
 		if _, err := pool.Exec(t.Context(), `INSERT INTO access_bindings
 			(organization_id,id,attempt_id,project_id,grant_id,grant_version,capability,resource,policy_version)
 			VALUES ($1,'other-binding','other-attempt',$2,'grant',1,'model.invoke','openai/gpt-6-luna',1)`,

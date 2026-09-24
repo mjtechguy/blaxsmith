@@ -23,6 +23,11 @@ type Scope struct {
 	OwnerGeneration int64
 }
 
+const (
+	PhaseSetup = "setup"
+	PhaseModel = "model"
+)
+
 type Actor struct {
 	Atespace string
 	Name     string
@@ -36,6 +41,7 @@ type Offer struct {
 	ActorAtespace string
 	ActorName     string
 	ActorUID      string
+	Phase         string
 	ExpiresAt     time.Time
 }
 
@@ -130,7 +136,16 @@ func (l *Ledger) CurrentOwner(ctx context.Context, clusterID, attemptID string) 
 // Issue returns a fresh connector nonce for the current execution owner.
 // Only its SHA-256 digest is persisted; a new offer cancels the old one.
 func (l *Ledger) Issue(ctx context.Context, scope Scope) (Offer, error) {
+	return l.IssuePhase(ctx, scope, PhaseSetup)
+}
+
+// IssuePhase binds a one-use actor challenge to either workspace setup or the
+// post-readiness model credential release.
+func (l *Ledger) IssuePhase(ctx context.Context, scope Scope, phase string) (Offer, error) {
 	if !validScope(scope) {
+		return Offer{}, ErrDenied
+	}
+	if phase != PhaseSetup && phase != PhaseModel {
 		return Offer{}, ErrDenied
 	}
 	tx, err := l.db.Begin(ctx)
@@ -169,16 +184,17 @@ func (l *Ledger) Issue(ctx context.Context, scope Scope) (Offer, error) {
 		return Offer{}, fmt.Errorf("cancel prior bootstrap challenge: %w", err)
 	}
 	err = tx.QueryRow(ctx, `INSERT INTO bootstrap_challenges
-		(id, cluster_id, attempt_id, owner_generation, actor_atespace, actor_name, actor_uid, nonce_sha256, expires_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,clock_timestamp()+interval '2 minutes') RETURNING expires_at`,
+		(id, cluster_id, attempt_id, owner_generation, actor_atespace, actor_name, actor_uid, nonce_sha256, expires_at, phase)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,clock_timestamp()+interval '2 minutes',$9) RETURNING expires_at`,
 		offer.ID, scope.ClusterID, scope.AttemptID, scope.OwnerGeneration,
-		offer.ActorAtespace, offer.ActorName, offer.ActorUID, nonceHash[:]).Scan(&offer.ExpiresAt)
+		offer.ActorAtespace, offer.ActorName, offer.ActorUID, nonceHash[:], phase).Scan(&offer.ExpiresAt)
 	if err != nil {
 		return Offer{}, fmt.Errorf("insert bootstrap challenge: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Offer{}, fmt.Errorf("commit bootstrap issue: %w", err)
 	}
+	offer.Phase = phase
 	return offer, nil
 }
 
@@ -210,12 +226,13 @@ func (l *Ledger) Redeem(ctx context.Context, scope Scope, id string, nonce [32]b
 	var storedHash []byte
 	var expiresAt, dbNow time.Time
 	var cancelled, consumed bool
+	var phase string
 	err = tx.QueryRow(ctx, `SELECT owner_generation, actor_atespace, actor_name, actor_uid,
-		nonce_sha256, expires_at, clock_timestamp(), cancelled_at IS NOT NULL, consumed_at IS NOT NULL
+		nonce_sha256, expires_at, clock_timestamp(), cancelled_at IS NOT NULL, consumed_at IS NOT NULL, phase
 		FROM bootstrap_challenges WHERE id=$1 AND cluster_id=$2 AND attempt_id=$3 FOR UPDATE`,
 		id, scope.ClusterID, scope.AttemptID).
 		Scan(&storedGeneration, &storedAtespace, &storedName, &storedUID,
-			&storedHash, &expiresAt, &dbNow, &cancelled, &consumed)
+			&storedHash, &expiresAt, &dbNow, &cancelled, &consumed, &phase)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Redeemed{}, ErrDenied
 	}
@@ -230,7 +247,7 @@ func (l *Ledger) Redeem(ctx context.Context, scope Scope, id string, nonce [32]b
 	}
 	challenge, err := Verify(Expected{Roots: roots, Atespace: ownerAtespace, ActorName: ownerName,
 		ActorUID: ownerUID, Nonce: nonce, Now: dbNow}, proof.Body, proof.CertificatePEM, proof.Signature)
-	if err != nil {
+	if err != nil || challenge.Phase != phase {
 		return Redeemed{}, ErrDenied
 	}
 	activationHash := sha256.Sum256([]byte(challenge.Nonce))
