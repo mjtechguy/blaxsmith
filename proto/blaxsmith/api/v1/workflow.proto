@@ -95,6 +95,11 @@ message LaunchRunRequest {
   string scope = 6; // Repository-relative code scope.
 }
 message LaunchRunResponse { Run run = 1; }
+message GetLaunchAvailabilityRequest { string project_id = 1; }
+message GetLaunchAvailabilityResponse {
+  bool enabled = 1;
+  string reason = 2; // Actionable when disabled; never contains secret material.
+}
 
 message RunTask {
   string id = 1;
@@ -201,6 +206,7 @@ service WorkflowService {
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
   rpc LaunchRun(LaunchRunRequest) returns (LaunchRunResponse);
+  rpc GetLaunchAvailability(GetLaunchAvailabilityRequest) returns (GetLaunchAvailabilityResponse);
   rpc ListRunTasks(ListRunTasksRequest) returns (ListRunTasksResponse);
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
   rpc EventsAfter(EventsAfterRequest) returns (EventsAfterResponse);

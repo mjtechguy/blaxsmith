@@ -6,6 +6,7 @@ migrationJob:
 image: "" # Immutable Dockerfile app target, repository@sha256:digest.
 imagePullPolicy: IfNotPresent
 imagePullSecrets: []
+runLaunchEnabled: false # Enable only when the dispatcher and credential release path are operating.
 origin: "" # Exact public HTTPS origin covered by tlsSecretName.
 tlsSecretName: "" # Existing kubernetes.io/tls Secret.
 signerSecretName: "" # Existing Secret with a 32-byte seed under key seed.

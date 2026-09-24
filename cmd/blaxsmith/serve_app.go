@@ -235,7 +235,9 @@ func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin,
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/api"+authPath, http.StripPrefix("/api", authHandler))
-	workflowPath, workflowHandler := apiv1connect.NewWorkflowServiceHandler(&workflowService{guard: guard, store: store}, connect.WithReadMaxBytes(1<<20))
+	workflowPath, workflowHandler := apiv1connect.NewWorkflowServiceHandler(&workflowService{
+		guard: guard, store: store, launchEnabled: os.Getenv("BLAXSMITH_RUN_LAUNCH_ENABLED") == "1",
+	}, connect.WithReadMaxBytes(1<<20))
 	mux.Handle("/api"+workflowPath, http.StripPrefix("/api", guard.Wrap(workflowHandler)))
 	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity}))
 	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(&catalogService{client: &http.Client{Timeout: 30 * time.Second}})

@@ -59,6 +59,9 @@ const (
 	// WorkflowServiceLaunchRunProcedure is the fully-qualified name of the WorkflowService's LaunchRun
 	// RPC.
 	WorkflowServiceLaunchRunProcedure = "/blaxsmith.api.v1.WorkflowService/LaunchRun"
+	// WorkflowServiceGetLaunchAvailabilityProcedure is the fully-qualified name of the
+	// WorkflowService's GetLaunchAvailability RPC.
+	WorkflowServiceGetLaunchAvailabilityProcedure = "/blaxsmith.api.v1.WorkflowService/GetLaunchAvailability"
 	// WorkflowServiceListRunTasksProcedure is the fully-qualified name of the WorkflowService's
 	// ListRunTasks RPC.
 	WorkflowServiceListRunTasksProcedure = "/blaxsmith.api.v1.WorkflowService/ListRunTasks"
@@ -90,6 +93,7 @@ type WorkflowServiceClient interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	LaunchRun(context.Context, *connect.Request[v1.LaunchRunRequest]) (*connect.Response[v1.LaunchRunResponse], error)
+	GetLaunchAvailability(context.Context, *connect.Request[v1.GetLaunchAvailabilityRequest]) (*connect.Response[v1.GetLaunchAvailabilityResponse], error)
 	ListRunTasks(context.Context, *connect.Request[v1.ListRunTasksRequest]) (*connect.Response[v1.ListRunTasksResponse], error)
 	ListRuns(context.Context, *connect.Request[v1.ListRunsRequest]) (*connect.Response[v1.ListRunsResponse], error)
 	EventsAfter(context.Context, *connect.Request[v1.EventsAfterRequest]) (*connect.Response[v1.EventsAfterResponse], error)
@@ -163,6 +167,12 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(workflowServiceMethods.ByName("LaunchRun")),
 			connect.WithClientOptions(opts...),
 		),
+		getLaunchAvailability: connect.NewClient[v1.GetLaunchAvailabilityRequest, v1.GetLaunchAvailabilityResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetLaunchAvailabilityProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetLaunchAvailability")),
+			connect.WithClientOptions(opts...),
+		),
 		listRunTasks: connect.NewClient[v1.ListRunTasksRequest, v1.ListRunTasksResponse](
 			httpClient,
 			baseURL+WorkflowServiceListRunTasksProcedure,
@@ -213,6 +223,7 @@ type workflowServiceClient struct {
 	listProjects           *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
 	getRun                 *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
 	launchRun              *connect.Client[v1.LaunchRunRequest, v1.LaunchRunResponse]
+	getLaunchAvailability  *connect.Client[v1.GetLaunchAvailabilityRequest, v1.GetLaunchAvailabilityResponse]
 	listRunTasks           *connect.Client[v1.ListRunTasksRequest, v1.ListRunTasksResponse]
 	listRuns               *connect.Client[v1.ListRunsRequest, v1.ListRunsResponse]
 	eventsAfter            *connect.Client[v1.EventsAfterRequest, v1.EventsAfterResponse]
@@ -266,6 +277,11 @@ func (c *workflowServiceClient) LaunchRun(ctx context.Context, req *connect.Requ
 	return c.launchRun.CallUnary(ctx, req)
 }
 
+// GetLaunchAvailability calls blaxsmith.api.v1.WorkflowService.GetLaunchAvailability.
+func (c *workflowServiceClient) GetLaunchAvailability(ctx context.Context, req *connect.Request[v1.GetLaunchAvailabilityRequest]) (*connect.Response[v1.GetLaunchAvailabilityResponse], error) {
+	return c.getLaunchAvailability.CallUnary(ctx, req)
+}
+
 // ListRunTasks calls blaxsmith.api.v1.WorkflowService.ListRunTasks.
 func (c *workflowServiceClient) ListRunTasks(ctx context.Context, req *connect.Request[v1.ListRunTasksRequest]) (*connect.Response[v1.ListRunTasksResponse], error) {
 	return c.listRunTasks.CallUnary(ctx, req)
@@ -307,6 +323,7 @@ type WorkflowServiceHandler interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	LaunchRun(context.Context, *connect.Request[v1.LaunchRunRequest]) (*connect.Response[v1.LaunchRunResponse], error)
+	GetLaunchAvailability(context.Context, *connect.Request[v1.GetLaunchAvailabilityRequest]) (*connect.Response[v1.GetLaunchAvailabilityResponse], error)
 	ListRunTasks(context.Context, *connect.Request[v1.ListRunTasksRequest]) (*connect.Response[v1.ListRunTasksResponse], error)
 	ListRuns(context.Context, *connect.Request[v1.ListRunsRequest]) (*connect.Response[v1.ListRunsResponse], error)
 	EventsAfter(context.Context, *connect.Request[v1.EventsAfterRequest]) (*connect.Response[v1.EventsAfterResponse], error)
@@ -376,6 +393,12 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		connect.WithSchema(workflowServiceMethods.ByName("LaunchRun")),
 		connect.WithHandlerOptions(opts...),
 	)
+	workflowServiceGetLaunchAvailabilityHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetLaunchAvailabilityProcedure,
+		svc.GetLaunchAvailability,
+		connect.WithSchema(workflowServiceMethods.ByName("GetLaunchAvailability")),
+		connect.WithHandlerOptions(opts...),
+	)
 	workflowServiceListRunTasksHandler := connect.NewUnaryHandler(
 		WorkflowServiceListRunTasksProcedure,
 		svc.ListRunTasks,
@@ -432,6 +455,8 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 			workflowServiceGetRunHandler.ServeHTTP(w, r)
 		case WorkflowServiceLaunchRunProcedure:
 			workflowServiceLaunchRunHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetLaunchAvailabilityProcedure:
+			workflowServiceGetLaunchAvailabilityHandler.ServeHTTP(w, r)
 		case WorkflowServiceListRunTasksProcedure:
 			workflowServiceListRunTasksHandler.ServeHTTP(w, r)
 		case WorkflowServiceListRunsProcedure:
@@ -487,6 +512,10 @@ func (UnimplementedWorkflowServiceHandler) GetRun(context.Context, *connect.Requ
 
 func (UnimplementedWorkflowServiceHandler) LaunchRun(context.Context, *connect.Request[v1.LaunchRunRequest]) (*connect.Response[v1.LaunchRunResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.LaunchRun is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetLaunchAvailability(context.Context, *connect.Request[v1.GetLaunchAvailabilityRequest]) (*connect.Response[v1.GetLaunchAvailabilityResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetLaunchAvailability is not implemented"))
 }
 
 func (UnimplementedWorkflowServiceHandler) ListRunTasks(context.Context, *connect.Request[v1.ListRunTasksRequest]) (*connect.Response[v1.ListRunTasksResponse], error) {

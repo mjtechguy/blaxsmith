@@ -20,8 +20,9 @@ import (
 )
 
 type workflowService struct {
-	guard *identity.BrowserGuard
-	store *workflow.Store
+	guard         *identity.BrowserGuard
+	store         *workflow.Store
+	launchEnabled bool
 }
 
 type pageCursor struct {
@@ -173,6 +174,9 @@ func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[ap
 	if err != nil {
 		return nil, err
 	}
+	if !s.launchEnabled {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("run dispatcher is not connected on this installation"))
+	}
 	if caller.Role != "owner" && caller.Role != "admin" && caller.Role != "member" {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("run launch denied"))
 	}
@@ -204,6 +208,31 @@ func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[ap
 		return nil, workflowError(err)
 	}
 	return connect.NewResponse(&api.LaunchRunResponse{Run: runMessage(run)}), nil
+}
+
+func (s *workflowService) GetLaunchAvailability(ctx context.Context, req *connect.Request[api.GetLaunchAvailabilityRequest]) (*connect.Response[api.GetLaunchAvailabilityResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.store.GetProject(ctx, caller.OrganizationID, req.Msg.ProjectId); err != nil {
+		return nil, workflowError(err)
+	}
+	response := &api.GetLaunchAvailabilityResponse{}
+	if !s.launchEnabled {
+		response.Reason = "Run dispatcher is not connected on this installation."
+	} else if _, err := s.store.GetProjectSource(ctx, caller.OrganizationID, req.Msg.ProjectId); errors.Is(err, workflow.ErrNotFound) {
+		response.Reason = "Add a Git source before launching a run."
+	} else if err != nil {
+		return nil, workflowError(err)
+	} else if _, err := s.store.GetProjectVerification(ctx, caller.OrganizationID, req.Msg.ProjectId); errors.Is(err, workflow.ErrNotFound) {
+		response.Reason = "Set project verification checks before launching a run."
+	} else if err != nil {
+		return nil, workflowError(err)
+	} else {
+		response.Enabled = true
+	}
+	return connect.NewResponse(response), nil
 }
 
 func (s *workflowService) ListRunTasks(ctx context.Context, req *connect.Request[api.ListRunTasksRequest]) (*connect.Response[api.ListRunTasksResponse], error) {
