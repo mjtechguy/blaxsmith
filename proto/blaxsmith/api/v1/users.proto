@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package blaxsmith.api.v1;
+
+// Organization member management for owners and admins, plus the public
+// account-link endpoints that complete setup and reset without SMTP. Tokens
+// appear only in the response that issues them and are never stored raw.
+
+message OrgMember {
+  string principal_id = 1;
+  string username = 2;
+  string display_name = 3;
+  string role = 4; // owner, admin, member, or viewer.
+  string status = 5; // invited (no password yet), active, or disabled.
+  int32 active_sessions = 6;
+  string last_login_at = 7; // RFC 3339 of the latest session; empty if never.
+  string created_at = 8;
+}
+
+// A single-use setup or reset link, shown once to the issuing admin. The
+// browser path is /setup/<token>.
+message AccountLink {
+  string token = 1;
+  string purpose = 2; // setup or reset.
+  string expires_at = 3; // RFC 3339.
+}
+
+message ListOrgMembersRequest {}
+message ListOrgMembersResponse { repeated OrgMember members = 1; }
+
+message InviteUserRequest {
+  string username = 1;
+  string display_name = 2;
+  string role = 3; // Only an owner can invite an owner.
+}
+message InviteUserResponse {
+  string principal_id = 1;
+  AccountLink link = 2;
+}
+
+// Changing a role revokes the member's sessions. Only owners grant owner or
+// change an owner; the last owner who can sign in cannot be demoted.
+message SetUserRoleRequest {
+  string principal_id = 1;
+  string role = 2;
+}
+message SetUserRoleResponse {}
+
+// Disabling revokes sessions and open links; the last owner cannot be
+// disabled and nobody can disable themselves.
+message SetUserEnabledRequest {
+  string principal_id = 1;
+  bool enabled = 2;
+}
+message SetUserEnabledResponse {}
+
+message IssueResetLinkRequest { string principal_id = 1; }
+message IssueResetLinkResponse { AccountLink link = 1; }
+
+message RevokeUserSessionsRequest { string principal_id = 1; }
+message RevokeUserSessionsResponse { int64 revoked = 1; }
+
+// Public: no session required. Unknown, used, revoked, and expired links all
+// return NOT_FOUND.
+message GetAccountLinkRequest { string token = 1; }
+message GetAccountLinkResponse {
+  string purpose = 1;
+  string username = 2;
+  string display_name = 3;
+  string organization_slug = 4;
+  string organization_name = 5;
+  string expires_at = 6;
+}
+
+// Public, CSRF-protected. Sets the password, consumes the link, and revokes
+// every existing session of the account.
+message CompleteAccountLinkRequest {
+  string token = 1;
+  string password = 2;
+}
+message CompleteAccountLinkResponse {
+  string organization_slug = 1;
+  string username = 2;
+}
+
+service UserAdminService {
+  rpc ListOrgMembers(ListOrgMembersRequest) returns (ListOrgMembersResponse);
+  rpc InviteUser(InviteUserRequest) returns (InviteUserResponse);
+  rpc SetUserRole(SetUserRoleRequest) returns (SetUserRoleResponse);
+  rpc SetUserEnabled(SetUserEnabledRequest) returns (SetUserEnabledResponse);
+  rpc IssueResetLink(IssueResetLinkRequest) returns (IssueResetLinkResponse);
+  rpc RevokeUserSessions(RevokeUserSessionsRequest) returns (RevokeUserSessionsResponse);
+  rpc GetAccountLink(GetAccountLinkRequest) returns (GetAccountLinkResponse);
+  rpc CompleteAccountLink(CompleteAccountLinkRequest) returns (CompleteAccountLinkResponse);
+}

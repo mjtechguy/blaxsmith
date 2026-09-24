@@ -76,6 +76,16 @@ func (g *BrowserGuard) Caller(ctx context.Context, header http.Header, mutation 
 	return caller, nil
 }
 
+// CheckRequest applies the same origin (and, for mutations, CSRF) checks as
+// Caller without requiring a session, for public account-link endpoints.
+func (g *BrowserGuard) CheckRequest(header http.Header, mutation bool) error {
+	s := browserService{manager: g.manager, origin: g.origin}
+	if mutation {
+		return s.checkCSRF(header)
+	}
+	return s.checkOrigin(header)
+}
+
 // StreamCaller accepts the headers native same-origin EventSource sends. It
 // cannot set the custom Origin header required by Connect read requests.
 func (g *BrowserGuard) StreamCaller(ctx context.Context, header http.Header) (Caller, error) {

@@ -306,6 +306,13 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	adminPath, adminHandler := apiv1connect.NewAdminServiceHandler(newAdminService(guard, store, dispatchConfig.workerPool),
 		connect.WithReadMaxBytes(1<<16))
 	mux.Handle("/api"+adminPath, http.StripPrefix("/api", guard.Wrap(adminHandler)))
+	users, err := identity.NewUserAdmin(pool)
+	if err != nil {
+		return nil, nil, err
+	}
+	usersPath, usersHandler := apiv1connect.NewUserAdminServiceHandler(&userAdminService{guard: guard, users: users},
+		connect.WithReadMaxBytes(1<<14))
+	mux.Handle("/api"+usersPath, http.StripPrefix("/api", guard.Wrap(usersHandler)))
 	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity}))
 	mux.Handle("/api/terminal/attempts/{attemptID}", guard.Wrap(newTerminalHandler(guard, origin, store, guests, terminals)))
 	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(&catalogService{client: &http.Client{Timeout: 30 * time.Second}})
@@ -352,6 +359,11 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 				return
 			}
 			w.Header().Set("X-Content-Type-Options", "nosniff")
+			if strings.HasPrefix(r.URL.Path, "/setup/") {
+				// The path carries a one-time account token.
+				w.Header().Set("Referrer-Policy", "no-referrer")
+				w.Header().Set("Cache-Control", "no-store")
+			}
 			if r.URL.Path == "/" || (filepath.Ext(r.URL.Path) == "" && !strings.HasPrefix(r.URL.Path, "/assets/")) {
 				http.ServeFile(w, r, index)
 				return
