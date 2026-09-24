@@ -10,8 +10,10 @@ RUN printf '%s\n' \
       > /etc/apt/sources.list \
     && rm -f /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends git ca-certificates tmux bsdutils \
+    && rm -rf /var/lib/apt/lists/* \
+    && tmux -V | awk '{ split($2, v, "."); if (v[1] < 3 || (v[1] == 3 && v[2] + 0 < 2)) { print "tmux 3.2+ required (attach -f ignore-size), got " $0; exit 1 } }' \
+    && script --version
 
 COPY --from=binaries --chmod=0755 /ax-task-runner /usr/local/bin/ax-task-runner
 COPY --from=binaries --chmod=0755 /blaxsmith-tool-worker /usr/local/bin/blaxsmith-tool-worker
@@ -19,6 +21,7 @@ COPY --from=binaries --chmod=0755 /blaxsmith-git-askpass /usr/local/bin/blaxsmit
 COPY --from=binaries /blaxsmith-git-ca.pem /tmp/blaxsmith-git-ca.pem
 COPY deploy/tool-worker/manifest.mjs /opt/blaxsmith/manifest.mjs
 RUN mkdir -p /run/blaxsmith /workspace \
+    && ln -s blaxsmith-tool-worker /usr/local/bin/bx \
     && chmod 0700 /run/blaxsmith \
     && cp /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/blaxsmith-git-ca.pem \
     && if [ -s /tmp/blaxsmith-git-ca.pem ]; then cat /tmp/blaxsmith-git-ca.pem >> /etc/ssl/certs/blaxsmith-git-ca.pem; fi \

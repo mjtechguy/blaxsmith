@@ -66,6 +66,7 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 		return Run{}, err
 	}
 	defer tx.Rollback(ctx)
+	var gitConnectionID string // frozen private-source connection; empty = public
 	if in.Caller != nil {
 		caller := *in.Caller
 		if caller.OrganizationID != in.OrganizationID || !ids(caller.PrincipalID, caller.SessionID) ||
@@ -93,9 +94,9 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 			return Run{}, err
 		}
 		var repositoryURL, sourceRef string
-		err = tx.QueryRow(ctx, `SELECT repository_url,git_ref FROM workflow_project_sources
+		err = tx.QueryRow(ctx, `SELECT repository_url,git_ref,COALESCE(git_connection_id,'') FROM workflow_project_sources
 			WHERE organization_id=$1 AND project_id=$2 FOR SHARE`, in.OrganizationID, in.ProjectID).
-			Scan(&repositoryURL, &sourceRef)
+			Scan(&repositoryURL, &sourceRef, &gitConnectionID)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && (repositoryURL != in.SourceRepositoryURL || sourceRef != in.SourceRef)) {
 			return Run{}, ErrConflict
 		}
@@ -154,9 +155,9 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 		return Run{}, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO workflow_run_bundles
-		(organization_id,run_id,bundle_json,verification_json,repository_url,git_ref)
-		VALUES ($1,$2,$3,$4,NULLIF($5,''),CASE WHEN $5='' THEN NULL ELSE $6 END)`,
-		in.OrganizationID, run.ID, bundleJSON, policyJSON, in.SourceRepositoryURL, in.SourceRef); err != nil {
+		(organization_id,run_id,bundle_json,verification_json,repository_url,git_ref,git_connection_id)
+		VALUES ($1,$2,$3,$4,NULLIF($5,''),CASE WHEN $5='' THEN NULL ELSE $6 END,NULLIF($7,''))`,
+		in.OrganizationID, run.ID, bundleJSON, policyJSON, in.SourceRepositoryURL, in.SourceRef, gitConnectionID); err != nil {
 		return Run{}, err
 	}
 	stageByID := make(map[string]recipe.Stage, len(bundle.Recipe.Stages))

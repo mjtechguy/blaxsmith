@@ -17,7 +17,7 @@ async function visit(dir) {
     if (path !== main && /import\s+["'][^"']+\.css["']/.test(source)) failures.push(`${relative(src, path)}: stylesheet import outside main`);
     if (path !== table && /<(?:table|thead|tbody|tr|th|td)(?=[\s/>])/.test(source)) failures.push(`${relative(src, path)}: use DataTable`);
     if (/\bstyle\s*=\s*\{/.test(source)) failures.push(`${relative(src, path)}: use global CSS classes`);
-    if (/\b(?:window\.)?(?:alert|confirm|prompt|open)\s*\(/.test(source)) failures.push(`${relative(src, path)}: use routed UI or app confirmation`);
+    if (/(?<![\w.])(?:window\.)?(?:alert|confirm|prompt|open)\s*\(/.test(source)) failures.push(`${relative(src, path)}: use routed UI or app confirmation`);
   }
 }
 

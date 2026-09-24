@@ -27,7 +27,10 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
 	"github.com/mjtechguy/blaxsmith/internal/dispatch"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/terminal"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var dispatchSHA256 = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -153,11 +156,19 @@ func validPort(value string) bool {
 type productDispatch struct {
 	Dispatcher *dispatch.Dispatcher
 	Activator  *dispatch.ModelActivator
-	ax         axbridge.CLI
+	Completion *axbridge.CompletionSweep
+	Recovery   *axbridge.RecoverySweep
+	Workflow   *workflow.Store
+	// Escalations receives loop/human-review cap escalations; nil leaves
+	// them durable and unraised until the interaction sink is wired.
+	Escalations workflow.EscalationSink
+	// RenewLeases extends still-authorized model leases; nil without guests.
+	RenewLeases func(context.Context)
+	ax          axbridge.CLI
 }
 
 func newProductDispatch(ctx context.Context, config dispatchConfig, pool *pgxpool.Pool,
-	store *workflow.Store, secrets *access.SecretStore) (*productDispatch, error) {
+	store *workflow.Store, secrets *access.SecretStore, guests *terminal.Router) (*productDispatch, error) {
 	if pool == nil || store == nil || secrets == nil {
 		return nil, errors.New("dispatch requires workflow storage and access credential custody")
 	}
@@ -230,7 +241,37 @@ func newProductDispatch(ctx context.Context, config dispatchConfig, pool *pgxpoo
 		Activate:            activator.Activate,
 		ReleaseModel:        activator.ReleaseModel,
 	}
-	result := &productDispatch{Dispatcher: d, Activator: activator, ax: ax}
+	// Completion signs current-actor exit readbacks with the connector key.
+	reader := &axbridge.CommandExitReader{Client: client, RouterURL: config.routerURL,
+		Token: func(context.Context) (string, error) { return dispatchToken(config.bootstrapTokenFile) }}
+	ledger := bootstrap.NewLedger(pool)
+	completion := &axbridge.CompletionSweep{Workflow: store,
+		Connector: func(ctx context.Context, attempt workflow.Attempt) (*axbridge.CommandExitConnector, error) {
+			bridge, err := d.AttemptBridge(ctx, attempt)
+			if err != nil {
+				return nil, err
+			}
+			return &axbridge.CommandExitConnector{Bridge: bridge, Reader: reader, Activation: ledger,
+				ClusterID: config.clusterID, Signer: signer,
+				Collector: workflow.CommandExitCollector{Store: store, SignerID: bridge.Pool + "/connector",
+					PublicKey: signer.Public().(ed25519.PublicKey), WorkerPool: bridge.Pool}}, nil
+		}}
+	if guests != nil {
+		completion.Result = func(ctx context.Context, a workflow.Attempt) ([]byte, error) {
+			data, err := readAttemptGuestFile(ctx, store, guests, a, attemptResultPath, attemptResultMax)
+			if status.Code(err) == codes.NotFound {
+				return nil, nil // the guest wrote no result
+			}
+			return data, err
+		}
+		completion.Deliver = (&runBranchDelivery{store: store, readBundle: guestBundleReader(store, guests),
+			remote: gitWriteRemote(pool, secrets)}).Deliver
+	}
+	result := &productDispatch{Dispatcher: d, Activator: activator, ax: ax, Workflow: store, Completion: completion,
+		Recovery: &axbridge.RecoverySweep{Workflow: store, Bridge: d.AttemptBridge}}
+	if guests != nil {
+		result.RenewLeases = leaseRenewer(pool, store, guests, mustParseDuration(config.leaseTTL))
+	}
 	if err := result.Preflight(ctx); err != nil {
 		result.Close()
 		return nil, err

@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file blaxsmith/api/v1/workflow.proto.
  */
 export const file_blaxsmith_api_v1_workflow: GenFile = /*@__PURE__*/
-  fileDesc("Ch9ibGF4c21pdGgvYXBpL3YxL3dvcmtmbG93LnByb3RvEhBibGF4c21pdGguYXBpLnYxIkUKB1Byb2plY3QSCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEhIKCmNyZWF0ZWRfYXQYBCABKAkipwEKA1J1bhIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhIKCmxhdW5jaF9rZXkYAyABKAkSFQoNc291cmNlX2NvbW1pdBgEIAEoCRIVCg1idW5kbGVfc2hhMjU2GAUgASgJEhsKE3ZlcmlmaWNhdGlvbl9zaGEyNTYYBiABKAkSDQoFc3RhdGUYByABKAkSEgoKY3JlYXRlZF9hdBgIIAEoCSJzCg1Xb3JrZmxvd0V2ZW50EgoKAmlkGAEgASgDEg4KBnJ1bl9pZBgCIAEoCRIPCgd0YXNrX2lkGAMgASgJEhIKCmF0dGVtcHRfaWQYBCABKAkSDAoEa2luZBgFIAEoCRITCgtvY2N1cnJlZF9hdBgGIAEoCSIyChRDcmVhdGVQcm9qZWN0UmVxdWVzdBIMCgRzbHVnGAEgASgJEgwKBG5hbWUYAiABKAkiQwoVQ3JlYXRlUHJvamVjdFJlc3BvbnNlEioKB3Byb2plY3QYASABKAsyGS5ibGF4c21pdGguYXBpLnYxLlByb2plY3QiJwoRR2V0UHJvamVjdFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCSJAChJHZXRQcm9qZWN0UmVzcG9uc2USKgoHcHJvamVjdBgBIAEoCzIZLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdCJcCg1Qcm9qZWN0U291cmNlEhIKCnByb2plY3RfaWQYASABKAkSFgoOcmVwb3NpdG9yeV91cmwYAiABKAkSCwoDcmVmGAMgASgJEhIKCnVwZGF0ZWRfYXQYBCABKAkiLQoXR2V0UHJvamVjdFNvdXJjZVJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCSJLChhHZXRQcm9qZWN0U291cmNlUmVzcG9uc2USLwoGc291cmNlGAEgASgLMh8uYmxheHNtaXRoLmFwaS52MS5Qcm9qZWN0U291cmNlIlIKF1NldFByb2plY3RTb3VyY2VSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSFgoOcmVwb3NpdG9yeV91cmwYAiABKAkSCwoDcmVmGAMgASgJIksKGFNldFByb2plY3RTb3VyY2VSZXNwb25zZRIvCgZzb3VyY2UYASABKAsyHy5ibGF4c21pdGguYXBpLnYxLlByb2plY3RTb3VyY2UiMAoRVmVyaWZpY2F0aW9uQ2hlY2sSCgoCaWQYASABKAkSDwoHY29tbWFuZBgCIAMoCSKDAQoTUHJvamVjdFZlcmlmaWNhdGlvbhISCgpwcm9qZWN0X2lkGAEgASgJEg8KB3ZlcnNpb24YAiABKAMSMwoGY2hlY2tzGAMgAygLMiMuYmxheHNtaXRoLmFwaS52MS5WZXJpZmljYXRpb25DaGVjaxISCgp1cGRhdGVkX2F0GAQgASgJIjMKHUdldFByb2plY3RWZXJpZmljYXRpb25SZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkiXQoeR2V0UHJvamVjdFZlcmlmaWNhdGlvblJlc3BvbnNlEjsKDHZlcmlmaWNhdGlvbhgBIAEoCzIlLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdFZlcmlmaWNhdGlvbiJoCh1TZXRQcm9qZWN0VmVyaWZpY2F0aW9uUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEjMKBmNoZWNrcxgCIAMoCzIjLmJsYXhzbWl0aC5hcGkudjEuVmVyaWZpY2F0aW9uQ2hlY2siXQoeU2V0UHJvamVjdFZlcmlmaWNhdGlvblJlc3BvbnNlEjsKDHZlcmlmaWNhdGlvbhgBIAEoCzIlLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdFZlcmlmaWNhdGlvbiKSAQoSUHJvamVjdE1vZGVsQWNjZXNzEgoKAmlkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSEAoIcHJvdmlkZXIYAyABKAkSDQoFbW9kZWwYBCABKAkSFQoNY29ubmVjdGlvbl9pZBgFIAEoCRIQCghncmFudF9pZBgGIAEoCRISCgpjcmVhdGVkX2F0GAcgASgJIjMKHUxpc3RQcm9qZWN0TW9kZWxBY2Nlc3NSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkiVgoeTGlzdFByb2plY3RNb2RlbEFjY2Vzc1Jlc3BvbnNlEjQKBmFjY2VzcxgBIAMoCzIkLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdE1vZGVsQWNjZXNzImcKH0NyZWF0ZVByb2plY3RNb2RlbEFjY2Vzc1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIQCghwcm92aWRlchgCIAEoCRINCgVtb2RlbBgDIAEoCRIPCgdhcGlfa2V5GAQgASgJIlgKIENyZWF0ZVByb2plY3RNb2RlbEFjY2Vzc1Jlc3BvbnNlEjQKBmFjY2VzcxgBIAEoCzIkLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdE1vZGVsQWNjZXNzIjQKH1Jldm9rZVByb2plY3RNb2RlbEFjY2Vzc1JlcXVlc3QSEQoJYWNjZXNzX2lkGAEgASgJIjUKIFJldm9rZVByb2plY3RNb2RlbEFjY2Vzc1Jlc3BvbnNlEhEKCWFjY2Vzc19pZBgBIAEoCSJ1ChNMaXN0UHJvamVjdHNSZXF1ZXN0EhEKCXBhZ2Vfc2l6ZRgBIAEoBRISCgpwYWdlX3Rva2VuGAIgASgJEg4KBnNlYXJjaBgDIAEoCRIPCgdzb3J0X2J5GAQgASgJEhYKDnNvcnRfZGlyZWN0aW9uGAUgASgJIlwKFExpc3RQcm9qZWN0c1Jlc3BvbnNlEisKCHByb2plY3RzGAEgAygLMhkuYmxheHNtaXRoLmFwaS52MS5Qcm9qZWN0EhcKD25leHRfcGFnZV90b2tlbhgCIAEoCSIfCg1HZXRSdW5SZXF1ZXN0Eg4KBnJ1bl9pZBgBIAEoCSI0Cg5HZXRSdW5SZXNwb25zZRIiCgNydW4YASABKAsyFS5ibGF4c21pdGguYXBpLnYxLlJ1biKKAQoQTGF1bmNoUnVuUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhIKCmxhdW5jaF9rZXkYAiABKAkSEwoLcmVjaXBlX3BhdGgYAyABKAkSEQoJc3BlY19wYXRoGAQgASgJEhcKD3RyYW5zY3JpcHRfcGF0aBgFIAEoCRINCgVzY29wZRgGIAEoCSI3ChFMYXVuY2hSdW5SZXNwb25zZRIiCgNydW4YASABKAsyFS5ibGF4c21pdGguYXBpLnYxLlJ1biIyChxHZXRMYXVuY2hBdmFpbGFiaWxpdHlSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkiQAodR2V0TGF1bmNoQXZhaWxhYmlsaXR5UmVzcG9uc2USDwoHZW5hYmxlZBgBIAEoCBIOCgZyZWFzb24YAiABKAkisAIKB1J1blRhc2sSCgoCaWQYASABKAkSCwoDa2V5GAIgASgJEg0KBXN0YXRlGAMgASgJEhIKCmdlbmVyYXRpb24YBCABKAMSFAoMbWF4X2F0dGVtcHRzGAUgASgFEhkKEWFjdGl2ZV9hdHRlbXB0X2lkGAYgASgJEhIKCmRlcGVuZHNfb24YByADKAkSDwoHaGFybmVzcxgIIAEoCRINCgVtb2RlbBgJIAEoCRIOCgZlZmZvcnQYCiABKAkSPAoRaW5zdHJ1Y3Rpb25fZmlsZXMYCyADKAsyIS5ibGF4c21pdGguYXBpLnYxLkZyb3plbklucHV0RmlsZRI2Cgtza2lsbF9maWxlcxgMIAMoCzIhLmJsYXhzbWl0aC5hcGkudjEuRnJvemVuSW5wdXRGaWxlIi8KD0Zyb3plbklucHV0RmlsZRIMCgRwYXRoGAEgASgJEg4KBnNoYTI1NhgCIAEoCSIlChNMaXN0UnVuVGFza3NSZXF1ZXN0Eg4KBnJ1bl9pZBgBIAEoCSJAChRMaXN0UnVuVGFza3NSZXNwb25zZRIoCgV0YXNrcxgBIAMoCzIZLmJsYXhzbWl0aC5hcGkudjEuUnVuVGFzayKFAQoPTGlzdFJ1bnNSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEQoJcGFnZV9zaXplGAIgASgFEhIKCnBhZ2VfdG9rZW4YAyABKAkSDgoGc2VhcmNoGAQgASgJEg8KB3NvcnRfYnkYBSABKAkSFgoOc29ydF9kaXJlY3Rpb24YBiABKAkiUAoQTGlzdFJ1bnNSZXNwb25zZRIjCgRydW5zGAEgAygLMhUuYmxheHNtaXRoLmFwaS52MS5SdW4SFwoPbmV4dF9wYWdlX3Rva2VuGAIgASgJIkUKEkV2ZW50c0FmdGVyUmVxdWVzdBIOCgZydW5faWQYASABKAkSEAoIYWZ0ZXJfaWQYAiABKAMSDQoFbGltaXQYAyABKAUiXQoTRXZlbnRzQWZ0ZXJSZXNwb25zZRIvCgZldmVudHMYASADKAsyHy5ibGF4c21pdGguYXBpLnYxLldvcmtmbG93RXZlbnQSFQoNbmV4dF9hZnRlcl9pZBgCIAEoAyL6AQoWQ29tbWFuZEV4aXRPYnNlcnZhdGlvbhIQCghldmVudF9pZBgBIAEoAxIPCgd0YXNrX2lkGAIgASgJEhIKCmF0dGVtcHRfaWQYAyABKAkSEQoJYWN0b3JfdWlkGAQgASgJEhYKDnJlY2VpcHRfc2hhMjU2GAUgASgJEhEKCWV4aXRfY29kZRgGIAEoBRIOCgZzaWduYWwYByABKAUSEwoLaW50ZXJydXB0ZWQYCCABKAgSHgoWb2JzZXJ2ZWRfYXRfdW5peF9uYW5vcxgJIAEoAxITCgtyZWNlaXZlZF9hdBgKIAEoCRIRCglzaWduZXJfaWQYCyABKAkiUAoXTGlzdENvbW1hbmRFeGl0c1JlcXVlc3QSDgoGcnVuX2lkGAEgASgJEhYKDmFmdGVyX2V2ZW50X2lkGAIgASgDEg0KBWxpbWl0GAMgASgFIncKGExpc3RDb21tYW5kRXhpdHNSZXNwb25zZRI+CgxvYnNlcnZhdGlvbnMYASADKAsyKC5ibGF4c21pdGguYXBpLnYxLkNvbW1hbmRFeGl0T2JzZXJ2YXRpb24SGwoTbmV4dF9hZnRlcl9ldmVudF9pZBgCIAEoAyJ8Cg5SZXZpZXdEZWNpc2lvbhIKCgJpZBgBIAEoCRISCgpwYWNrYWdlX2lkGAIgASgJEhQKDHByaW5jaXBhbF9pZBgDIAEoCRIOCgZhY3Rpb24YBCABKAkSEgoKZGVjaWRlZF9hdBgFIAEoCRIQCghmZWVkYmFjaxgGIAEoCSKGAgoNUmV2aWV3UGFja2FnZRIKCgJpZBgBIAEoCRIOCgZydW5faWQYAiABKAkSEAoIcmV2aXNpb24YAyABKAMSFQoNc291cmNlX2NvbW1pdBgEIAEoCRIVCg1idW5kbGVfc2hhMjU2GAUgASgJEhsKE3ZlcmlmaWNhdGlvbl9zaGEyNTYYBiABKAkSGQoRaW50ZWdyYXRlZF9jb21taXQYByABKAkSFwoPZXZpZGVuY2Vfc2hhMjU2GAggASgJEhQKDHByZXNlbnRlZF9hdBgJIAEoCRIyCghkZWNpc2lvbhgKIAEoCzIgLmJsYXhzbWl0aC5hcGkudjEuUmV2aWV3RGVjaXNpb24iKQoXR2V0Q3VycmVudFJldmlld1JlcXVlc3QSDgoGcnVuX2lkGAEgASgJIkwKGEdldEN1cnJlbnRSZXZpZXdSZXNwb25zZRIwCgdwYWNrYWdlGAEgASgLMh8uYmxheHNtaXRoLmFwaS52MS5SZXZpZXdQYWNrYWdlInQKE0RlY2lkZVJldmlld1JlcXVlc3QSDgoGcnVuX2lkGAEgASgJEhIKCnBhY2thZ2VfaWQYAiABKAkSFwoPaWRlbXBvdGVuY3lfa2V5GAMgASgJEg4KBmFjdGlvbhgEIAEoCRIQCghmZWVkYmFjaxgFIAEoCSJKChREZWNpZGVSZXZpZXdSZXNwb25zZRIyCghkZWNpc2lvbhgBIAEoCzIgLmJsYXhzbWl0aC5hcGkudjEuUmV2aWV3RGVjaXNpb24y4A8KD1dvcmtmbG93U2VydmljZRJgCg1DcmVhdGVQcm9qZWN0EiYuYmxheHNtaXRoLmFwaS52MS5DcmVhdGVQcm9qZWN0UmVxdWVzdBonLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlUHJvamVjdFJlc3BvbnNlElcKCkdldFByb2plY3QSIy5ibGF4c21pdGguYXBpLnYxLkdldFByb2plY3RSZXF1ZXN0GiQuYmxheHNtaXRoLmFwaS52MS5HZXRQcm9qZWN0UmVzcG9uc2USaQoQR2V0UHJvamVjdFNvdXJjZRIpLmJsYXhzbWl0aC5hcGkudjEuR2V0UHJvamVjdFNvdXJjZVJlcXVlc3QaKi5ibGF4c21pdGguYXBpLnYxLkdldFByb2plY3RTb3VyY2VSZXNwb25zZRJpChBTZXRQcm9qZWN0U291cmNlEikuYmxheHNtaXRoLmFwaS52MS5TZXRQcm9qZWN0U291cmNlUmVxdWVzdBoqLmJsYXhzbWl0aC5hcGkudjEuU2V0UHJvamVjdFNvdXJjZVJlc3BvbnNlEnsKFkdldFByb2plY3RWZXJpZmljYXRpb24SLy5ibGF4c21pdGguYXBpLnYxLkdldFByb2plY3RWZXJpZmljYXRpb25SZXF1ZXN0GjAuYmxheHNtaXRoLmFwaS52MS5HZXRQcm9qZWN0VmVyaWZpY2F0aW9uUmVzcG9uc2USewoWU2V0UHJvamVjdFZlcmlmaWNhdGlvbhIvLmJsYXhzbWl0aC5hcGkudjEuU2V0UHJvamVjdFZlcmlmaWNhdGlvblJlcXVlc3QaMC5ibGF4c21pdGguYXBpLnYxLlNldFByb2plY3RWZXJpZmljYXRpb25SZXNwb25zZRJ7ChZMaXN0UHJvamVjdE1vZGVsQWNjZXNzEi8uYmxheHNtaXRoLmFwaS52MS5MaXN0UHJvamVjdE1vZGVsQWNjZXNzUmVxdWVzdBowLmJsYXhzbWl0aC5hcGkudjEuTGlzdFByb2plY3RNb2RlbEFjY2Vzc1Jlc3BvbnNlEoEBChhDcmVhdGVQcm9qZWN0TW9kZWxBY2Nlc3MSMS5ibGF4c21pdGguYXBpLnYxLkNyZWF0ZVByb2plY3RNb2RlbEFjY2Vzc1JlcXVlc3QaMi5ibGF4c21pdGguYXBpLnYxLkNyZWF0ZVByb2plY3RNb2RlbEFjY2Vzc1Jlc3BvbnNlEoEBChhSZXZva2VQcm9qZWN0TW9kZWxBY2Nlc3MSMS5ibGF4c21pdGguYXBpLnYxLlJldm9rZVByb2plY3RNb2RlbEFjY2Vzc1JlcXVlc3QaMi5ibGF4c21pdGguYXBpLnYxLlJldm9rZVByb2plY3RNb2RlbEFjY2Vzc1Jlc3BvbnNlEl0KDExpc3RQcm9qZWN0cxIlLmJsYXhzbWl0aC5hcGkudjEuTGlzdFByb2plY3RzUmVxdWVzdBomLmJsYXhzbWl0aC5hcGkudjEuTGlzdFByb2plY3RzUmVzcG9uc2USSwoGR2V0UnVuEh8uYmxheHNtaXRoLmFwaS52MS5HZXRSdW5SZXF1ZXN0GiAuYmxheHNtaXRoLmFwaS52MS5HZXRSdW5SZXNwb25zZRJUCglMYXVuY2hSdW4SIi5ibGF4c21pdGguYXBpLnYxLkxhdW5jaFJ1blJlcXVlc3QaIy5ibGF4c21pdGguYXBpLnYxLkxhdW5jaFJ1blJlc3BvbnNlEngKFUdldExhdW5jaEF2YWlsYWJpbGl0eRIuLmJsYXhzbWl0aC5hcGkudjEuR2V0TGF1bmNoQXZhaWxhYmlsaXR5UmVxdWVzdBovLmJsYXhzbWl0aC5hcGkudjEuR2V0TGF1bmNoQXZhaWxhYmlsaXR5UmVzcG9uc2USXQoMTGlzdFJ1blRhc2tzEiUuYmxheHNtaXRoLmFwaS52MS5MaXN0UnVuVGFza3NSZXF1ZXN0GiYuYmxheHNtaXRoLmFwaS52MS5MaXN0UnVuVGFza3NSZXNwb25zZRJRCghMaXN0UnVucxIhLmJsYXhzbWl0aC5hcGkudjEuTGlzdFJ1bnNSZXF1ZXN0GiIuYmxheHNtaXRoLmFwaS52MS5MaXN0UnVuc1Jlc3BvbnNlEloKC0V2ZW50c0FmdGVyEiQuYmxheHNtaXRoLmFwaS52MS5FdmVudHNBZnRlclJlcXVlc3QaJS5ibGF4c21pdGguYXBpLnYxLkV2ZW50c0FmdGVyUmVzcG9uc2USaQoQTGlzdENvbW1hbmRFeGl0cxIpLmJsYXhzbWl0aC5hcGkudjEuTGlzdENvbW1hbmRFeGl0c1JlcXVlc3QaKi5ibGF4c21pdGguYXBpLnYxLkxpc3RDb21tYW5kRXhpdHNSZXNwb25zZRJpChBHZXRDdXJyZW50UmV2aWV3EikuYmxheHNtaXRoLmFwaS52MS5HZXRDdXJyZW50UmV2aWV3UmVxdWVzdBoqLmJsYXhzbWl0aC5hcGkudjEuR2V0Q3VycmVudFJldmlld1Jlc3BvbnNlEl0KDERlY2lkZVJldmlldxIlLmJsYXhzbWl0aC5hcGkudjEuRGVjaWRlUmV2aWV3UmVxdWVzdBomLmJsYXhzbWl0aC5hcGkudjEuRGVjaWRlUmV2aWV3UmVzcG9uc2VCxQEKFGNvbS5ibGF4c21pdGguYXBpLnYxQg1Xb3JrZmxvd1Byb3RvUAFaPGdpdGh1Yi5jb20vbWp0ZWNoZ3V5L2JsYXhzbWl0aC9nZW4vZ28vYmxheHNtaXRoL2FwaS92MTthcGl2MaICA0JBWKoCEEJsYXhzbWl0aC5BcGkuVjHKAhBCbGF4c21pdGhcQXBpXFYx4gIcQmxheHNtaXRoXEFwaVxWMVxHUEJNZXRhZGF0YeoCEkJsYXhzbWl0aDo6QXBpOjpWMWIGcHJvdG8z");
+  fileDesc("Ch9ibGF4c21pdGgvYXBpL3YxL3dvcmtmbG93LnByb3RvEhBibGF4c21pdGguYXBpLnYxIkUKB1Byb2plY3QSCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEhIKCmNyZWF0ZWRfYXQYBCABKAkipwEKA1J1bhIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhIKCmxhdW5jaF9rZXkYAyABKAkSFQoNc291cmNlX2NvbW1pdBgEIAEoCRIVCg1idW5kbGVfc2hhMjU2GAUgASgJEhsKE3ZlcmlmaWNhdGlvbl9zaGEyNTYYBiABKAkSDQoFc3RhdGUYByABKAkSEgoKY3JlYXRlZF9hdBgIIAEoCSKJAQoNV29ya2Zsb3dFdmVudBIKCgJpZBgBIAEoAxIOCgZydW5faWQYAiABKAkSDwoHdGFza19pZBgDIAEoCRISCgphdHRlbXB0X2lkGAQgASgJEgwKBGtpbmQYBSABKAkSEwoLb2NjdXJyZWRfYXQYBiABKAkSFAoMcGF5bG9hZF9qc29uGAcgASgJIjIKFENyZWF0ZVByb2plY3RSZXF1ZXN0EgwKBHNsdWcYASABKAkSDAoEbmFtZRgCIAEoCSJDChVDcmVhdGVQcm9qZWN0UmVzcG9uc2USKgoHcHJvamVjdBgBIAEoCzIZLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdCInChFHZXRQcm9qZWN0UmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJIkAKEkdldFByb2plY3RSZXNwb25zZRIqCgdwcm9qZWN0GAEgASgLMhkuYmxheHNtaXRoLmFwaS52MS5Qcm9qZWN0IncKDVByb2plY3RTb3VyY2USEgoKcHJvamVjdF9pZBgBIAEoCRIWCg5yZXBvc2l0b3J5X3VybBgCIAEoCRILCgNyZWYYAyABKAkSEgoKdXBkYXRlZF9hdBgEIAEoCRIZChFnaXRfY29ubmVjdGlvbl9pZBgFIAEoCSItChdHZXRQcm9qZWN0U291cmNlUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJIksKGEdldFByb2plY3RTb3VyY2VSZXNwb25zZRIvCgZzb3VyY2UYASABKAsyHy5ibGF4c21pdGguYXBpLnYxLlByb2plY3RTb3VyY2UibQoXU2V0UHJvamVjdFNvdXJjZVJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIWCg5yZXBvc2l0b3J5X3VybBgCIAEoCRILCgNyZWYYAyABKAkSGQoRZ2l0X2Nvbm5lY3Rpb25faWQYBCABKAkiTwoNR2l0Q29ubmVjdGlvbhIKCgJpZBgBIAEoCRIMCgRob3N0GAIgASgJEhAKCHVzZXJuYW1lGAMgASgJEhIKCmNyZWF0ZWRfYXQYBCABKAkiGwoZTGlzdEdpdENvbm5lY3Rpb25zUmVxdWVzdCJSChpMaXN0R2l0Q29ubmVjdGlvbnNSZXNwb25zZRI0Cgtjb25uZWN0aW9ucxgBIAMoCzIfLmJsYXhzbWl0aC5hcGkudjEuR2l0Q29ubmVjdGlvbiJLChpDcmVhdGVHaXRDb25uZWN0aW9uUmVxdWVzdBIMCgRob3N0GAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEg0KBXRva2VuGAMgASgJIlIKG0NyZWF0ZUdpdENvbm5lY3Rpb25SZXNwb25zZRIzCgpjb25uZWN0aW9uGAEgASgLMh8uYmxheHNtaXRoLmFwaS52MS5HaXRDb25uZWN0aW9uIksKGFNldFByb2plY3RTb3VyY2VSZXNwb25zZRIvCgZzb3VyY2UYASABKAsyHy5ibGF4c21pdGguYXBpLnYxLlByb2plY3RTb3VyY2UiMAoRVmVyaWZpY2F0aW9uQ2hlY2sSCgoCaWQYASABKAkSDwoHY29tbWFuZBgCIAMoCSKDAQoTUHJvamVjdFZlcmlmaWNhdGlvbhISCgpwcm9qZWN0X2lkGAEgASgJEg8KB3ZlcnNpb24YAiABKAMSMwoGY2hlY2tzGAMgAygLMiMuYmxheHNtaXRoLmFwaS52MS5WZXJpZmljYXRpb25DaGVjaxISCgp1cGRhdGVkX2F0GAQgASgJIjMKHUdldFByb2plY3RWZXJpZmljYXRpb25SZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkiXQoeR2V0UHJvamVjdFZlcmlmaWNhdGlvblJlc3BvbnNlEjsKDHZlcmlmaWNhdGlvbhgBIAEoCzIlLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdFZlcmlmaWNhdGlvbiJoCh1TZXRQcm9qZWN0VmVyaWZpY2F0aW9uUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEjMKBmNoZWNrcxgCIAMoCzIjLmJsYXhzbWl0aC5hcGkudjEuVmVyaWZpY2F0aW9uQ2hlY2siXQoeU2V0UHJvamVjdFZlcmlmaWNhdGlvblJlc3BvbnNlEjsKDHZlcmlmaWNhdGlvbhgBIAEoCzIlLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdFZlcmlmaWNhdGlvbiKSAQoSUHJvamVjdE1vZGVsQWNjZXNzEgoKAmlkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSEAoIcHJvdmlkZXIYAyABKAkSDQoFbW9kZWwYBCABKAkSFQoNY29ubmVjdGlvbl9pZBgFIAEoCRIQCghncmFudF9pZBgGIAEoCRISCgpjcmVhdGVkX2F0GAcgASgJIjMKHUxpc3RQcm9qZWN0TW9kZWxBY2Nlc3NSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkiVgoeTGlzdFByb2plY3RNb2RlbEFjY2Vzc1Jlc3BvbnNlEjQKBmFjY2VzcxgBIAMoCzIkLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdE1vZGVsQWNjZXNzImcKH0NyZWF0ZVByb2plY3RNb2RlbEFjY2Vzc1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIQCghwcm92aWRlchgCIAEoCRINCgVtb2RlbBgDIAEoCRIPCgdhcGlfa2V5GAQgASgJIlgKIENyZWF0ZVByb2plY3RNb2RlbEFjY2Vzc1Jlc3BvbnNlEjQKBmFjY2VzcxgBIAEoCzIkLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdE1vZGVsQWNjZXNzIjQKH1Jldm9rZVByb2plY3RNb2RlbEFjY2Vzc1JlcXVlc3QSEQoJYWNjZXNzX2lkGAEgASgJIjUKIFJldm9rZVByb2plY3RNb2RlbEFjY2Vzc1Jlc3BvbnNlEhEKCWFjY2Vzc19pZBgBIAEoCSJ1ChNMaXN0UHJvamVjdHNSZXF1ZXN0EhEKCXBhZ2Vfc2l6ZRgBIAEoBRISCgpwYWdlX3Rva2VuGAIgASgJEg4KBnNlYXJjaBgDIAEoCRIPCgdzb3J0X2J5GAQgASgJEhYKDnNvcnRfZGlyZWN0aW9uGAUgASgJIlwKFExpc3RQcm9qZWN0c1Jlc3BvbnNlEisKCHByb2plY3RzGAEgAygLMhkuYmxheHNtaXRoLmFwaS52MS5Qcm9qZWN0EhcKD25leHRfcGFnZV90b2tlbhgCIAEoCSIfCg1HZXRSdW5SZXF1ZXN0Eg4KBnJ1bl9pZBgBIAEoCSI0Cg5HZXRSdW5SZXNwb25zZRIiCgNydW4YASABKAsyFS5ibGF4c21pdGguYXBpLnYxLlJ1biKKAQoQTGF1bmNoUnVuUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhIKCmxhdW5jaF9rZXkYAiABKAkSEwoLcmVjaXBlX3BhdGgYAyABKAkSEQoJc3BlY19wYXRoGAQgASgJEhcKD3RyYW5zY3JpcHRfcGF0aBgFIAEoCRINCgVzY29wZRgGIAEoCSI3ChFMYXVuY2hSdW5SZXNwb25zZRIiCgNydW4YASABKAsyFS5ibGF4c21pdGguYXBpLnYxLlJ1biIyChxHZXRMYXVuY2hBdmFpbGFiaWxpdHlSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkiQAodR2V0TGF1bmNoQXZhaWxhYmlsaXR5UmVzcG9uc2USDwoHZW5hYmxlZBgBIAEoCBIOCgZyZWFzb24YAiABKAki+gIKB1J1blRhc2sSCgoCaWQYASABKAkSCwoDa2V5GAIgASgJEg0KBXN0YXRlGAMgASgJEhIKCmdlbmVyYXRpb24YBCABKAMSFAoMbWF4X2F0dGVtcHRzGAUgASgFEhkKEWFjdGl2ZV9hdHRlbXB0X2lkGAYgASgJEhIKCmRlcGVuZHNfb24YByADKAkSDwoHaGFybmVzcxgIIAEoCRINCgVtb2RlbBgJIAEoCRIOCgZlZmZvcnQYCiABKAkSPAoRaW5zdHJ1Y3Rpb25fZmlsZXMYCyADKAsyIS5ibGF4c21pdGguYXBpLnYxLkZyb3plbklucHV0RmlsZRI2Cgtza2lsbF9maWxlcxgMIAMoCzIhLmJsYXhzbWl0aC5hcGkudjEuRnJvemVuSW5wdXRGaWxlEgwKBGtpbmQYDSABKAkSEQoJbG9vcF93aXRoGA4gASgJEhIKCm1heF9jeWNsZXMYDyABKAUSEwoLbG9vcF9jeWNsZXMYECABKAUiLwoPRnJvemVuSW5wdXRGaWxlEgwKBHBhdGgYASABKAkSDgoGc2hhMjU2GAIgASgJIiUKE0xpc3RSdW5UYXNrc1JlcXVlc3QSDgoGcnVuX2lkGAEgASgJIkAKFExpc3RSdW5UYXNrc1Jlc3BvbnNlEigKBXRhc2tzGAEgAygLMhkuYmxheHNtaXRoLmFwaS52MS5SdW5UYXNrIoUBCg9MaXN0UnVuc1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIRCglwYWdlX3NpemUYAiABKAUSEgoKcGFnZV90b2tlbhgDIAEoCRIOCgZzZWFyY2gYBCABKAkSDwoHc29ydF9ieRgFIAEoCRIWCg5zb3J0X2RpcmVjdGlvbhgGIAEoCSJQChBMaXN0UnVuc1Jlc3BvbnNlEiMKBHJ1bnMYASADKAsyFS5ibGF4c21pdGguYXBpLnYxLlJ1bhIXCg9uZXh0X3BhZ2VfdG9rZW4YAiABKAkiRQoSRXZlbnRzQWZ0ZXJSZXF1ZXN0Eg4KBnJ1bl9pZBgBIAEoCRIQCghhZnRlcl9pZBgCIAEoAxINCgVsaW1pdBgDIAEoBSJdChNFdmVudHNBZnRlclJlc3BvbnNlEi8KBmV2ZW50cxgBIAMoCzIfLmJsYXhzbWl0aC5hcGkudjEuV29ya2Zsb3dFdmVudBIVCg1uZXh0X2FmdGVyX2lkGAIgASgDIvoBChZDb21tYW5kRXhpdE9ic2VydmF0aW9uEhAKCGV2ZW50X2lkGAEgASgDEg8KB3Rhc2tfaWQYAiABKAkSEgoKYXR0ZW1wdF9pZBgDIAEoCRIRCglhY3Rvcl91aWQYBCABKAkSFgoOcmVjZWlwdF9zaGEyNTYYBSABKAkSEQoJZXhpdF9jb2RlGAYgASgFEg4KBnNpZ25hbBgHIAEoBRITCgtpbnRlcnJ1cHRlZBgIIAEoCBIeChZvYnNlcnZlZF9hdF91bml4X25hbm9zGAkgASgDEhMKC3JlY2VpdmVkX2F0GAogASgJEhEKCXNpZ25lcl9pZBgLIAEoCSJQChdMaXN0Q29tbWFuZEV4aXRzUmVxdWVzdBIOCgZydW5faWQYASABKAkSFgoOYWZ0ZXJfZXZlbnRfaWQYAiABKAMSDQoFbGltaXQYAyABKAUidwoYTGlzdENvbW1hbmRFeGl0c1Jlc3BvbnNlEj4KDG9ic2VydmF0aW9ucxgBIAMoCzIoLmJsYXhzbWl0aC5hcGkudjEuQ29tbWFuZEV4aXRPYnNlcnZhdGlvbhIbChNuZXh0X2FmdGVyX2V2ZW50X2lkGAIgASgDInwKDlJldmlld0RlY2lzaW9uEgoKAmlkGAEgASgJEhIKCnBhY2thZ2VfaWQYAiABKAkSFAoMcHJpbmNpcGFsX2lkGAMgASgJEg4KBmFjdGlvbhgEIAEoCRISCgpkZWNpZGVkX2F0GAUgASgJEhAKCGZlZWRiYWNrGAYgASgJIoYCCg1SZXZpZXdQYWNrYWdlEgoKAmlkGAEgASgJEg4KBnJ1bl9pZBgCIAEoCRIQCghyZXZpc2lvbhgDIAEoAxIVCg1zb3VyY2VfY29tbWl0GAQgASgJEhUKDWJ1bmRsZV9zaGEyNTYYBSABKAkSGwoTdmVyaWZpY2F0aW9uX3NoYTI1NhgGIAEoCRIZChFpbnRlZ3JhdGVkX2NvbW1pdBgHIAEoCRIXCg9ldmlkZW5jZV9zaGEyNTYYCCABKAkSFAoMcHJlc2VudGVkX2F0GAkgASgJEjIKCGRlY2lzaW9uGAogASgLMiAuYmxheHNtaXRoLmFwaS52MS5SZXZpZXdEZWNpc2lvbiIpChdHZXRDdXJyZW50UmV2aWV3UmVxdWVzdBIOCgZydW5faWQYASABKAkiTAoYR2V0Q3VycmVudFJldmlld1Jlc3BvbnNlEjAKB3BhY2thZ2UYASABKAsyHy5ibGF4c21pdGguYXBpLnYxLlJldmlld1BhY2thZ2UidAoTRGVjaWRlUmV2aWV3UmVxdWVzdBIOCgZydW5faWQYASABKAkSEgoKcGFja2FnZV9pZBgCIAEoCRIXCg9pZGVtcG90ZW5jeV9rZXkYAyABKAkSDgoGYWN0aW9uGAQgASgJEhAKCGZlZWRiYWNrGAUgASgJIkoKFERlY2lkZVJldmlld1Jlc3BvbnNlEjIKCGRlY2lzaW9uGAEgASgLMiAuYmxheHNtaXRoLmFwaS52MS5SZXZpZXdEZWNpc2lvbiJYChFJbnRlcmFjdGlvbk9wdGlvbhIKCgJpZBgBIAEoCRINCgVsYWJlbBgCIAEoCRITCgtkZXNjcmlwdGlvbhgDIAEoCRITCgtyZWNvbW1lbmRlZBgEIAEoCCIvChFJbnRlcmFjdGlvblNvdXJjZRIMCgRwYXRoGAEgASgJEgwKBGxpbmUYAiABKAUiPgoUSW50ZXJhY3Rpb25JbnRlcnZpZXcSDQoFcm91bmQYASABKAUSFwoPZmluYWxpemVfb3B0aW9uGAIgASgJIlYKEUludGVyYWN0aW9uQW5zd2VyEhIKCm9wdGlvbl9pZHMYASADKAkSDAoEdGV4dBgCIAEoCRITCgthbnN3ZXJlZF9ieRgDIAEoCRIKCgJhdBgEIAEoCSKqAwoLSW50ZXJhY3Rpb24SCgoCaWQYASABKAkSEgoKYXR0ZW1wdF9pZBgCIAEoCRINCgVzdGFnZRgDIAEoCRIMCgRraW5kGAQgASgJEg0KBXRpdGxlGAUgASgJEg8KB2JvZHlfbWQYBiABKAkSNAoHb3B0aW9ucxgHIAMoCzIjLmJsYXhzbWl0aC5hcGkudjEuSW50ZXJhY3Rpb25PcHRpb24SFAoMbXVsdGlfc2VsZWN0GAggASgIEhcKD2FsbG93X2ZyZWVfdGV4dBgJIAEoCBIQCghibG9ja2luZxgKIAEoCBI0Cgdzb3VyY2VzGAsgAygLMiMuYmxheHNtaXRoLmFwaS52MS5JbnRlcmFjdGlvblNvdXJjZRI5CglpbnRlcnZpZXcYDCABKAsyJi5ibGF4c21pdGguYXBpLnYxLkludGVyYWN0aW9uSW50ZXJ2aWV3Eg0KBXN0YXRlGA0gASgJEjMKBmFuc3dlchgOIAEoCzIjLmJsYXhzbWl0aC5hcGkudjEuSW50ZXJhY3Rpb25BbnN3ZXISEgoKY3JlYXRlZF9hdBgPIAEoCSIpChdMaXN0SW50ZXJhY3Rpb25zUmVxdWVzdBIOCgZydW5faWQYASABKAkiTwoYTGlzdEludGVyYWN0aW9uc1Jlc3BvbnNlEjMKDGludGVyYWN0aW9ucxgBIAMoCzIdLmJsYXhzbWl0aC5hcGkudjEuSW50ZXJhY3Rpb24iVAoYQW5zd2VySW50ZXJhY3Rpb25SZXF1ZXN0EhYKDmludGVyYWN0aW9uX2lkGAEgASgJEhIKCm9wdGlvbl9pZHMYAiADKAkSDAoEdGV4dBgDIAEoCSJPChlBbnN3ZXJJbnRlcmFjdGlvblJlc3BvbnNlEjIKC2ludGVyYWN0aW9uGAEgASgLMh0uYmxheHNtaXRoLmFwaS52MS5JbnRlcmFjdGlvbiJgChNTdGVlckF0dGVtcHRSZXF1ZXN0EhIKCmF0dGVtcHRfaWQYASABKAkSDAoEa2luZBgCIAEoCRIMCgR0ZXh0GAMgASgJEg4KBnJlYXNvbhgEIAEoCRIJCgFuGAUgASgFIigKFFN0ZWVyQXR0ZW1wdFJlc3BvbnNlEhAKCHN0ZWVyX2lkGAEgASgJIo0BCg5BdHRlbXB0Q29udHJvbBISCgphdHRlbXB0X2lkGAEgASgJEg8KB2NvbnRyb2wYAiABKAkSGwoTaG9sZGVyX3ByaW5jaXBhbF9pZBgDIAEoCRISCgpnZW5lcmF0aW9uGAQgASgDEg0KBXN0YWdlGAUgASgJEhYKDmF0dGVtcHRfc3RhdHVzGAYgASgJIi4KGEdldEF0dGVtcHRDb250cm9sUmVxdWVzdBISCgphdHRlbXB0X2lkGAEgASgJImUKGUdldEF0dGVtcHRDb250cm9sUmVzcG9uc2USMQoHY29udHJvbBgBIAEoCzIgLmJsYXhzbWl0aC5hcGkudjEuQXR0ZW1wdENvbnRyb2wSFQoNY2FuX3Rha2Vfb3ZlchgCIAEoCCIsChZUYWtlT3ZlckF0dGVtcHRSZXF1ZXN0EhIKCmF0dGVtcHRfaWQYASABKAkiTAoXVGFrZU92ZXJBdHRlbXB0UmVzcG9uc2USMQoHY29udHJvbBgBIAEoCzIgLmJsYXhzbWl0aC5hcGkudjEuQXR0ZW1wdENvbnRyb2wiLAoWSGFuZEJhY2tBdHRlbXB0UmVxdWVzdBISCgphdHRlbXB0X2lkGAEgASgJIkwKF0hhbmRCYWNrQXR0ZW1wdFJlc3BvbnNlEjEKB2NvbnRyb2wYASABKAsyIC5ibGF4c21pdGguYXBpLnYxLkF0dGVtcHRDb250cm9sMrsWCg9Xb3JrZmxvd1NlcnZpY2USYAoNQ3JlYXRlUHJvamVjdBImLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlUHJvamVjdFJlcXVlc3QaJy5ibGF4c21pdGguYXBpLnYxLkNyZWF0ZVByb2plY3RSZXNwb25zZRJXCgpHZXRQcm9qZWN0EiMuYmxheHNtaXRoLmFwaS52MS5HZXRQcm9qZWN0UmVxdWVzdBokLmJsYXhzbWl0aC5hcGkudjEuR2V0UHJvamVjdFJlc3BvbnNlEmkKEEdldFByb2plY3RTb3VyY2USKS5ibGF4c21pdGguYXBpLnYxLkdldFByb2plY3RTb3VyY2VSZXF1ZXN0GiouYmxheHNtaXRoLmFwaS52MS5HZXRQcm9qZWN0U291cmNlUmVzcG9uc2USaQoQU2V0UHJvamVjdFNvdXJjZRIpLmJsYXhzbWl0aC5hcGkudjEuU2V0UHJvamVjdFNvdXJjZVJlcXVlc3QaKi5ibGF4c21pdGguYXBpLnYxLlNldFByb2plY3RTb3VyY2VSZXNwb25zZRJvChJMaXN0R2l0Q29ubmVjdGlvbnMSKy5ibGF4c21pdGguYXBpLnYxLkxpc3RHaXRDb25uZWN0aW9uc1JlcXVlc3QaLC5ibGF4c21pdGguYXBpLnYxLkxpc3RHaXRDb25uZWN0aW9uc1Jlc3BvbnNlEnIKE0NyZWF0ZUdpdENvbm5lY3Rpb24SLC5ibGF4c21pdGguYXBpLnYxLkNyZWF0ZUdpdENvbm5lY3Rpb25SZXF1ZXN0Gi0uYmxheHNtaXRoLmFwaS52MS5DcmVhdGVHaXRDb25uZWN0aW9uUmVzcG9uc2USewoWR2V0UHJvamVjdFZlcmlmaWNhdGlvbhIvLmJsYXhzbWl0aC5hcGkudjEuR2V0UHJvamVjdFZlcmlmaWNhdGlvblJlcXVlc3QaMC5ibGF4c21pdGguYXBpLnYxLkdldFByb2plY3RWZXJpZmljYXRpb25SZXNwb25zZRJ7ChZTZXRQcm9qZWN0VmVyaWZpY2F0aW9uEi8uYmxheHNtaXRoLmFwaS52MS5TZXRQcm9qZWN0VmVyaWZpY2F0aW9uUmVxdWVzdBowLmJsYXhzbWl0aC5hcGkudjEuU2V0UHJvamVjdFZlcmlmaWNhdGlvblJlc3BvbnNlEnsKFkxpc3RQcm9qZWN0TW9kZWxBY2Nlc3MSLy5ibGF4c21pdGguYXBpLnYxLkxpc3RQcm9qZWN0TW9kZWxBY2Nlc3NSZXF1ZXN0GjAuYmxheHNtaXRoLmFwaS52MS5MaXN0UHJvamVjdE1vZGVsQWNjZXNzUmVzcG9uc2USgQEKGENyZWF0ZVByb2plY3RNb2RlbEFjY2VzcxIxLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlUHJvamVjdE1vZGVsQWNjZXNzUmVxdWVzdBoyLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlUHJvamVjdE1vZGVsQWNjZXNzUmVzcG9uc2USgQEKGFJldm9rZVByb2plY3RNb2RlbEFjY2VzcxIxLmJsYXhzbWl0aC5hcGkudjEuUmV2b2tlUHJvamVjdE1vZGVsQWNjZXNzUmVxdWVzdBoyLmJsYXhzbWl0aC5hcGkudjEuUmV2b2tlUHJvamVjdE1vZGVsQWNjZXNzUmVzcG9uc2USXQoMTGlzdFByb2plY3RzEiUuYmxheHNtaXRoLmFwaS52MS5MaXN0UHJvamVjdHNSZXF1ZXN0GiYuYmxheHNtaXRoLmFwaS52MS5MaXN0UHJvamVjdHNSZXNwb25zZRJLCgZHZXRSdW4SHy5ibGF4c21pdGguYXBpLnYxLkdldFJ1blJlcXVlc3QaIC5ibGF4c21pdGguYXBpLnYxLkdldFJ1blJlc3BvbnNlElQKCUxhdW5jaFJ1bhIiLmJsYXhzbWl0aC5hcGkudjEuTGF1bmNoUnVuUmVxdWVzdBojLmJsYXhzbWl0aC5hcGkudjEuTGF1bmNoUnVuUmVzcG9uc2USeAoVR2V0TGF1bmNoQXZhaWxhYmlsaXR5Ei4uYmxheHNtaXRoLmFwaS52MS5HZXRMYXVuY2hBdmFpbGFiaWxpdHlSZXF1ZXN0Gi8uYmxheHNtaXRoLmFwaS52MS5HZXRMYXVuY2hBdmFpbGFiaWxpdHlSZXNwb25zZRJdCgxMaXN0UnVuVGFza3MSJS5ibGF4c21pdGguYXBpLnYxLkxpc3RSdW5UYXNrc1JlcXVlc3QaJi5ibGF4c21pdGguYXBpLnYxLkxpc3RSdW5UYXNrc1Jlc3BvbnNlElEKCExpc3RSdW5zEiEuYmxheHNtaXRoLmFwaS52MS5MaXN0UnVuc1JlcXVlc3QaIi5ibGF4c21pdGguYXBpLnYxLkxpc3RSdW5zUmVzcG9uc2USWgoLRXZlbnRzQWZ0ZXISJC5ibGF4c21pdGguYXBpLnYxLkV2ZW50c0FmdGVyUmVxdWVzdBolLmJsYXhzbWl0aC5hcGkudjEuRXZlbnRzQWZ0ZXJSZXNwb25zZRJpChBMaXN0Q29tbWFuZEV4aXRzEikuYmxheHNtaXRoLmFwaS52MS5MaXN0Q29tbWFuZEV4aXRzUmVxdWVzdBoqLmJsYXhzbWl0aC5hcGkudjEuTGlzdENvbW1hbmRFeGl0c1Jlc3BvbnNlEmkKEEdldEN1cnJlbnRSZXZpZXcSKS5ibGF4c21pdGguYXBpLnYxLkdldEN1cnJlbnRSZXZpZXdSZXF1ZXN0GiouYmxheHNtaXRoLmFwaS52MS5HZXRDdXJyZW50UmV2aWV3UmVzcG9uc2USXQoMRGVjaWRlUmV2aWV3EiUuYmxheHNtaXRoLmFwaS52MS5EZWNpZGVSZXZpZXdSZXF1ZXN0GiYuYmxheHNtaXRoLmFwaS52MS5EZWNpZGVSZXZpZXdSZXNwb25zZRJsChFHZXRBdHRlbXB0Q29udHJvbBIqLmJsYXhzbWl0aC5hcGkudjEuR2V0QXR0ZW1wdENvbnRyb2xSZXF1ZXN0GisuYmxheHNtaXRoLmFwaS52MS5HZXRBdHRlbXB0Q29udHJvbFJlc3BvbnNlEmYKD1Rha2VPdmVyQXR0ZW1wdBIoLmJsYXhzbWl0aC5hcGkudjEuVGFrZU92ZXJBdHRlbXB0UmVxdWVzdBopLmJsYXhzbWl0aC5hcGkudjEuVGFrZU92ZXJBdHRlbXB0UmVzcG9uc2USZgoPSGFuZEJhY2tBdHRlbXB0EiguYmxheHNtaXRoLmFwaS52MS5IYW5kQmFja0F0dGVtcHRSZXF1ZXN0GikuYmxheHNtaXRoLmFwaS52MS5IYW5kQmFja0F0dGVtcHRSZXNwb25zZRJpChBMaXN0SW50ZXJhY3Rpb25zEikuYmxheHNtaXRoLmFwaS52MS5MaXN0SW50ZXJhY3Rpb25zUmVxdWVzdBoqLmJsYXhzbWl0aC5hcGkudjEuTGlzdEludGVyYWN0aW9uc1Jlc3BvbnNlEmwKEUFuc3dlckludGVyYWN0aW9uEiouYmxheHNtaXRoLmFwaS52MS5BbnN3ZXJJbnRlcmFjdGlvblJlcXVlc3QaKy5ibGF4c21pdGguYXBpLnYxLkFuc3dlckludGVyYWN0aW9uUmVzcG9uc2USXQoMU3RlZXJBdHRlbXB0EiUuYmxheHNtaXRoLmFwaS52MS5TdGVlckF0dGVtcHRSZXF1ZXN0GiYuYmxheHNtaXRoLmFwaS52MS5TdGVlckF0dGVtcHRSZXNwb25zZULFAQoUY29tLmJsYXhzbWl0aC5hcGkudjFCDVdvcmtmbG93UHJvdG9QAVo8Z2l0aHViLmNvbS9tanRlY2hndXkvYmxheHNtaXRoL2dlbi9nby9ibGF4c21pdGgvYXBpL3YxO2FwaXYxogIDQkFYqgIQQmxheHNtaXRoLkFwaS5WMcoCEEJsYXhzbWl0aFxBcGlcVjHiAhxCbGF4c21pdGhcQXBpXFYxXEdQQk1ldGFkYXRh6gISQmxheHNtaXRoOjpBcGk6OlYxYgZwcm90bzM");
 
 /**
  * @generated from message blaxsmith.api.v1.Project
@@ -135,6 +135,13 @@ export type WorkflowEvent = Message<"blaxsmith.api.v1.WorkflowEvent"> & {
    * @generated from field: string occurred_at = 6;
    */
   occurredAt: string;
+
+  /**
+   * JSON object for attempt.progress; empty otherwise.
+   *
+   * @generated from field: string payload_json = 7;
+   */
+  payloadJson: string;
 };
 
 /**
@@ -227,7 +234,7 @@ export type ProjectSource = Message<"blaxsmith.api.v1.ProjectSource"> & {
   projectId: string;
 
   /**
-   * Public GitHub or GitLab HTTPS repository.
+   * GitHub or GitLab HTTPS repository.
    *
    * @generated from field: string repository_url = 2;
    */
@@ -246,6 +253,13 @@ export type ProjectSource = Message<"blaxsmith.api.v1.ProjectSource"> & {
    * @generated from field: string updated_at = 4;
    */
   updatedAt: string;
+
+  /**
+   * Organization Git connection for a private repository; empty = public.
+   *
+   * @generated from field: string git_connection_id = 5;
+   */
+  gitConnectionId: string;
 };
 
 /**
@@ -307,6 +321,13 @@ export type SetProjectSourceRequest = Message<"blaxsmith.api.v1.SetProjectSource
    * @generated from field: string ref = 3;
    */
   ref: string;
+
+  /**
+   * Empty for a public repository.
+   *
+   * @generated from field: string git_connection_id = 4;
+   */
+  gitConnectionId: string;
 };
 
 /**
@@ -315,6 +336,125 @@ export type SetProjectSourceRequest = Message<"blaxsmith.api.v1.SetProjectSource
  */
 export const SetProjectSourceRequestSchema: GenMessage<SetProjectSourceRequest> = /*@__PURE__*/
   messageDesc(file_blaxsmith_api_v1_workflow, 10);
+
+/**
+ * An organization Git credential for private repositories. The token is
+ * write-only; the platform uses it for AX Workspace setup and run-branch pushes.
+ *
+ * @generated from message blaxsmith.api.v1.GitConnection
+ */
+export type GitConnection = Message<"blaxsmith.api.v1.GitConnection"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * github.com or gitlab.com.
+   *
+   * @generated from field: string host = 2;
+   */
+  host: string;
+
+  /**
+   * HTTPS basic-auth user for the token.
+   *
+   * @generated from field: string username = 3;
+   */
+  username: string;
+
+  /**
+   * RFC 3339.
+   *
+   * @generated from field: string created_at = 4;
+   */
+  createdAt: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.GitConnection.
+ * Use `create(GitConnectionSchema)` to create a new message.
+ */
+export const GitConnectionSchema: GenMessage<GitConnection> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 11);
+
+/**
+ * @generated from message blaxsmith.api.v1.ListGitConnectionsRequest
+ */
+export type ListGitConnectionsRequest = Message<"blaxsmith.api.v1.ListGitConnectionsRequest"> & {
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ListGitConnectionsRequest.
+ * Use `create(ListGitConnectionsRequestSchema)` to create a new message.
+ */
+export const ListGitConnectionsRequestSchema: GenMessage<ListGitConnectionsRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 12);
+
+/**
+ * @generated from message blaxsmith.api.v1.ListGitConnectionsResponse
+ */
+export type ListGitConnectionsResponse = Message<"blaxsmith.api.v1.ListGitConnectionsResponse"> & {
+  /**
+   * @generated from field: repeated blaxsmith.api.v1.GitConnection connections = 1;
+   */
+  connections: GitConnection[];
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ListGitConnectionsResponse.
+ * Use `create(ListGitConnectionsResponseSchema)` to create a new message.
+ */
+export const ListGitConnectionsResponseSchema: GenMessage<ListGitConnectionsResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 13);
+
+/**
+ * @generated from message blaxsmith.api.v1.CreateGitConnectionRequest
+ */
+export type CreateGitConnectionRequest = Message<"blaxsmith.api.v1.CreateGitConnectionRequest"> & {
+  /**
+   * github.com or gitlab.com.
+   *
+   * @generated from field: string host = 1;
+   */
+  host: string;
+
+  /**
+   * @generated from field: string username = 2;
+   */
+  username: string;
+
+  /**
+   * Write-only, max 8192 bytes; contents read/write on the repository.
+   *
+   * @generated from field: string token = 3;
+   */
+  token: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.CreateGitConnectionRequest.
+ * Use `create(CreateGitConnectionRequestSchema)` to create a new message.
+ */
+export const CreateGitConnectionRequestSchema: GenMessage<CreateGitConnectionRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 14);
+
+/**
+ * @generated from message blaxsmith.api.v1.CreateGitConnectionResponse
+ */
+export type CreateGitConnectionResponse = Message<"blaxsmith.api.v1.CreateGitConnectionResponse"> & {
+  /**
+   * @generated from field: blaxsmith.api.v1.GitConnection connection = 1;
+   */
+  connection?: GitConnection | undefined;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.CreateGitConnectionResponse.
+ * Use `create(CreateGitConnectionResponseSchema)` to create a new message.
+ */
+export const CreateGitConnectionResponseSchema: GenMessage<CreateGitConnectionResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 15);
 
 /**
  * @generated from message blaxsmith.api.v1.SetProjectSourceResponse
@@ -331,7 +471,7 @@ export type SetProjectSourceResponse = Message<"blaxsmith.api.v1.SetProjectSourc
  * Use `create(SetProjectSourceResponseSchema)` to create a new message.
  */
 export const SetProjectSourceResponseSchema: GenMessage<SetProjectSourceResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 11);
+  messageDesc(file_blaxsmith_api_v1_workflow, 16);
 
 /**
  * @generated from message blaxsmith.api.v1.VerificationCheck
@@ -353,7 +493,7 @@ export type VerificationCheck = Message<"blaxsmith.api.v1.VerificationCheck"> & 
  * Use `create(VerificationCheckSchema)` to create a new message.
  */
 export const VerificationCheckSchema: GenMessage<VerificationCheck> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 12);
+  messageDesc(file_blaxsmith_api_v1_workflow, 17);
 
 /**
  * @generated from message blaxsmith.api.v1.ProjectVerification
@@ -387,7 +527,7 @@ export type ProjectVerification = Message<"blaxsmith.api.v1.ProjectVerification"
  * Use `create(ProjectVerificationSchema)` to create a new message.
  */
 export const ProjectVerificationSchema: GenMessage<ProjectVerification> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 13);
+  messageDesc(file_blaxsmith_api_v1_workflow, 18);
 
 /**
  * @generated from message blaxsmith.api.v1.GetProjectVerificationRequest
@@ -404,7 +544,7 @@ export type GetProjectVerificationRequest = Message<"blaxsmith.api.v1.GetProject
  * Use `create(GetProjectVerificationRequestSchema)` to create a new message.
  */
 export const GetProjectVerificationRequestSchema: GenMessage<GetProjectVerificationRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 14);
+  messageDesc(file_blaxsmith_api_v1_workflow, 19);
 
 /**
  * @generated from message blaxsmith.api.v1.GetProjectVerificationResponse
@@ -421,7 +561,7 @@ export type GetProjectVerificationResponse = Message<"blaxsmith.api.v1.GetProjec
  * Use `create(GetProjectVerificationResponseSchema)` to create a new message.
  */
 export const GetProjectVerificationResponseSchema: GenMessage<GetProjectVerificationResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 15);
+  messageDesc(file_blaxsmith_api_v1_workflow, 20);
 
 /**
  * @generated from message blaxsmith.api.v1.SetProjectVerificationRequest
@@ -443,7 +583,7 @@ export type SetProjectVerificationRequest = Message<"blaxsmith.api.v1.SetProject
  * Use `create(SetProjectVerificationRequestSchema)` to create a new message.
  */
 export const SetProjectVerificationRequestSchema: GenMessage<SetProjectVerificationRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 16);
+  messageDesc(file_blaxsmith_api_v1_workflow, 21);
 
 /**
  * @generated from message blaxsmith.api.v1.SetProjectVerificationResponse
@@ -460,7 +600,7 @@ export type SetProjectVerificationResponse = Message<"blaxsmith.api.v1.SetProjec
  * Use `create(SetProjectVerificationResponseSchema)` to create a new message.
  */
 export const SetProjectVerificationResponseSchema: GenMessage<SetProjectVerificationResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 17);
+  messageDesc(file_blaxsmith_api_v1_workflow, 22);
 
 /**
  * An organization-owned model connection and project grant. Credential bytes
@@ -516,7 +656,7 @@ export type ProjectModelAccess = Message<"blaxsmith.api.v1.ProjectModelAccess"> 
  * Use `create(ProjectModelAccessSchema)` to create a new message.
  */
 export const ProjectModelAccessSchema: GenMessage<ProjectModelAccess> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 18);
+  messageDesc(file_blaxsmith_api_v1_workflow, 23);
 
 /**
  * @generated from message blaxsmith.api.v1.ListProjectModelAccessRequest
@@ -533,7 +673,7 @@ export type ListProjectModelAccessRequest = Message<"blaxsmith.api.v1.ListProjec
  * Use `create(ListProjectModelAccessRequestSchema)` to create a new message.
  */
 export const ListProjectModelAccessRequestSchema: GenMessage<ListProjectModelAccessRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 19);
+  messageDesc(file_blaxsmith_api_v1_workflow, 24);
 
 /**
  * @generated from message blaxsmith.api.v1.ListProjectModelAccessResponse
@@ -550,7 +690,7 @@ export type ListProjectModelAccessResponse = Message<"blaxsmith.api.v1.ListProje
  * Use `create(ListProjectModelAccessResponseSchema)` to create a new message.
  */
 export const ListProjectModelAccessResponseSchema: GenMessage<ListProjectModelAccessResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 20);
+  messageDesc(file_blaxsmith_api_v1_workflow, 25);
 
 /**
  * @generated from message blaxsmith.api.v1.CreateProjectModelAccessRequest
@@ -584,7 +724,7 @@ export type CreateProjectModelAccessRequest = Message<"blaxsmith.api.v1.CreatePr
  * Use `create(CreateProjectModelAccessRequestSchema)` to create a new message.
  */
 export const CreateProjectModelAccessRequestSchema: GenMessage<CreateProjectModelAccessRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 21);
+  messageDesc(file_blaxsmith_api_v1_workflow, 26);
 
 /**
  * @generated from message blaxsmith.api.v1.CreateProjectModelAccessResponse
@@ -601,7 +741,7 @@ export type CreateProjectModelAccessResponse = Message<"blaxsmith.api.v1.CreateP
  * Use `create(CreateProjectModelAccessResponseSchema)` to create a new message.
  */
 export const CreateProjectModelAccessResponseSchema: GenMessage<CreateProjectModelAccessResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 22);
+  messageDesc(file_blaxsmith_api_v1_workflow, 27);
 
 /**
  * @generated from message blaxsmith.api.v1.RevokeProjectModelAccessRequest
@@ -618,7 +758,7 @@ export type RevokeProjectModelAccessRequest = Message<"blaxsmith.api.v1.RevokePr
  * Use `create(RevokeProjectModelAccessRequestSchema)` to create a new message.
  */
 export const RevokeProjectModelAccessRequestSchema: GenMessage<RevokeProjectModelAccessRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 23);
+  messageDesc(file_blaxsmith_api_v1_workflow, 28);
 
 /**
  * @generated from message blaxsmith.api.v1.RevokeProjectModelAccessResponse
@@ -635,7 +775,7 @@ export type RevokeProjectModelAccessResponse = Message<"blaxsmith.api.v1.RevokeP
  * Use `create(RevokeProjectModelAccessResponseSchema)` to create a new message.
  */
 export const RevokeProjectModelAccessResponseSchema: GenMessage<RevokeProjectModelAccessResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 24);
+  messageDesc(file_blaxsmith_api_v1_workflow, 29);
 
 /**
  * @generated from message blaxsmith.api.v1.ListProjectsRequest
@@ -680,7 +820,7 @@ export type ListProjectsRequest = Message<"blaxsmith.api.v1.ListProjectsRequest"
  * Use `create(ListProjectsRequestSchema)` to create a new message.
  */
 export const ListProjectsRequestSchema: GenMessage<ListProjectsRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 25);
+  messageDesc(file_blaxsmith_api_v1_workflow, 30);
 
 /**
  * @generated from message blaxsmith.api.v1.ListProjectsResponse
@@ -702,7 +842,7 @@ export type ListProjectsResponse = Message<"blaxsmith.api.v1.ListProjectsRespons
  * Use `create(ListProjectsResponseSchema)` to create a new message.
  */
 export const ListProjectsResponseSchema: GenMessage<ListProjectsResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 26);
+  messageDesc(file_blaxsmith_api_v1_workflow, 31);
 
 /**
  * @generated from message blaxsmith.api.v1.GetRunRequest
@@ -719,7 +859,7 @@ export type GetRunRequest = Message<"blaxsmith.api.v1.GetRunRequest"> & {
  * Use `create(GetRunRequestSchema)` to create a new message.
  */
 export const GetRunRequestSchema: GenMessage<GetRunRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 27);
+  messageDesc(file_blaxsmith_api_v1_workflow, 32);
 
 /**
  * @generated from message blaxsmith.api.v1.GetRunResponse
@@ -736,7 +876,7 @@ export type GetRunResponse = Message<"blaxsmith.api.v1.GetRunResponse"> & {
  * Use `create(GetRunResponseSchema)` to create a new message.
  */
 export const GetRunResponseSchema: GenMessage<GetRunResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 28);
+  messageDesc(file_blaxsmith_api_v1_workflow, 33);
 
 /**
  * @generated from message blaxsmith.api.v1.LaunchRunRequest
@@ -788,7 +928,7 @@ export type LaunchRunRequest = Message<"blaxsmith.api.v1.LaunchRunRequest"> & {
  * Use `create(LaunchRunRequestSchema)` to create a new message.
  */
 export const LaunchRunRequestSchema: GenMessage<LaunchRunRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 29);
+  messageDesc(file_blaxsmith_api_v1_workflow, 34);
 
 /**
  * @generated from message blaxsmith.api.v1.LaunchRunResponse
@@ -805,7 +945,7 @@ export type LaunchRunResponse = Message<"blaxsmith.api.v1.LaunchRunResponse"> & 
  * Use `create(LaunchRunResponseSchema)` to create a new message.
  */
 export const LaunchRunResponseSchema: GenMessage<LaunchRunResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 30);
+  messageDesc(file_blaxsmith_api_v1_workflow, 35);
 
 /**
  * @generated from message blaxsmith.api.v1.GetLaunchAvailabilityRequest
@@ -822,7 +962,7 @@ export type GetLaunchAvailabilityRequest = Message<"blaxsmith.api.v1.GetLaunchAv
  * Use `create(GetLaunchAvailabilityRequestSchema)` to create a new message.
  */
 export const GetLaunchAvailabilityRequestSchema: GenMessage<GetLaunchAvailabilityRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 31);
+  messageDesc(file_blaxsmith_api_v1_workflow, 36);
 
 /**
  * @generated from message blaxsmith.api.v1.GetLaunchAvailabilityResponse
@@ -846,7 +986,7 @@ export type GetLaunchAvailabilityResponse = Message<"blaxsmith.api.v1.GetLaunchA
  * Use `create(GetLaunchAvailabilityResponseSchema)` to create a new message.
  */
 export const GetLaunchAvailabilityResponseSchema: GenMessage<GetLaunchAvailabilityResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 32);
+  messageDesc(file_blaxsmith_api_v1_workflow, 37);
 
 /**
  * @generated from message blaxsmith.api.v1.RunTask
@@ -915,6 +1055,34 @@ export type RunTask = Message<"blaxsmith.api.v1.RunTask"> & {
    * @generated from field: repeated blaxsmith.api.v1.FrozenInputFile skill_files = 12;
    */
   skillFiles: FrozenInputFile[];
+
+  /**
+   * Frozen stage kind, e.g. plan, interview, implement, verify.
+   *
+   * @generated from field: string kind = 13;
+   */
+  kind: string;
+
+  /**
+   * Correction target when this stage owns a loop.
+   *
+   * @generated from field: string loop_with = 14;
+   */
+  loopWith: string;
+
+  /**
+   * Loop cap before escalation, including granted raises.
+   *
+   * @generated from field: int32 max_cycles = 15;
+   */
+  maxCycles: number;
+
+  /**
+   * Corrections this loop has requested so far.
+   *
+   * @generated from field: int32 loop_cycles = 16;
+   */
+  loopCycles: number;
 };
 
 /**
@@ -922,7 +1090,7 @@ export type RunTask = Message<"blaxsmith.api.v1.RunTask"> & {
  * Use `create(RunTaskSchema)` to create a new message.
  */
 export const RunTaskSchema: GenMessage<RunTask> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 33);
+  messageDesc(file_blaxsmith_api_v1_workflow, 38);
 
 /**
  * @generated from message blaxsmith.api.v1.FrozenInputFile
@@ -944,7 +1112,7 @@ export type FrozenInputFile = Message<"blaxsmith.api.v1.FrozenInputFile"> & {
  * Use `create(FrozenInputFileSchema)` to create a new message.
  */
 export const FrozenInputFileSchema: GenMessage<FrozenInputFile> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 34);
+  messageDesc(file_blaxsmith_api_v1_workflow, 39);
 
 /**
  * @generated from message blaxsmith.api.v1.ListRunTasksRequest
@@ -961,7 +1129,7 @@ export type ListRunTasksRequest = Message<"blaxsmith.api.v1.ListRunTasksRequest"
  * Use `create(ListRunTasksRequestSchema)` to create a new message.
  */
 export const ListRunTasksRequestSchema: GenMessage<ListRunTasksRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 35);
+  messageDesc(file_blaxsmith_api_v1_workflow, 40);
 
 /**
  * @generated from message blaxsmith.api.v1.ListRunTasksResponse
@@ -978,7 +1146,7 @@ export type ListRunTasksResponse = Message<"blaxsmith.api.v1.ListRunTasksRespons
  * Use `create(ListRunTasksResponseSchema)` to create a new message.
  */
 export const ListRunTasksResponseSchema: GenMessage<ListRunTasksResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 36);
+  messageDesc(file_blaxsmith_api_v1_workflow, 41);
 
 /**
  * @generated from message blaxsmith.api.v1.ListRunsRequest
@@ -1028,7 +1196,7 @@ export type ListRunsRequest = Message<"blaxsmith.api.v1.ListRunsRequest"> & {
  * Use `create(ListRunsRequestSchema)` to create a new message.
  */
 export const ListRunsRequestSchema: GenMessage<ListRunsRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 37);
+  messageDesc(file_blaxsmith_api_v1_workflow, 42);
 
 /**
  * @generated from message blaxsmith.api.v1.ListRunsResponse
@@ -1050,7 +1218,7 @@ export type ListRunsResponse = Message<"blaxsmith.api.v1.ListRunsResponse"> & {
  * Use `create(ListRunsResponseSchema)` to create a new message.
  */
 export const ListRunsResponseSchema: GenMessage<ListRunsResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 38);
+  messageDesc(file_blaxsmith_api_v1_workflow, 43);
 
 /**
  * @generated from message blaxsmith.api.v1.EventsAfterRequest
@@ -1079,7 +1247,7 @@ export type EventsAfterRequest = Message<"blaxsmith.api.v1.EventsAfterRequest"> 
  * Use `create(EventsAfterRequestSchema)` to create a new message.
  */
 export const EventsAfterRequestSchema: GenMessage<EventsAfterRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 39);
+  messageDesc(file_blaxsmith_api_v1_workflow, 44);
 
 /**
  * @generated from message blaxsmith.api.v1.EventsAfterResponse
@@ -1101,7 +1269,7 @@ export type EventsAfterResponse = Message<"blaxsmith.api.v1.EventsAfterResponse"
  * Use `create(EventsAfterResponseSchema)` to create a new message.
  */
 export const EventsAfterResponseSchema: GenMessage<EventsAfterResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 40);
+  messageDesc(file_blaxsmith_api_v1_workflow, 45);
 
 /**
  * A signed connector readback. It does not verify task success or artifacts.
@@ -1176,7 +1344,7 @@ export type CommandExitObservation = Message<"blaxsmith.api.v1.CommandExitObserv
  * Use `create(CommandExitObservationSchema)` to create a new message.
  */
 export const CommandExitObservationSchema: GenMessage<CommandExitObservation> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 41);
+  messageDesc(file_blaxsmith_api_v1_workflow, 46);
 
 /**
  * @generated from message blaxsmith.api.v1.ListCommandExitsRequest
@@ -1205,7 +1373,7 @@ export type ListCommandExitsRequest = Message<"blaxsmith.api.v1.ListCommandExits
  * Use `create(ListCommandExitsRequestSchema)` to create a new message.
  */
 export const ListCommandExitsRequestSchema: GenMessage<ListCommandExitsRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 42);
+  messageDesc(file_blaxsmith_api_v1_workflow, 47);
 
 /**
  * @generated from message blaxsmith.api.v1.ListCommandExitsResponse
@@ -1227,7 +1395,7 @@ export type ListCommandExitsResponse = Message<"blaxsmith.api.v1.ListCommandExit
  * Use `create(ListCommandExitsResponseSchema)` to create a new message.
  */
 export const ListCommandExitsResponseSchema: GenMessage<ListCommandExitsResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 43);
+  messageDesc(file_blaxsmith_api_v1_workflow, 48);
 
 /**
  * @generated from message blaxsmith.api.v1.ReviewDecision
@@ -1275,7 +1443,7 @@ export type ReviewDecision = Message<"blaxsmith.api.v1.ReviewDecision"> & {
  * Use `create(ReviewDecisionSchema)` to create a new message.
  */
 export const ReviewDecisionSchema: GenMessage<ReviewDecision> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 44);
+  messageDesc(file_blaxsmith_api_v1_workflow, 49);
 
 /**
  * @generated from message blaxsmith.api.v1.ReviewPackage
@@ -1339,7 +1507,7 @@ export type ReviewPackage = Message<"blaxsmith.api.v1.ReviewPackage"> & {
  * Use `create(ReviewPackageSchema)` to create a new message.
  */
 export const ReviewPackageSchema: GenMessage<ReviewPackage> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 45);
+  messageDesc(file_blaxsmith_api_v1_workflow, 50);
 
 /**
  * @generated from message blaxsmith.api.v1.GetCurrentReviewRequest
@@ -1356,7 +1524,7 @@ export type GetCurrentReviewRequest = Message<"blaxsmith.api.v1.GetCurrentReview
  * Use `create(GetCurrentReviewRequestSchema)` to create a new message.
  */
 export const GetCurrentReviewRequestSchema: GenMessage<GetCurrentReviewRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 46);
+  messageDesc(file_blaxsmith_api_v1_workflow, 51);
 
 /**
  * @generated from message blaxsmith.api.v1.GetCurrentReviewResponse
@@ -1373,7 +1541,7 @@ export type GetCurrentReviewResponse = Message<"blaxsmith.api.v1.GetCurrentRevie
  * Use `create(GetCurrentReviewResponseSchema)` to create a new message.
  */
 export const GetCurrentReviewResponseSchema: GenMessage<GetCurrentReviewResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 47);
+  messageDesc(file_blaxsmith_api_v1_workflow, 52);
 
 /**
  * @generated from message blaxsmith.api.v1.DecideReviewRequest
@@ -1414,7 +1582,7 @@ export type DecideReviewRequest = Message<"blaxsmith.api.v1.DecideReviewRequest"
  * Use `create(DecideReviewRequestSchema)` to create a new message.
  */
 export const DecideReviewRequestSchema: GenMessage<DecideReviewRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 48);
+  messageDesc(file_blaxsmith_api_v1_workflow, 53);
 
 /**
  * @generated from message blaxsmith.api.v1.DecideReviewResponse
@@ -1431,7 +1599,519 @@ export type DecideReviewResponse = Message<"blaxsmith.api.v1.DecideReviewRespons
  * Use `create(DecideReviewResponseSchema)` to create a new message.
  */
 export const DecideReviewResponseSchema: GenMessage<DecideReviewResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 49);
+  messageDesc(file_blaxsmith_api_v1_workflow, 54);
+
+/**
+ * A structured human interaction raised by a guest (`bx ask`) or by the
+ * platform (escalation). The first answer wins.
+ *
+ * @generated from message blaxsmith.api.v1.InteractionOption
+ */
+export type InteractionOption = Message<"blaxsmith.api.v1.InteractionOption"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string label = 2;
+   */
+  label: string;
+
+  /**
+   * @generated from field: string description = 3;
+   */
+  description: string;
+
+  /**
+   * @generated from field: bool recommended = 4;
+   */
+  recommended: boolean;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.InteractionOption.
+ * Use `create(InteractionOptionSchema)` to create a new message.
+ */
+export const InteractionOptionSchema: GenMessage<InteractionOption> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 55);
+
+/**
+ * @generated from message blaxsmith.api.v1.InteractionSource
+ */
+export type InteractionSource = Message<"blaxsmith.api.v1.InteractionSource"> & {
+  /**
+   * @generated from field: string path = 1;
+   */
+  path: string;
+
+  /**
+   * @generated from field: int32 line = 2;
+   */
+  line: number;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.InteractionSource.
+ * Use `create(InteractionSourceSchema)` to create a new message.
+ */
+export const InteractionSourceSchema: GenMessage<InteractionSource> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 56);
+
+/**
+ * @generated from message blaxsmith.api.v1.InteractionInterview
+ */
+export type InteractionInterview = Message<"blaxsmith.api.v1.InteractionInterview"> & {
+  /**
+   * @generated from field: int32 round = 1;
+   */
+  round: number;
+
+  /**
+   * @generated from field: string finalize_option = 2;
+   */
+  finalizeOption: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.InteractionInterview.
+ * Use `create(InteractionInterviewSchema)` to create a new message.
+ */
+export const InteractionInterviewSchema: GenMessage<InteractionInterview> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 57);
+
+/**
+ * @generated from message blaxsmith.api.v1.InteractionAnswer
+ */
+export type InteractionAnswer = Message<"blaxsmith.api.v1.InteractionAnswer"> & {
+  /**
+   * @generated from field: repeated string option_ids = 1;
+   */
+  optionIds: string[];
+
+  /**
+   * @generated from field: string text = 2;
+   */
+  text: string;
+
+  /**
+   * Principal ID.
+   *
+   * @generated from field: string answered_by = 3;
+   */
+  answeredBy: string;
+
+  /**
+   * RFC 3339.
+   *
+   * @generated from field: string at = 4;
+   */
+  at: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.InteractionAnswer.
+ * Use `create(InteractionAnswerSchema)` to create a new message.
+ */
+export const InteractionAnswerSchema: GenMessage<InteractionAnswer> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 58);
+
+/**
+ * @generated from message blaxsmith.api.v1.Interaction
+ */
+export type Interaction = Message<"blaxsmith.api.v1.Interaction"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * Empty for platform escalations.
+   *
+   * @generated from field: string attempt_id = 2;
+   */
+  attemptId: string;
+
+  /**
+   * Frozen stage key.
+   *
+   * @generated from field: string stage = 3;
+   */
+  stage: string;
+
+  /**
+   * question, approval, escalation, or interview_round.
+   *
+   * @generated from field: string kind = 4;
+   */
+  kind: string;
+
+  /**
+   * @generated from field: string title = 5;
+   */
+  title: string;
+
+  /**
+   * @generated from field: string body_md = 6;
+   */
+  bodyMd: string;
+
+  /**
+   * @generated from field: repeated blaxsmith.api.v1.InteractionOption options = 7;
+   */
+  options: InteractionOption[];
+
+  /**
+   * @generated from field: bool multi_select = 8;
+   */
+  multiSelect: boolean;
+
+  /**
+   * @generated from field: bool allow_free_text = 9;
+   */
+  allowFreeText: boolean;
+
+  /**
+   * @generated from field: bool blocking = 10;
+   */
+  blocking: boolean;
+
+  /**
+   * @generated from field: repeated blaxsmith.api.v1.InteractionSource sources = 11;
+   */
+  sources: InteractionSource[];
+
+  /**
+   * @generated from field: blaxsmith.api.v1.InteractionInterview interview = 12;
+   */
+  interview?: InteractionInterview | undefined;
+
+  /**
+   * open, answered, cancelled, or superseded.
+   *
+   * @generated from field: string state = 13;
+   */
+  state: string;
+
+  /**
+   * @generated from field: blaxsmith.api.v1.InteractionAnswer answer = 14;
+   */
+  answer?: InteractionAnswer | undefined;
+
+  /**
+   * RFC 3339.
+   *
+   * @generated from field: string created_at = 15;
+   */
+  createdAt: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.Interaction.
+ * Use `create(InteractionSchema)` to create a new message.
+ */
+export const InteractionSchema: GenMessage<Interaction> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 59);
+
+/**
+ * @generated from message blaxsmith.api.v1.ListInteractionsRequest
+ */
+export type ListInteractionsRequest = Message<"blaxsmith.api.v1.ListInteractionsRequest"> & {
+  /**
+   * @generated from field: string run_id = 1;
+   */
+  runId: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ListInteractionsRequest.
+ * Use `create(ListInteractionsRequestSchema)` to create a new message.
+ */
+export const ListInteractionsRequestSchema: GenMessage<ListInteractionsRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 60);
+
+/**
+ * @generated from message blaxsmith.api.v1.ListInteractionsResponse
+ */
+export type ListInteractionsResponse = Message<"blaxsmith.api.v1.ListInteractionsResponse"> & {
+  /**
+   * @generated from field: repeated blaxsmith.api.v1.Interaction interactions = 1;
+   */
+  interactions: Interaction[];
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ListInteractionsResponse.
+ * Use `create(ListInteractionsResponseSchema)` to create a new message.
+ */
+export const ListInteractionsResponseSchema: GenMessage<ListInteractionsResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 61);
+
+/**
+ * @generated from message blaxsmith.api.v1.AnswerInteractionRequest
+ */
+export type AnswerInteractionRequest = Message<"blaxsmith.api.v1.AnswerInteractionRequest"> & {
+  /**
+   * @generated from field: string interaction_id = 1;
+   */
+  interactionId: string;
+
+  /**
+   * Must name stored options.
+   *
+   * @generated from field: repeated string option_ids = 2;
+   */
+  optionIds: string[];
+
+  /**
+   * Only when free text is allowed; max 4000 characters.
+   *
+   * @generated from field: string text = 3;
+   */
+  text: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.AnswerInteractionRequest.
+ * Use `create(AnswerInteractionRequestSchema)` to create a new message.
+ */
+export const AnswerInteractionRequestSchema: GenMessage<AnswerInteractionRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 62);
+
+/**
+ * @generated from message blaxsmith.api.v1.AnswerInteractionResponse
+ */
+export type AnswerInteractionResponse = Message<"blaxsmith.api.v1.AnswerInteractionResponse"> & {
+  /**
+   * @generated from field: blaxsmith.api.v1.Interaction interaction = 1;
+   */
+  interaction?: Interaction | undefined;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.AnswerInteractionResponse.
+ * Use `create(AnswerInteractionResponseSchema)` to create a new message.
+ */
+export const AnswerInteractionResponseSchema: GenMessage<AnswerInteractionResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 63);
+
+/**
+ * @generated from message blaxsmith.api.v1.SteerAttemptRequest
+ */
+export type SteerAttemptRequest = Message<"blaxsmith.api.v1.SteerAttemptRequest"> & {
+  /**
+   * @generated from field: string attempt_id = 1;
+   */
+  attemptId: string;
+
+  /**
+   * instruction, pause, halt, or set_max_cycles.
+   *
+   * @generated from field: string kind = 2;
+   */
+  kind: string;
+
+  /**
+   * instruction: 1-4000 characters.
+   *
+   * @generated from field: string text = 3;
+   */
+  text: string;
+
+  /**
+   * halt: 1-1000 characters.
+   *
+   * @generated from field: string reason = 4;
+   */
+  reason: string;
+
+  /**
+   * set_max_cycles: 1-100.
+   *
+   * @generated from field: int32 n = 5;
+   */
+  n: number;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.SteerAttemptRequest.
+ * Use `create(SteerAttemptRequestSchema)` to create a new message.
+ */
+export const SteerAttemptRequestSchema: GenMessage<SteerAttemptRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 64);
+
+/**
+ * @generated from message blaxsmith.api.v1.SteerAttemptResponse
+ */
+export type SteerAttemptResponse = Message<"blaxsmith.api.v1.SteerAttemptResponse"> & {
+  /**
+   * @generated from field: string steer_id = 1;
+   */
+  steerId: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.SteerAttemptResponse.
+ * Use `create(SteerAttemptResponseSchema)` to create a new message.
+ */
+export const SteerAttemptResponseSchema: GenMessage<SteerAttemptResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 65);
+
+/**
+ * Interactive terminal control. control is "agent" or "human"; the holder is
+ * set only while a person controls the running attempt. generation advances on
+ * every holder change.
+ *
+ * @generated from message blaxsmith.api.v1.AttemptControl
+ */
+export type AttemptControl = Message<"blaxsmith.api.v1.AttemptControl"> & {
+  /**
+   * @generated from field: string attempt_id = 1;
+   */
+  attemptId: string;
+
+  /**
+   * @generated from field: string control = 2;
+   */
+  control: string;
+
+  /**
+   * @generated from field: string holder_principal_id = 3;
+   */
+  holderPrincipalId: string;
+
+  /**
+   * @generated from field: int64 generation = 4;
+   */
+  generation: bigint;
+
+  /**
+   * @generated from field: string stage = 5;
+   */
+  stage: string;
+
+  /**
+   * @generated from field: string attempt_status = 6;
+   */
+  attemptStatus: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.AttemptControl.
+ * Use `create(AttemptControlSchema)` to create a new message.
+ */
+export const AttemptControlSchema: GenMessage<AttemptControl> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 66);
+
+/**
+ * @generated from message blaxsmith.api.v1.GetAttemptControlRequest
+ */
+export type GetAttemptControlRequest = Message<"blaxsmith.api.v1.GetAttemptControlRequest"> & {
+  /**
+   * @generated from field: string attempt_id = 1;
+   */
+  attemptId: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.GetAttemptControlRequest.
+ * Use `create(GetAttemptControlRequestSchema)` to create a new message.
+ */
+export const GetAttemptControlRequestSchema: GenMessage<GetAttemptControlRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 67);
+
+/**
+ * @generated from message blaxsmith.api.v1.GetAttemptControlResponse
+ */
+export type GetAttemptControlResponse = Message<"blaxsmith.api.v1.GetAttemptControlResponse"> & {
+  /**
+   * @generated from field: blaxsmith.api.v1.AttemptControl control = 1;
+   */
+  control?: AttemptControl | undefined;
+
+  /**
+   * Takeover shows the model API key: org owners and admins, or the owner of
+   * the attempt's personal model connection.
+   *
+   * @generated from field: bool can_take_over = 2;
+   */
+  canTakeOver: boolean;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.GetAttemptControlResponse.
+ * Use `create(GetAttemptControlResponseSchema)` to create a new message.
+ */
+export const GetAttemptControlResponseSchema: GenMessage<GetAttemptControlResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 68);
+
+/**
+ * @generated from message blaxsmith.api.v1.TakeOverAttemptRequest
+ */
+export type TakeOverAttemptRequest = Message<"blaxsmith.api.v1.TakeOverAttemptRequest"> & {
+  /**
+   * @generated from field: string attempt_id = 1;
+   */
+  attemptId: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.TakeOverAttemptRequest.
+ * Use `create(TakeOverAttemptRequestSchema)` to create a new message.
+ */
+export const TakeOverAttemptRequestSchema: GenMessage<TakeOverAttemptRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 69);
+
+/**
+ * @generated from message blaxsmith.api.v1.TakeOverAttemptResponse
+ */
+export type TakeOverAttemptResponse = Message<"blaxsmith.api.v1.TakeOverAttemptResponse"> & {
+  /**
+   * @generated from field: blaxsmith.api.v1.AttemptControl control = 1;
+   */
+  control?: AttemptControl | undefined;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.TakeOverAttemptResponse.
+ * Use `create(TakeOverAttemptResponseSchema)` to create a new message.
+ */
+export const TakeOverAttemptResponseSchema: GenMessage<TakeOverAttemptResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 70);
+
+/**
+ * @generated from message blaxsmith.api.v1.HandBackAttemptRequest
+ */
+export type HandBackAttemptRequest = Message<"blaxsmith.api.v1.HandBackAttemptRequest"> & {
+  /**
+   * @generated from field: string attempt_id = 1;
+   */
+  attemptId: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.HandBackAttemptRequest.
+ * Use `create(HandBackAttemptRequestSchema)` to create a new message.
+ */
+export const HandBackAttemptRequestSchema: GenMessage<HandBackAttemptRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 71);
+
+/**
+ * @generated from message blaxsmith.api.v1.HandBackAttemptResponse
+ */
+export type HandBackAttemptResponse = Message<"blaxsmith.api.v1.HandBackAttemptResponse"> & {
+  /**
+   * @generated from field: blaxsmith.api.v1.AttemptControl control = 1;
+   */
+  control?: AttemptControl | undefined;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.HandBackAttemptResponse.
+ * Use `create(HandBackAttemptResponseSchema)` to create a new message.
+ */
+export const HandBackAttemptResponseSchema: GenMessage<HandBackAttemptResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 72);
 
 /**
  * Browser requests derive their organization exclusively from a live session.
@@ -1470,6 +2150,22 @@ export const WorkflowService: GenService<{
     methodKind: "unary";
     input: typeof SetProjectSourceRequestSchema;
     output: typeof SetProjectSourceResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.WorkflowService.ListGitConnections
+   */
+  listGitConnections: {
+    methodKind: "unary";
+    input: typeof ListGitConnectionsRequestSchema;
+    output: typeof ListGitConnectionsResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.WorkflowService.CreateGitConnection
+   */
+  createGitConnection: {
+    methodKind: "unary";
+    input: typeof CreateGitConnectionRequestSchema;
+    output: typeof CreateGitConnectionResponseSchema;
   },
   /**
    * @generated from rpc blaxsmith.api.v1.WorkflowService.GetProjectVerification
@@ -1590,6 +2286,54 @@ export const WorkflowService: GenService<{
     methodKind: "unary";
     input: typeof DecideReviewRequestSchema;
     output: typeof DecideReviewResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.WorkflowService.GetAttemptControl
+   */
+  getAttemptControl: {
+    methodKind: "unary";
+    input: typeof GetAttemptControlRequestSchema;
+    output: typeof GetAttemptControlResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.WorkflowService.TakeOverAttempt
+   */
+  takeOverAttempt: {
+    methodKind: "unary";
+    input: typeof TakeOverAttemptRequestSchema;
+    output: typeof TakeOverAttemptResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.WorkflowService.HandBackAttempt
+   */
+  handBackAttempt: {
+    methodKind: "unary";
+    input: typeof HandBackAttemptRequestSchema;
+    output: typeof HandBackAttemptResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.WorkflowService.ListInteractions
+   */
+  listInteractions: {
+    methodKind: "unary";
+    input: typeof ListInteractionsRequestSchema;
+    output: typeof ListInteractionsResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.WorkflowService.AnswerInteraction
+   */
+  answerInteraction: {
+    methodKind: "unary";
+    input: typeof AnswerInteractionRequestSchema;
+    output: typeof AnswerInteractionResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.WorkflowService.SteerAttempt
+   */
+  steerAttempt: {
+    methodKind: "unary";
+    input: typeof SteerAttemptRequestSchema;
+    output: typeof SteerAttemptResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_blaxsmith_api_v1_workflow, 0);

@@ -3,14 +3,18 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, Check, GitCommitHorizontal, RefreshCw, Terminal } from "lucide-react";
+import { ArrowLeft, Check, GitCommitHorizontal, RefreshCw, Terminal, TerminalSquare } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
 import type { RunTask } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
+import { Inbox, interactionsKey, StagePanel, useInteractions } from "../run-live";
 import { appendRunEvent, decideReview, eventsAfter, getCurrentReview, getRun, listCommandExits, listRunTasks, liveEventsUrl, parseLiveEvent, recoverRunEventBatch, type RunEventPages } from "../workflow";
 
-export const Route = createFileRoute("/projects/$projectId/runs/$runId")({ component: RunDetail });
+export const Route = createFileRoute("/projects/$projectId/runs/$runId")({
+  component: RunDetail,
+  validateSearch: (search: Record<string, unknown>): { stage?: string } => typeof search.stage === "string" ? { stage: search.stage } : {},
+});
 
 const taskFeatures = tableFeatures({});
 const activityLabels: Record<string, string> = {
@@ -31,6 +35,10 @@ const activityLabels: Record<string, string> = {
   "review.superseded": "Review package superseded",
   "review.approved": "Review approved",
   "review.changes_requested": "Changes requested",
+  "interaction.opened": "Agent asked a question",
+  "interaction.answered": "Question answered",
+  "attempt.progress": "Agent progress",
+  "attempt.control": "Terminal control changed",
 };
 
 function activityLabel(kind: string) {
@@ -39,9 +47,9 @@ function activityLabel(kind: string) {
 
 const taskColumns: ColumnDef<typeof taskFeatures, RunTask>[] = [
   { id: "stage", accessorKey: "key", header: "Stage", cell: ({ row }) => <span className="task-stage"><strong>{row.original.key}</strong><small title={row.original.id}>Task {row.original.id.slice(0, 8)}</small></span> },
-  { id: "profile", header: "Selected runtime", cell: ({ row }) => row.original.harness
-    ? <span className="task-stage"><strong>{row.original.harness}</strong><small>{row.original.model} · {row.original.effort}</small></span>
-    : "Human checkpoint" },
+  { id: "profile", header: "Selected runtime", cell: ({ row }) => row.original.kind === "human_review" ? "Human review"
+    : <span className="task-stage"><strong>{row.original.harness}</strong><small>{[row.original.kind.replaceAll("_", " "), row.original.model, row.original.effort,
+      row.original.loopWith ? `loop ${row.original.loopCycles}/${row.original.maxCycles} with ${row.original.loopWith}` : ""].filter(Boolean).join(" · ")}</small></span> },
   { id: "inputs", header: "Frozen skills and instructions", cell: ({ row }) => {
     const task = row.original;
     const files = [
@@ -58,10 +66,13 @@ const taskColumns: ColumnDef<typeof taskFeatures, RunTask>[] = [
   { id: "state", accessorKey: "state", header: "State", cell: ({ row }) => <span className={`state-badge state-${row.original.state}`}>{row.original.state.replaceAll("_", " ")}</span> },
   { id: "attempts", accessorKey: "generation", header: "Attempts", cell: ({ row }) => `${row.original.generation.toString()} of ${row.original.maxAttempts}` },
   { id: "active", accessorKey: "activeAttemptId", header: "Active attempt", cell: ({ row }) => row.original.activeAttemptId ? <code title={row.original.activeAttemptId}>{row.original.activeAttemptId.slice(0, 8)}</code> : "—" },
+  { id: "live", header: "Live", cell: ({ row }) => <Link from={Route.fullPath} to={Route.fullPath} search={{ stage: row.original.key }} className="text-action" aria-label={`Open stage ${row.original.key}`}>
+    <TerminalSquare size={14} aria-hidden="true" /> {row.original.activeAttemptId ? "Watch" : "Open"}</Link> },
 ];
 
 function RunDetail() {
   const { projectId, runId } = Route.useParams();
+  const search = Route.useSearch();
   const queryClient = useQueryClient();
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const scope = session.data ? `${session.data.organizationId}:${session.data.principalId}` : "";
@@ -89,6 +100,10 @@ function RunDetail() {
   const latestDelivered = useRef(0n);
   const recoverRef = useRef<(() => Promise<void>) | null>(null);
   const [eventStream, setEventStream] = useState<"connecting" | "connected" | "reconnecting">("connecting");
+  const interactions = useInteractions(runId, scope, !!scope && run.data?.run?.projectId === projectId);
+  const selectedKey = search.stage ?? tasks.data?.tasks.find((task) => task.activeAttemptId)?.key;
+  const selectedTask = tasks.data?.tasks.find((task) => task.key === selectedKey);
+  const mayOperate = session.data?.role === "owner" || session.data?.role === "admin" || session.data?.role === "member";
 
   useEffect(() => {
     if (!scope || run.data?.run?.projectId !== projectId || !activity.isSuccess) return;
@@ -137,6 +152,7 @@ function RunDetail() {
         if (event.kind.startsWith("run.")) void queryClient.invalidateQueries({ queryKey: ["run", scope, runId] });
         if (event.kind.startsWith("task.") || event.kind.startsWith("attempt.")) void queryClient.invalidateQueries({ queryKey: ["run-tasks", scope, runId] });
         if (event.kind.startsWith("review.")) void queryClient.invalidateQueries({ queryKey: ["run-review", scope, runId] });
+        if (event.kind.startsWith("interaction.")) void queryClient.invalidateQueries({ queryKey: interactionsKey(scope, runId) });
         if (event.kind === "attempt.command_exited") void queryClient.invalidateQueries({ queryKey: ["run-command-exits", scope, runId] });
       } catch { void recover(); }
     };
@@ -168,12 +184,15 @@ function RunDetail() {
       <section className="summary-card"><span className="summary-label">Source commit</span><strong className="summary-value mono" title={run.data.run.sourceCommit}>{run.data.run.sourceCommit.slice(0, 12)}</strong><span className="summary-meta">Pinned at launch</span></section>
       <section className="summary-card"><span className="summary-label">Created</span><strong className="summary-value"><time dateTime={run.data.run.createdAt}>{new Date(run.data.run.createdAt).toLocaleDateString()}</time></strong><span className="summary-meta">{new Date(run.data.run.createdAt).toLocaleTimeString()}</span></section>
     </div> : null}
+    {run.data?.run && interactions.data ? <Inbox items={interactions.data} mayAnswer={mayOperate} scope={scope} runId={runId} projectId={projectId} /> : null}
     {run.data?.run ? <section className="table-section" aria-labelledby="run-tasks-heading">
       <div className="table-heading"><div><h2 id="run-tasks-heading">Execution plan</h2><p>Frozen stages run after their dependencies. Attempts count reservations, not verified results. AX pod and interactive session status are not exposed here.</p></div><span className="fetched-time">{tasks.data?.tasks.length ?? 0} stages</span></div>
       {tasks.isPending ? <div className="table-empty" role="status">Loading stages…</div> : null}
       {tasks.isError ? <div className="table-empty" role="alert">Execution plan is unavailable. <button type="button" className="text-action" onClick={() => void tasks.refetch()}>Try again</button></div> : null}
       {tasks.data ? <DataTable table={taskTable} label="Run execution plan" empty="No stages have been frozen for this run." /> : null}
     </section> : null}
+    {run.data?.run && selectedTask && session.data ? <StagePanel key={selectedTask.id} task={selectedTask} principalId={session.data.principalId} mayControl={mayOperate}
+      interactions={interactions.data ?? []} events={events} label={activityLabel} scope={scope} runId={runId} /> : null}
     {run.data?.run ? <FinalReview runId={runId} scope={scope} state={run.data.run.state} /> : null}
     {run.data?.run ? <section className="table-section" aria-labelledby="command-exits-heading">
       <div className="table-heading"><div><h2 id="command-exits-heading">Command observations</h2><p>Connector-signed exits are unverified. A zero exit does not verify artifacts or complete a task.</p></div><span className="fetched-time">{observations.length} observed</span></div>

@@ -11,15 +11,19 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 )
 
 var (
 	ErrProjectSourceDenied = errors.New("project source change denied")
 	ErrSourceRoute         = errors.New("repository host has no verified public route")
-	sourceSegmentPattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
-	sourceRefPattern       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$`)
-	reservedIPv4           = []netip.Prefix{
+	// ErrGitConnection: a private source names no active Git connection for
+	// its host, or the connection has no git.read grant for the project.
+	ErrGitConnection     = errors.New("private Git source has no granted Git connection")
+	sourceSegmentPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	sourceRefPattern     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$`)
+	reservedIPv4         = []netip.Prefix{
 		netip.MustParsePrefix("0.0.0.0/8"), netip.MustParsePrefix("100.64.0.0/10"),
 		netip.MustParsePrefix("192.0.0.0/24"), netip.MustParsePrefix("192.0.2.0/24"),
 		netip.MustParsePrefix("198.18.0.0/15"), netip.MustParsePrefix("198.51.100.0/24"),
@@ -36,7 +40,10 @@ type ProjectSource struct {
 	ProjectID     string
 	RepositoryURL string
 	Ref           string
-	UpdatedAt     time.Time
+	// GitConnectionID names the organization Git connection for a private
+	// repository; empty means the source is fetched anonymously.
+	GitConnectionID string
+	UpdatedAt       time.Time
 }
 
 // ValidatePublicGitSource is also required immediately before any server-side
@@ -129,9 +136,9 @@ func (s *Store) GetProjectSource(ctx context.Context, orgID, projectID string) (
 		return ProjectSource{}, ErrInvalid
 	}
 	var source ProjectSource
-	err := s.pool.QueryRow(ctx, `SELECT project_id,repository_url,git_ref,updated_at
+	err := s.pool.QueryRow(ctx, `SELECT project_id,repository_url,git_ref,COALESCE(git_connection_id,''),updated_at
 		FROM workflow_project_sources WHERE organization_id=$1 AND project_id=$2`, orgID, projectID).
-		Scan(&source.ProjectID, &source.RepositoryURL, &source.Ref, &source.UpdatedAt)
+		Scan(&source.ProjectID, &source.RepositoryURL, &source.Ref, &source.GitConnectionID, &source.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ProjectSource{}, ErrNotFound
 	}
@@ -140,7 +147,9 @@ func (s *Store) GetProjectSource(ctx context.Context, orgID, projectID string) (
 
 // SetProjectSourceAs validates the route, then rechecks the live owner/admin
 // session and writes the source and principal audit record atomically.
-func (s *Store) SetProjectSourceAs(ctx context.Context, caller identity.Caller, projectID, rawURL, ref string) (ProjectSource, error) {
+// A non-empty gitConnectionID makes the source private: the dispatcher is
+// granted git.read and git.write on that connection for this repository.
+func (s *Store) SetProjectSourceAs(ctx context.Context, caller identity.Caller, projectID, rawURL, ref, gitConnectionID string) (ProjectSource, error) {
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID) ||
 		(caller.Role != "owner" && caller.Role != "admin") {
 		return ProjectSource{}, ErrProjectSourceDenied
@@ -187,13 +196,20 @@ func (s *Store) SetProjectSourceAs(ctx context.Context, caller identity.Caller, 
 	}
 	var source ProjectSource
 	err = tx.QueryRow(ctx, `INSERT INTO workflow_project_sources
-		(organization_id,project_id,repository_url,git_ref) VALUES ($1,$2,$3,$4)
+		(organization_id,project_id,repository_url,git_ref,git_connection_id) VALUES ($1,$2,$3,$4,NULLIF($5,''))
 		ON CONFLICT (organization_id,project_id) DO UPDATE
-		SET repository_url=EXCLUDED.repository_url,git_ref=EXCLUDED.git_ref,updated_at=clock_timestamp()
-		RETURNING project_id,repository_url,git_ref,updated_at`,
-		caller.OrganizationID, projectID, repositoryURL, ref).
-		Scan(&source.ProjectID, &source.RepositoryURL, &source.Ref, &source.UpdatedAt)
+		SET repository_url=EXCLUDED.repository_url,git_ref=EXCLUDED.git_ref,
+			git_connection_id=EXCLUDED.git_connection_id,updated_at=clock_timestamp()
+		RETURNING project_id,repository_url,git_ref,COALESCE(git_connection_id,''),updated_at`,
+		caller.OrganizationID, projectID, repositoryURL, ref, gitConnectionID).
+		Scan(&source.ProjectID, &source.RepositoryURL, &source.Ref, &source.GitConnectionID, &source.UpdatedAt)
 	if err != nil {
+		return ProjectSource{}, err
+	}
+	if err := access.SetProjectGit(ctx, tx, caller.OrganizationID, projectID, gitConnectionID, repositoryURL,
+		caller.PrincipalID); errors.Is(err, access.ErrDenied) {
+		return ProjectSource{}, ErrGitConnection
+	} else if err != nil {
 		return ProjectSource{}, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO identity_audit_events

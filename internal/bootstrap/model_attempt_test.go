@@ -339,6 +339,31 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 			model.Invoke.BindingID, model.Attempt.ID).Scan(&delivered); err != nil || !delivered {
 			t.Fatalf("same-attempt lease not delivered: %t %v", delivered, err)
 		}
+		// A still-authorized running attempt's short lease is renewed near expiry.
+		renewed, err := access.RenewModelLeases(t.Context(), pool, 30*time.Minute)
+		if err != nil || len(renewed) != 1 || renewed[0].AttemptID != model.Attempt.ID ||
+			time.Until(renewed[0].ExpiresAt) < 25*time.Minute {
+			t.Fatalf("renewal: %+v %v", renewed, err)
+		}
+		if again, err := access.RenewModelLeases(t.Context(), pool, 30*time.Minute); err != nil || len(again) != 0 {
+			t.Fatalf("a fresh lease was renewed again: %+v %v", again, err)
+		}
+		// A revoked grant is never renewed; the worker stops at the old expiry.
+		if _, err := pool.Exec(t.Context(), `UPDATE access_leases SET expires_at=clock_timestamp()+interval '1 minute'
+			WHERE attempt_id=$1`, model.Attempt.ID); err != nil {
+			t.Fatal(err)
+		}
+		var grantID string
+		if err := pool.QueryRow(t.Context(), `SELECT grant_id FROM access_bindings WHERE organization_id=$1 AND id=$2`,
+			model.Invoke.OrganizationID, model.Invoke.BindingID).Scan(&grantID); err != nil {
+			t.Fatal(err)
+		}
+		if err := access.RevokeGrant(t.Context(), pool, model.Invoke.OrganizationID, grantID); err != nil {
+			t.Fatal(err)
+		}
+		if revoked, err := access.RenewModelLeases(t.Context(), pool, 30*time.Minute); err != nil || len(revoked) != 0 {
+			t.Fatalf("revoked lease renewed: %+v %v", revoked, err)
+		}
 	})
 	t.Run("grant revoked after intent", func(t *testing.T) {
 		pool, ledger, secrets, model, runtime, redeemed := modelAttemptFixture(t)

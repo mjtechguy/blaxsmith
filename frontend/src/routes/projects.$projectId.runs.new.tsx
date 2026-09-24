@@ -73,6 +73,12 @@ function RunEditor({ projectId, org, source, verification }: { projectId: string
     <section className="editor-card" aria-labelledby="run-inputs-heading">
       <div className="editor-card-heading"><span className="project-symbol"><GitBranch size={18} aria-hidden="true" /></span><div><h2 id="run-inputs-heading">Committed inputs</h2><p>Use paths from the configured repository and ref. Each must exist in the commit selected when this run starts.</p></div></div>
       <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
+        <div className="notice"><strong>Guild recipe.</strong> Plan, implement, review, verify, architect review, then human review.{" "}
+          <button type="button" className="text-action" onClick={() => {
+            form.setFieldValue("recipePath", "examples/guild/recipe.json");
+            form.setFieldValue("specPath", "examples/guild/spec.md");
+            form.setFieldValue("transcriptPath", "examples/guild/transcript.md");
+          }}>Use Guild example paths</button></div>
         <form.Field name="launchKey" validators={{ onBlur: ({ value }) => value.trim().length >= 1 && value.trim().length <= 128 ? undefined : "Use 1–128 characters." }}>
           {(field) => <TextField autoFocus label="Run key" name={field.name} autoComplete="off" placeholder="customer-portal-iteration-1" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} />}
         </form.Field>

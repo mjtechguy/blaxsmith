@@ -27,6 +27,10 @@ type RunTask struct {
 	Effort          string
 	Instructions    []FrozenFile
 	Skills          []FrozenFile
+	Kind            string
+	LoopWith        string // Set only on a stage that owns a loop.
+	MaxCycles       int32  // Loop cap including human-granted raises.
+	LoopCycles      int32  // Corrections the loop has requested.
 }
 
 // ListRunTasks returns only the selected organization's run graph. The caller
@@ -54,7 +58,25 @@ func (s *Store) ListRunTasks(ctx context.Context, orgID, runID string) ([]RunTas
 			return nil, err
 		}
 	}
-	rows, err := s.pool.Query(ctx, `SELECT t.id,t.task_key,t.state,t.generation,t.max_attempts,t.active_attempt_id::text,
+	type loopCount struct{ used, granted int32 }
+	loops := map[string]loopCount{}
+	rows, err := s.pool.Query(ctx, `SELECT stage,sum(used)::integer,sum(granted)::integer FROM (
+		SELECT source_stage AS stage,count(DISTINCT COALESCE(decision_id,id)) AS used,0 AS granted FROM workflow_corrections
+			WHERE organization_id=$1 AND run_id=$2 GROUP BY source_stage
+		UNION ALL SELECT stage_key,0,granted_cycles FROM workflow_escalations
+			WHERE organization_id=$1 AND run_id=$2 AND resolution='raise_cap') counts GROUP BY stage`, orgID, runID)
+	if err != nil {
+		return nil, err
+	}
+	var loopStage string
+	var loop loopCount
+	if _, err := pgx.ForEachRow(rows, []any{&loopStage, &loop.used, &loop.granted}, func() error {
+		loops[loopStage] = loop
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	rows, err = s.pool.Query(ctx, `SELECT t.id,t.task_key,t.state,t.generation,t.max_attempts,t.active_attempt_id::text,
 		t.input_sha256,
 		ARRAY(SELECT parent.task_key FROM workflow_task_dependencies d
 		JOIN workflow_tasks parent ON parent.organization_id=d.organization_id AND parent.id=d.depends_on_task_id
@@ -82,6 +104,11 @@ func (s *Store) ListRunTasks(ctx context.Context, orgID, runID string) ([]RunTas
 					continue
 				}
 				found = true
+				task.Kind = stage.Kind
+				if stage.Loop != nil {
+					count := loops[stage.ID]
+					task.LoopWith, task.MaxCycles, task.LoopCycles = stage.Loop.With, int32(stage.Loop.MaxCycles)+count.granted, count.used
+				}
 				if stage.Kind != "human_review" {
 					profile, ok := bundle.Recipe.Profiles[stage.Profile]
 					if !ok {

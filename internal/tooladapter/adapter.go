@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -48,10 +49,13 @@ type ModelEffort struct{ Model, Effort string }
 type Invocation struct {
 	runtime        Runtime
 	args           []string
+	resume         []string // native resume flags; Run adds scoped paths, pane adds the session id
+	base           string   // frozen commit; the pane squashes stage changes onto it
 	skills         []string
 	skillNames     []string
 	skillArtifacts []ArtifactDigest
-	timeout        time.Duration
+	timeout        time.Duration // idle timeout
+	maxRuntime     time.Duration // total cap; zero is unlimited
 	maxOutputBytes int
 }
 
@@ -92,22 +96,34 @@ func Prepare(runtime Runtime, profile recipe.Profile, prompt string, timeout tim
 	if !approved {
 		return Invocation{}, fmt.Errorf("%w: %s %s/%s on %s", ErrBlocked, profile.Harness, profile.Model, profile.Effort, runtime.Version)
 	}
-	var args []string
+	// Session persistence stays on (inside the attempt's temporary home) so a
+	// human can resume the same native session; every other control is kept.
+	prompt += bxInstructions
+	var args, resume []string
 	switch profile.Harness {
 	case "codex":
-		args = []string{"exec", "--json", "--ephemeral", "--ignore-user-config", "--disable", "multi_agent", "--disable", "apps", "--disable", "plugins",
+		// `codex resume` has no --ignore-user-config; the temporary home has no
+		// user config.toml, so the resumed TUI loads the same (empty) config.
+		controls := []string{"--disable", "multi_agent", "--disable", "apps", "--disable", "plugins",
 			"--sandbox", "workspace-write", "--model", profile.Model, "--config", `approval_policy="never"`, "--config", fmt.Sprintf("model_reasoning_effort=%q", profile.Effort),
-			"--config", `web_search="disabled"`, "--config", `skills.bundled.enabled=false`, prompt}
+			"--config", `web_search="disabled"`, "--config", `skills.bundled.enabled=false`}
+		args = append(append([]string{"exec", "--json", "--ignore-user-config"}, controls...), prompt)
+		resume = append([]string{"resume"}, controls...)
 	case "claude-code":
 		settings := fmt.Sprintf(`{"availableModels":[%q],"fallbackModel":[]}`, profile.Model)
-		args = []string{"--bare", "--print", "--output-format", "stream-json", "--verbose", "--permission-prompts", "none", "--no-session-persistence",
-			"--settings", string(settings), "--model", profile.Model, "--effort", profile.Effort, prompt}
+		scoped := []string{"--bare", "--settings", settings, "--model", profile.Model, "--effort", profile.Effort}
+		// Questions go through `bx ask` while autonomous; the native widget
+		// stays available in the takeover TUI. "--" ends variadic flags.
+		args = append(append([]string(nil), scoped...), "--print", "--output-format", "stream-json", "--verbose", "--permission-prompts", "none",
+			"--disallowedTools", "AskUserQuestion", "--", prompt)
+		resume = scoped
 	case "opencode":
 		args = []string{"run", "--standalone", "--format", "json", "--model", profile.Model + "#" + profile.Effort, prompt}
+		resume = []string{"--standalone", "--session"} // the session keeps its model and variant
 	default:
 		return Invocation{}, fmt.Errorf("%w: harness %q", ErrBlocked, profile.Harness)
 	}
-	return Invocation{runtime: runtime, args: args, skills: append([]string(nil), profile.Skills...), skillNames: skillNames, timeout: timeout, maxOutputBytes: maxOutputBytes}, nil
+	return Invocation{runtime: runtime, args: args, resume: resume, skills: append([]string(nil), profile.Skills...), skillNames: skillNames, timeout: timeout, maxOutputBytes: maxOutputBytes}, nil
 }
 
 // Run checks the executable bytes and version in the pod, then bounds elapsed
@@ -211,19 +227,94 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 	if err := check.Run(); err != nil || strings.TrimSpace(versionOutput.String()) != expectedVersion(in.runtime) {
 		return nil, fmt.Errorf("%w: executable version mismatch: %v", ErrBlocked, err)
 	}
-	runCtx, cancelRun := context.WithTimeout(ctx, in.timeout)
+	runCtx, cancelRun := context.WithCancel(ctx)
+	if in.maxRuntime > 0 {
+		cancelRun()
+		runCtx, cancelRun = context.WithTimeout(ctx, in.maxRuntime)
+	}
 	defer cancelRun()
 	args := in.args
-	if in.runtime.Harness == "claude-code" && claudeSkillDir != "" {
-		args = append(append(append([]string(nil), args[:len(args)-1]...), "--add-dir", claudeSkillDir), args[len(args)-1])
+	resume := append([]string(nil), in.resume...)
+	switch in.runtime.Harness {
+	case "claude-code":
+		if claudeSkillDir != "" {
+			args = append(append(append([]string(nil), args[:len(args)-2]...), "--add-dir", claudeSkillDir), args[len(args)-2:]...)
+			resume = append(resume, "--add-dir", claudeSkillDir)
+		}
+		resume = append(resume, "--resume")
+	case "codex":
+		// The TUI otherwise stops at a folder-trust prompt; exec never asks.
+		dir, _ := json.Marshal(workdir)
+		resume = append(resume, "--config", fmt.Sprintf("projects={%s={trust_level=%q}}", dir, "trusted"))
 	}
-	cmd := exec.CommandContext(runCtx, in.runtime.Binary, args...) // #nosec G204 -- verified absolute executable, separate argv
-	cmd.Env, cmd.Dir = toolEnv, workdir
-	cmd.WaitDelay = time.Second
+	return runInPane(runCtx, in, workdir, append(toolEnv, "BLAXSMITH_STATE_DIR="+StateDir()), launch{
+		Harness: in.runtime.Harness, Dir: workdir, Base: in.base, Tmux: tmuxBinary,
+		Run:    append([]string{in.runtime.Binary}, args...),
+		Resume: append([]string{in.runtime.Binary}, resume...),
+	})
+}
+
+// runInPane starts the harness in the attempt's tmux session and blocks until
+// the pane (autonomous, or the human's resumed TUI) signals blaxsmith-done.
+func runInPane(ctx context.Context, in Invocation, workdir string, env []string, l launch) ([]byte, error) {
+	state := StateDir()
+	if err := os.MkdirAll(state, 0700); err != nil {
+		return nil, err
+	}
+	for _, name := range []string{"exit", "session-id", "events.jsonl", "stderr.log", "owner", "result.json"} {
+		_ = os.Remove(filepath.Join(state, name))
+	}
+	data, err := json.Marshal(l)
+	if err != nil {
+		return nil, err
+	}
+	if err := writeAtomic(filepath.Join(state, "launch.json"), data, 0600); err != nil {
+		return nil, err
+	}
+	socket := filepath.Join(state, "tmux.sock")
+	tmux := func(ctx context.Context, args ...string) *exec.Cmd {
+		cmd := exec.CommandContext(ctx, tmuxBinary, append([]string{"-S", socket}, args...)...) // #nosec G204 -- fixed binary, separate argv
+		cmd.Env, cmd.Dir = env, workdir
+		cmd.WaitDelay = time.Second
+		return cmd
+	}
+	defer func() { _ = tmux(context.Background(), "kill-server").Run() }()
+	// The pane reads its argv from launch.json: tmux splits arguments that end
+	// in ";", so user text must never reach tmux's command parser.
+	if err := tmux(ctx, "new-session", "-d", "-s", "agent", "-x", "200", "-y", "50", "-c", workdir, "--", paneBinary, "pane").Run(); err != nil {
+		return nil, fmt.Errorf("start terminal session: %w", err)
+	}
+	_ = tmux(ctx, "set-option", "-t", "agent", "remain-on-exit", "on").Run()
+	waitCtx, stop := context.WithCancelCause(ctx)
+	defer stop(nil)
+	go watchIdle(waitCtx, stop, in.timeout, func() time.Time {
+		out, err := tmux(waitCtx, "display-message", "-p", "-t", "agent", "#{window_activity}").Output()
+		n, perr := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+		if err != nil || perr != nil {
+			return time.Time{}
+		}
+		return time.Unix(n, 0)
+	})
+	waitErr := tmux(waitCtx, "wait-for", "blaxsmith-done").Run()
+	code, err := os.ReadFile(filepath.Join(state, "exit"))
+	if err != nil {
+		if cause := context.Cause(waitCtx); cause != nil {
+			return nil, fmt.Errorf("tool exited: %w", cause)
+		}
+		return nil, fmt.Errorf("terminal session ended without a result: %v", waitErr)
+	}
 	output := &boundedOutput{buffer: limit.Buffer{Max: in.maxOutputBytes}}
-	cmd.Stdout, cmd.Stderr = output, output
-	if err := cmd.Run(); err != nil {
-		return output.Bytes(), fmt.Errorf("tool exited: %w", err)
+	for _, name := range []string{"events.jsonl", "stderr.log"} {
+		if f, err := os.Open(filepath.Join(state, name)); err == nil {
+			_, err = io.Copy(output, f)
+			f.Close()
+			if err != nil {
+				return output.Bytes(), err
+			}
+		}
+	}
+	if status := strings.TrimSpace(string(code)); status != "0" {
+		return output.Bytes(), fmt.Errorf("tool exited: exit status %s", status)
 	}
 	return output.Bytes(), nil
 }
@@ -287,4 +378,58 @@ func rejectProjectConfig(workdir, harness string) error {
 		}
 	}
 	return nil
+}
+
+// ErrIdle stops a stage that made no progress for its idle timeout.
+var ErrIdle = errors.New("stage idle timeout: no progress")
+
+var idleTick = 15 * time.Second
+
+// watchIdle stops the stage after idle with no progress: a new harness event
+// line, a `bx` record, or pane output. It never stops a stage a human has
+// taken over, or one waiting on a human answer (paused, as for blocked work).
+func watchIdle(ctx context.Context, stop context.CancelCauseFunc, idle time.Duration, activity func() time.Time) {
+	tick := time.NewTicker(max(time.Millisecond*100, min(idleTick, idle/2)))
+	defer tick.Stop()
+	last := time.Now()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		now := time.Now()
+		if owner, _ := os.ReadFile(statePath("owner")); string(owner) == "human" || waitingOnHuman() {
+			last = now
+			continue
+		}
+		for _, at := range []time.Time{modTime(statePath("events.jsonl")), modTime(ixPath("log")), activity()} {
+			if at.After(last) {
+				last = at
+			}
+		}
+		if now.Sub(last) > idle {
+			stop(ErrIdle)
+			return
+		}
+	}
+}
+
+func modTime(path string) time.Time {
+	info, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
+}
+
+// waitingOnHuman reports an open `bx ask` with no answer yet.
+func waitingOnHuman() bool {
+	entries, _ := os.ReadDir(ixPath("asked"))
+	for _, entry := range entries {
+		if _, err := os.Stat(ixPath("answers", entry.Name()+".json")); err != nil {
+			return true
+		}
+	}
+	return false
 }

@@ -15,6 +15,15 @@ import (
 type CompletionSweep struct {
 	Workflow  *workflow.Store
 	Connector func(context.Context, workflow.Attempt) (*CommandExitConnector, error)
+	// Result reads the guest's bounded result file after a signed clean exit;
+	// nil data means the guest wrote none. A nil Result keeps clean exits
+	// pending for an external verifier. The result is untrusted handoff text:
+	// it advances the graph only after actor stop is proved.
+	Result func(context.Context, workflow.Attempt) ([]byte, error)
+	// Deliver runs before the result is recorded: it pushes a code-producing
+	// stage's commit to the run branch and sets result.Revision to the
+	// accepted revision. workflow.ErrInvalid discards the result.
+	Deliver func(context.Context, workflow.Attempt, *workflow.AttemptResult) error
 }
 
 type CompletionBatch struct {
@@ -47,6 +56,9 @@ func (s *CompletionSweep) Sweep(ctx context.Context, afterOrgID, afterAttemptID 
 		if err == nil {
 			err = connector.Reconcile(ctx, a)
 		}
+		if errors.Is(err, ErrVerificationPending) && s.Result != nil {
+			err = s.accept(ctx, connector, a)
+		}
 		switch {
 		case err == nil:
 			batch.Stopped++
@@ -61,4 +73,33 @@ func (s *CompletionSweep) Sweep(ctx context.Context, afterOrgID, afterAttemptID 
 		}
 	}
 	return batch, errors.Join(failures...)
+}
+
+// accept records the guest result once, then proves the actor gone. A
+// malformed result is discarded and the stop takes the normal retry path.
+func (s *CompletionSweep) accept(ctx context.Context, connector *CommandExitConnector, a workflow.Attempt) error {
+	recorded, err := s.Workflow.HasAttemptResult(ctx, a)
+	if err != nil {
+		return err
+	}
+	if !recorded {
+		data, err := s.Result(ctx, a)
+		if err != nil {
+			return err
+		}
+		result := workflow.AttemptResult{}
+		if data != nil {
+			result, err = workflow.ParseAttemptResult(data)
+		}
+		if err == nil && s.Deliver != nil {
+			err = s.Deliver(ctx, a, &result)
+		}
+		if err == nil {
+			err = s.Workflow.RecordAttemptResult(ctx, a, result)
+		}
+		if err != nil && !errors.Is(err, workflow.ErrInvalid) {
+			return err
+		}
+	}
+	return connector.Bridge.StopKnown(ctx, a)
 }

@@ -63,6 +63,7 @@
         },
         "clusterID": { "type": "string" },
         "leaseTTL": { "type": "string" },
+        "guestRouter": { "type": "string", "pattern": "^$|^[a-z0-9]([-a-z0-9.]*[a-z0-9])?:[0-9]{1,5}$" },
         "workerImage": { "type": "string" },
         "workerPool": { "type": "string" },
         "snapshotStorage": { "type": "string" },

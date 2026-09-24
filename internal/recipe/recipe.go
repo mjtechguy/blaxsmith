@@ -40,12 +40,28 @@ type Stage struct {
 	Profile   string   `json:"profile,omitempty"`
 	DependsOn []string `json:"depends_on,omitempty"`
 	Prompt    string   `json:"prompt,omitempty"`
+	Loop      *Loop    `json:"loop,omitempty"`
 }
 
+// Loop reruns a review/verify stage after a correction attempt on With until
+// it reports a pass. MaxCycles bounds corrections before human escalation.
+type Loop struct {
+	With      string `json:"with"`
+	Until     string `json:"until"`
+	MaxCycles int    `json:"max_cycles"`
+}
+
+// Limits bound a stage. TimeoutSeconds is an IDLE timeout: a stage fails only
+// after that long with no progress (harness output, a `bx event`, or pane
+// activity). MaxRuntimeSeconds is an optional total cap; 0 means unlimited.
 type Limits struct {
 	MaxCorrectionCycles int `json:"max_correction_cycles"`
 	TimeoutSeconds      int `json:"timeout_seconds"`
+	MaxRuntimeSeconds   int `json:"max_runtime_seconds,omitempty"`
 }
+
+// MaxRuntimeCap is the longest total stage runtime a recipe may request.
+const MaxRuntimeCap = 7 * 24 * 3600
 
 var identifier = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
@@ -101,8 +117,9 @@ func (r Recipe) validate() ([]string, error) {
 	if r.SchemaVersion != Schema || !identifier.MatchString(r.Name) {
 		return nil, fmt.Errorf("recipe requires schema_version %q and a valid name", Schema)
 	}
-	if r.Limits.MaxCorrectionCycles < 1 || r.Limits.MaxCorrectionCycles > 10 || r.Limits.TimeoutSeconds < 1 || r.Limits.TimeoutSeconds > 86400 {
-		return nil, fmt.Errorf("limits require 1–10 correction cycles and 1–86400 seconds")
+	if r.Limits.MaxCorrectionCycles < 1 || r.Limits.MaxCorrectionCycles > 10 || r.Limits.TimeoutSeconds < 1 || r.Limits.TimeoutSeconds > 86400 ||
+		r.Limits.MaxRuntimeSeconds < 0 || r.Limits.MaxRuntimeSeconds > MaxRuntimeCap {
+		return nil, fmt.Errorf("limits require 1–10 correction cycles, a 1–86400 second idle timeout, and a 0–%d second max runtime", MaxRuntimeCap)
 	}
 	if len(r.RequiredChecks) == 0 || len(r.Profiles) == 0 || len(r.Stages) > 64 {
 		return nil, fmt.Errorf("require checks, profiles, and at most 64 stages")
@@ -138,7 +155,7 @@ func (r Recipe) validate() ([]string, error) {
 			return nil, fmt.Errorf("invalid or duplicate stage ID %q", s.ID)
 		}
 		switch s.Kind {
-		case "plan", "implement", "review", "verify", "architect_review", "research", "integrate", "ui_review", "documentation":
+		case "plan", "interview", "implement", "review", "verify", "architect_review", "research", "integrate", "ui_review", "documentation":
 			if _, ok := r.Profiles[s.Profile]; !ok || !validPath(s.Prompt) {
 				return nil, fmt.Errorf("stage %q requires a known profile and prompt file", s.ID)
 			}
@@ -149,8 +166,16 @@ func (r Recipe) validate() ([]string, error) {
 		default:
 			return nil, fmt.Errorf("stage %q has unsupported kind %q", s.ID, s.Kind)
 		}
+		if s.Loop != nil && (s.Kind != "review" && s.Kind != "verify" || s.Loop.Until != "pass" ||
+			s.Loop.MaxCycles < 1 || s.Loop.MaxCycles > 10) {
+			return nil, fmt.Errorf("stage %q loop needs a review/verify stage, until \"pass\", and 1–10 cycles", s.ID)
+		}
 		stages[s.ID] = s
-		kinds[s.Kind] = append(kinds[s.Kind], s.ID)
+		kind := s.Kind
+		if kind == "interview" {
+			kind = "plan" // An interview is a plan the architect runs with a human.
+		}
+		kinds[kind] = append(kinds[kind], s.ID)
 	}
 	for _, k := range []string{"plan", "implement", "review", "verify", "architect_review", "human_review"} {
 		if len(kinds[k]) == 0 {
@@ -200,6 +225,9 @@ func (r Recipe) validate() ([]string, error) {
 	}
 	human, architect := kinds["human_review"][0], kinds["architect_review"][0]
 	for _, s := range r.Stages {
+		if s.Loop != nil && (!ancestors[s.ID][s.Loop.With] || stages[s.Loop.With].Kind == "human_review") {
+			return nil, fmt.Errorf("stage %q loop target %q must be an upstream agent stage", s.ID, s.Loop.With)
+		}
 		if s.ID != human && !ancestors[human][s.ID] {
 			return nil, fmt.Errorf("stage %q must precede final human review", s.ID)
 		}

@@ -121,9 +121,16 @@ func (a *ModelActivator) attemptConnector(ctx context.Context, attempt workflow.
 	base.Current = func(ctx context.Context) (bootstrap.Runtime, error) {
 		return a.Actor.Current(ctx, runtime.Actor.Atespace, runtime.Actor.Name)
 	}
-	connector, err := bootstrap.NewModelAttemptConnector(base, a.DB, a.Secrets, bootstrap.ModelAttempt{
-		Scope: scope, Attempt: attempt, Runtime: binding, Invoke: invoke, TTL: a.LeaseTTL,
-	})
+	model := bootstrap.ModelAttempt{Scope: scope, Attempt: attempt, Runtime: binding, Invoke: invoke, TTL: a.LeaseTTL}
+	// A private source's frozen git.read binding rides the setup phase only.
+	read, username, private, err := access.AttemptGitRead(ctx, a.DB, attempt.OrganizationID, attempt.ID)
+	if err == nil && private {
+		model.Git = &bootstrap.GitAttempt{Read: read, Username: username}
+	}
+	var connector bootstrap.Connector
+	if err == nil {
+		connector, err = bootstrap.NewModelAttemptConnector(base, a.DB, a.Secrets, model)
+	}
 	if err != nil {
 		if assign {
 			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)

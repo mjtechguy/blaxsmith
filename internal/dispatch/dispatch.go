@@ -96,15 +96,90 @@ func (d *Dispatcher) PreflightModel(ctx context.Context, grant access.ModelGrant
 	return err
 }
 
+// toolRequest rebuilds the public tool request from durable inputs. Dispatch
+// and completion must derive the same command, so nothing here may depend on
+// state that changes during an attempt except the approved runtime record.
+// input is the attempt's frozen input commit (workflow.AttemptInput).
+func (d *Dispatcher) toolRequest(ctx context.Context, orgID, runID, taskID, handoff, input string) (
+	tooladapter.Request, workflow.FrozenTask, workflow.ApprovedToolRuntime, error) {
+	frozen, err := d.Workflow.LoadFrozenTask(ctx, orgID, runID, taskID)
+	if err != nil {
+		return tooladapter.Request{}, frozen, workflow.ApprovedToolRuntime{}, err
+	}
+	approved, err := d.Workflow.GetApprovedToolRuntime(ctx, orgID,
+		frozen.Profile.Harness, frozen.Profile.Model, frozen.Profile.Effort)
+	if err != nil {
+		return tooladapter.Request{}, frozen, approved, err
+	}
+	prompt, artifacts, err := frozenPrompt(frozen, handoff)
+	if err != nil {
+		return tooladapter.Request{}, frozen, approved, err
+	}
+	timeout := min(frozen.Bundle.Recipe.Limits.TimeoutSeconds, approved.MaxTimeoutSeconds)
+	request := tooladapter.Request{AttemptID: "preflight", RepositoryURL: frozen.RepositoryURL,
+		SourceRef: frozen.SourceRef, SourceCommit: input,
+		Runtime: approved.Runtime, Profile: frozen.Profile,
+		Prompt: prompt, FrozenArtifacts: artifacts, TimeoutSeconds: timeout,
+		MaxRuntimeSeconds: frozen.Bundle.Recipe.Limits.MaxRuntimeSeconds, MaxOutputBytes: approved.MaxOutputBytes}
+	if _, err := tooladapter.Command(request); err != nil {
+		return tooladapter.Request{}, frozen, approved, err
+	}
+	return request, frozen, approved, nil
+}
+
+// attemptBridge scopes the shared bridge to one attempt's tool selection and
+// attempt-named Workspace/Gateway. It returns nil when names cannot be formed.
+func (d *Dispatcher) attemptBridge(attempt workflow.Attempt, request tooladapter.Request, approved workflow.ApprovedToolRuntime) *axbridge.Bridge {
+	request.AttemptID, request.SourceDirectory = attempt.ID, "source"
+	bridge := *d.Bridge // the per-attempt tool selection is never shared across launches.
+	bridge.Workspace = axbridge.AttemptWorkspaceName(attempt.ID)
+	bridge.GatewayTemplate = d.Bridge.Gateway
+	bridge.Gateway = axbridge.AttemptGatewayName(attempt.ID)
+	if bridge.Workspace == "" || bridge.Gateway == "" || bridge.GatewayTemplate == "" {
+		return nil
+	}
+	bridge.Workflow, bridge.Tool, bridge.Image, bridge.Pool = d.Workflow, &request, approved.Runtime.Image, approved.WorkerPool
+	return &bridge
+}
+
+// AttemptBridge reconstructs a dispatched attempt's bridge, including its
+// frozen handoff, for completion and recovery sweeps.
+func (d *Dispatcher) AttemptBridge(ctx context.Context, attempt workflow.Attempt) (*axbridge.Bridge, error) {
+	if d == nil || d.Workflow == nil || d.Bridge == nil {
+		return nil, ErrNotReady
+	}
+	handoff, err := d.Workflow.LoadHandoff(ctx, attempt)
+	if err != nil {
+		return nil, err
+	}
+	input, err := d.Workflow.LoadInputCommit(ctx, attempt)
+	if err != nil {
+		return nil, err
+	}
+	request, _, approved, err := d.toolRequest(ctx, attempt.OrganizationID, attempt.RunID, attempt.TaskID, handoff, input)
+	if err != nil {
+		return nil, err
+	}
+	bridge := d.attemptBridge(attempt, request, approved)
+	if bridge == nil {
+		return nil, axbridge.ErrInputs
+	}
+	return bridge, nil
+}
+
 func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTask) Outcome {
 	outcome := Outcome{Task: candidate, State: "blocked"}
-	frozen, err := d.Workflow.LoadFrozenTask(ctx, candidate.OrganizationID, candidate.RunID, candidate.TaskID)
+	handoff, corrections, err := d.Workflow.BuildHandoff(ctx, candidate.OrganizationID, candidate.RunID, candidate.TaskID)
 	if err != nil {
 		outcome.Err = err
 		return outcome
 	}
-	approved, err := d.Workflow.GetApprovedToolRuntime(ctx, candidate.OrganizationID,
-		frozen.Profile.Harness, frozen.Profile.Model, frozen.Profile.Effort)
+	input, err := d.Workflow.AttemptInput(ctx, candidate.OrganizationID, candidate.RunID, candidate.TaskID)
+	if err != nil {
+		outcome.Err = err
+		return outcome
+	}
+	request, frozen, approved, err := d.toolRequest(ctx, candidate.OrganizationID, candidate.RunID, candidate.TaskID, handoff, input)
 	if err != nil {
 		outcome.Err = err
 		return outcome
@@ -119,23 +194,20 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		outcome.Err = err
 		return outcome
 	}
-	prompt, artifacts, err := frozenPrompt(frozen)
-	if err != nil {
-		outcome.Err = err
-		return outcome
-	}
-	timeout := min(frozen.Bundle.Recipe.Limits.TimeoutSeconds, approved.MaxTimeoutSeconds)
-	request := tooladapter.Request{AttemptID: "preflight", RepositoryURL: frozen.RepositoryURL,
-		SourceRef: frozen.SourceRef, SourceCommit: frozen.Bundle.Source.Commit,
-		Runtime: approved.Runtime, Profile: frozen.Profile,
-		Prompt: prompt, FrozenArtifacts: artifacts, TimeoutSeconds: timeout, MaxOutputBytes: approved.MaxOutputBytes}
-	if _, err := tooladapter.Command(request); err != nil {
-		outcome.Err = err
-		return outcome
-	}
 	if err := d.Bridge.CheckToolInputs(ctx, candidate.OrganizationID, frozen.RepositoryURL, provider); err != nil {
 		outcome.Err = err
 		return outcome
+	}
+	if frozen.GitConnectionID != "" {
+		// A private source needs a live git.read grant for the AX Workspace setup.
+		if err := access.PreflightGitRead(ctx, d.DB, candidate.OrganizationID, frozen.ProjectID,
+			frozen.GitConnectionID, frozen.RepositoryURL); errors.Is(err, access.ErrDenied) {
+			outcome.Err = workflow.ErrGitConnection
+			return outcome
+		} else if err != nil {
+			outcome.Err = err
+			return outcome
+		}
 	}
 	if err := d.PreflightWorker(ctx, approved, frozen.RepositoryURL, provider); err != nil {
 		outcome.Err = err
@@ -160,6 +232,19 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 				approved.ApprovalID, selection.SelectionID); err != nil {
 				return err
 			}
+			if err := workflow.RecordHandoff(ctx, tx, attempt, handoff, corrections); err != nil {
+				return err
+			}
+			if err := workflow.RecordInputCommit(ctx, tx, attempt, input); err != nil {
+				return err
+			}
+			if frozen.GitConnectionID != "" {
+				// The setup phase releases this Git lease; the model phase never does.
+				if _, err := access.BindGitRead(ctx, tx, candidate.OrganizationID, frozen.ProjectID,
+					frozen.GitConnectionID, frozen.RepositoryURL, attempt.ID, input); err != nil {
+					return err
+				}
+			}
 			var err error
 			bindingID, err = access.BindModelInvoke(ctx, tx, grant, authority, attempt.ID)
 			return err
@@ -172,17 +257,11 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		return outcome
 	}
 	outcome.AttemptID, outcome.BindingID = attempt.ID, bindingID
-	request.AttemptID = attempt.ID
-	request.SourceDirectory = "source"
-	bridge := *d.Bridge // the per-attempt tool selection is never shared across launches.
-	bridge.Workspace = axbridge.AttemptWorkspaceName(attempt.ID)
-	bridge.GatewayTemplate = d.Bridge.Gateway
-	bridge.Gateway = axbridge.AttemptGatewayName(attempt.ID)
-	if bridge.Workspace == "" || bridge.Gateway == "" || bridge.GatewayTemplate == "" {
+	bridge := d.attemptBridge(attempt, request, approved)
+	if bridge == nil {
 		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, axbridge.ErrInputs)
 		return outcome
 	}
-	bridge.Workflow, bridge.Tool, bridge.Image, bridge.Pool = d.Workflow, &request, approved.Runtime.Image, approved.WorkerPool
 	runtime, err := bridge.Launch(ctx, attempt)
 	if err != nil {
 		outcome.State, outcome.Err = "unresolved", err

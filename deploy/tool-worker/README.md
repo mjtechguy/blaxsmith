@@ -34,7 +34,10 @@ the CLI installation and final manifest check still run without network.
 `build.sh` first compares the AX binary, patch hashes, and Git askpass helper
 to `provenance.json`. It compiles the static `blaxsmith-tool-worker` from the
 current commit, builds the [pinned CLI proof](../runtime-proof/README.md),
-then adds the AX runner, worker, and Git to the final image. The final image
+then adds the AX runner, worker, and Git to the final image. It also installs
+`tmux` (the build fails below 3.2, which viewers need for `attach -f
+ignore-size`) and util-linux `script` for the live terminal, and links
+`/usr/local/bin/bx` to the worker ([interactive sessions](../../docs/interactive-sessions.md)). The final image
 pre-owns `/run/blaxsmith` as mode 0700 for the bootstrap credential file.
 Pass `--git-ca PEM` when the AX Workspace Git origin uses an administrator
 managed private CA; the image combines that PEM with the pinned base trust

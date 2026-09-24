@@ -34,7 +34,7 @@ func (s *Store) ListReadyOrganizationIDs(ctx context.Context, afterID string, li
 		JOIN workflow_tasks t ON t.organization_id=r.organization_id AND t.run_id=r.id
 		JOIN workflow_run_bundles b ON b.organization_id=r.organization_id AND b.run_id=r.id
 		WHERE r.organization_id>$1 AND r.graph_sealed AND r.state IN ('queued','active')
-		AND t.state='pending' AND t.active_attempt_id IS NULL AND t.generation<t.max_attempts
+		AND t.state='pending' AND t.active_attempt_id IS NULL AND t.generation<LEAST(20,t.max_attempts+t.extra_attempts)
 		AND NOT EXISTS (SELECT 1 FROM workflow_task_dependencies d
 			JOIN workflow_tasks parent ON parent.organization_id=d.organization_id
 				AND parent.run_id=d.run_id AND parent.id=d.depends_on_task_id
@@ -66,7 +66,7 @@ func (s *Store) ListReadyTasks(ctx context.Context, orgID string, limit int) ([]
 		JOIN workflow_tasks t ON t.organization_id=r.organization_id AND t.run_id=r.id
 		JOIN workflow_run_bundles b ON b.organization_id=r.organization_id AND b.run_id=r.id
 		WHERE r.organization_id=$1 AND r.graph_sealed AND r.state IN ('queued','active')
-		AND t.state='pending' AND t.active_attempt_id IS NULL AND t.generation<t.max_attempts
+		AND t.state='pending' AND t.active_attempt_id IS NULL AND t.generation<LEAST(20,t.max_attempts+t.extra_attempts)
 		AND NOT EXISTS (SELECT 1 FROM workflow_task_dependencies d
 			JOIN workflow_tasks parent ON parent.organization_id=d.organization_id
 				AND parent.run_id=d.run_id AND parent.id=d.depends_on_task_id
@@ -99,10 +99,13 @@ type FrozenTask struct {
 	Key            string
 	RepositoryURL  string // Empty for legacy runs without a public source.
 	SourceRef      string
-	Bundle         *recipe.Bundle
-	Stage          recipe.Stage
-	Profile        recipe.Profile
-	Verification   VerificationPolicy
+	// GitConnectionID is the private source's frozen Git connection; empty
+	// for public sources.
+	GitConnectionID string
+	Bundle          *recipe.Bundle
+	Stage           recipe.Stage
+	Profile         recipe.Profile
+	Verification    VerificationPolicy
 }
 
 func (s *Store) LoadFrozenTask(ctx context.Context, orgID, runID, taskID string) (FrozenTask, error) {
@@ -115,12 +118,12 @@ func (s *Store) LoadFrozenTask(ctx context.Context, orgID, runID, taskID string)
 	var bundleJSON, verificationJSON []byte
 	var repositoryURL, sourceRef *string
 	err := s.pool.QueryRow(ctx, `SELECT r.project_id,r.graph_sealed,r.source_commit,r.bundle_sha256,r.verification_sha256,
-		t.task_key,t.input_sha256,b.bundle_json,b.verification_json,b.repository_url,b.git_ref
+		t.task_key,t.input_sha256,b.bundle_json,b.verification_json,b.repository_url,b.git_ref,COALESCE(b.git_connection_id,'')
 		FROM workflow_tasks t JOIN workflow_runs r ON r.organization_id=t.organization_id AND r.id=t.run_id
 		LEFT JOIN workflow_run_bundles b ON b.organization_id=r.organization_id AND b.run_id=r.id
 		WHERE t.organization_id=$1 AND t.run_id=$2 AND t.id=$3`, orgID, runID, taskID).
 		Scan(&task.ProjectID, &sealed, &sourceCommit, &bundleSHA, &verificationSHA,
-			&task.Key, &inputSHA, &bundleJSON, &verificationJSON, &repositoryURL, &sourceRef)
+			&task.Key, &inputSHA, &bundleJSON, &verificationJSON, &repositoryURL, &sourceRef, &task.GitConnectionID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return FrozenTask{}, ErrNotFound
 	}

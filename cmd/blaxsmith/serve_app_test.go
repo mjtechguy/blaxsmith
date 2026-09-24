@@ -385,7 +385,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, product, err := newAppHandler(ctx, pool, manager, origin, staticDir, nil, dispatchConfig{})
+	handler, product, err := newAppHandler(ctx, pool, manager, origin, staticDir, nil, dispatchConfig{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -842,6 +842,7 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if _, err := other.DecideReview(ctx, decision); connect.CodeOf(err) != connect.CodeNotFound {
 		t.Fatalf("cross-tenant review decision: %v", err)
 	}
+	interactionID, interactionAttempt := testInteractionBrowserAPI(t, ctx, pool, client, origin, csrf, owner)
 	if _, err := pool.Exec(ctx, `UPDATE identity_memberships SET role='viewer'
 		WHERE organization_id=$1 AND principal_id=$2`, owner.OrganizationID, owner.PrincipalID); err != nil {
 		t.Fatal(err)
@@ -865,6 +866,23 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	viewerDecision.Header().Set("X-Blaxsmith-CSRF", csrf)
 	if _, err := w.DecideReview(ctx, viewerDecision); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("viewer decided final review: %v", err)
+	}
+	viewerAnswer := connect.NewRequest(&api.AnswerInteractionRequest{InteractionId: interactionID, OptionIds: []string{"a"}})
+	viewerAnswer.Header().Set("Origin", origin)
+	viewerAnswer.Header().Set("X-Blaxsmith-CSRF", csrf)
+	if _, err := w.AnswerInteraction(ctx, viewerAnswer); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("viewer answered interaction: %v", err)
+	}
+	viewerSteer := connect.NewRequest(&api.SteerAttemptRequest{AttemptId: interactionAttempt, Kind: "pause"})
+	viewerSteer.Header().Set("Origin", origin)
+	viewerSteer.Header().Set("X-Blaxsmith-CSRF", csrf)
+	if _, err := w.SteerAttempt(ctx, viewerSteer); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("viewer steered attempt: %v", err)
+	}
+	viewerList := connect.NewRequest(&api.ListInteractionsRequest{RunId: run.ID})
+	viewerList.Header().Set("Origin", origin)
+	if _, err := w.ListInteractions(ctx, viewerList); err != nil {
+		t.Fatalf("viewer list interactions: %v", err)
 	}
 	head, err := store.EventHead(ctx, owner.OrganizationID, run.ID)
 	if err != nil {

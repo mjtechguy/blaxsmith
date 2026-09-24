@@ -238,8 +238,9 @@ func (h *runActivityHandler) replay(w http.ResponseWriter, flusher http.Flusher,
 				AttemptID  *string `json:"attemptId,omitempty"`
 				Kind       string  `json:"kind"`
 				OccurredAt string  `json:"occurredAt"`
+				Payload    string  `json:"payloadJson,omitempty"`
 			}{strconv.FormatInt(event.ID, 10), event.RunID, event.TaskID, event.AttemptID,
-				event.Kind, event.OccurredAt.UTC().Format(time.RFC3339Nano)})
+				event.Kind, event.OccurredAt.UTC().Format(time.RFC3339Nano), event.PayloadJSON})
 			if err != nil || !writeActivity(w, flusher, fmt.Sprintf("id: %d\ndata: %s\n\n", event.ID, payload)) {
 				return count, false
 			}

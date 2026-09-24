@@ -39,6 +39,9 @@ dispatch:
   snapshotStorage: ""
   workspace: ""
   gateway: ""
+  # In-cluster atenet-router host:port for live terminals, takeover, guest
+  # result reads, and lease renewal notices. Empty disables them (terminals 503).
+  guestRouter: ""
 resources:
   requests:
     cpu: 100m

@@ -129,6 +129,7 @@ dispatch:
   snapshotStorage: blaxsmith-snapshots
   workspace: blaxsmith-workspaces
   gateway: blaxsmith-egress
+  guestRouter: atenet-router.ate-system.svc.cluster.local:80 # optional; empty = terminals 503
 ```
 
 The normal setting `egressMode: exact` retains the attempt-scoped host

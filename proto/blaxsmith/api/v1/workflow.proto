@@ -27,6 +27,7 @@ message WorkflowEvent {
   string attempt_id = 4;
   string kind = 5;
   string occurred_at = 6; // RFC 3339.
+  string payload_json = 7; // JSON object for attempt.progress; empty otherwise.
 }
 
 message CreateProjectRequest {
@@ -40,9 +41,11 @@ message GetProjectResponse { Project project = 1; }
 
 message ProjectSource {
   string project_id = 1;
-  string repository_url = 2; // Public GitHub or GitLab HTTPS repository.
+  string repository_url = 2; // GitHub or GitLab HTTPS repository.
   string ref = 3; // Empty selects the remote default branch.
   string updated_at = 4; // RFC 3339.
+  // Organization Git connection for a private repository; empty = public.
+  string git_connection_id = 5;
 }
 message GetProjectSourceRequest { string project_id = 1; }
 message GetProjectSourceResponse { ProjectSource source = 1; }
@@ -50,7 +53,25 @@ message SetProjectSourceRequest {
   string project_id = 1;
   string repository_url = 2;
   string ref = 3;
+  string git_connection_id = 4; // Empty for a public repository.
 }
+
+// An organization Git credential for private repositories. The token is
+// write-only; the platform uses it for AX Workspace setup and run-branch pushes.
+message GitConnection {
+  string id = 1;
+  string host = 2; // github.com or gitlab.com.
+  string username = 3; // HTTPS basic-auth user for the token.
+  string created_at = 4; // RFC 3339.
+}
+message ListGitConnectionsRequest {}
+message ListGitConnectionsResponse { repeated GitConnection connections = 1; }
+message CreateGitConnectionRequest {
+  string host = 1; // github.com or gitlab.com.
+  string username = 2;
+  string token = 3; // Write-only, max 8192 bytes; contents read/write on the repository.
+}
+message CreateGitConnectionResponse { GitConnection connection = 1; }
 message SetProjectSourceResponse { ProjectSource source = 1; }
 
 message VerificationCheck {
@@ -137,6 +158,10 @@ message RunTask {
   string effort = 10;
   repeated FrozenInputFile instruction_files = 11;
   repeated FrozenInputFile skill_files = 12;
+  string kind = 13; // Frozen stage kind, e.g. plan, interview, implement, verify.
+  string loop_with = 14; // Correction target when this stage owns a loop.
+  int32 max_cycles = 15; // Loop cap before escalation, including granted raises.
+  int32 loop_cycles = 16; // Corrections this loop has requested so far.
 }
 message FrozenInputFile { string path = 1; string sha256 = 2; }
 message ListRunTasksRequest { string run_id = 1; }
@@ -224,12 +249,94 @@ message DecideReviewRequest {
 }
 message DecideReviewResponse { ReviewDecision decision = 1; }
 
+// A structured human interaction raised by a guest (`bx ask`) or by the
+// platform (escalation). The first answer wins.
+message InteractionOption {
+  string id = 1;
+  string label = 2;
+  string description = 3;
+  bool recommended = 4;
+}
+message InteractionSource {
+  string path = 1;
+  int32 line = 2;
+}
+message InteractionInterview {
+  int32 round = 1;
+  string finalize_option = 2;
+}
+message InteractionAnswer {
+  repeated string option_ids = 1;
+  string text = 2;
+  string answered_by = 3; // Principal ID.
+  string at = 4; // RFC 3339.
+}
+message Interaction {
+  string id = 1;
+  string attempt_id = 2; // Empty for platform escalations.
+  string stage = 3; // Frozen stage key.
+  string kind = 4; // question, approval, escalation, or interview_round.
+  string title = 5;
+  string body_md = 6;
+  repeated InteractionOption options = 7;
+  bool multi_select = 8;
+  bool allow_free_text = 9;
+  bool blocking = 10;
+  repeated InteractionSource sources = 11;
+  InteractionInterview interview = 12;
+  string state = 13; // open, answered, cancelled, or superseded.
+  InteractionAnswer answer = 14;
+  string created_at = 15; // RFC 3339.
+}
+message ListInteractionsRequest { string run_id = 1; }
+message ListInteractionsResponse { repeated Interaction interactions = 1; }
+message AnswerInteractionRequest {
+  string interaction_id = 1;
+  repeated string option_ids = 2; // Must name stored options.
+  string text = 3; // Only when free text is allowed; max 4000 characters.
+}
+message AnswerInteractionResponse { Interaction interaction = 1; }
+message SteerAttemptRequest {
+  string attempt_id = 1;
+  string kind = 2; // instruction, pause, halt, or set_max_cycles.
+  string text = 3; // instruction: 1-4000 characters.
+  string reason = 4; // halt: 1-1000 characters.
+  int32 n = 5; // set_max_cycles: 1-100.
+}
+message SteerAttemptResponse { string steer_id = 1; }
+
+// Interactive terminal control. control is "agent" or "human"; the holder is
+// set only while a person controls the running attempt. generation advances on
+// every holder change.
+message AttemptControl {
+  string attempt_id = 1;
+  string control = 2;
+  string holder_principal_id = 3;
+  int64 generation = 4;
+  string stage = 5;
+  string attempt_status = 6;
+}
+
+message GetAttemptControlRequest { string attempt_id = 1; }
+message GetAttemptControlResponse {
+  AttemptControl control = 1;
+  // Takeover shows the model API key: org owners and admins, or the owner of
+  // the attempt's personal model connection.
+  bool can_take_over = 2;
+}
+message TakeOverAttemptRequest { string attempt_id = 1; }
+message TakeOverAttemptResponse { AttemptControl control = 1; }
+message HandBackAttemptRequest { string attempt_id = 1; }
+message HandBackAttemptResponse { AttemptControl control = 1; }
+
 // Browser requests derive their organization exclusively from a live session.
 service WorkflowService {
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc GetProjectSource(GetProjectSourceRequest) returns (GetProjectSourceResponse);
   rpc SetProjectSource(SetProjectSourceRequest) returns (SetProjectSourceResponse);
+  rpc ListGitConnections(ListGitConnectionsRequest) returns (ListGitConnectionsResponse);
+  rpc CreateGitConnection(CreateGitConnectionRequest) returns (CreateGitConnectionResponse);
   rpc GetProjectVerification(GetProjectVerificationRequest) returns (GetProjectVerificationResponse);
   rpc SetProjectVerification(SetProjectVerificationRequest) returns (SetProjectVerificationResponse);
   rpc ListProjectModelAccess(ListProjectModelAccessRequest) returns (ListProjectModelAccessResponse);
@@ -245,4 +352,10 @@ service WorkflowService {
   rpc ListCommandExits(ListCommandExitsRequest) returns (ListCommandExitsResponse);
   rpc GetCurrentReview(GetCurrentReviewRequest) returns (GetCurrentReviewResponse);
   rpc DecideReview(DecideReviewRequest) returns (DecideReviewResponse);
+  rpc GetAttemptControl(GetAttemptControlRequest) returns (GetAttemptControlResponse);
+  rpc TakeOverAttempt(TakeOverAttemptRequest) returns (TakeOverAttemptResponse);
+  rpc HandBackAttempt(HandBackAttemptRequest) returns (HandBackAttemptResponse);
+  rpc ListInteractions(ListInteractionsRequest) returns (ListInteractionsResponse);
+  rpc AnswerInteraction(AnswerInteractionRequest) returns (AnswerInteractionResponse);
+  rpc SteerAttempt(SteerAttemptRequest) returns (SteerAttemptResponse);
 }

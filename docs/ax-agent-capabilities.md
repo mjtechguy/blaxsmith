@@ -88,8 +88,24 @@ mounts the Workspace, and applies its Gateway; the runner's Workspace
 `skills` field alone does not install skill content. MCP still needs a granted
 server identity, endpoint/command policy, egress, secret binding, native CLI
 configuration, and revocation proof. Hooks remain unsupported until they have
-an explicit lifecycle and execution policy. The adapter stays pinned and
-noninteractive, and launch stays disabled until end-to-end AX verification.
+an explicit lifecycle and execution policy. The adapter stays pinned, and
+launch stays disabled until end-to-end AX verification.
+
+The harness now runs its headless mode inside a tmux pane
+([interactive sessions](interactive-sessions.md)), so a human can resume the
+same native session in the CLI's own TUI. Every isolation flag above still
+applies to that TUI, except two things: `codex resume` has no
+`--ignore-user-config` (the temporary home has no user config), and Claude
+Code's `AskUserQuestion` is disallowed only in autonomous mode. Session
+transcripts stay in the attempt's temporary home and are deleted with it.
+Two credential changes come with takeover. First, the leased key sits in the
+tmux server's environment so the resumed TUI can authenticate. Second, Codex
+needs `codex login --with-api-key`, which writes the key to the temporary
+home, and Claude records the key's last 20 characters as approved. Both
+happen only when a takeover starts. A human with control can run shell
+commands through the TUI, so the human can read the provider key, just as the
+agent's own shell can. Rendered pane output redacts the key, but that is not
+a boundary.
 
 For public Git runs, the dispatcher creates an attempt-named AX Workspace with
 the frozen repository and commit object ID as its fetch ref, in a `source`

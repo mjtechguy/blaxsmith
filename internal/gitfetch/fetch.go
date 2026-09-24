@@ -4,6 +4,7 @@ package gitfetch
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -67,6 +68,13 @@ func Validate(rawURL, ref string) error {
 // proxy resolves and dials the checked public IP itself, so a DNS change
 // between validation and Git's connection cannot redirect into the cluster.
 func Fetch(ctx context.Context, rawURL, ref string) (Source, error) {
+	return FetchAuth(ctx, rawURL, ref, "", nil)
+}
+
+// FetchAuth is Fetch for a private repository: the platform-held token goes
+// in an HTTPS basic Authorization header through the environment, never argv
+// or the fetched repository's config.
+func FetchAuth(ctx context.Context, rawURL, ref, username string, token []byte) (Source, error) {
 	if err := Validate(rawURL, ref); err != nil {
 		return Source{}, err
 	}
@@ -92,6 +100,11 @@ func Fetch(ctx context.Context, rawURL, ref string) (Source, error) {
 	defer proxy.Close()
 	env := []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null",
 		"GIT_TERMINAL_PROMPT=0", "GIT_ALLOW_PROTOCOL=https", "GIT_NO_REPLACE_OBJECTS=1", "GIT_NO_LAZY_FETCH=1"}
+	if len(token) > 0 {
+		basic := base64.StdEncoding.EncodeToString([]byte(username + ":" + string(token)))
+		env = append(env, "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=http.extraHeader",
+			"GIT_CONFIG_VALUE_0=Authorization: Basic "+basic)
+	}
 	args := []string{"-c", "http.proxy=http://" + proxy.Addr().String(), "-c", "http.followRedirects=false",
 		"-c", "credential.helper=", "-c", "core.hooksPath=/dev/null", "-c", "init.templateDir=/dev/null"}
 	run := func(extra ...string) ([]byte, error) {

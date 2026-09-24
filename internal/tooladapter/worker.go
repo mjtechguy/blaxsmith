@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,8 +43,10 @@ type Request struct {
 	Profile         recipe.Profile   `json:"profile"`
 	Prompt          string           `json:"prompt"`
 	FrozenArtifacts []ArtifactDigest `json:"frozen_artifacts,omitempty"`
-	TimeoutSeconds  int              `json:"timeout_seconds"`
-	MaxOutputBytes  int              `json:"max_output_bytes"`
+	TimeoutSeconds  int              `json:"timeout_seconds"` // idle timeout
+	// MaxRuntimeSeconds caps total stage time; 0 is unlimited.
+	MaxRuntimeSeconds int `json:"max_runtime_seconds,omitempty"`
+	MaxOutputBytes    int `json:"max_output_bytes"`
 }
 
 // ArtifactDigest binds prompt context to regular files in the pinned checkout.
@@ -70,6 +74,9 @@ func Command(request Request) ([]string, error) {
 	if _, err := Prepare(request.Runtime, profile, request.Prompt,
 		time.Duration(request.TimeoutSeconds)*time.Second, request.MaxOutputBytes); err != nil {
 		return nil, err
+	}
+	if request.MaxRuntimeSeconds < 0 || request.MaxRuntimeSeconds > recipe.MaxRuntimeCap {
+		return nil, fmt.Errorf("%w: invalid max runtime", ErrBlocked)
 	}
 	if _, err := credentialProvider(request.Profile); err != nil {
 		return nil, err
@@ -140,11 +147,13 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 		return nil, err
 	}
 	in.skillArtifacts = selectedSkillArtifacts(profile.Skills, request.FrozenArtifacts)
+	in.base = request.SourceCommit
+	in.maxRuntime = time.Duration(request.MaxRuntimeSeconds) * time.Second
 	variable := "OPENAI_API_KEY="
 	if provider == "anthropic" {
 		variable = "ANTHROPIC_API_KEY="
 	}
-	leaseContext, cancel := context.WithDeadline(ctx, expiry)
+	leaseContext, cancel := watchLease(ctx, expiry)
 	defer cancel()
 	output, err := Run(leaseContext, in, sourcePath, []string{variable + string(key)})
 	return bytes.ReplaceAll(output, key, []byte("[redacted]")), err
@@ -567,4 +576,45 @@ func strictJSON(body []byte, into any) error {
 		return ErrBlocked
 	}
 	return nil
+}
+
+// ErrLeaseExpired stops the harness when the model lease was not renewed.
+var ErrLeaseExpired = errors.New("model lease expired")
+
+var leaseTick = 10 * time.Second
+
+// watchLease cancels ctx once the model lease expires. The platform renews
+// the lease while the attempt stays authorized and writes the new expiry to
+// lease-expires in the state dir; each value is honored at most an hour ahead.
+// ponytail: renewal is platform-push and the expiry file is advisory: the
+// agent already holds the raw key and could rewrite the file. The real
+// protection is the platform's stop-actor path on revocation, which removes
+// the sandbox and the key with it.
+func watchLease(ctx context.Context, expiry time.Time) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	go func() {
+		for {
+			if data, err := os.ReadFile(statePath("lease-expires")); err == nil {
+				if n, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64); err == nil {
+					renewed := time.Unix(n, 0)
+					if limit := time.Now().Add(time.Hour); renewed.After(limit) {
+						renewed = limit
+					}
+					if renewed.After(expiry) {
+						expiry = renewed
+					}
+				}
+			}
+			if !time.Now().Before(expiry) {
+				cancel(ErrLeaseExpired)
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(min(leaseTick, time.Until(expiry)+10*time.Millisecond)):
+			}
+		}
+	}()
+	return ctx, func() { cancel(nil) }
 }

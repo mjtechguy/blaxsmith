@@ -17,6 +17,7 @@ import (
 )
 
 func TestAXWorkerRequiresScopedCredentialBeforePinnedTool(t *testing.T) {
+	requireTmux(t)
 	root := t.TempDir()
 	binary := filepath.Join(root, "codex")
 	body := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'codex-cli 0.156.1'; exit; fi\nprintf '%s|%s|%s' \"$OPENAI_API_KEY\" \"$7\" \"${SHOULD_NOT_LEAK:-}\"\n")
@@ -82,6 +83,7 @@ func TestAXWorkerRequiresScopedCredentialBeforePinnedTool(t *testing.T) {
 }
 
 func TestAXWorkspaceSourceMustMatchFrozenRepositoryAndCommit(t *testing.T) {
+	requireTmux(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is required for workspace source verification")
 	}
@@ -158,6 +160,7 @@ func TestAXWorkspaceSourceMustMatchFrozenRepositoryAndCommit(t *testing.T) {
 }
 
 func TestWorkerChecksFrozenSkillAgainstPinnedCheckout(t *testing.T) {
+	requireTmux(t)
 	root := t.TempDir()
 	binary := filepath.Join(root, "codex")
 	program := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'codex-cli 0.156.1'; elif [ ! -f \"$HOME/.agents/skills/evidence/SKILL.md\" ] || [ ! -f \"$HOME/.agents/skills/evidence/references/evidence.md\" ]; then exit 9; else printf ran; fi\n")
@@ -272,6 +275,7 @@ func TestPortableSkillMaterializesInEachHarnessAndRejectsToolGrants(t *testing.T
 }
 
 func TestClaudeBareModeGetsOnlyDeclaredSkillDirectory(t *testing.T) {
+	requireTmux(t)
 	workdir := t.TempDir()
 	skill := "skills/evidence/SKILL.md"
 	content := []byte("---\nname: evidence\ndescription: Review evidence.\n---\n\nReview evidence.")
@@ -302,6 +306,7 @@ func TestClaudeBareModeGetsOnlyDeclaredSkillDirectory(t *testing.T) {
 }
 
 func TestOpenCodeReceivesSelectedSkillWithoutNativeDelegation(t *testing.T) {
+	requireTmux(t)
 	workdir := t.TempDir()
 	skill := "skills/evidence/SKILL.md"
 	reference := "skills/evidence/references/evidence.md"

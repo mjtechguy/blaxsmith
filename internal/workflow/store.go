@@ -79,12 +79,13 @@ type Attempt struct {
 }
 
 type Event struct {
-	ID         int64
-	RunID      string
-	TaskID     *string
-	AttemptID  *string
-	Kind       string
-	OccurredAt time.Time
+	ID          int64
+	RunID       string
+	TaskID      *string
+	AttemptID   *string
+	Kind        string
+	OccurredAt  time.Time
+	PayloadJSON string // JSON object for attempt.progress; empty otherwise
 }
 
 // CreateProject creates a tenant-owned project; slug conflicts are explicit.
@@ -366,7 +367,7 @@ func (s *Store) reserveAttempt(ctx context.Context, orgID, runID, taskID string,
 	var taskState string
 	var generation int64
 	var max int
-	err = tx.QueryRow(ctx, `SELECT state,generation,max_attempts FROM workflow_tasks
+	err = tx.QueryRow(ctx, `SELECT state,generation,LEAST(20,max_attempts+extra_attempts) FROM workflow_tasks
 		WHERE organization_id=$1 AND run_id=$2 AND id=$3 FOR UPDATE`, orgID, runID, taskID).
 		Scan(&taskState, &generation, &max)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -515,7 +516,7 @@ func (s *Store) FinishAttempt(ctx context.Context, a Attempt, succeeded bool, re
 	var generation int64
 	var max int
 	var oldResult *string
-	err = tx.QueryRow(ctx, `SELECT t.state,t.active_attempt_id,t.generation,t.max_attempts,
+	err = tx.QueryRow(ctx, `SELECT t.state,t.active_attempt_id,t.generation,LEAST(20,t.max_attempts+t.extra_attempts),
 		a.state,a.fence_token,a.result_sha256 FROM workflow_tasks t
 		JOIN workflow_attempts a ON (a.organization_id=t.organization_id AND a.task_id=t.id)
 		WHERE t.organization_id=$1 AND t.run_id=$2 AND t.id=$3 AND a.id=$4
@@ -608,7 +609,7 @@ func (s *Store) ConfirmStopped(ctx context.Context, a Attempt) error {
 	var activeID *string
 	var generation int64
 	var max int
-	err = tx.QueryRow(ctx, `SELECT t.state,t.active_attempt_id,t.generation,t.max_attempts,
+	err = tx.QueryRow(ctx, `SELECT t.state,t.active_attempt_id,t.generation,LEAST(20,t.max_attempts+t.extra_attempts),
 		a.state,a.fence_token FROM workflow_tasks t
 		JOIN workflow_attempts a ON (a.organization_id=t.organization_id AND a.task_id=t.id)
 		WHERE t.organization_id=$1 AND t.run_id=$2 AND t.id=$3 AND a.id=$4 FOR UPDATE OF t,a`,
@@ -620,8 +621,9 @@ func (s *Store) ConfirmStopped(ctx context.Context, a Attempt) error {
 	if err != nil {
 		return err
 	}
-	if token == a.FenceToken && generation == a.OwnerGeneration && activeID == nil && attemptState == "stopped" &&
-		(taskState == "pending" || taskState == "blocked" || taskState == "cancelled") {
+	if token == a.FenceToken && generation == a.OwnerGeneration && activeID == nil &&
+		(attemptState == "succeeded" || (attemptState == "stopped" &&
+			(taskState == "pending" || taskState == "blocked" || taskState == "cancelled"))) {
 		return tx.Commit(ctx)
 	}
 	if activeID == nil || *activeID != a.ID || token != a.FenceToken || generation != a.OwnerGeneration {
@@ -629,6 +631,15 @@ func (s *Store) ConfirmStopped(ctx context.Context, a Attempt) error {
 	}
 	if taskState != attemptState || (taskState != "reserved" && taskState != "starting" && taskState != "running" && taskState != "reconciling") {
 		return ErrConflict
+	}
+	if runState == "active" && taskState == "running" {
+		// A recorded clean result is accepted only now that the actor is gone.
+		if accepted, err := s.acceptStopped(ctx, tx, a); err != nil || accepted {
+			if err != nil {
+				return err
+			}
+			return tx.Commit(ctx)
+		}
 	}
 	taskFinal := "pending"
 	if runState == "cancel_requested" {
@@ -781,7 +792,7 @@ func (s *Store) EventsAfter(ctx context.Context, orgID, runID string, after int6
 	if !ids(orgID, runID) || after < 0 || limit < 1 || limit > 500 {
 		return nil, ErrInvalid
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id,run_id,task_id::text,attempt_id::text,kind,occurred_at
+	rows, err := s.pool.Query(ctx, `SELECT id,run_id,task_id::text,attempt_id::text,kind,occurred_at,COALESCE(payload::text,'')
 		FROM workflow_events WHERE organization_id=$1 AND run_id=$2 AND id>$3
 		ORDER BY id LIMIT $4`, orgID, runID, after, limit)
 	if err != nil {
@@ -791,7 +802,7 @@ func (s *Store) EventsAfter(ctx context.Context, orgID, runID string, after int6
 	events := []Event{}
 	for rows.Next() {
 		var e Event
-		if err := rows.Scan(&e.ID, &e.RunID, &e.TaskID, &e.AttemptID, &e.Kind, &e.OccurredAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.RunID, &e.TaskID, &e.AttemptID, &e.Kind, &e.OccurredAt, &e.PayloadJSON); err != nil {
 			return nil, err
 		}
 		events = append(events, e)
@@ -813,6 +824,12 @@ func (s *Store) EventHead(ctx context.Context, orgID, runID string) (int64, erro
 }
 
 func event(ctx context.Context, tx pgx.Tx, orgID, runID, taskID, attemptID, kind string) error {
+	return AppendEvent(ctx, tx, orgID, runID, taskID, attemptID, kind, nil)
+}
+
+// AppendEvent writes one workflow_events row with an optional JSON object
+// payload (attempt.progress carries one; other kinds pass nil).
+func AppendEvent(ctx context.Context, tx pgx.Tx, orgID, runID, taskID, attemptID, kind string, payload []byte) error {
 	// A per-run counter is advanced under the run row lock in this transaction.
 	// Sequence IDs therefore commit in cursor order, unlike global sequences.
 	var id int64
@@ -820,15 +837,18 @@ func event(ctx context.Context, tx pgx.Tx, orgID, runID, taskID, attemptID, kind
 		WHERE organization_id=$1 AND id=$2 RETURNING event_seq`, orgID, runID).Scan(&id); err != nil {
 		return err
 	}
-	var task, attempt any
+	var task, attempt, body any
 	if taskID != "" {
 		task = taskID
 	}
 	if attemptID != "" {
 		attempt = attemptID
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO workflow_events (id,organization_id,run_id,task_id,attempt_id,kind)
-		VALUES ($1,$2,$3,$4,$5,$6)`, id, orgID, runID, task, attempt, kind)
+	if payload != nil {
+		body = string(payload)
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO workflow_events (id,organization_id,run_id,task_id,attempt_id,kind,payload)
+		VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)`, id, orgID, runID, task, attempt, kind, body)
 	if err != nil {
 		return err
 	}

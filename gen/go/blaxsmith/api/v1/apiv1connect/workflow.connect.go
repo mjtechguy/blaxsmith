@@ -45,6 +45,12 @@ const (
 	// WorkflowServiceSetProjectSourceProcedure is the fully-qualified name of the WorkflowService's
 	// SetProjectSource RPC.
 	WorkflowServiceSetProjectSourceProcedure = "/blaxsmith.api.v1.WorkflowService/SetProjectSource"
+	// WorkflowServiceListGitConnectionsProcedure is the fully-qualified name of the WorkflowService's
+	// ListGitConnections RPC.
+	WorkflowServiceListGitConnectionsProcedure = "/blaxsmith.api.v1.WorkflowService/ListGitConnections"
+	// WorkflowServiceCreateGitConnectionProcedure is the fully-qualified name of the WorkflowService's
+	// CreateGitConnection RPC.
+	WorkflowServiceCreateGitConnectionProcedure = "/blaxsmith.api.v1.WorkflowService/CreateGitConnection"
 	// WorkflowServiceGetProjectVerificationProcedure is the fully-qualified name of the
 	// WorkflowService's GetProjectVerification RPC.
 	WorkflowServiceGetProjectVerificationProcedure = "/blaxsmith.api.v1.WorkflowService/GetProjectVerification"
@@ -89,6 +95,24 @@ const (
 	// WorkflowServiceDecideReviewProcedure is the fully-qualified name of the WorkflowService's
 	// DecideReview RPC.
 	WorkflowServiceDecideReviewProcedure = "/blaxsmith.api.v1.WorkflowService/DecideReview"
+	// WorkflowServiceGetAttemptControlProcedure is the fully-qualified name of the WorkflowService's
+	// GetAttemptControl RPC.
+	WorkflowServiceGetAttemptControlProcedure = "/blaxsmith.api.v1.WorkflowService/GetAttemptControl"
+	// WorkflowServiceTakeOverAttemptProcedure is the fully-qualified name of the WorkflowService's
+	// TakeOverAttempt RPC.
+	WorkflowServiceTakeOverAttemptProcedure = "/blaxsmith.api.v1.WorkflowService/TakeOverAttempt"
+	// WorkflowServiceHandBackAttemptProcedure is the fully-qualified name of the WorkflowService's
+	// HandBackAttempt RPC.
+	WorkflowServiceHandBackAttemptProcedure = "/blaxsmith.api.v1.WorkflowService/HandBackAttempt"
+	// WorkflowServiceListInteractionsProcedure is the fully-qualified name of the WorkflowService's
+	// ListInteractions RPC.
+	WorkflowServiceListInteractionsProcedure = "/blaxsmith.api.v1.WorkflowService/ListInteractions"
+	// WorkflowServiceAnswerInteractionProcedure is the fully-qualified name of the WorkflowService's
+	// AnswerInteraction RPC.
+	WorkflowServiceAnswerInteractionProcedure = "/blaxsmith.api.v1.WorkflowService/AnswerInteraction"
+	// WorkflowServiceSteerAttemptProcedure is the fully-qualified name of the WorkflowService's
+	// SteerAttempt RPC.
+	WorkflowServiceSteerAttemptProcedure = "/blaxsmith.api.v1.WorkflowService/SteerAttempt"
 )
 
 // WorkflowServiceClient is a client for the blaxsmith.api.v1.WorkflowService service.
@@ -97,6 +121,8 @@ type WorkflowServiceClient interface {
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
 	GetProjectSource(context.Context, *connect.Request[v1.GetProjectSourceRequest]) (*connect.Response[v1.GetProjectSourceResponse], error)
 	SetProjectSource(context.Context, *connect.Request[v1.SetProjectSourceRequest]) (*connect.Response[v1.SetProjectSourceResponse], error)
+	ListGitConnections(context.Context, *connect.Request[v1.ListGitConnectionsRequest]) (*connect.Response[v1.ListGitConnectionsResponse], error)
+	CreateGitConnection(context.Context, *connect.Request[v1.CreateGitConnectionRequest]) (*connect.Response[v1.CreateGitConnectionResponse], error)
 	GetProjectVerification(context.Context, *connect.Request[v1.GetProjectVerificationRequest]) (*connect.Response[v1.GetProjectVerificationResponse], error)
 	SetProjectVerification(context.Context, *connect.Request[v1.SetProjectVerificationRequest]) (*connect.Response[v1.SetProjectVerificationResponse], error)
 	ListProjectModelAccess(context.Context, *connect.Request[v1.ListProjectModelAccessRequest]) (*connect.Response[v1.ListProjectModelAccessResponse], error)
@@ -112,6 +138,12 @@ type WorkflowServiceClient interface {
 	ListCommandExits(context.Context, *connect.Request[v1.ListCommandExitsRequest]) (*connect.Response[v1.ListCommandExitsResponse], error)
 	GetCurrentReview(context.Context, *connect.Request[v1.GetCurrentReviewRequest]) (*connect.Response[v1.GetCurrentReviewResponse], error)
 	DecideReview(context.Context, *connect.Request[v1.DecideReviewRequest]) (*connect.Response[v1.DecideReviewResponse], error)
+	GetAttemptControl(context.Context, *connect.Request[v1.GetAttemptControlRequest]) (*connect.Response[v1.GetAttemptControlResponse], error)
+	TakeOverAttempt(context.Context, *connect.Request[v1.TakeOverAttemptRequest]) (*connect.Response[v1.TakeOverAttemptResponse], error)
+	HandBackAttempt(context.Context, *connect.Request[v1.HandBackAttemptRequest]) (*connect.Response[v1.HandBackAttemptResponse], error)
+	ListInteractions(context.Context, *connect.Request[v1.ListInteractionsRequest]) (*connect.Response[v1.ListInteractionsResponse], error)
+	AnswerInteraction(context.Context, *connect.Request[v1.AnswerInteractionRequest]) (*connect.Response[v1.AnswerInteractionResponse], error)
+	SteerAttempt(context.Context, *connect.Request[v1.SteerAttemptRequest]) (*connect.Response[v1.SteerAttemptResponse], error)
 }
 
 // NewWorkflowServiceClient constructs a client for the blaxsmith.api.v1.WorkflowService service. By
@@ -147,6 +179,18 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			httpClient,
 			baseURL+WorkflowServiceSetProjectSourceProcedure,
 			connect.WithSchema(workflowServiceMethods.ByName("SetProjectSource")),
+			connect.WithClientOptions(opts...),
+		),
+		listGitConnections: connect.NewClient[v1.ListGitConnectionsRequest, v1.ListGitConnectionsResponse](
+			httpClient,
+			baseURL+WorkflowServiceListGitConnectionsProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ListGitConnections")),
+			connect.WithClientOptions(opts...),
+		),
+		createGitConnection: connect.NewClient[v1.CreateGitConnectionRequest, v1.CreateGitConnectionResponse](
+			httpClient,
+			baseURL+WorkflowServiceCreateGitConnectionProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("CreateGitConnection")),
 			connect.WithClientOptions(opts...),
 		),
 		getProjectVerification: connect.NewClient[v1.GetProjectVerificationRequest, v1.GetProjectVerificationResponse](
@@ -239,6 +283,42 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(workflowServiceMethods.ByName("DecideReview")),
 			connect.WithClientOptions(opts...),
 		),
+		getAttemptControl: connect.NewClient[v1.GetAttemptControlRequest, v1.GetAttemptControlResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetAttemptControlProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetAttemptControl")),
+			connect.WithClientOptions(opts...),
+		),
+		takeOverAttempt: connect.NewClient[v1.TakeOverAttemptRequest, v1.TakeOverAttemptResponse](
+			httpClient,
+			baseURL+WorkflowServiceTakeOverAttemptProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("TakeOverAttempt")),
+			connect.WithClientOptions(opts...),
+		),
+		handBackAttempt: connect.NewClient[v1.HandBackAttemptRequest, v1.HandBackAttemptResponse](
+			httpClient,
+			baseURL+WorkflowServiceHandBackAttemptProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("HandBackAttempt")),
+			connect.WithClientOptions(opts...),
+		),
+		listInteractions: connect.NewClient[v1.ListInteractionsRequest, v1.ListInteractionsResponse](
+			httpClient,
+			baseURL+WorkflowServiceListInteractionsProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ListInteractions")),
+			connect.WithClientOptions(opts...),
+		),
+		answerInteraction: connect.NewClient[v1.AnswerInteractionRequest, v1.AnswerInteractionResponse](
+			httpClient,
+			baseURL+WorkflowServiceAnswerInteractionProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("AnswerInteraction")),
+			connect.WithClientOptions(opts...),
+		),
+		steerAttempt: connect.NewClient[v1.SteerAttemptRequest, v1.SteerAttemptResponse](
+			httpClient,
+			baseURL+WorkflowServiceSteerAttemptProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("SteerAttempt")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -248,6 +328,8 @@ type workflowServiceClient struct {
 	getProject               *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
 	getProjectSource         *connect.Client[v1.GetProjectSourceRequest, v1.GetProjectSourceResponse]
 	setProjectSource         *connect.Client[v1.SetProjectSourceRequest, v1.SetProjectSourceResponse]
+	listGitConnections       *connect.Client[v1.ListGitConnectionsRequest, v1.ListGitConnectionsResponse]
+	createGitConnection      *connect.Client[v1.CreateGitConnectionRequest, v1.CreateGitConnectionResponse]
 	getProjectVerification   *connect.Client[v1.GetProjectVerificationRequest, v1.GetProjectVerificationResponse]
 	setProjectVerification   *connect.Client[v1.SetProjectVerificationRequest, v1.SetProjectVerificationResponse]
 	listProjectModelAccess   *connect.Client[v1.ListProjectModelAccessRequest, v1.ListProjectModelAccessResponse]
@@ -263,6 +345,12 @@ type workflowServiceClient struct {
 	listCommandExits         *connect.Client[v1.ListCommandExitsRequest, v1.ListCommandExitsResponse]
 	getCurrentReview         *connect.Client[v1.GetCurrentReviewRequest, v1.GetCurrentReviewResponse]
 	decideReview             *connect.Client[v1.DecideReviewRequest, v1.DecideReviewResponse]
+	getAttemptControl        *connect.Client[v1.GetAttemptControlRequest, v1.GetAttemptControlResponse]
+	takeOverAttempt          *connect.Client[v1.TakeOverAttemptRequest, v1.TakeOverAttemptResponse]
+	handBackAttempt          *connect.Client[v1.HandBackAttemptRequest, v1.HandBackAttemptResponse]
+	listInteractions         *connect.Client[v1.ListInteractionsRequest, v1.ListInteractionsResponse]
+	answerInteraction        *connect.Client[v1.AnswerInteractionRequest, v1.AnswerInteractionResponse]
+	steerAttempt             *connect.Client[v1.SteerAttemptRequest, v1.SteerAttemptResponse]
 }
 
 // CreateProject calls blaxsmith.api.v1.WorkflowService.CreateProject.
@@ -283,6 +371,16 @@ func (c *workflowServiceClient) GetProjectSource(ctx context.Context, req *conne
 // SetProjectSource calls blaxsmith.api.v1.WorkflowService.SetProjectSource.
 func (c *workflowServiceClient) SetProjectSource(ctx context.Context, req *connect.Request[v1.SetProjectSourceRequest]) (*connect.Response[v1.SetProjectSourceResponse], error) {
 	return c.setProjectSource.CallUnary(ctx, req)
+}
+
+// ListGitConnections calls blaxsmith.api.v1.WorkflowService.ListGitConnections.
+func (c *workflowServiceClient) ListGitConnections(ctx context.Context, req *connect.Request[v1.ListGitConnectionsRequest]) (*connect.Response[v1.ListGitConnectionsResponse], error) {
+	return c.listGitConnections.CallUnary(ctx, req)
+}
+
+// CreateGitConnection calls blaxsmith.api.v1.WorkflowService.CreateGitConnection.
+func (c *workflowServiceClient) CreateGitConnection(ctx context.Context, req *connect.Request[v1.CreateGitConnectionRequest]) (*connect.Response[v1.CreateGitConnectionResponse], error) {
+	return c.createGitConnection.CallUnary(ctx, req)
 }
 
 // GetProjectVerification calls blaxsmith.api.v1.WorkflowService.GetProjectVerification.
@@ -360,12 +458,44 @@ func (c *workflowServiceClient) DecideReview(ctx context.Context, req *connect.R
 	return c.decideReview.CallUnary(ctx, req)
 }
 
+// GetAttemptControl calls blaxsmith.api.v1.WorkflowService.GetAttemptControl.
+func (c *workflowServiceClient) GetAttemptControl(ctx context.Context, req *connect.Request[v1.GetAttemptControlRequest]) (*connect.Response[v1.GetAttemptControlResponse], error) {
+	return c.getAttemptControl.CallUnary(ctx, req)
+}
+
+// TakeOverAttempt calls blaxsmith.api.v1.WorkflowService.TakeOverAttempt.
+func (c *workflowServiceClient) TakeOverAttempt(ctx context.Context, req *connect.Request[v1.TakeOverAttemptRequest]) (*connect.Response[v1.TakeOverAttemptResponse], error) {
+	return c.takeOverAttempt.CallUnary(ctx, req)
+}
+
+// HandBackAttempt calls blaxsmith.api.v1.WorkflowService.HandBackAttempt.
+func (c *workflowServiceClient) HandBackAttempt(ctx context.Context, req *connect.Request[v1.HandBackAttemptRequest]) (*connect.Response[v1.HandBackAttemptResponse], error) {
+	return c.handBackAttempt.CallUnary(ctx, req)
+}
+
+// ListInteractions calls blaxsmith.api.v1.WorkflowService.ListInteractions.
+func (c *workflowServiceClient) ListInteractions(ctx context.Context, req *connect.Request[v1.ListInteractionsRequest]) (*connect.Response[v1.ListInteractionsResponse], error) {
+	return c.listInteractions.CallUnary(ctx, req)
+}
+
+// AnswerInteraction calls blaxsmith.api.v1.WorkflowService.AnswerInteraction.
+func (c *workflowServiceClient) AnswerInteraction(ctx context.Context, req *connect.Request[v1.AnswerInteractionRequest]) (*connect.Response[v1.AnswerInteractionResponse], error) {
+	return c.answerInteraction.CallUnary(ctx, req)
+}
+
+// SteerAttempt calls blaxsmith.api.v1.WorkflowService.SteerAttempt.
+func (c *workflowServiceClient) SteerAttempt(ctx context.Context, req *connect.Request[v1.SteerAttemptRequest]) (*connect.Response[v1.SteerAttemptResponse], error) {
+	return c.steerAttempt.CallUnary(ctx, req)
+}
+
 // WorkflowServiceHandler is an implementation of the blaxsmith.api.v1.WorkflowService service.
 type WorkflowServiceHandler interface {
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
 	GetProjectSource(context.Context, *connect.Request[v1.GetProjectSourceRequest]) (*connect.Response[v1.GetProjectSourceResponse], error)
 	SetProjectSource(context.Context, *connect.Request[v1.SetProjectSourceRequest]) (*connect.Response[v1.SetProjectSourceResponse], error)
+	ListGitConnections(context.Context, *connect.Request[v1.ListGitConnectionsRequest]) (*connect.Response[v1.ListGitConnectionsResponse], error)
+	CreateGitConnection(context.Context, *connect.Request[v1.CreateGitConnectionRequest]) (*connect.Response[v1.CreateGitConnectionResponse], error)
 	GetProjectVerification(context.Context, *connect.Request[v1.GetProjectVerificationRequest]) (*connect.Response[v1.GetProjectVerificationResponse], error)
 	SetProjectVerification(context.Context, *connect.Request[v1.SetProjectVerificationRequest]) (*connect.Response[v1.SetProjectVerificationResponse], error)
 	ListProjectModelAccess(context.Context, *connect.Request[v1.ListProjectModelAccessRequest]) (*connect.Response[v1.ListProjectModelAccessResponse], error)
@@ -381,6 +511,12 @@ type WorkflowServiceHandler interface {
 	ListCommandExits(context.Context, *connect.Request[v1.ListCommandExitsRequest]) (*connect.Response[v1.ListCommandExitsResponse], error)
 	GetCurrentReview(context.Context, *connect.Request[v1.GetCurrentReviewRequest]) (*connect.Response[v1.GetCurrentReviewResponse], error)
 	DecideReview(context.Context, *connect.Request[v1.DecideReviewRequest]) (*connect.Response[v1.DecideReviewResponse], error)
+	GetAttemptControl(context.Context, *connect.Request[v1.GetAttemptControlRequest]) (*connect.Response[v1.GetAttemptControlResponse], error)
+	TakeOverAttempt(context.Context, *connect.Request[v1.TakeOverAttemptRequest]) (*connect.Response[v1.TakeOverAttemptResponse], error)
+	HandBackAttempt(context.Context, *connect.Request[v1.HandBackAttemptRequest]) (*connect.Response[v1.HandBackAttemptResponse], error)
+	ListInteractions(context.Context, *connect.Request[v1.ListInteractionsRequest]) (*connect.Response[v1.ListInteractionsResponse], error)
+	AnswerInteraction(context.Context, *connect.Request[v1.AnswerInteractionRequest]) (*connect.Response[v1.AnswerInteractionResponse], error)
+	SteerAttempt(context.Context, *connect.Request[v1.SteerAttemptRequest]) (*connect.Response[v1.SteerAttemptResponse], error)
 }
 
 // NewWorkflowServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -412,6 +548,18 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		WorkflowServiceSetProjectSourceProcedure,
 		svc.SetProjectSource,
 		connect.WithSchema(workflowServiceMethods.ByName("SetProjectSource")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceListGitConnectionsHandler := connect.NewUnaryHandler(
+		WorkflowServiceListGitConnectionsProcedure,
+		svc.ListGitConnections,
+		connect.WithSchema(workflowServiceMethods.ByName("ListGitConnections")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceCreateGitConnectionHandler := connect.NewUnaryHandler(
+		WorkflowServiceCreateGitConnectionProcedure,
+		svc.CreateGitConnection,
+		connect.WithSchema(workflowServiceMethods.ByName("CreateGitConnection")),
 		connect.WithHandlerOptions(opts...),
 	)
 	workflowServiceGetProjectVerificationHandler := connect.NewUnaryHandler(
@@ -504,6 +652,42 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		connect.WithSchema(workflowServiceMethods.ByName("DecideReview")),
 		connect.WithHandlerOptions(opts...),
 	)
+	workflowServiceGetAttemptControlHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetAttemptControlProcedure,
+		svc.GetAttemptControl,
+		connect.WithSchema(workflowServiceMethods.ByName("GetAttemptControl")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceTakeOverAttemptHandler := connect.NewUnaryHandler(
+		WorkflowServiceTakeOverAttemptProcedure,
+		svc.TakeOverAttempt,
+		connect.WithSchema(workflowServiceMethods.ByName("TakeOverAttempt")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceHandBackAttemptHandler := connect.NewUnaryHandler(
+		WorkflowServiceHandBackAttemptProcedure,
+		svc.HandBackAttempt,
+		connect.WithSchema(workflowServiceMethods.ByName("HandBackAttempt")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceListInteractionsHandler := connect.NewUnaryHandler(
+		WorkflowServiceListInteractionsProcedure,
+		svc.ListInteractions,
+		connect.WithSchema(workflowServiceMethods.ByName("ListInteractions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceAnswerInteractionHandler := connect.NewUnaryHandler(
+		WorkflowServiceAnswerInteractionProcedure,
+		svc.AnswerInteraction,
+		connect.WithSchema(workflowServiceMethods.ByName("AnswerInteraction")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceSteerAttemptHandler := connect.NewUnaryHandler(
+		WorkflowServiceSteerAttemptProcedure,
+		svc.SteerAttempt,
+		connect.WithSchema(workflowServiceMethods.ByName("SteerAttempt")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blaxsmith.api.v1.WorkflowService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case WorkflowServiceCreateProjectProcedure:
@@ -514,6 +698,10 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 			workflowServiceGetProjectSourceHandler.ServeHTTP(w, r)
 		case WorkflowServiceSetProjectSourceProcedure:
 			workflowServiceSetProjectSourceHandler.ServeHTTP(w, r)
+		case WorkflowServiceListGitConnectionsProcedure:
+			workflowServiceListGitConnectionsHandler.ServeHTTP(w, r)
+		case WorkflowServiceCreateGitConnectionProcedure:
+			workflowServiceCreateGitConnectionHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetProjectVerificationProcedure:
 			workflowServiceGetProjectVerificationHandler.ServeHTTP(w, r)
 		case WorkflowServiceSetProjectVerificationProcedure:
@@ -544,6 +732,18 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 			workflowServiceGetCurrentReviewHandler.ServeHTTP(w, r)
 		case WorkflowServiceDecideReviewProcedure:
 			workflowServiceDecideReviewHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetAttemptControlProcedure:
+			workflowServiceGetAttemptControlHandler.ServeHTTP(w, r)
+		case WorkflowServiceTakeOverAttemptProcedure:
+			workflowServiceTakeOverAttemptHandler.ServeHTTP(w, r)
+		case WorkflowServiceHandBackAttemptProcedure:
+			workflowServiceHandBackAttemptHandler.ServeHTTP(w, r)
+		case WorkflowServiceListInteractionsProcedure:
+			workflowServiceListInteractionsHandler.ServeHTTP(w, r)
+		case WorkflowServiceAnswerInteractionProcedure:
+			workflowServiceAnswerInteractionHandler.ServeHTTP(w, r)
+		case WorkflowServiceSteerAttemptProcedure:
+			workflowServiceSteerAttemptHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -567,6 +767,14 @@ func (UnimplementedWorkflowServiceHandler) GetProjectSource(context.Context, *co
 
 func (UnimplementedWorkflowServiceHandler) SetProjectSource(context.Context, *connect.Request[v1.SetProjectSourceRequest]) (*connect.Response[v1.SetProjectSourceResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.SetProjectSource is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) ListGitConnections(context.Context, *connect.Request[v1.ListGitConnectionsRequest]) (*connect.Response[v1.ListGitConnectionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ListGitConnections is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) CreateGitConnection(context.Context, *connect.Request[v1.CreateGitConnectionRequest]) (*connect.Response[v1.CreateGitConnectionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.CreateGitConnection is not implemented"))
 }
 
 func (UnimplementedWorkflowServiceHandler) GetProjectVerification(context.Context, *connect.Request[v1.GetProjectVerificationRequest]) (*connect.Response[v1.GetProjectVerificationResponse], error) {
@@ -627,4 +835,28 @@ func (UnimplementedWorkflowServiceHandler) GetCurrentReview(context.Context, *co
 
 func (UnimplementedWorkflowServiceHandler) DecideReview(context.Context, *connect.Request[v1.DecideReviewRequest]) (*connect.Response[v1.DecideReviewResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.DecideReview is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetAttemptControl(context.Context, *connect.Request[v1.GetAttemptControlRequest]) (*connect.Response[v1.GetAttemptControlResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetAttemptControl is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) TakeOverAttempt(context.Context, *connect.Request[v1.TakeOverAttemptRequest]) (*connect.Response[v1.TakeOverAttemptResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.TakeOverAttempt is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) HandBackAttempt(context.Context, *connect.Request[v1.HandBackAttemptRequest]) (*connect.Response[v1.HandBackAttemptResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.HandBackAttempt is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) ListInteractions(context.Context, *connect.Request[v1.ListInteractionsRequest]) (*connect.Response[v1.ListInteractionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ListInteractions is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) AnswerInteraction(context.Context, *connect.Request[v1.AnswerInteractionRequest]) (*connect.Response[v1.AnswerInteractionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.AnswerInteraction is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) SteerAttempt(context.Context, *connect.Request[v1.SteerAttemptRequest]) (*connect.Response[v1.SteerAttemptResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.SteerAttempt is not implemented"))
 }

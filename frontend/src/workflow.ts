@@ -30,9 +30,21 @@ export async function getProjectSource(projectId: string, signal?: AbortSignal) 
   }
 }
 
-export async function setProjectSource(projectId: string, repositoryUrl: string, ref: string) {
+export async function setProjectSource(projectId: string, repositoryUrl: string, ref: string, gitConnectionId = "") {
   const token = await csrfToken();
-  return client.setProjectSource({ projectId, repositoryUrl, ref }, { headers: { "X-Blaxsmith-CSRF": token } });
+  return client.setProjectSource({ projectId, repositoryUrl, ref, gitConnectionId }, { headers: { "X-Blaxsmith-CSRF": token } });
+}
+
+export const gitConnectionsQueryKey = (organizationId: string) => ["git-connections", organizationId] as const;
+
+export async function listGitConnections(signal?: AbortSignal) {
+  return (await client.listGitConnections({}, { signal })).connections;
+}
+
+// The token is write-only: it is sent once and never returned.
+export async function createGitConnection(host: string, username: string, token: string) {
+  const csrf = await csrfToken();
+  return (await client.createGitConnection({ host, username, token }, { headers: { "X-Blaxsmith-CSRF": csrf } })).connection;
 }
 
 export async function getProjectVerification(projectId: string, signal?: AbortSignal) {

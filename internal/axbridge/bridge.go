@@ -108,18 +108,21 @@ func (b *Bridge) task(a workflow.Attempt) (Task, error) {
 	for i, arg := range command {
 		argv[i] = arg
 	}
-	spec := map[string]any{"image": b.Image, "command": argv} // AX omits debug:false on read-back.
-	if b.Tool == nil {
-		spec["debug"] = true
-	}
+	// ponytail: debug exposes the whole guest process/file API so the terminal
+	// gateway (internal/terminal) can attach and take over. The connector must
+	// be the only reachable caller of atenet-router (NetworkPolicy); replace
+	// with a narrow AX terminal API before multi-tenant release.
+	spec := map[string]any{"image": b.Image, "command": argv, "debug": true}
 	if b.Tool != nil {
 		if !axResourceName.MatchString(b.Workspace) || !axResourceName.MatchString(b.Gateway) {
 			return Task{}, ErrInputs
 		}
-		// ponytail: one class matches the proof pool; add approved classes with admin selection.
+		// ponytail: one class for every agent sandbox (2 CPU / 4 GiB, the user's
+		// choice); requests equal limits because Substrate requires it. Add
+		// approved classes with admin selection when stages need other sizes.
 		spec["resources"] = map[string]any{
-			"requests": map[string]any{"cpu": "1", "memory": "1Gi"},
-			"limits":   map[string]any{"cpu": "1", "memory": "1Gi"},
+			"requests": map[string]any{"cpu": "2", "memory": "4Gi"},
+			"limits":   map[string]any{"cpu": "2", "memory": "4Gi"},
 		}
 		spec["workspaces"] = []any{map[string]any{"name": b.Workspace, "path": "/workspace"}}
 		spec["gateway"] = map[string]any{"name": b.Gateway}

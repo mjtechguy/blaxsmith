@@ -196,7 +196,8 @@ type WorkflowEvent struct {
 	TaskId        string                 `protobuf:"bytes,3,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
 	AttemptId     string                 `protobuf:"bytes,4,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
 	Kind          string                 `protobuf:"bytes,5,opt,name=kind,proto3" json:"kind,omitempty"`
-	OccurredAt    string                 `protobuf:"bytes,6,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"` // RFC 3339.
+	OccurredAt    string                 `protobuf:"bytes,6,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`    // RFC 3339.
+	PayloadJson   string                 `protobuf:"bytes,7,opt,name=payload_json,json=payloadJson,proto3" json:"payload_json,omitempty"` // JSON object for attempt.progress; empty otherwise.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -269,6 +270,13 @@ func (x *WorkflowEvent) GetKind() string {
 func (x *WorkflowEvent) GetOccurredAt() string {
 	if x != nil {
 		return x.OccurredAt
+	}
+	return ""
+}
+
+func (x *WorkflowEvent) GetPayloadJson() string {
+	if x != nil {
+		return x.PayloadJson
 	}
 	return ""
 }
@@ -460,11 +468,13 @@ func (x *GetProjectResponse) GetProject() *Project {
 type ProjectSource struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	RepositoryUrl string                 `protobuf:"bytes,2,opt,name=repository_url,json=repositoryUrl,proto3" json:"repository_url,omitempty"` // Public GitHub or GitLab HTTPS repository.
+	RepositoryUrl string                 `protobuf:"bytes,2,opt,name=repository_url,json=repositoryUrl,proto3" json:"repository_url,omitempty"` // GitHub or GitLab HTTPS repository.
 	Ref           string                 `protobuf:"bytes,3,opt,name=ref,proto3" json:"ref,omitempty"`                                          // Empty selects the remote default branch.
 	UpdatedAt     string                 `protobuf:"bytes,4,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`             // RFC 3339.
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// Organization Git connection for a private repository; empty = public.
+	GitConnectionId string `protobuf:"bytes,5,opt,name=git_connection_id,json=gitConnectionId,proto3" json:"git_connection_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ProjectSource) Reset() {
@@ -521,6 +531,13 @@ func (x *ProjectSource) GetRef() string {
 func (x *ProjectSource) GetUpdatedAt() string {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return ""
+}
+
+func (x *ProjectSource) GetGitConnectionId() string {
+	if x != nil {
+		return x.GitConnectionId
 	}
 	return ""
 }
@@ -614,12 +631,13 @@ func (x *GetProjectSourceResponse) GetSource() *ProjectSource {
 }
 
 type SetProjectSourceRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	RepositoryUrl string                 `protobuf:"bytes,2,opt,name=repository_url,json=repositoryUrl,proto3" json:"repository_url,omitempty"`
-	Ref           string                 `protobuf:"bytes,3,opt,name=ref,proto3" json:"ref,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId       string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	RepositoryUrl   string                 `protobuf:"bytes,2,opt,name=repository_url,json=repositoryUrl,proto3" json:"repository_url,omitempty"`
+	Ref             string                 `protobuf:"bytes,3,opt,name=ref,proto3" json:"ref,omitempty"`
+	GitConnectionId string                 `protobuf:"bytes,4,opt,name=git_connection_id,json=gitConnectionId,proto3" json:"git_connection_id,omitempty"` // Empty for a public repository.
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *SetProjectSourceRequest) Reset() {
@@ -673,6 +691,267 @@ func (x *SetProjectSourceRequest) GetRef() string {
 	return ""
 }
 
+func (x *SetProjectSourceRequest) GetGitConnectionId() string {
+	if x != nil {
+		return x.GitConnectionId
+	}
+	return ""
+}
+
+// An organization Git credential for private repositories. The token is
+// write-only; the platform uses it for AX Workspace setup and run-branch pushes.
+type GitConnection struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Host          string                 `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"`                            // github.com or gitlab.com.
+	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`                    // HTTPS basic-auth user for the token.
+	CreatedAt     string                 `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // RFC 3339.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GitConnection) Reset() {
+	*x = GitConnection{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GitConnection) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GitConnection) ProtoMessage() {}
+
+func (x *GitConnection) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GitConnection.ProtoReflect.Descriptor instead.
+func (*GitConnection) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GitConnection) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *GitConnection) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *GitConnection) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *GitConnection) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+type ListGitConnectionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGitConnectionsRequest) Reset() {
+	*x = ListGitConnectionsRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGitConnectionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGitConnectionsRequest) ProtoMessage() {}
+
+func (x *ListGitConnectionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGitConnectionsRequest.ProtoReflect.Descriptor instead.
+func (*ListGitConnectionsRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{12}
+}
+
+type ListGitConnectionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Connections   []*GitConnection       `protobuf:"bytes,1,rep,name=connections,proto3" json:"connections,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGitConnectionsResponse) Reset() {
+	*x = ListGitConnectionsResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGitConnectionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGitConnectionsResponse) ProtoMessage() {}
+
+func (x *ListGitConnectionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGitConnectionsResponse.ProtoReflect.Descriptor instead.
+func (*ListGitConnectionsResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ListGitConnectionsResponse) GetConnections() []*GitConnection {
+	if x != nil {
+		return x.Connections
+	}
+	return nil
+}
+
+type CreateGitConnectionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Host          string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"` // github.com or gitlab.com.
+	Username      string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	Token         string                 `protobuf:"bytes,3,opt,name=token,proto3" json:"token,omitempty"` // Write-only, max 8192 bytes; contents read/write on the repository.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateGitConnectionRequest) Reset() {
+	*x = CreateGitConnectionRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateGitConnectionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateGitConnectionRequest) ProtoMessage() {}
+
+func (x *CreateGitConnectionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateGitConnectionRequest.ProtoReflect.Descriptor instead.
+func (*CreateGitConnectionRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *CreateGitConnectionRequest) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *CreateGitConnectionRequest) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *CreateGitConnectionRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+type CreateGitConnectionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Connection    *GitConnection         `protobuf:"bytes,1,opt,name=connection,proto3" json:"connection,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateGitConnectionResponse) Reset() {
+	*x = CreateGitConnectionResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateGitConnectionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateGitConnectionResponse) ProtoMessage() {}
+
+func (x *CreateGitConnectionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateGitConnectionResponse.ProtoReflect.Descriptor instead.
+func (*CreateGitConnectionResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *CreateGitConnectionResponse) GetConnection() *GitConnection {
+	if x != nil {
+		return x.Connection
+	}
+	return nil
+}
+
 type SetProjectSourceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Source        *ProjectSource         `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
@@ -682,7 +961,7 @@ type SetProjectSourceResponse struct {
 
 func (x *SetProjectSourceResponse) Reset() {
 	*x = SetProjectSourceResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[11]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -694,7 +973,7 @@ func (x *SetProjectSourceResponse) String() string {
 func (*SetProjectSourceResponse) ProtoMessage() {}
 
 func (x *SetProjectSourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[11]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -707,7 +986,7 @@ func (x *SetProjectSourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetProjectSourceResponse.ProtoReflect.Descriptor instead.
 func (*SetProjectSourceResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{11}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SetProjectSourceResponse) GetSource() *ProjectSource {
@@ -727,7 +1006,7 @@ type VerificationCheck struct {
 
 func (x *VerificationCheck) Reset() {
 	*x = VerificationCheck{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[12]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -739,7 +1018,7 @@ func (x *VerificationCheck) String() string {
 func (*VerificationCheck) ProtoMessage() {}
 
 func (x *VerificationCheck) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[12]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -752,7 +1031,7 @@ func (x *VerificationCheck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerificationCheck.ProtoReflect.Descriptor instead.
 func (*VerificationCheck) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{12}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *VerificationCheck) GetId() string {
@@ -781,7 +1060,7 @@ type ProjectVerification struct {
 
 func (x *ProjectVerification) Reset() {
 	*x = ProjectVerification{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[13]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -793,7 +1072,7 @@ func (x *ProjectVerification) String() string {
 func (*ProjectVerification) ProtoMessage() {}
 
 func (x *ProjectVerification) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[13]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -806,7 +1085,7 @@ func (x *ProjectVerification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectVerification.ProtoReflect.Descriptor instead.
 func (*ProjectVerification) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{13}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ProjectVerification) GetProjectId() string {
@@ -846,7 +1125,7 @@ type GetProjectVerificationRequest struct {
 
 func (x *GetProjectVerificationRequest) Reset() {
 	*x = GetProjectVerificationRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[14]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -858,7 +1137,7 @@ func (x *GetProjectVerificationRequest) String() string {
 func (*GetProjectVerificationRequest) ProtoMessage() {}
 
 func (x *GetProjectVerificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[14]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -871,7 +1150,7 @@ func (x *GetProjectVerificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectVerificationRequest.ProtoReflect.Descriptor instead.
 func (*GetProjectVerificationRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{14}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetProjectVerificationRequest) GetProjectId() string {
@@ -890,7 +1169,7 @@ type GetProjectVerificationResponse struct {
 
 func (x *GetProjectVerificationResponse) Reset() {
 	*x = GetProjectVerificationResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[15]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -902,7 +1181,7 @@ func (x *GetProjectVerificationResponse) String() string {
 func (*GetProjectVerificationResponse) ProtoMessage() {}
 
 func (x *GetProjectVerificationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[15]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -915,7 +1194,7 @@ func (x *GetProjectVerificationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectVerificationResponse.ProtoReflect.Descriptor instead.
 func (*GetProjectVerificationResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{15}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetProjectVerificationResponse) GetVerification() *ProjectVerification {
@@ -935,7 +1214,7 @@ type SetProjectVerificationRequest struct {
 
 func (x *SetProjectVerificationRequest) Reset() {
 	*x = SetProjectVerificationRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[16]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -947,7 +1226,7 @@ func (x *SetProjectVerificationRequest) String() string {
 func (*SetProjectVerificationRequest) ProtoMessage() {}
 
 func (x *SetProjectVerificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[16]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -960,7 +1239,7 @@ func (x *SetProjectVerificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetProjectVerificationRequest.ProtoReflect.Descriptor instead.
 func (*SetProjectVerificationRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{16}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *SetProjectVerificationRequest) GetProjectId() string {
@@ -986,7 +1265,7 @@ type SetProjectVerificationResponse struct {
 
 func (x *SetProjectVerificationResponse) Reset() {
 	*x = SetProjectVerificationResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[17]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -998,7 +1277,7 @@ func (x *SetProjectVerificationResponse) String() string {
 func (*SetProjectVerificationResponse) ProtoMessage() {}
 
 func (x *SetProjectVerificationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[17]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1011,7 +1290,7 @@ func (x *SetProjectVerificationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetProjectVerificationResponse.ProtoReflect.Descriptor instead.
 func (*SetProjectVerificationResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{17}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *SetProjectVerificationResponse) GetVerification() *ProjectVerification {
@@ -1038,7 +1317,7 @@ type ProjectModelAccess struct {
 
 func (x *ProjectModelAccess) Reset() {
 	*x = ProjectModelAccess{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[18]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1050,7 +1329,7 @@ func (x *ProjectModelAccess) String() string {
 func (*ProjectModelAccess) ProtoMessage() {}
 
 func (x *ProjectModelAccess) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[18]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1063,7 +1342,7 @@ func (x *ProjectModelAccess) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectModelAccess.ProtoReflect.Descriptor instead.
 func (*ProjectModelAccess) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{18}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ProjectModelAccess) GetId() string {
@@ -1124,7 +1403,7 @@ type ListProjectModelAccessRequest struct {
 
 func (x *ListProjectModelAccessRequest) Reset() {
 	*x = ListProjectModelAccessRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[19]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1136,7 +1415,7 @@ func (x *ListProjectModelAccessRequest) String() string {
 func (*ListProjectModelAccessRequest) ProtoMessage() {}
 
 func (x *ListProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[19]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1149,7 +1428,7 @@ func (x *ListProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectModelAccessRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectModelAccessRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{19}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ListProjectModelAccessRequest) GetProjectId() string {
@@ -1168,7 +1447,7 @@ type ListProjectModelAccessResponse struct {
 
 func (x *ListProjectModelAccessResponse) Reset() {
 	*x = ListProjectModelAccessResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[20]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1180,7 +1459,7 @@ func (x *ListProjectModelAccessResponse) String() string {
 func (*ListProjectModelAccessResponse) ProtoMessage() {}
 
 func (x *ListProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[20]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1193,7 +1472,7 @@ func (x *ListProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectModelAccessResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectModelAccessResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{20}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListProjectModelAccessResponse) GetAccess() []*ProjectModelAccess {
@@ -1215,7 +1494,7 @@ type CreateProjectModelAccessRequest struct {
 
 func (x *CreateProjectModelAccessRequest) Reset() {
 	*x = CreateProjectModelAccessRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[21]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1227,7 +1506,7 @@ func (x *CreateProjectModelAccessRequest) String() string {
 func (*CreateProjectModelAccessRequest) ProtoMessage() {}
 
 func (x *CreateProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[21]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1240,7 +1519,7 @@ func (x *CreateProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectModelAccessRequest.ProtoReflect.Descriptor instead.
 func (*CreateProjectModelAccessRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{21}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *CreateProjectModelAccessRequest) GetProjectId() string {
@@ -1280,7 +1559,7 @@ type CreateProjectModelAccessResponse struct {
 
 func (x *CreateProjectModelAccessResponse) Reset() {
 	*x = CreateProjectModelAccessResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[22]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1292,7 +1571,7 @@ func (x *CreateProjectModelAccessResponse) String() string {
 func (*CreateProjectModelAccessResponse) ProtoMessage() {}
 
 func (x *CreateProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[22]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1305,7 +1584,7 @@ func (x *CreateProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectModelAccessResponse.ProtoReflect.Descriptor instead.
 func (*CreateProjectModelAccessResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{22}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *CreateProjectModelAccessResponse) GetAccess() *ProjectModelAccess {
@@ -1324,7 +1603,7 @@ type RevokeProjectModelAccessRequest struct {
 
 func (x *RevokeProjectModelAccessRequest) Reset() {
 	*x = RevokeProjectModelAccessRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[23]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1336,7 +1615,7 @@ func (x *RevokeProjectModelAccessRequest) String() string {
 func (*RevokeProjectModelAccessRequest) ProtoMessage() {}
 
 func (x *RevokeProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[23]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1349,7 +1628,7 @@ func (x *RevokeProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeProjectModelAccessRequest.ProtoReflect.Descriptor instead.
 func (*RevokeProjectModelAccessRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{23}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RevokeProjectModelAccessRequest) GetAccessId() string {
@@ -1368,7 +1647,7 @@ type RevokeProjectModelAccessResponse struct {
 
 func (x *RevokeProjectModelAccessResponse) Reset() {
 	*x = RevokeProjectModelAccessResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[24]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1380,7 +1659,7 @@ func (x *RevokeProjectModelAccessResponse) String() string {
 func (*RevokeProjectModelAccessResponse) ProtoMessage() {}
 
 func (x *RevokeProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[24]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1393,7 +1672,7 @@ func (x *RevokeProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeProjectModelAccessResponse.ProtoReflect.Descriptor instead.
 func (*RevokeProjectModelAccessResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{24}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RevokeProjectModelAccessResponse) GetAccessId() string {
@@ -1416,7 +1695,7 @@ type ListProjectsRequest struct {
 
 func (x *ListProjectsRequest) Reset() {
 	*x = ListProjectsRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[25]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1428,7 +1707,7 @@ func (x *ListProjectsRequest) String() string {
 func (*ListProjectsRequest) ProtoMessage() {}
 
 func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[25]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1441,7 +1720,7 @@ func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{25}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ListProjectsRequest) GetPageSize() int32 {
@@ -1489,7 +1768,7 @@ type ListProjectsResponse struct {
 
 func (x *ListProjectsResponse) Reset() {
 	*x = ListProjectsResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[26]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1501,7 +1780,7 @@ func (x *ListProjectsResponse) String() string {
 func (*ListProjectsResponse) ProtoMessage() {}
 
 func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[26]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1514,7 +1793,7 @@ func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{26}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ListProjectsResponse) GetProjects() []*Project {
@@ -1540,7 +1819,7 @@ type GetRunRequest struct {
 
 func (x *GetRunRequest) Reset() {
 	*x = GetRunRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[27]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1552,7 +1831,7 @@ func (x *GetRunRequest) String() string {
 func (*GetRunRequest) ProtoMessage() {}
 
 func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[27]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1565,7 +1844,7 @@ func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunRequest.ProtoReflect.Descriptor instead.
 func (*GetRunRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{27}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *GetRunRequest) GetRunId() string {
@@ -1584,7 +1863,7 @@ type GetRunResponse struct {
 
 func (x *GetRunResponse) Reset() {
 	*x = GetRunResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[28]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1596,7 +1875,7 @@ func (x *GetRunResponse) String() string {
 func (*GetRunResponse) ProtoMessage() {}
 
 func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[28]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1609,7 +1888,7 @@ func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunResponse.ProtoReflect.Descriptor instead.
 func (*GetRunResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{28}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *GetRunResponse) GetRun() *Run {
@@ -1633,7 +1912,7 @@ type LaunchRunRequest struct {
 
 func (x *LaunchRunRequest) Reset() {
 	*x = LaunchRunRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[29]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1645,7 +1924,7 @@ func (x *LaunchRunRequest) String() string {
 func (*LaunchRunRequest) ProtoMessage() {}
 
 func (x *LaunchRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[29]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1658,7 +1937,7 @@ func (x *LaunchRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LaunchRunRequest.ProtoReflect.Descriptor instead.
 func (*LaunchRunRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{29}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *LaunchRunRequest) GetProjectId() string {
@@ -1712,7 +1991,7 @@ type LaunchRunResponse struct {
 
 func (x *LaunchRunResponse) Reset() {
 	*x = LaunchRunResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[30]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1724,7 +2003,7 @@ func (x *LaunchRunResponse) String() string {
 func (*LaunchRunResponse) ProtoMessage() {}
 
 func (x *LaunchRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[30]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1737,7 +2016,7 @@ func (x *LaunchRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LaunchRunResponse.ProtoReflect.Descriptor instead.
 func (*LaunchRunResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{30}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *LaunchRunResponse) GetRun() *Run {
@@ -1756,7 +2035,7 @@ type GetLaunchAvailabilityRequest struct {
 
 func (x *GetLaunchAvailabilityRequest) Reset() {
 	*x = GetLaunchAvailabilityRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[31]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1768,7 +2047,7 @@ func (x *GetLaunchAvailabilityRequest) String() string {
 func (*GetLaunchAvailabilityRequest) ProtoMessage() {}
 
 func (x *GetLaunchAvailabilityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[31]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1781,7 +2060,7 @@ func (x *GetLaunchAvailabilityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLaunchAvailabilityRequest.ProtoReflect.Descriptor instead.
 func (*GetLaunchAvailabilityRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{31}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *GetLaunchAvailabilityRequest) GetProjectId() string {
@@ -1801,7 +2080,7 @@ type GetLaunchAvailabilityResponse struct {
 
 func (x *GetLaunchAvailabilityResponse) Reset() {
 	*x = GetLaunchAvailabilityResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[32]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1813,7 +2092,7 @@ func (x *GetLaunchAvailabilityResponse) String() string {
 func (*GetLaunchAvailabilityResponse) ProtoMessage() {}
 
 func (x *GetLaunchAvailabilityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[32]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1826,7 +2105,7 @@ func (x *GetLaunchAvailabilityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLaunchAvailabilityResponse.ProtoReflect.Descriptor instead.
 func (*GetLaunchAvailabilityResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{32}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *GetLaunchAvailabilityResponse) GetEnabled() bool {
@@ -1857,13 +2136,17 @@ type RunTask struct {
 	Effort           string                 `protobuf:"bytes,10,opt,name=effort,proto3" json:"effort,omitempty"`
 	InstructionFiles []*FrozenInputFile     `protobuf:"bytes,11,rep,name=instruction_files,json=instructionFiles,proto3" json:"instruction_files,omitempty"`
 	SkillFiles       []*FrozenInputFile     `protobuf:"bytes,12,rep,name=skill_files,json=skillFiles,proto3" json:"skill_files,omitempty"`
+	Kind             string                 `protobuf:"bytes,13,opt,name=kind,proto3" json:"kind,omitempty"`                                // Frozen stage kind, e.g. plan, interview, implement, verify.
+	LoopWith         string                 `protobuf:"bytes,14,opt,name=loop_with,json=loopWith,proto3" json:"loop_with,omitempty"`        // Correction target when this stage owns a loop.
+	MaxCycles        int32                  `protobuf:"varint,15,opt,name=max_cycles,json=maxCycles,proto3" json:"max_cycles,omitempty"`    // Loop cap before escalation, including granted raises.
+	LoopCycles       int32                  `protobuf:"varint,16,opt,name=loop_cycles,json=loopCycles,proto3" json:"loop_cycles,omitempty"` // Corrections this loop has requested so far.
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
 func (x *RunTask) Reset() {
 	*x = RunTask{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[33]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1875,7 +2158,7 @@ func (x *RunTask) String() string {
 func (*RunTask) ProtoMessage() {}
 
 func (x *RunTask) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[33]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1888,7 +2171,7 @@ func (x *RunTask) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunTask.ProtoReflect.Descriptor instead.
 func (*RunTask) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{33}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *RunTask) GetId() string {
@@ -1975,6 +2258,34 @@ func (x *RunTask) GetSkillFiles() []*FrozenInputFile {
 	return nil
 }
 
+func (x *RunTask) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *RunTask) GetLoopWith() string {
+	if x != nil {
+		return x.LoopWith
+	}
+	return ""
+}
+
+func (x *RunTask) GetMaxCycles() int32 {
+	if x != nil {
+		return x.MaxCycles
+	}
+	return 0
+}
+
+func (x *RunTask) GetLoopCycles() int32 {
+	if x != nil {
+		return x.LoopCycles
+	}
+	return 0
+}
+
 type FrozenInputFile struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
@@ -1985,7 +2296,7 @@ type FrozenInputFile struct {
 
 func (x *FrozenInputFile) Reset() {
 	*x = FrozenInputFile{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[34]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1997,7 +2308,7 @@ func (x *FrozenInputFile) String() string {
 func (*FrozenInputFile) ProtoMessage() {}
 
 func (x *FrozenInputFile) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[34]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2010,7 +2321,7 @@ func (x *FrozenInputFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrozenInputFile.ProtoReflect.Descriptor instead.
 func (*FrozenInputFile) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{34}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *FrozenInputFile) GetPath() string {
@@ -2036,7 +2347,7 @@ type ListRunTasksRequest struct {
 
 func (x *ListRunTasksRequest) Reset() {
 	*x = ListRunTasksRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[35]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2048,7 +2359,7 @@ func (x *ListRunTasksRequest) String() string {
 func (*ListRunTasksRequest) ProtoMessage() {}
 
 func (x *ListRunTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[35]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2061,7 +2372,7 @@ func (x *ListRunTasksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListRunTasksRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{35}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ListRunTasksRequest) GetRunId() string {
@@ -2080,7 +2391,7 @@ type ListRunTasksResponse struct {
 
 func (x *ListRunTasksResponse) Reset() {
 	*x = ListRunTasksResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[36]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2092,7 +2403,7 @@ func (x *ListRunTasksResponse) String() string {
 func (*ListRunTasksResponse) ProtoMessage() {}
 
 func (x *ListRunTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[36]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2105,7 +2416,7 @@ func (x *ListRunTasksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunTasksResponse.ProtoReflect.Descriptor instead.
 func (*ListRunTasksResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{36}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ListRunTasksResponse) GetTasks() []*RunTask {
@@ -2129,7 +2440,7 @@ type ListRunsRequest struct {
 
 func (x *ListRunsRequest) Reset() {
 	*x = ListRunsRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[37]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2141,7 +2452,7 @@ func (x *ListRunsRequest) String() string {
 func (*ListRunsRequest) ProtoMessage() {}
 
 func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[37]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2154,7 +2465,7 @@ func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListRunsRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{37}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ListRunsRequest) GetProjectId() string {
@@ -2209,7 +2520,7 @@ type ListRunsResponse struct {
 
 func (x *ListRunsResponse) Reset() {
 	*x = ListRunsResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[38]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2221,7 +2532,7 @@ func (x *ListRunsResponse) String() string {
 func (*ListRunsResponse) ProtoMessage() {}
 
 func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[38]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2234,7 +2545,7 @@ func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListRunsResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{38}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ListRunsResponse) GetRuns() []*Run {
@@ -2262,7 +2573,7 @@ type EventsAfterRequest struct {
 
 func (x *EventsAfterRequest) Reset() {
 	*x = EventsAfterRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[39]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2274,7 +2585,7 @@ func (x *EventsAfterRequest) String() string {
 func (*EventsAfterRequest) ProtoMessage() {}
 
 func (x *EventsAfterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[39]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2287,7 +2598,7 @@ func (x *EventsAfterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventsAfterRequest.ProtoReflect.Descriptor instead.
 func (*EventsAfterRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{39}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *EventsAfterRequest) GetRunId() string {
@@ -2321,7 +2632,7 @@ type EventsAfterResponse struct {
 
 func (x *EventsAfterResponse) Reset() {
 	*x = EventsAfterResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[40]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2333,7 +2644,7 @@ func (x *EventsAfterResponse) String() string {
 func (*EventsAfterResponse) ProtoMessage() {}
 
 func (x *EventsAfterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[40]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2346,7 +2657,7 @@ func (x *EventsAfterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventsAfterResponse.ProtoReflect.Descriptor instead.
 func (*EventsAfterResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{40}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *EventsAfterResponse) GetEvents() []*WorkflowEvent {
@@ -2383,7 +2694,7 @@ type CommandExitObservation struct {
 
 func (x *CommandExitObservation) Reset() {
 	*x = CommandExitObservation{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[41]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2395,7 +2706,7 @@ func (x *CommandExitObservation) String() string {
 func (*CommandExitObservation) ProtoMessage() {}
 
 func (x *CommandExitObservation) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[41]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2408,7 +2719,7 @@ func (x *CommandExitObservation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandExitObservation.ProtoReflect.Descriptor instead.
 func (*CommandExitObservation) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{41}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *CommandExitObservation) GetEventId() int64 {
@@ -2499,7 +2810,7 @@ type ListCommandExitsRequest struct {
 
 func (x *ListCommandExitsRequest) Reset() {
 	*x = ListCommandExitsRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[42]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2511,7 +2822,7 @@ func (x *ListCommandExitsRequest) String() string {
 func (*ListCommandExitsRequest) ProtoMessage() {}
 
 func (x *ListCommandExitsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[42]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2524,7 +2835,7 @@ func (x *ListCommandExitsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCommandExitsRequest.ProtoReflect.Descriptor instead.
 func (*ListCommandExitsRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{42}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ListCommandExitsRequest) GetRunId() string {
@@ -2558,7 +2869,7 @@ type ListCommandExitsResponse struct {
 
 func (x *ListCommandExitsResponse) Reset() {
 	*x = ListCommandExitsResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[43]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2570,7 +2881,7 @@ func (x *ListCommandExitsResponse) String() string {
 func (*ListCommandExitsResponse) ProtoMessage() {}
 
 func (x *ListCommandExitsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[43]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2583,7 +2894,7 @@ func (x *ListCommandExitsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCommandExitsResponse.ProtoReflect.Descriptor instead.
 func (*ListCommandExitsResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{43}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *ListCommandExitsResponse) GetObservations() []*CommandExitObservation {
@@ -2614,7 +2925,7 @@ type ReviewDecision struct {
 
 func (x *ReviewDecision) Reset() {
 	*x = ReviewDecision{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[44]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2626,7 +2937,7 @@ func (x *ReviewDecision) String() string {
 func (*ReviewDecision) ProtoMessage() {}
 
 func (x *ReviewDecision) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[44]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2639,7 +2950,7 @@ func (x *ReviewDecision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewDecision.ProtoReflect.Descriptor instead.
 func (*ReviewDecision) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{44}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ReviewDecision) GetId() string {
@@ -2702,7 +3013,7 @@ type ReviewPackage struct {
 
 func (x *ReviewPackage) Reset() {
 	*x = ReviewPackage{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[45]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2714,7 +3025,7 @@ func (x *ReviewPackage) String() string {
 func (*ReviewPackage) ProtoMessage() {}
 
 func (x *ReviewPackage) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[45]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2727,7 +3038,7 @@ func (x *ReviewPackage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewPackage.ProtoReflect.Descriptor instead.
 func (*ReviewPackage) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{45}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ReviewPackage) GetId() string {
@@ -2809,7 +3120,7 @@ type GetCurrentReviewRequest struct {
 
 func (x *GetCurrentReviewRequest) Reset() {
 	*x = GetCurrentReviewRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[46]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2821,7 +3132,7 @@ func (x *GetCurrentReviewRequest) String() string {
 func (*GetCurrentReviewRequest) ProtoMessage() {}
 
 func (x *GetCurrentReviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[46]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2834,7 +3145,7 @@ func (x *GetCurrentReviewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCurrentReviewRequest.ProtoReflect.Descriptor instead.
 func (*GetCurrentReviewRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{46}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *GetCurrentReviewRequest) GetRunId() string {
@@ -2853,7 +3164,7 @@ type GetCurrentReviewResponse struct {
 
 func (x *GetCurrentReviewResponse) Reset() {
 	*x = GetCurrentReviewResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[47]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2865,7 +3176,7 @@ func (x *GetCurrentReviewResponse) String() string {
 func (*GetCurrentReviewResponse) ProtoMessage() {}
 
 func (x *GetCurrentReviewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[47]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2878,7 +3189,7 @@ func (x *GetCurrentReviewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCurrentReviewResponse.ProtoReflect.Descriptor instead.
 func (*GetCurrentReviewResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{47}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *GetCurrentReviewResponse) GetPackage() *ReviewPackage {
@@ -2901,7 +3212,7 @@ type DecideReviewRequest struct {
 
 func (x *DecideReviewRequest) Reset() {
 	*x = DecideReviewRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[48]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2913,7 +3224,7 @@ func (x *DecideReviewRequest) String() string {
 func (*DecideReviewRequest) ProtoMessage() {}
 
 func (x *DecideReviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[48]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2926,7 +3237,7 @@ func (x *DecideReviewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecideReviewRequest.ProtoReflect.Descriptor instead.
 func (*DecideReviewRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{48}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *DecideReviewRequest) GetRunId() string {
@@ -2973,7 +3284,7 @@ type DecideReviewResponse struct {
 
 func (x *DecideReviewResponse) Reset() {
 	*x = DecideReviewResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[49]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2985,7 +3296,7 @@ func (x *DecideReviewResponse) String() string {
 func (*DecideReviewResponse) ProtoMessage() {}
 
 func (x *DecideReviewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[49]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2998,12 +3309,1083 @@ func (x *DecideReviewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecideReviewResponse.ProtoReflect.Descriptor instead.
 func (*DecideReviewResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{49}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *DecideReviewResponse) GetDecision() *ReviewDecision {
 	if x != nil {
 		return x.Decision
+	}
+	return nil
+}
+
+// A structured human interaction raised by a guest (`bx ask`) or by the
+// platform (escalation). The first answer wins.
+type InteractionOption struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Recommended   bool                   `protobuf:"varint,4,opt,name=recommended,proto3" json:"recommended,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InteractionOption) Reset() {
+	*x = InteractionOption{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InteractionOption) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InteractionOption) ProtoMessage() {}
+
+func (x *InteractionOption) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InteractionOption.ProtoReflect.Descriptor instead.
+func (*InteractionOption) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *InteractionOption) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *InteractionOption) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *InteractionOption) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *InteractionOption) GetRecommended() bool {
+	if x != nil {
+		return x.Recommended
+	}
+	return false
+}
+
+type InteractionSource struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Line          int32                  `protobuf:"varint,2,opt,name=line,proto3" json:"line,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InteractionSource) Reset() {
+	*x = InteractionSource{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InteractionSource) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InteractionSource) ProtoMessage() {}
+
+func (x *InteractionSource) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InteractionSource.ProtoReflect.Descriptor instead.
+func (*InteractionSource) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *InteractionSource) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *InteractionSource) GetLine() int32 {
+	if x != nil {
+		return x.Line
+	}
+	return 0
+}
+
+type InteractionInterview struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Round          int32                  `protobuf:"varint,1,opt,name=round,proto3" json:"round,omitempty"`
+	FinalizeOption string                 `protobuf:"bytes,2,opt,name=finalize_option,json=finalizeOption,proto3" json:"finalize_option,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *InteractionInterview) Reset() {
+	*x = InteractionInterview{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InteractionInterview) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InteractionInterview) ProtoMessage() {}
+
+func (x *InteractionInterview) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InteractionInterview.ProtoReflect.Descriptor instead.
+func (*InteractionInterview) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *InteractionInterview) GetRound() int32 {
+	if x != nil {
+		return x.Round
+	}
+	return 0
+}
+
+func (x *InteractionInterview) GetFinalizeOption() string {
+	if x != nil {
+		return x.FinalizeOption
+	}
+	return ""
+}
+
+type InteractionAnswer struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OptionIds     []string               `protobuf:"bytes,1,rep,name=option_ids,json=optionIds,proto3" json:"option_ids,omitempty"`
+	Text          string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	AnsweredBy    string                 `protobuf:"bytes,3,opt,name=answered_by,json=answeredBy,proto3" json:"answered_by,omitempty"` // Principal ID.
+	At            string                 `protobuf:"bytes,4,opt,name=at,proto3" json:"at,omitempty"`                                   // RFC 3339.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InteractionAnswer) Reset() {
+	*x = InteractionAnswer{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InteractionAnswer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InteractionAnswer) ProtoMessage() {}
+
+func (x *InteractionAnswer) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InteractionAnswer.ProtoReflect.Descriptor instead.
+func (*InteractionAnswer) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *InteractionAnswer) GetOptionIds() []string {
+	if x != nil {
+		return x.OptionIds
+	}
+	return nil
+}
+
+func (x *InteractionAnswer) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *InteractionAnswer) GetAnsweredBy() string {
+	if x != nil {
+		return x.AnsweredBy
+	}
+	return ""
+}
+
+func (x *InteractionAnswer) GetAt() string {
+	if x != nil {
+		return x.At
+	}
+	return ""
+}
+
+type Interaction struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	AttemptId     string                 `protobuf:"bytes,2,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"` // Empty for platform escalations.
+	Stage         string                 `protobuf:"bytes,3,opt,name=stage,proto3" json:"stage,omitempty"`                          // Frozen stage key.
+	Kind          string                 `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"`                            // question, approval, escalation, or interview_round.
+	Title         string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
+	BodyMd        string                 `protobuf:"bytes,6,opt,name=body_md,json=bodyMd,proto3" json:"body_md,omitempty"`
+	Options       []*InteractionOption   `protobuf:"bytes,7,rep,name=options,proto3" json:"options,omitempty"`
+	MultiSelect   bool                   `protobuf:"varint,8,opt,name=multi_select,json=multiSelect,proto3" json:"multi_select,omitempty"`
+	AllowFreeText bool                   `protobuf:"varint,9,opt,name=allow_free_text,json=allowFreeText,proto3" json:"allow_free_text,omitempty"`
+	Blocking      bool                   `protobuf:"varint,10,opt,name=blocking,proto3" json:"blocking,omitempty"`
+	Sources       []*InteractionSource   `protobuf:"bytes,11,rep,name=sources,proto3" json:"sources,omitempty"`
+	Interview     *InteractionInterview  `protobuf:"bytes,12,opt,name=interview,proto3" json:"interview,omitempty"`
+	State         string                 `protobuf:"bytes,13,opt,name=state,proto3" json:"state,omitempty"` // open, answered, cancelled, or superseded.
+	Answer        *InteractionAnswer     `protobuf:"bytes,14,opt,name=answer,proto3" json:"answer,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,15,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // RFC 3339.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Interaction) Reset() {
+	*x = Interaction{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Interaction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Interaction) ProtoMessage() {}
+
+func (x *Interaction) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Interaction.ProtoReflect.Descriptor instead.
+func (*Interaction) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *Interaction) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Interaction) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+func (x *Interaction) GetStage() string {
+	if x != nil {
+		return x.Stage
+	}
+	return ""
+}
+
+func (x *Interaction) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *Interaction) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *Interaction) GetBodyMd() string {
+	if x != nil {
+		return x.BodyMd
+	}
+	return ""
+}
+
+func (x *Interaction) GetOptions() []*InteractionOption {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+func (x *Interaction) GetMultiSelect() bool {
+	if x != nil {
+		return x.MultiSelect
+	}
+	return false
+}
+
+func (x *Interaction) GetAllowFreeText() bool {
+	if x != nil {
+		return x.AllowFreeText
+	}
+	return false
+}
+
+func (x *Interaction) GetBlocking() bool {
+	if x != nil {
+		return x.Blocking
+	}
+	return false
+}
+
+func (x *Interaction) GetSources() []*InteractionSource {
+	if x != nil {
+		return x.Sources
+	}
+	return nil
+}
+
+func (x *Interaction) GetInterview() *InteractionInterview {
+	if x != nil {
+		return x.Interview
+	}
+	return nil
+}
+
+func (x *Interaction) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *Interaction) GetAnswer() *InteractionAnswer {
+	if x != nil {
+		return x.Answer
+	}
+	return nil
+}
+
+func (x *Interaction) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+type ListInteractionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInteractionsRequest) Reset() {
+	*x = ListInteractionsRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInteractionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInteractionsRequest) ProtoMessage() {}
+
+func (x *ListInteractionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInteractionsRequest.ProtoReflect.Descriptor instead.
+func (*ListInteractionsRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *ListInteractionsRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+type ListInteractionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Interactions  []*Interaction         `protobuf:"bytes,1,rep,name=interactions,proto3" json:"interactions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInteractionsResponse) Reset() {
+	*x = ListInteractionsResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInteractionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInteractionsResponse) ProtoMessage() {}
+
+func (x *ListInteractionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInteractionsResponse.ProtoReflect.Descriptor instead.
+func (*ListInteractionsResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *ListInteractionsResponse) GetInteractions() []*Interaction {
+	if x != nil {
+		return x.Interactions
+	}
+	return nil
+}
+
+type AnswerInteractionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InteractionId string                 `protobuf:"bytes,1,opt,name=interaction_id,json=interactionId,proto3" json:"interaction_id,omitempty"`
+	OptionIds     []string               `protobuf:"bytes,2,rep,name=option_ids,json=optionIds,proto3" json:"option_ids,omitempty"` // Must name stored options.
+	Text          string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`                            // Only when free text is allowed; max 4000 characters.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AnswerInteractionRequest) Reset() {
+	*x = AnswerInteractionRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AnswerInteractionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AnswerInteractionRequest) ProtoMessage() {}
+
+func (x *AnswerInteractionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AnswerInteractionRequest.ProtoReflect.Descriptor instead.
+func (*AnswerInteractionRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *AnswerInteractionRequest) GetInteractionId() string {
+	if x != nil {
+		return x.InteractionId
+	}
+	return ""
+}
+
+func (x *AnswerInteractionRequest) GetOptionIds() []string {
+	if x != nil {
+		return x.OptionIds
+	}
+	return nil
+}
+
+func (x *AnswerInteractionRequest) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+type AnswerInteractionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Interaction   *Interaction           `protobuf:"bytes,1,opt,name=interaction,proto3" json:"interaction,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AnswerInteractionResponse) Reset() {
+	*x = AnswerInteractionResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AnswerInteractionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AnswerInteractionResponse) ProtoMessage() {}
+
+func (x *AnswerInteractionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AnswerInteractionResponse.ProtoReflect.Descriptor instead.
+func (*AnswerInteractionResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *AnswerInteractionResponse) GetInteraction() *Interaction {
+	if x != nil {
+		return x.Interaction
+	}
+	return nil
+}
+
+type SteerAttemptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AttemptId     string                 `protobuf:"bytes,1,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`     // instruction, pause, halt, or set_max_cycles.
+	Text          string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`     // instruction: 1-4000 characters.
+	Reason        string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"` // halt: 1-1000 characters.
+	N             int32                  `protobuf:"varint,5,opt,name=n,proto3" json:"n,omitempty"`          // set_max_cycles: 1-100.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SteerAttemptRequest) Reset() {
+	*x = SteerAttemptRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SteerAttemptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SteerAttemptRequest) ProtoMessage() {}
+
+func (x *SteerAttemptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SteerAttemptRequest.ProtoReflect.Descriptor instead.
+func (*SteerAttemptRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{64}
+}
+
+func (x *SteerAttemptRequest) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+func (x *SteerAttemptRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *SteerAttemptRequest) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *SteerAttemptRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *SteerAttemptRequest) GetN() int32 {
+	if x != nil {
+		return x.N
+	}
+	return 0
+}
+
+type SteerAttemptResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SteerId       string                 `protobuf:"bytes,1,opt,name=steer_id,json=steerId,proto3" json:"steer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SteerAttemptResponse) Reset() {
+	*x = SteerAttemptResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SteerAttemptResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SteerAttemptResponse) ProtoMessage() {}
+
+func (x *SteerAttemptResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SteerAttemptResponse.ProtoReflect.Descriptor instead.
+func (*SteerAttemptResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *SteerAttemptResponse) GetSteerId() string {
+	if x != nil {
+		return x.SteerId
+	}
+	return ""
+}
+
+// Interactive terminal control. control is "agent" or "human"; the holder is
+// set only while a person controls the running attempt. generation advances on
+// every holder change.
+type AttemptControl struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	AttemptId         string                 `protobuf:"bytes,1,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	Control           string                 `protobuf:"bytes,2,opt,name=control,proto3" json:"control,omitempty"`
+	HolderPrincipalId string                 `protobuf:"bytes,3,opt,name=holder_principal_id,json=holderPrincipalId,proto3" json:"holder_principal_id,omitempty"`
+	Generation        int64                  `protobuf:"varint,4,opt,name=generation,proto3" json:"generation,omitempty"`
+	Stage             string                 `protobuf:"bytes,5,opt,name=stage,proto3" json:"stage,omitempty"`
+	AttemptStatus     string                 `protobuf:"bytes,6,opt,name=attempt_status,json=attemptStatus,proto3" json:"attempt_status,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *AttemptControl) Reset() {
+	*x = AttemptControl{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AttemptControl) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AttemptControl) ProtoMessage() {}
+
+func (x *AttemptControl) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AttemptControl.ProtoReflect.Descriptor instead.
+func (*AttemptControl) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *AttemptControl) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+func (x *AttemptControl) GetControl() string {
+	if x != nil {
+		return x.Control
+	}
+	return ""
+}
+
+func (x *AttemptControl) GetHolderPrincipalId() string {
+	if x != nil {
+		return x.HolderPrincipalId
+	}
+	return ""
+}
+
+func (x *AttemptControl) GetGeneration() int64 {
+	if x != nil {
+		return x.Generation
+	}
+	return 0
+}
+
+func (x *AttemptControl) GetStage() string {
+	if x != nil {
+		return x.Stage
+	}
+	return ""
+}
+
+func (x *AttemptControl) GetAttemptStatus() string {
+	if x != nil {
+		return x.AttemptStatus
+	}
+	return ""
+}
+
+type GetAttemptControlRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AttemptId     string                 `protobuf:"bytes,1,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAttemptControlRequest) Reset() {
+	*x = GetAttemptControlRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAttemptControlRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAttemptControlRequest) ProtoMessage() {}
+
+func (x *GetAttemptControlRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAttemptControlRequest.ProtoReflect.Descriptor instead.
+func (*GetAttemptControlRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *GetAttemptControlRequest) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+type GetAttemptControlResponse struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Control *AttemptControl        `protobuf:"bytes,1,opt,name=control,proto3" json:"control,omitempty"`
+	// Takeover shows the model API key: org owners and admins, or the owner of
+	// the attempt's personal model connection.
+	CanTakeOver   bool `protobuf:"varint,2,opt,name=can_take_over,json=canTakeOver,proto3" json:"can_take_over,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAttemptControlResponse) Reset() {
+	*x = GetAttemptControlResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAttemptControlResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAttemptControlResponse) ProtoMessage() {}
+
+func (x *GetAttemptControlResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAttemptControlResponse.ProtoReflect.Descriptor instead.
+func (*GetAttemptControlResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *GetAttemptControlResponse) GetControl() *AttemptControl {
+	if x != nil {
+		return x.Control
+	}
+	return nil
+}
+
+func (x *GetAttemptControlResponse) GetCanTakeOver() bool {
+	if x != nil {
+		return x.CanTakeOver
+	}
+	return false
+}
+
+type TakeOverAttemptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AttemptId     string                 `protobuf:"bytes,1,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TakeOverAttemptRequest) Reset() {
+	*x = TakeOverAttemptRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TakeOverAttemptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TakeOverAttemptRequest) ProtoMessage() {}
+
+func (x *TakeOverAttemptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TakeOverAttemptRequest.ProtoReflect.Descriptor instead.
+func (*TakeOverAttemptRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *TakeOverAttemptRequest) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+type TakeOverAttemptResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Control       *AttemptControl        `protobuf:"bytes,1,opt,name=control,proto3" json:"control,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TakeOverAttemptResponse) Reset() {
+	*x = TakeOverAttemptResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TakeOverAttemptResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TakeOverAttemptResponse) ProtoMessage() {}
+
+func (x *TakeOverAttemptResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TakeOverAttemptResponse.ProtoReflect.Descriptor instead.
+func (*TakeOverAttemptResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *TakeOverAttemptResponse) GetControl() *AttemptControl {
+	if x != nil {
+		return x.Control
+	}
+	return nil
+}
+
+type HandBackAttemptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AttemptId     string                 `protobuf:"bytes,1,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HandBackAttemptRequest) Reset() {
+	*x = HandBackAttemptRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HandBackAttemptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HandBackAttemptRequest) ProtoMessage() {}
+
+func (x *HandBackAttemptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HandBackAttemptRequest.ProtoReflect.Descriptor instead.
+func (*HandBackAttemptRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{71}
+}
+
+func (x *HandBackAttemptRequest) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+type HandBackAttemptResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Control       *AttemptControl        `protobuf:"bytes,1,opt,name=control,proto3" json:"control,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HandBackAttemptResponse) Reset() {
+	*x = HandBackAttemptResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[72]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HandBackAttemptResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HandBackAttemptResponse) ProtoMessage() {}
+
+func (x *HandBackAttemptResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[72]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HandBackAttemptResponse.ProtoReflect.Descriptor instead.
+func (*HandBackAttemptResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{72}
+}
+
+func (x *HandBackAttemptResponse) GetControl() *AttemptControl {
+	if x != nil {
+		return x.Control
 	}
 	return nil
 }
@@ -3030,7 +4412,7 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\x13verification_sha256\x18\x06 \x01(\tR\x12verificationSha256\x12\x14\n" +
 	"\x05state\x18\a \x01(\tR\x05state\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\b \x01(\tR\tcreatedAt\"\xa3\x01\n" +
+	"created_at\x18\b \x01(\tR\tcreatedAt\"\xc6\x01\n" +
 	"\rWorkflowEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x17\n" +
@@ -3039,7 +4421,8 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"attempt_id\x18\x04 \x01(\tR\tattemptId\x12\x12\n" +
 	"\x04kind\x18\x05 \x01(\tR\x04kind\x12\x1f\n" +
 	"\voccurred_at\x18\x06 \x01(\tR\n" +
-	"occurredAt\">\n" +
+	"occurredAt\x12!\n" +
+	"\fpayload_json\x18\a \x01(\tR\vpayloadJson\">\n" +
 	"\x14CreateProjectRequest\x12\x12\n" +
 	"\x04slug\x18\x01 \x01(\tR\x04slug\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\"L\n" +
@@ -3049,24 +4432,43 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\"I\n" +
 	"\x12GetProjectResponse\x123\n" +
-	"\aproject\x18\x01 \x01(\v2\x19.blaxsmith.api.v1.ProjectR\aproject\"\x86\x01\n" +
+	"\aproject\x18\x01 \x01(\v2\x19.blaxsmith.api.v1.ProjectR\aproject\"\xb2\x01\n" +
 	"\rProjectSource\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12%\n" +
 	"\x0erepository_url\x18\x02 \x01(\tR\rrepositoryUrl\x12\x10\n" +
 	"\x03ref\x18\x03 \x01(\tR\x03ref\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\x04 \x01(\tR\tupdatedAt\"8\n" +
+	"updated_at\x18\x04 \x01(\tR\tupdatedAt\x12*\n" +
+	"\x11git_connection_id\x18\x05 \x01(\tR\x0fgitConnectionId\"8\n" +
 	"\x17GetProjectSourceRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\"S\n" +
 	"\x18GetProjectSourceResponse\x127\n" +
-	"\x06source\x18\x01 \x01(\v2\x1f.blaxsmith.api.v1.ProjectSourceR\x06source\"q\n" +
+	"\x06source\x18\x01 \x01(\v2\x1f.blaxsmith.api.v1.ProjectSourceR\x06source\"\x9d\x01\n" +
 	"\x17SetProjectSourceRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12%\n" +
 	"\x0erepository_url\x18\x02 \x01(\tR\rrepositoryUrl\x12\x10\n" +
-	"\x03ref\x18\x03 \x01(\tR\x03ref\"S\n" +
+	"\x03ref\x18\x03 \x01(\tR\x03ref\x12*\n" +
+	"\x11git_connection_id\x18\x04 \x01(\tR\x0fgitConnectionId\"n\n" +
+	"\rGitConnection\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04host\x18\x02 \x01(\tR\x04host\x12\x1a\n" +
+	"\busername\x18\x03 \x01(\tR\busername\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x04 \x01(\tR\tcreatedAt\"\x1b\n" +
+	"\x19ListGitConnectionsRequest\"_\n" +
+	"\x1aListGitConnectionsResponse\x12A\n" +
+	"\vconnections\x18\x01 \x03(\v2\x1f.blaxsmith.api.v1.GitConnectionR\vconnections\"b\n" +
+	"\x1aCreateGitConnectionRequest\x12\x12\n" +
+	"\x04host\x18\x01 \x01(\tR\x04host\x12\x1a\n" +
+	"\busername\x18\x02 \x01(\tR\busername\x12\x14\n" +
+	"\x05token\x18\x03 \x01(\tR\x05token\"^\n" +
+	"\x1bCreateGitConnectionResponse\x12?\n" +
+	"\n" +
+	"connection\x18\x01 \x01(\v2\x1f.blaxsmith.api.v1.GitConnectionR\n" +
+	"connection\"S\n" +
 	"\x18SetProjectSourceResponse\x127\n" +
 	"\x06source\x18\x01 \x01(\v2\x1f.blaxsmith.api.v1.ProjectSourceR\x06source\"=\n" +
 	"\x11VerificationCheck\x12\x0e\n" +
@@ -3148,7 +4550,7 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\"Q\n" +
 	"\x1dGetLaunchAvailabilityResponse\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xab\x03\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\x9c\x04\n" +
 	"\aRunTask\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
@@ -3166,7 +4568,13 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	" \x01(\tR\x06effort\x12N\n" +
 	"\x11instruction_files\x18\v \x03(\v2!.blaxsmith.api.v1.FrozenInputFileR\x10instructionFiles\x12B\n" +
 	"\vskill_files\x18\f \x03(\v2!.blaxsmith.api.v1.FrozenInputFileR\n" +
-	"skillFiles\"=\n" +
+	"skillFiles\x12\x12\n" +
+	"\x04kind\x18\r \x01(\tR\x04kind\x12\x1b\n" +
+	"\tloop_with\x18\x0e \x01(\tR\bloopWith\x12\x1d\n" +
+	"\n" +
+	"max_cycles\x18\x0f \x01(\x05R\tmaxCycles\x12\x1f\n" +
+	"\vloop_cycles\x18\x10 \x01(\x05R\n" +
+	"loopCycles\"=\n" +
 	"\x0fFrozenInputFile\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
 	"\x06sha256\x18\x02 \x01(\tR\x06sha256\",\n" +
@@ -3248,13 +4656,98 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\x06action\x18\x04 \x01(\tR\x06action\x12\x1a\n" +
 	"\bfeedback\x18\x05 \x01(\tR\bfeedback\"T\n" +
 	"\x14DecideReviewResponse\x12<\n" +
-	"\bdecision\x18\x01 \x01(\v2 .blaxsmith.api.v1.ReviewDecisionR\bdecision2\xe0\x0f\n" +
+	"\bdecision\x18\x01 \x01(\v2 .blaxsmith.api.v1.ReviewDecisionR\bdecision\"}\n" +
+	"\x11InteractionOption\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12 \n" +
+	"\vrecommended\x18\x04 \x01(\bR\vrecommended\";\n" +
+	"\x11InteractionSource\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
+	"\x04line\x18\x02 \x01(\x05R\x04line\"U\n" +
+	"\x14InteractionInterview\x12\x14\n" +
+	"\x05round\x18\x01 \x01(\x05R\x05round\x12'\n" +
+	"\x0ffinalize_option\x18\x02 \x01(\tR\x0efinalizeOption\"w\n" +
+	"\x11InteractionAnswer\x12\x1d\n" +
+	"\n" +
+	"option_ids\x18\x01 \x03(\tR\toptionIds\x12\x12\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\x12\x1f\n" +
+	"\vanswered_by\x18\x03 \x01(\tR\n" +
+	"answeredBy\x12\x0e\n" +
+	"\x02at\x18\x04 \x01(\tR\x02at\"\xb2\x04\n" +
+	"\vInteraction\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x02 \x01(\tR\tattemptId\x12\x14\n" +
+	"\x05stage\x18\x03 \x01(\tR\x05stage\x12\x12\n" +
+	"\x04kind\x18\x04 \x01(\tR\x04kind\x12\x14\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title\x12\x17\n" +
+	"\abody_md\x18\x06 \x01(\tR\x06bodyMd\x12=\n" +
+	"\aoptions\x18\a \x03(\v2#.blaxsmith.api.v1.InteractionOptionR\aoptions\x12!\n" +
+	"\fmulti_select\x18\b \x01(\bR\vmultiSelect\x12&\n" +
+	"\x0fallow_free_text\x18\t \x01(\bR\rallowFreeText\x12\x1a\n" +
+	"\bblocking\x18\n" +
+	" \x01(\bR\bblocking\x12=\n" +
+	"\asources\x18\v \x03(\v2#.blaxsmith.api.v1.InteractionSourceR\asources\x12D\n" +
+	"\tinterview\x18\f \x01(\v2&.blaxsmith.api.v1.InteractionInterviewR\tinterview\x12\x14\n" +
+	"\x05state\x18\r \x01(\tR\x05state\x12;\n" +
+	"\x06answer\x18\x0e \x01(\v2#.blaxsmith.api.v1.InteractionAnswerR\x06answer\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x0f \x01(\tR\tcreatedAt\"0\n" +
+	"\x17ListInteractionsRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\"]\n" +
+	"\x18ListInteractionsResponse\x12A\n" +
+	"\finteractions\x18\x01 \x03(\v2\x1d.blaxsmith.api.v1.InteractionR\finteractions\"t\n" +
+	"\x18AnswerInteractionRequest\x12%\n" +
+	"\x0einteraction_id\x18\x01 \x01(\tR\rinteractionId\x12\x1d\n" +
+	"\n" +
+	"option_ids\x18\x02 \x03(\tR\toptionIds\x12\x12\n" +
+	"\x04text\x18\x03 \x01(\tR\x04text\"\\\n" +
+	"\x19AnswerInteractionResponse\x12?\n" +
+	"\vinteraction\x18\x01 \x01(\v2\x1d.blaxsmith.api.v1.InteractionR\vinteraction\"\x82\x01\n" +
+	"\x13SteerAttemptRequest\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x01 \x01(\tR\tattemptId\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
+	"\x04text\x18\x03 \x01(\tR\x04text\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\x12\f\n" +
+	"\x01n\x18\x05 \x01(\x05R\x01n\"1\n" +
+	"\x14SteerAttemptResponse\x12\x19\n" +
+	"\bsteer_id\x18\x01 \x01(\tR\asteerId\"\xd6\x01\n" +
+	"\x0eAttemptControl\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x01 \x01(\tR\tattemptId\x12\x18\n" +
+	"\acontrol\x18\x02 \x01(\tR\acontrol\x12.\n" +
+	"\x13holder_principal_id\x18\x03 \x01(\tR\x11holderPrincipalId\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x04 \x01(\x03R\n" +
+	"generation\x12\x14\n" +
+	"\x05stage\x18\x05 \x01(\tR\x05stage\x12%\n" +
+	"\x0eattempt_status\x18\x06 \x01(\tR\rattemptStatus\"9\n" +
+	"\x18GetAttemptControlRequest\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x01 \x01(\tR\tattemptId\"{\n" +
+	"\x19GetAttemptControlResponse\x12:\n" +
+	"\acontrol\x18\x01 \x01(\v2 .blaxsmith.api.v1.AttemptControlR\acontrol\x12\"\n" +
+	"\rcan_take_over\x18\x02 \x01(\bR\vcanTakeOver\"7\n" +
+	"\x16TakeOverAttemptRequest\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x01 \x01(\tR\tattemptId\"U\n" +
+	"\x17TakeOverAttemptResponse\x12:\n" +
+	"\acontrol\x18\x01 \x01(\v2 .blaxsmith.api.v1.AttemptControlR\acontrol\"7\n" +
+	"\x16HandBackAttemptRequest\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x01 \x01(\tR\tattemptId\"U\n" +
+	"\x17HandBackAttemptResponse\x12:\n" +
+	"\acontrol\x18\x01 \x01(\v2 .blaxsmith.api.v1.AttemptControlR\acontrol2\xbb\x16\n" +
 	"\x0fWorkflowService\x12`\n" +
 	"\rCreateProject\x12&.blaxsmith.api.v1.CreateProjectRequest\x1a'.blaxsmith.api.v1.CreateProjectResponse\x12W\n" +
 	"\n" +
 	"GetProject\x12#.blaxsmith.api.v1.GetProjectRequest\x1a$.blaxsmith.api.v1.GetProjectResponse\x12i\n" +
 	"\x10GetProjectSource\x12).blaxsmith.api.v1.GetProjectSourceRequest\x1a*.blaxsmith.api.v1.GetProjectSourceResponse\x12i\n" +
-	"\x10SetProjectSource\x12).blaxsmith.api.v1.SetProjectSourceRequest\x1a*.blaxsmith.api.v1.SetProjectSourceResponse\x12{\n" +
+	"\x10SetProjectSource\x12).blaxsmith.api.v1.SetProjectSourceRequest\x1a*.blaxsmith.api.v1.SetProjectSourceResponse\x12o\n" +
+	"\x12ListGitConnections\x12+.blaxsmith.api.v1.ListGitConnectionsRequest\x1a,.blaxsmith.api.v1.ListGitConnectionsResponse\x12r\n" +
+	"\x13CreateGitConnection\x12,.blaxsmith.api.v1.CreateGitConnectionRequest\x1a-.blaxsmith.api.v1.CreateGitConnectionResponse\x12{\n" +
 	"\x16GetProjectVerification\x12/.blaxsmith.api.v1.GetProjectVerificationRequest\x1a0.blaxsmith.api.v1.GetProjectVerificationResponse\x12{\n" +
 	"\x16SetProjectVerification\x12/.blaxsmith.api.v1.SetProjectVerificationRequest\x1a0.blaxsmith.api.v1.SetProjectVerificationResponse\x12{\n" +
 	"\x16ListProjectModelAccess\x12/.blaxsmith.api.v1.ListProjectModelAccessRequest\x1a0.blaxsmith.api.v1.ListProjectModelAccessResponse\x12\x81\x01\n" +
@@ -3269,7 +4762,13 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\vEventsAfter\x12$.blaxsmith.api.v1.EventsAfterRequest\x1a%.blaxsmith.api.v1.EventsAfterResponse\x12i\n" +
 	"\x10ListCommandExits\x12).blaxsmith.api.v1.ListCommandExitsRequest\x1a*.blaxsmith.api.v1.ListCommandExitsResponse\x12i\n" +
 	"\x10GetCurrentReview\x12).blaxsmith.api.v1.GetCurrentReviewRequest\x1a*.blaxsmith.api.v1.GetCurrentReviewResponse\x12]\n" +
-	"\fDecideReview\x12%.blaxsmith.api.v1.DecideReviewRequest\x1a&.blaxsmith.api.v1.DecideReviewResponseB\xc5\x01\n" +
+	"\fDecideReview\x12%.blaxsmith.api.v1.DecideReviewRequest\x1a&.blaxsmith.api.v1.DecideReviewResponse\x12l\n" +
+	"\x11GetAttemptControl\x12*.blaxsmith.api.v1.GetAttemptControlRequest\x1a+.blaxsmith.api.v1.GetAttemptControlResponse\x12f\n" +
+	"\x0fTakeOverAttempt\x12(.blaxsmith.api.v1.TakeOverAttemptRequest\x1a).blaxsmith.api.v1.TakeOverAttemptResponse\x12f\n" +
+	"\x0fHandBackAttempt\x12(.blaxsmith.api.v1.HandBackAttemptRequest\x1a).blaxsmith.api.v1.HandBackAttemptResponse\x12i\n" +
+	"\x10ListInteractions\x12).blaxsmith.api.v1.ListInteractionsRequest\x1a*.blaxsmith.api.v1.ListInteractionsResponse\x12l\n" +
+	"\x11AnswerInteraction\x12*.blaxsmith.api.v1.AnswerInteractionRequest\x1a+.blaxsmith.api.v1.AnswerInteractionResponse\x12]\n" +
+	"\fSteerAttempt\x12%.blaxsmith.api.v1.SteerAttemptRequest\x1a&.blaxsmith.api.v1.SteerAttemptResponseB\xc5\x01\n" +
 	"\x14com.blaxsmith.api.v1B\rWorkflowProtoP\x01Z<github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1;apiv1\xa2\x02\x03BAX\xaa\x02\x10Blaxsmith.Api.V1\xca\x02\x10Blaxsmith\\Api\\V1\xe2\x02\x1cBlaxsmith\\Api\\V1\\GPBMetadata\xea\x02\x12Blaxsmith::Api::V1b\x06proto3"
 
 var (
@@ -3284,7 +4783,7 @@ func file_blaxsmith_api_v1_workflow_proto_rawDescGZIP() []byte {
 	return file_blaxsmith_api_v1_workflow_proto_rawDescData
 }
 
-var file_blaxsmith_api_v1_workflow_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
+var file_blaxsmith_api_v1_workflow_proto_msgTypes = make([]protoimpl.MessageInfo, 73)
 var file_blaxsmith_api_v1_workflow_proto_goTypes = []any{
 	(*Project)(nil),                          // 0: blaxsmith.api.v1.Project
 	(*Run)(nil),                              // 1: blaxsmith.api.v1.Run
@@ -3297,112 +4796,162 @@ var file_blaxsmith_api_v1_workflow_proto_goTypes = []any{
 	(*GetProjectSourceRequest)(nil),          // 8: blaxsmith.api.v1.GetProjectSourceRequest
 	(*GetProjectSourceResponse)(nil),         // 9: blaxsmith.api.v1.GetProjectSourceResponse
 	(*SetProjectSourceRequest)(nil),          // 10: blaxsmith.api.v1.SetProjectSourceRequest
-	(*SetProjectSourceResponse)(nil),         // 11: blaxsmith.api.v1.SetProjectSourceResponse
-	(*VerificationCheck)(nil),                // 12: blaxsmith.api.v1.VerificationCheck
-	(*ProjectVerification)(nil),              // 13: blaxsmith.api.v1.ProjectVerification
-	(*GetProjectVerificationRequest)(nil),    // 14: blaxsmith.api.v1.GetProjectVerificationRequest
-	(*GetProjectVerificationResponse)(nil),   // 15: blaxsmith.api.v1.GetProjectVerificationResponse
-	(*SetProjectVerificationRequest)(nil),    // 16: blaxsmith.api.v1.SetProjectVerificationRequest
-	(*SetProjectVerificationResponse)(nil),   // 17: blaxsmith.api.v1.SetProjectVerificationResponse
-	(*ProjectModelAccess)(nil),               // 18: blaxsmith.api.v1.ProjectModelAccess
-	(*ListProjectModelAccessRequest)(nil),    // 19: blaxsmith.api.v1.ListProjectModelAccessRequest
-	(*ListProjectModelAccessResponse)(nil),   // 20: blaxsmith.api.v1.ListProjectModelAccessResponse
-	(*CreateProjectModelAccessRequest)(nil),  // 21: blaxsmith.api.v1.CreateProjectModelAccessRequest
-	(*CreateProjectModelAccessResponse)(nil), // 22: blaxsmith.api.v1.CreateProjectModelAccessResponse
-	(*RevokeProjectModelAccessRequest)(nil),  // 23: blaxsmith.api.v1.RevokeProjectModelAccessRequest
-	(*RevokeProjectModelAccessResponse)(nil), // 24: blaxsmith.api.v1.RevokeProjectModelAccessResponse
-	(*ListProjectsRequest)(nil),              // 25: blaxsmith.api.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),             // 26: blaxsmith.api.v1.ListProjectsResponse
-	(*GetRunRequest)(nil),                    // 27: blaxsmith.api.v1.GetRunRequest
-	(*GetRunResponse)(nil),                   // 28: blaxsmith.api.v1.GetRunResponse
-	(*LaunchRunRequest)(nil),                 // 29: blaxsmith.api.v1.LaunchRunRequest
-	(*LaunchRunResponse)(nil),                // 30: blaxsmith.api.v1.LaunchRunResponse
-	(*GetLaunchAvailabilityRequest)(nil),     // 31: blaxsmith.api.v1.GetLaunchAvailabilityRequest
-	(*GetLaunchAvailabilityResponse)(nil),    // 32: blaxsmith.api.v1.GetLaunchAvailabilityResponse
-	(*RunTask)(nil),                          // 33: blaxsmith.api.v1.RunTask
-	(*FrozenInputFile)(nil),                  // 34: blaxsmith.api.v1.FrozenInputFile
-	(*ListRunTasksRequest)(nil),              // 35: blaxsmith.api.v1.ListRunTasksRequest
-	(*ListRunTasksResponse)(nil),             // 36: blaxsmith.api.v1.ListRunTasksResponse
-	(*ListRunsRequest)(nil),                  // 37: blaxsmith.api.v1.ListRunsRequest
-	(*ListRunsResponse)(nil),                 // 38: blaxsmith.api.v1.ListRunsResponse
-	(*EventsAfterRequest)(nil),               // 39: blaxsmith.api.v1.EventsAfterRequest
-	(*EventsAfterResponse)(nil),              // 40: blaxsmith.api.v1.EventsAfterResponse
-	(*CommandExitObservation)(nil),           // 41: blaxsmith.api.v1.CommandExitObservation
-	(*ListCommandExitsRequest)(nil),          // 42: blaxsmith.api.v1.ListCommandExitsRequest
-	(*ListCommandExitsResponse)(nil),         // 43: blaxsmith.api.v1.ListCommandExitsResponse
-	(*ReviewDecision)(nil),                   // 44: blaxsmith.api.v1.ReviewDecision
-	(*ReviewPackage)(nil),                    // 45: blaxsmith.api.v1.ReviewPackage
-	(*GetCurrentReviewRequest)(nil),          // 46: blaxsmith.api.v1.GetCurrentReviewRequest
-	(*GetCurrentReviewResponse)(nil),         // 47: blaxsmith.api.v1.GetCurrentReviewResponse
-	(*DecideReviewRequest)(nil),              // 48: blaxsmith.api.v1.DecideReviewRequest
-	(*DecideReviewResponse)(nil),             // 49: blaxsmith.api.v1.DecideReviewResponse
+	(*GitConnection)(nil),                    // 11: blaxsmith.api.v1.GitConnection
+	(*ListGitConnectionsRequest)(nil),        // 12: blaxsmith.api.v1.ListGitConnectionsRequest
+	(*ListGitConnectionsResponse)(nil),       // 13: blaxsmith.api.v1.ListGitConnectionsResponse
+	(*CreateGitConnectionRequest)(nil),       // 14: blaxsmith.api.v1.CreateGitConnectionRequest
+	(*CreateGitConnectionResponse)(nil),      // 15: blaxsmith.api.v1.CreateGitConnectionResponse
+	(*SetProjectSourceResponse)(nil),         // 16: blaxsmith.api.v1.SetProjectSourceResponse
+	(*VerificationCheck)(nil),                // 17: blaxsmith.api.v1.VerificationCheck
+	(*ProjectVerification)(nil),              // 18: blaxsmith.api.v1.ProjectVerification
+	(*GetProjectVerificationRequest)(nil),    // 19: blaxsmith.api.v1.GetProjectVerificationRequest
+	(*GetProjectVerificationResponse)(nil),   // 20: blaxsmith.api.v1.GetProjectVerificationResponse
+	(*SetProjectVerificationRequest)(nil),    // 21: blaxsmith.api.v1.SetProjectVerificationRequest
+	(*SetProjectVerificationResponse)(nil),   // 22: blaxsmith.api.v1.SetProjectVerificationResponse
+	(*ProjectModelAccess)(nil),               // 23: blaxsmith.api.v1.ProjectModelAccess
+	(*ListProjectModelAccessRequest)(nil),    // 24: blaxsmith.api.v1.ListProjectModelAccessRequest
+	(*ListProjectModelAccessResponse)(nil),   // 25: blaxsmith.api.v1.ListProjectModelAccessResponse
+	(*CreateProjectModelAccessRequest)(nil),  // 26: blaxsmith.api.v1.CreateProjectModelAccessRequest
+	(*CreateProjectModelAccessResponse)(nil), // 27: blaxsmith.api.v1.CreateProjectModelAccessResponse
+	(*RevokeProjectModelAccessRequest)(nil),  // 28: blaxsmith.api.v1.RevokeProjectModelAccessRequest
+	(*RevokeProjectModelAccessResponse)(nil), // 29: blaxsmith.api.v1.RevokeProjectModelAccessResponse
+	(*ListProjectsRequest)(nil),              // 30: blaxsmith.api.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),             // 31: blaxsmith.api.v1.ListProjectsResponse
+	(*GetRunRequest)(nil),                    // 32: blaxsmith.api.v1.GetRunRequest
+	(*GetRunResponse)(nil),                   // 33: blaxsmith.api.v1.GetRunResponse
+	(*LaunchRunRequest)(nil),                 // 34: blaxsmith.api.v1.LaunchRunRequest
+	(*LaunchRunResponse)(nil),                // 35: blaxsmith.api.v1.LaunchRunResponse
+	(*GetLaunchAvailabilityRequest)(nil),     // 36: blaxsmith.api.v1.GetLaunchAvailabilityRequest
+	(*GetLaunchAvailabilityResponse)(nil),    // 37: blaxsmith.api.v1.GetLaunchAvailabilityResponse
+	(*RunTask)(nil),                          // 38: blaxsmith.api.v1.RunTask
+	(*FrozenInputFile)(nil),                  // 39: blaxsmith.api.v1.FrozenInputFile
+	(*ListRunTasksRequest)(nil),              // 40: blaxsmith.api.v1.ListRunTasksRequest
+	(*ListRunTasksResponse)(nil),             // 41: blaxsmith.api.v1.ListRunTasksResponse
+	(*ListRunsRequest)(nil),                  // 42: blaxsmith.api.v1.ListRunsRequest
+	(*ListRunsResponse)(nil),                 // 43: blaxsmith.api.v1.ListRunsResponse
+	(*EventsAfterRequest)(nil),               // 44: blaxsmith.api.v1.EventsAfterRequest
+	(*EventsAfterResponse)(nil),              // 45: blaxsmith.api.v1.EventsAfterResponse
+	(*CommandExitObservation)(nil),           // 46: blaxsmith.api.v1.CommandExitObservation
+	(*ListCommandExitsRequest)(nil),          // 47: blaxsmith.api.v1.ListCommandExitsRequest
+	(*ListCommandExitsResponse)(nil),         // 48: blaxsmith.api.v1.ListCommandExitsResponse
+	(*ReviewDecision)(nil),                   // 49: blaxsmith.api.v1.ReviewDecision
+	(*ReviewPackage)(nil),                    // 50: blaxsmith.api.v1.ReviewPackage
+	(*GetCurrentReviewRequest)(nil),          // 51: blaxsmith.api.v1.GetCurrentReviewRequest
+	(*GetCurrentReviewResponse)(nil),         // 52: blaxsmith.api.v1.GetCurrentReviewResponse
+	(*DecideReviewRequest)(nil),              // 53: blaxsmith.api.v1.DecideReviewRequest
+	(*DecideReviewResponse)(nil),             // 54: blaxsmith.api.v1.DecideReviewResponse
+	(*InteractionOption)(nil),                // 55: blaxsmith.api.v1.InteractionOption
+	(*InteractionSource)(nil),                // 56: blaxsmith.api.v1.InteractionSource
+	(*InteractionInterview)(nil),             // 57: blaxsmith.api.v1.InteractionInterview
+	(*InteractionAnswer)(nil),                // 58: blaxsmith.api.v1.InteractionAnswer
+	(*Interaction)(nil),                      // 59: blaxsmith.api.v1.Interaction
+	(*ListInteractionsRequest)(nil),          // 60: blaxsmith.api.v1.ListInteractionsRequest
+	(*ListInteractionsResponse)(nil),         // 61: blaxsmith.api.v1.ListInteractionsResponse
+	(*AnswerInteractionRequest)(nil),         // 62: blaxsmith.api.v1.AnswerInteractionRequest
+	(*AnswerInteractionResponse)(nil),        // 63: blaxsmith.api.v1.AnswerInteractionResponse
+	(*SteerAttemptRequest)(nil),              // 64: blaxsmith.api.v1.SteerAttemptRequest
+	(*SteerAttemptResponse)(nil),             // 65: blaxsmith.api.v1.SteerAttemptResponse
+	(*AttemptControl)(nil),                   // 66: blaxsmith.api.v1.AttemptControl
+	(*GetAttemptControlRequest)(nil),         // 67: blaxsmith.api.v1.GetAttemptControlRequest
+	(*GetAttemptControlResponse)(nil),        // 68: blaxsmith.api.v1.GetAttemptControlResponse
+	(*TakeOverAttemptRequest)(nil),           // 69: blaxsmith.api.v1.TakeOverAttemptRequest
+	(*TakeOverAttemptResponse)(nil),          // 70: blaxsmith.api.v1.TakeOverAttemptResponse
+	(*HandBackAttemptRequest)(nil),           // 71: blaxsmith.api.v1.HandBackAttemptRequest
+	(*HandBackAttemptResponse)(nil),          // 72: blaxsmith.api.v1.HandBackAttemptResponse
 }
 var file_blaxsmith_api_v1_workflow_proto_depIdxs = []int32{
 	0,  // 0: blaxsmith.api.v1.CreateProjectResponse.project:type_name -> blaxsmith.api.v1.Project
 	0,  // 1: blaxsmith.api.v1.GetProjectResponse.project:type_name -> blaxsmith.api.v1.Project
 	7,  // 2: blaxsmith.api.v1.GetProjectSourceResponse.source:type_name -> blaxsmith.api.v1.ProjectSource
-	7,  // 3: blaxsmith.api.v1.SetProjectSourceResponse.source:type_name -> blaxsmith.api.v1.ProjectSource
-	12, // 4: blaxsmith.api.v1.ProjectVerification.checks:type_name -> blaxsmith.api.v1.VerificationCheck
-	13, // 5: blaxsmith.api.v1.GetProjectVerificationResponse.verification:type_name -> blaxsmith.api.v1.ProjectVerification
-	12, // 6: blaxsmith.api.v1.SetProjectVerificationRequest.checks:type_name -> blaxsmith.api.v1.VerificationCheck
-	13, // 7: blaxsmith.api.v1.SetProjectVerificationResponse.verification:type_name -> blaxsmith.api.v1.ProjectVerification
-	18, // 8: blaxsmith.api.v1.ListProjectModelAccessResponse.access:type_name -> blaxsmith.api.v1.ProjectModelAccess
-	18, // 9: blaxsmith.api.v1.CreateProjectModelAccessResponse.access:type_name -> blaxsmith.api.v1.ProjectModelAccess
-	0,  // 10: blaxsmith.api.v1.ListProjectsResponse.projects:type_name -> blaxsmith.api.v1.Project
-	1,  // 11: blaxsmith.api.v1.GetRunResponse.run:type_name -> blaxsmith.api.v1.Run
-	1,  // 12: blaxsmith.api.v1.LaunchRunResponse.run:type_name -> blaxsmith.api.v1.Run
-	34, // 13: blaxsmith.api.v1.RunTask.instruction_files:type_name -> blaxsmith.api.v1.FrozenInputFile
-	34, // 14: blaxsmith.api.v1.RunTask.skill_files:type_name -> blaxsmith.api.v1.FrozenInputFile
-	33, // 15: blaxsmith.api.v1.ListRunTasksResponse.tasks:type_name -> blaxsmith.api.v1.RunTask
-	1,  // 16: blaxsmith.api.v1.ListRunsResponse.runs:type_name -> blaxsmith.api.v1.Run
-	2,  // 17: blaxsmith.api.v1.EventsAfterResponse.events:type_name -> blaxsmith.api.v1.WorkflowEvent
-	41, // 18: blaxsmith.api.v1.ListCommandExitsResponse.observations:type_name -> blaxsmith.api.v1.CommandExitObservation
-	44, // 19: blaxsmith.api.v1.ReviewPackage.decision:type_name -> blaxsmith.api.v1.ReviewDecision
-	45, // 20: blaxsmith.api.v1.GetCurrentReviewResponse.package:type_name -> blaxsmith.api.v1.ReviewPackage
-	44, // 21: blaxsmith.api.v1.DecideReviewResponse.decision:type_name -> blaxsmith.api.v1.ReviewDecision
-	3,  // 22: blaxsmith.api.v1.WorkflowService.CreateProject:input_type -> blaxsmith.api.v1.CreateProjectRequest
-	5,  // 23: blaxsmith.api.v1.WorkflowService.GetProject:input_type -> blaxsmith.api.v1.GetProjectRequest
-	8,  // 24: blaxsmith.api.v1.WorkflowService.GetProjectSource:input_type -> blaxsmith.api.v1.GetProjectSourceRequest
-	10, // 25: blaxsmith.api.v1.WorkflowService.SetProjectSource:input_type -> blaxsmith.api.v1.SetProjectSourceRequest
-	14, // 26: blaxsmith.api.v1.WorkflowService.GetProjectVerification:input_type -> blaxsmith.api.v1.GetProjectVerificationRequest
-	16, // 27: blaxsmith.api.v1.WorkflowService.SetProjectVerification:input_type -> blaxsmith.api.v1.SetProjectVerificationRequest
-	19, // 28: blaxsmith.api.v1.WorkflowService.ListProjectModelAccess:input_type -> blaxsmith.api.v1.ListProjectModelAccessRequest
-	21, // 29: blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess:input_type -> blaxsmith.api.v1.CreateProjectModelAccessRequest
-	23, // 30: blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess:input_type -> blaxsmith.api.v1.RevokeProjectModelAccessRequest
-	25, // 31: blaxsmith.api.v1.WorkflowService.ListProjects:input_type -> blaxsmith.api.v1.ListProjectsRequest
-	27, // 32: blaxsmith.api.v1.WorkflowService.GetRun:input_type -> blaxsmith.api.v1.GetRunRequest
-	29, // 33: blaxsmith.api.v1.WorkflowService.LaunchRun:input_type -> blaxsmith.api.v1.LaunchRunRequest
-	31, // 34: blaxsmith.api.v1.WorkflowService.GetLaunchAvailability:input_type -> blaxsmith.api.v1.GetLaunchAvailabilityRequest
-	35, // 35: blaxsmith.api.v1.WorkflowService.ListRunTasks:input_type -> blaxsmith.api.v1.ListRunTasksRequest
-	37, // 36: blaxsmith.api.v1.WorkflowService.ListRuns:input_type -> blaxsmith.api.v1.ListRunsRequest
-	39, // 37: blaxsmith.api.v1.WorkflowService.EventsAfter:input_type -> blaxsmith.api.v1.EventsAfterRequest
-	42, // 38: blaxsmith.api.v1.WorkflowService.ListCommandExits:input_type -> blaxsmith.api.v1.ListCommandExitsRequest
-	46, // 39: blaxsmith.api.v1.WorkflowService.GetCurrentReview:input_type -> blaxsmith.api.v1.GetCurrentReviewRequest
-	48, // 40: blaxsmith.api.v1.WorkflowService.DecideReview:input_type -> blaxsmith.api.v1.DecideReviewRequest
-	4,  // 41: blaxsmith.api.v1.WorkflowService.CreateProject:output_type -> blaxsmith.api.v1.CreateProjectResponse
-	6,  // 42: blaxsmith.api.v1.WorkflowService.GetProject:output_type -> blaxsmith.api.v1.GetProjectResponse
-	9,  // 43: blaxsmith.api.v1.WorkflowService.GetProjectSource:output_type -> blaxsmith.api.v1.GetProjectSourceResponse
-	11, // 44: blaxsmith.api.v1.WorkflowService.SetProjectSource:output_type -> blaxsmith.api.v1.SetProjectSourceResponse
-	15, // 45: blaxsmith.api.v1.WorkflowService.GetProjectVerification:output_type -> blaxsmith.api.v1.GetProjectVerificationResponse
-	17, // 46: blaxsmith.api.v1.WorkflowService.SetProjectVerification:output_type -> blaxsmith.api.v1.SetProjectVerificationResponse
-	20, // 47: blaxsmith.api.v1.WorkflowService.ListProjectModelAccess:output_type -> blaxsmith.api.v1.ListProjectModelAccessResponse
-	22, // 48: blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess:output_type -> blaxsmith.api.v1.CreateProjectModelAccessResponse
-	24, // 49: blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess:output_type -> blaxsmith.api.v1.RevokeProjectModelAccessResponse
-	26, // 50: blaxsmith.api.v1.WorkflowService.ListProjects:output_type -> blaxsmith.api.v1.ListProjectsResponse
-	28, // 51: blaxsmith.api.v1.WorkflowService.GetRun:output_type -> blaxsmith.api.v1.GetRunResponse
-	30, // 52: blaxsmith.api.v1.WorkflowService.LaunchRun:output_type -> blaxsmith.api.v1.LaunchRunResponse
-	32, // 53: blaxsmith.api.v1.WorkflowService.GetLaunchAvailability:output_type -> blaxsmith.api.v1.GetLaunchAvailabilityResponse
-	36, // 54: blaxsmith.api.v1.WorkflowService.ListRunTasks:output_type -> blaxsmith.api.v1.ListRunTasksResponse
-	38, // 55: blaxsmith.api.v1.WorkflowService.ListRuns:output_type -> blaxsmith.api.v1.ListRunsResponse
-	40, // 56: blaxsmith.api.v1.WorkflowService.EventsAfter:output_type -> blaxsmith.api.v1.EventsAfterResponse
-	43, // 57: blaxsmith.api.v1.WorkflowService.ListCommandExits:output_type -> blaxsmith.api.v1.ListCommandExitsResponse
-	47, // 58: blaxsmith.api.v1.WorkflowService.GetCurrentReview:output_type -> blaxsmith.api.v1.GetCurrentReviewResponse
-	49, // 59: blaxsmith.api.v1.WorkflowService.DecideReview:output_type -> blaxsmith.api.v1.DecideReviewResponse
-	41, // [41:60] is the sub-list for method output_type
-	22, // [22:41] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	11, // 3: blaxsmith.api.v1.ListGitConnectionsResponse.connections:type_name -> blaxsmith.api.v1.GitConnection
+	11, // 4: blaxsmith.api.v1.CreateGitConnectionResponse.connection:type_name -> blaxsmith.api.v1.GitConnection
+	7,  // 5: blaxsmith.api.v1.SetProjectSourceResponse.source:type_name -> blaxsmith.api.v1.ProjectSource
+	17, // 6: blaxsmith.api.v1.ProjectVerification.checks:type_name -> blaxsmith.api.v1.VerificationCheck
+	18, // 7: blaxsmith.api.v1.GetProjectVerificationResponse.verification:type_name -> blaxsmith.api.v1.ProjectVerification
+	17, // 8: blaxsmith.api.v1.SetProjectVerificationRequest.checks:type_name -> blaxsmith.api.v1.VerificationCheck
+	18, // 9: blaxsmith.api.v1.SetProjectVerificationResponse.verification:type_name -> blaxsmith.api.v1.ProjectVerification
+	23, // 10: blaxsmith.api.v1.ListProjectModelAccessResponse.access:type_name -> blaxsmith.api.v1.ProjectModelAccess
+	23, // 11: blaxsmith.api.v1.CreateProjectModelAccessResponse.access:type_name -> blaxsmith.api.v1.ProjectModelAccess
+	0,  // 12: blaxsmith.api.v1.ListProjectsResponse.projects:type_name -> blaxsmith.api.v1.Project
+	1,  // 13: blaxsmith.api.v1.GetRunResponse.run:type_name -> blaxsmith.api.v1.Run
+	1,  // 14: blaxsmith.api.v1.LaunchRunResponse.run:type_name -> blaxsmith.api.v1.Run
+	39, // 15: blaxsmith.api.v1.RunTask.instruction_files:type_name -> blaxsmith.api.v1.FrozenInputFile
+	39, // 16: blaxsmith.api.v1.RunTask.skill_files:type_name -> blaxsmith.api.v1.FrozenInputFile
+	38, // 17: blaxsmith.api.v1.ListRunTasksResponse.tasks:type_name -> blaxsmith.api.v1.RunTask
+	1,  // 18: blaxsmith.api.v1.ListRunsResponse.runs:type_name -> blaxsmith.api.v1.Run
+	2,  // 19: blaxsmith.api.v1.EventsAfterResponse.events:type_name -> blaxsmith.api.v1.WorkflowEvent
+	46, // 20: blaxsmith.api.v1.ListCommandExitsResponse.observations:type_name -> blaxsmith.api.v1.CommandExitObservation
+	49, // 21: blaxsmith.api.v1.ReviewPackage.decision:type_name -> blaxsmith.api.v1.ReviewDecision
+	50, // 22: blaxsmith.api.v1.GetCurrentReviewResponse.package:type_name -> blaxsmith.api.v1.ReviewPackage
+	49, // 23: blaxsmith.api.v1.DecideReviewResponse.decision:type_name -> blaxsmith.api.v1.ReviewDecision
+	55, // 24: blaxsmith.api.v1.Interaction.options:type_name -> blaxsmith.api.v1.InteractionOption
+	56, // 25: blaxsmith.api.v1.Interaction.sources:type_name -> blaxsmith.api.v1.InteractionSource
+	57, // 26: blaxsmith.api.v1.Interaction.interview:type_name -> blaxsmith.api.v1.InteractionInterview
+	58, // 27: blaxsmith.api.v1.Interaction.answer:type_name -> blaxsmith.api.v1.InteractionAnswer
+	59, // 28: blaxsmith.api.v1.ListInteractionsResponse.interactions:type_name -> blaxsmith.api.v1.Interaction
+	59, // 29: blaxsmith.api.v1.AnswerInteractionResponse.interaction:type_name -> blaxsmith.api.v1.Interaction
+	66, // 30: blaxsmith.api.v1.GetAttemptControlResponse.control:type_name -> blaxsmith.api.v1.AttemptControl
+	66, // 31: blaxsmith.api.v1.TakeOverAttemptResponse.control:type_name -> blaxsmith.api.v1.AttemptControl
+	66, // 32: blaxsmith.api.v1.HandBackAttemptResponse.control:type_name -> blaxsmith.api.v1.AttemptControl
+	3,  // 33: blaxsmith.api.v1.WorkflowService.CreateProject:input_type -> blaxsmith.api.v1.CreateProjectRequest
+	5,  // 34: blaxsmith.api.v1.WorkflowService.GetProject:input_type -> blaxsmith.api.v1.GetProjectRequest
+	8,  // 35: blaxsmith.api.v1.WorkflowService.GetProjectSource:input_type -> blaxsmith.api.v1.GetProjectSourceRequest
+	10, // 36: blaxsmith.api.v1.WorkflowService.SetProjectSource:input_type -> blaxsmith.api.v1.SetProjectSourceRequest
+	12, // 37: blaxsmith.api.v1.WorkflowService.ListGitConnections:input_type -> blaxsmith.api.v1.ListGitConnectionsRequest
+	14, // 38: blaxsmith.api.v1.WorkflowService.CreateGitConnection:input_type -> blaxsmith.api.v1.CreateGitConnectionRequest
+	19, // 39: blaxsmith.api.v1.WorkflowService.GetProjectVerification:input_type -> blaxsmith.api.v1.GetProjectVerificationRequest
+	21, // 40: blaxsmith.api.v1.WorkflowService.SetProjectVerification:input_type -> blaxsmith.api.v1.SetProjectVerificationRequest
+	24, // 41: blaxsmith.api.v1.WorkflowService.ListProjectModelAccess:input_type -> blaxsmith.api.v1.ListProjectModelAccessRequest
+	26, // 42: blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess:input_type -> blaxsmith.api.v1.CreateProjectModelAccessRequest
+	28, // 43: blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess:input_type -> blaxsmith.api.v1.RevokeProjectModelAccessRequest
+	30, // 44: blaxsmith.api.v1.WorkflowService.ListProjects:input_type -> blaxsmith.api.v1.ListProjectsRequest
+	32, // 45: blaxsmith.api.v1.WorkflowService.GetRun:input_type -> blaxsmith.api.v1.GetRunRequest
+	34, // 46: blaxsmith.api.v1.WorkflowService.LaunchRun:input_type -> blaxsmith.api.v1.LaunchRunRequest
+	36, // 47: blaxsmith.api.v1.WorkflowService.GetLaunchAvailability:input_type -> blaxsmith.api.v1.GetLaunchAvailabilityRequest
+	40, // 48: blaxsmith.api.v1.WorkflowService.ListRunTasks:input_type -> blaxsmith.api.v1.ListRunTasksRequest
+	42, // 49: blaxsmith.api.v1.WorkflowService.ListRuns:input_type -> blaxsmith.api.v1.ListRunsRequest
+	44, // 50: blaxsmith.api.v1.WorkflowService.EventsAfter:input_type -> blaxsmith.api.v1.EventsAfterRequest
+	47, // 51: blaxsmith.api.v1.WorkflowService.ListCommandExits:input_type -> blaxsmith.api.v1.ListCommandExitsRequest
+	51, // 52: blaxsmith.api.v1.WorkflowService.GetCurrentReview:input_type -> blaxsmith.api.v1.GetCurrentReviewRequest
+	53, // 53: blaxsmith.api.v1.WorkflowService.DecideReview:input_type -> blaxsmith.api.v1.DecideReviewRequest
+	67, // 54: blaxsmith.api.v1.WorkflowService.GetAttemptControl:input_type -> blaxsmith.api.v1.GetAttemptControlRequest
+	69, // 55: blaxsmith.api.v1.WorkflowService.TakeOverAttempt:input_type -> blaxsmith.api.v1.TakeOverAttemptRequest
+	71, // 56: blaxsmith.api.v1.WorkflowService.HandBackAttempt:input_type -> blaxsmith.api.v1.HandBackAttemptRequest
+	60, // 57: blaxsmith.api.v1.WorkflowService.ListInteractions:input_type -> blaxsmith.api.v1.ListInteractionsRequest
+	62, // 58: blaxsmith.api.v1.WorkflowService.AnswerInteraction:input_type -> blaxsmith.api.v1.AnswerInteractionRequest
+	64, // 59: blaxsmith.api.v1.WorkflowService.SteerAttempt:input_type -> blaxsmith.api.v1.SteerAttemptRequest
+	4,  // 60: blaxsmith.api.v1.WorkflowService.CreateProject:output_type -> blaxsmith.api.v1.CreateProjectResponse
+	6,  // 61: blaxsmith.api.v1.WorkflowService.GetProject:output_type -> blaxsmith.api.v1.GetProjectResponse
+	9,  // 62: blaxsmith.api.v1.WorkflowService.GetProjectSource:output_type -> blaxsmith.api.v1.GetProjectSourceResponse
+	16, // 63: blaxsmith.api.v1.WorkflowService.SetProjectSource:output_type -> blaxsmith.api.v1.SetProjectSourceResponse
+	13, // 64: blaxsmith.api.v1.WorkflowService.ListGitConnections:output_type -> blaxsmith.api.v1.ListGitConnectionsResponse
+	15, // 65: blaxsmith.api.v1.WorkflowService.CreateGitConnection:output_type -> blaxsmith.api.v1.CreateGitConnectionResponse
+	20, // 66: blaxsmith.api.v1.WorkflowService.GetProjectVerification:output_type -> blaxsmith.api.v1.GetProjectVerificationResponse
+	22, // 67: blaxsmith.api.v1.WorkflowService.SetProjectVerification:output_type -> blaxsmith.api.v1.SetProjectVerificationResponse
+	25, // 68: blaxsmith.api.v1.WorkflowService.ListProjectModelAccess:output_type -> blaxsmith.api.v1.ListProjectModelAccessResponse
+	27, // 69: blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess:output_type -> blaxsmith.api.v1.CreateProjectModelAccessResponse
+	29, // 70: blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess:output_type -> blaxsmith.api.v1.RevokeProjectModelAccessResponse
+	31, // 71: blaxsmith.api.v1.WorkflowService.ListProjects:output_type -> blaxsmith.api.v1.ListProjectsResponse
+	33, // 72: blaxsmith.api.v1.WorkflowService.GetRun:output_type -> blaxsmith.api.v1.GetRunResponse
+	35, // 73: blaxsmith.api.v1.WorkflowService.LaunchRun:output_type -> blaxsmith.api.v1.LaunchRunResponse
+	37, // 74: blaxsmith.api.v1.WorkflowService.GetLaunchAvailability:output_type -> blaxsmith.api.v1.GetLaunchAvailabilityResponse
+	41, // 75: blaxsmith.api.v1.WorkflowService.ListRunTasks:output_type -> blaxsmith.api.v1.ListRunTasksResponse
+	43, // 76: blaxsmith.api.v1.WorkflowService.ListRuns:output_type -> blaxsmith.api.v1.ListRunsResponse
+	45, // 77: blaxsmith.api.v1.WorkflowService.EventsAfter:output_type -> blaxsmith.api.v1.EventsAfterResponse
+	48, // 78: blaxsmith.api.v1.WorkflowService.ListCommandExits:output_type -> blaxsmith.api.v1.ListCommandExitsResponse
+	52, // 79: blaxsmith.api.v1.WorkflowService.GetCurrentReview:output_type -> blaxsmith.api.v1.GetCurrentReviewResponse
+	54, // 80: blaxsmith.api.v1.WorkflowService.DecideReview:output_type -> blaxsmith.api.v1.DecideReviewResponse
+	68, // 81: blaxsmith.api.v1.WorkflowService.GetAttemptControl:output_type -> blaxsmith.api.v1.GetAttemptControlResponse
+	70, // 82: blaxsmith.api.v1.WorkflowService.TakeOverAttempt:output_type -> blaxsmith.api.v1.TakeOverAttemptResponse
+	72, // 83: blaxsmith.api.v1.WorkflowService.HandBackAttempt:output_type -> blaxsmith.api.v1.HandBackAttemptResponse
+	61, // 84: blaxsmith.api.v1.WorkflowService.ListInteractions:output_type -> blaxsmith.api.v1.ListInteractionsResponse
+	63, // 85: blaxsmith.api.v1.WorkflowService.AnswerInteraction:output_type -> blaxsmith.api.v1.AnswerInteractionResponse
+	65, // 86: blaxsmith.api.v1.WorkflowService.SteerAttempt:output_type -> blaxsmith.api.v1.SteerAttemptResponse
+	60, // [60:87] is the sub-list for method output_type
+	33, // [33:60] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_blaxsmith_api_v1_workflow_proto_init() }
@@ -3416,7 +4965,7 @@ func file_blaxsmith_api_v1_workflow_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blaxsmith_api_v1_workflow_proto_rawDesc), len(file_blaxsmith_api_v1_workflow_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   50,
+			NumMessages:   73,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

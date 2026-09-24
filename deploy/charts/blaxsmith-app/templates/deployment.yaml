@@ -198,6 +198,10 @@ spec:
             - name: BLAXSMITH_DISPATCH_EGRESS_MODE
               value: {{ .Values.dispatch.egressMode | quote }}
             {{- end }}
+            {{- with .Values.dispatch.guestRouter }}
+            - name: BLAXSMITH_GUEST_ROUTER
+              value: {{ . | quote }}
+            {{- end }}
           ports:
             - name: https
               containerPort: 8443

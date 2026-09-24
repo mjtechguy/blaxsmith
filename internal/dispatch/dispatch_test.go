@@ -20,6 +20,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/axbridge"
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -359,6 +360,10 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		ax.task.Status.Conditions[0].Status != "True" || ax.task.Status.Conditions[0].Reason != "SetupComplete" {
 		t.Fatalf("dispatch batch: %+v, %v", batch, err)
 	}
+	// A public source binds no Git capability; setup releases no Git lease.
+	if _, _, private, err := access.AttemptGitRead(ctx, pool, orgID, batch.Outcomes[0].AttemptID); err != nil || private {
+		t.Fatalf("public source bound git.read: %v %v", private, err)
+	}
 	workspaceName := axbridge.AttemptWorkspaceName(batch.Outcomes[0].AttemptID)
 	workspace, ok := ax.attemptWorkspaces[workspaceName]
 	gatewayName := axbridge.AttemptGatewayName(batch.Outcomes[0].AttemptID)
@@ -390,6 +395,18 @@ func TestDispatchBatchPostgres(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM workflow_events WHERE organization_id=$1 AND run_id=$2 AND attempt_id=$3 AND kind='attempt.started'`,
 		orgID, run.ID, batch.Outcomes[0].AttemptID).Scan(&startedEvents); err != nil || startedEvents != 1 {
 		t.Fatalf("Workspace readiness did not publish exactly one started event: %d %v", startedEvents, err)
+	}
+	// Completion rebuilds the launched command from durable inputs alone.
+	running, err := store.ListRunningAttempts(ctx, "", "", 1)
+	if err != nil || len(running) != 1 {
+		t.Fatalf("running attempt: %+v, %v", running, err)
+	}
+	rebuilt, err := dispatcher.AttemptBridge(ctx, running[0])
+	if err != nil || rebuilt.Workspace != workspaceName || rebuilt.Gateway != gatewayName || rebuilt.Tool.AttemptID != running[0].ID {
+		t.Fatalf("attempt bridge: %+v, %v", rebuilt, err)
+	}
+	if rebuiltCommand, err := tooladapter.Command(*rebuilt.Tool); err != nil || rebuiltCommand[1] != command {
+		t.Fatalf("completion would not match the launched command: %v", err)
 	}
 	secondRun, err := store.CreateRun(ctx, workflow.RunInput{OrganizationID: orgID, ProjectID: projectID,
 		LaunchKey: "activation-fails", SourceCommit: bundle.Source.Commit,
@@ -499,6 +516,89 @@ func TestDispatchBatchPostgres(t *testing.T) {
 	}
 	if _, ok := ax.attemptGateways[axbridge.AttemptGatewayName(failedSetup.Outcomes[0].AttemptID)]; ok || ax.task != nil {
 		t.Fatal("failed attempt AX resources were retained after actor-gone proof")
+	}
+
+	// Private source: the run froze a Git connection. Without a git.read grant
+	// dispatch refuses at preflight with a clear reason and reserves nothing.
+	const repo = "https://github.com/owner/repo"
+	privateRun, err := store.CreateRun(ctx, workflow.RunInput{OrganizationID: orgID, ProjectID: projectID,
+		LaunchKey: "private-source", SourceCommit: bundle.Source.Commit,
+		BundleSHA256: bundle.Digest, VerificationSHA256: policySHA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workflow_run_bundles
+		(organization_id,run_id,bundle_json,verification_json,repository_url,git_ref,git_connection_id)
+		VALUES ($1,$2,$3,$4,$5,'main','git-connection')`, orgID, privateRun.ID, bundleJSON, policyJSON, repo); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddTask(ctx, orgID, privateRun.ID, "plan", inputSHA, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, orgID, privateRun.ID); err != nil {
+		t.Fatal(err)
+	}
+	// Leave only the private run dispatchable.
+	if _, err := pool.Exec(ctx, `UPDATE workflow_tasks SET state='cancelled' WHERE organization_id=$1 AND run_id<>$2 AND state='pending'`,
+		orgID, privateRun.ID); err != nil {
+		t.Fatal(err)
+	}
+	ax.task, ax.delayWorkspaceReady = nil, false
+	dispatcher.Activate = func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error {
+		return nil
+	}
+	dispatcher.ReleaseModel = func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error {
+		return nil
+	}
+	refused, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
+	if err != nil || len(refused.Outcomes) != 1 || refused.Outcomes[0].State != "blocked" ||
+		!errors.Is(refused.Outcomes[0].Err, workflow.ErrGitConnection) || refused.Outcomes[0].AttemptID != "" {
+		t.Fatalf("private source without a grant was dispatched: %+v, %v", refused, err)
+	}
+	// An owner selects the connection: the dispatcher gets git.read/git.write.
+	if _, err := pool.Exec(ctx, `INSERT INTO access_provider_registrations (organization_id,id,provider_kind,origin,delivery_modes,state)
+		VALUES ($1,'git-provider','git','https://github.com',ARRAY['native_raw'],'active')`, orgID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO access_connections (organization_id,id,owner_kind,owner_id,provider_registration_id,external_account_id,auth_method,state)
+		VALUES ($1,'git-connection','organization',$1,'git-provider','x-access-token','token','active')`, orgID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := secretStore.Rotate(ctx, orgID, "git-connection", 0, []byte("private-git-token"), nil); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := access.SetProjectGit(ctx, tx, orgID, projectID, "git-connection", repo, "owner"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	private, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
+	if err != nil || len(private.Outcomes) != 1 || private.Outcomes[0].State != "started" {
+		t.Fatalf("private source dispatch: %+v, %v", private, err)
+	}
+	read, username, isPrivate, err := access.AttemptGitRead(ctx, pool, orgID, private.Outcomes[0].AttemptID)
+	if err != nil || !isPrivate || read.RepoURL != repo || read.Commit != bundle.Source.Commit || username != "x-access-token" ||
+		read.GranteeID != access.DispatcherGrantee {
+		t.Fatalf("private source did not bind the setup-phase Git lease: %+v %q %v %v", read, username, isPrivate, err)
+	}
+	// Switching the source back to public revokes the dispatcher's Git grants.
+	tx, err = pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := access.SetProjectGit(ctx, tx, orgID, projectID, "", repo, "owner"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := access.PreflightGitRead(ctx, pool, orgID, projectID, "git-connection", repo); !errors.Is(err, access.ErrDenied) {
+		t.Fatalf("public source kept a Git grant: %v", err)
 	}
 }
 

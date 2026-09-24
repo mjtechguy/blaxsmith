@@ -106,6 +106,11 @@ func TestRejectInvalidRunInputs(t *testing.T) {
 			r.Stages = append(r.Stages, Stage{ID: "late", Kind: "documentation", Profile: "architect", Prompt: example + "prompts/plan.md", DependsOn: []string{"architect-review"}})
 			r.Stages[5].DependsOn = []string{"late"}
 		}, "must precede final architect"},
+		{"loop on plan", func(t *testing.T, in *Input, r *Recipe) {
+			r.Stages[0].Loop = &Loop{With: "plan", Until: "pass", MaxCycles: 2}
+		}, "review/verify stage"},
+		{"unbounded loop", func(t *testing.T, in *Input, r *Recipe) { r.Stages[3].Loop.MaxCycles = 11 }, "1–10 cycles"},
+		{"loop downstream", func(t *testing.T, in *Input, r *Recipe) { r.Stages[3].Loop.With = "architect-review" }, "upstream agent stage"},
 		{"missing policy checks", func(t *testing.T, in *Input, r *Recipe) { r.RequiredChecks = nil }, "require checks"},
 		{"duplicate checks", func(t *testing.T, in *Input, r *Recipe) { r.RequiredChecks = []string{"tests", "tests"} }, "duplicate required check"},
 		{"missing profile", func(t *testing.T, in *Input, r *Recipe) { r.Stages[1].Profile = "unknown" }, "known profile"},
@@ -180,6 +185,24 @@ func TestRejectAmbiguousJSON(t *testing.T) {
 		if _, err := parse([]byte(data)); err == nil {
 			t.Fatalf("accepted ambiguous recipe: %s", data)
 		}
+	}
+}
+
+func TestInterviewSatisfiesPlanning(t *testing.T) {
+	data, err := os.ReadFile("../../" + example + "recipe.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Stages[3].Loop == nil || r.Stages[3].Loop.With != "implement" {
+		t.Fatalf("example verify loop missing: %+v", r.Stages[3])
+	}
+	r.Stages[0].Kind = "interview"
+	if _, err := r.validate(); err != nil {
+		t.Fatalf("interview did not satisfy planning: %v", err)
 	}
 }
 

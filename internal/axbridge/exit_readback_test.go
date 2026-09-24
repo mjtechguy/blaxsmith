@@ -217,6 +217,27 @@ func TestCommandExitConnectorRecordsOnlyBoundObservation(t *testing.T) {
 			if batch.VerificationPending != 1 || batch.Stopped != 0 || revoked != 0 || len(running) != 1 {
 				t.Fatalf("clean exit falsely completed without verification: %+v, running=%d, revoked=%d", batch, len(running), revoked)
 			}
+			reads := 0
+			sweep.Result = func(context.Context, workflow.Attempt) ([]byte, error) {
+				reads++
+				return []byte(`{"schema":"blaxsmith.attempt-result/v1alpha1","summary":"done","revision":"` +
+					strings.Repeat("b", 40) + `","verdict":""}`), nil
+			}
+			batch, err = sweep.Sweep(t.Context(), "", "", 1)
+			if err != nil || batch.Waiting != 1 || revoked != 1 || reads != 1 {
+				t.Fatalf("clean result did not start actor stop: %+v, revoked=%d, %v", batch, revoked, err)
+			}
+			gone = true
+			batch, err = sweep.Sweep(t.Context(), "", "", 1)
+			if err != nil || batch.Stopped != 1 || reads != 1 {
+				t.Fatalf("recorded result did not resume stop without a guest read: %+v, reads=%d, %v", batch, reads, err)
+			}
+			var attemptState, taskState string
+			if err := pool.QueryRow(t.Context(), `SELECT a.state,t.state FROM workflow_attempts a JOIN workflow_tasks t
+				ON t.organization_id=a.organization_id AND t.id=a.task_id WHERE a.organization_id=$1 AND a.id=$2`,
+				org, attempt.ID).Scan(&attemptState, &taskState); err != nil || attemptState != "succeeded" || taskState != "succeeded" {
+				t.Fatalf("stopped clean result was not accepted: %s/%s, %v", attemptState, taskState, err)
+			}
 		} else {
 			if batch.Waiting != 1 || batch.Stopped != 0 || revoked != 1 || len(running) != 1 || ax.task != nil {
 				t.Fatalf("failed exit skipped actor-gone proof: %+v, running=%d, revoked=%d", batch, len(running), revoked)

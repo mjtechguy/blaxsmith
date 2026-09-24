@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -18,17 +19,22 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/dispatch"
 	"github.com/mjtechguy/blaxsmith/internal/gitfetch"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/interact"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/terminal"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
 type workflowService struct {
 	guard         *identity.BrowserGuard
+	interactions  *interact.Store
 	store         *workflow.Store
 	secrets       *access.SecretStore
 	dispatcher    *dispatch.Dispatcher
 	dispatchReady func(context.Context) error
 	launchEnabled bool
+	guests        *terminal.Router
+	terminals     *terminal.Hub
 }
 
 type pageCursor struct {
@@ -90,7 +96,7 @@ func (s *workflowService) SetProjectSource(ctx context.Context, req *connect.Req
 	if err != nil {
 		return nil, err
 	}
-	source, err := s.store.SetProjectSourceAs(ctx, caller, req.Msg.ProjectId, req.Msg.RepositoryUrl, req.Msg.Ref)
+	source, err := s.store.SetProjectSourceAs(ctx, caller, req.Msg.ProjectId, req.Msg.RepositoryUrl, req.Msg.Ref, req.Msg.GitConnectionId)
 	if err != nil {
 		return nil, workflowError(err)
 	}
@@ -249,8 +255,18 @@ func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[ap
 	if err != nil {
 		return nil, workflowError(err)
 	}
-	fetched, err := gitfetch.Fetch(ctx, repositoryURL, ref)
-	if err != nil {
+	var fetched gitfetch.Source
+	if source.GitConnectionID != "" {
+		username, token, err := s.privateSourceCredential(ctx, caller.OrganizationID, source)
+		if err != nil {
+			return nil, workflowError(err)
+		}
+		fetched, err = gitfetch.FetchAuth(ctx, repositoryURL, ref, username, token)
+		clear(token)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("private repository fetch failed; check the URL, ref, and the Git connection's access"))
+		}
+	} else if fetched, err = gitfetch.Fetch(ctx, repositoryURL, ref); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("repository fetch failed; check the URL, ref, and public access"))
 	}
 	defer fetched.Close()
@@ -259,6 +275,11 @@ func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[ap
 	bundle, err := recipe.Freeze(ctx, sourceInput)
 	if err != nil {
 		return nil, workflowError(fmt.Errorf("%w: %v", workflow.ErrRecipe, err))
+	}
+	if source.GitConnectionID == "" && slices.ContainsFunc(bundle.Recipe.Stages, func(st recipe.Stage) bool { return st.Kind == "implement" }) {
+		// Implement stages deliver through a platform-pushed run branch.
+		return nil, connect.NewError(connect.CodeFailedPrecondition,
+			errors.New("implement stages push a run branch; select a Git connection with write access on the project source"))
 	}
 	if err := s.preflightFrozenRun(ctx, caller.OrganizationID, req.Msg.ProjectId, repositoryURL, bundle); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("run recipe, model access, worker image, or AX egress is not ready"))
@@ -290,6 +311,10 @@ func (s *workflowService) GetLaunchAvailability(ctx context.Context, req *connec
 		response.Reason = "Add a Git source before launching a run."
 	} else if err != nil {
 		return nil, workflowError(err)
+	} else if source, _ := s.store.GetProjectSource(ctx, caller.OrganizationID, req.Msg.ProjectId); source.GitConnectionID != "" &&
+		errors.Is(access.PreflightGitRead(ctx, s.dispatcher.DB, caller.OrganizationID, req.Msg.ProjectId,
+			source.GitConnectionID, source.RepositoryURL), access.ErrDenied) {
+		response.Reason = "The private Git source has no granted Git connection. Ask an owner or admin to select one on the project source."
 	} else if _, err := s.store.GetProjectVerification(ctx, caller.OrganizationID, req.Msg.ProjectId); errors.Is(err, workflow.ErrNotFound) {
 		response.Reason = "Set project verification checks before launching a run."
 	} else if err != nil {
@@ -385,7 +410,8 @@ func (s *workflowService) ListRunTasks(ctx context.Context, req *connect.Request
 	for _, task := range tasks {
 		item := &api.RunTask{Id: task.ID, Key: task.Key, State: task.State, Generation: task.Generation,
 			MaxAttempts: task.MaxAttempts, DependsOn: task.DependsOn, Harness: task.Harness,
-			Model: task.Model, Effort: task.Effort}
+			Model: task.Model, Effort: task.Effort, Kind: task.Kind, LoopWith: task.LoopWith,
+			MaxCycles: task.MaxCycles, LoopCycles: task.LoopCycles}
 		if task.ActiveAttemptID != nil {
 			item.ActiveAttemptId = *task.ActiveAttemptID
 		}
@@ -458,7 +484,7 @@ func (s *workflowService) EventsAfter(ctx context.Context, req *connect.Request[
 	response := &api.EventsAfterResponse{NextAfterId: req.Msg.AfterId}
 	for _, event := range events {
 		message := &api.WorkflowEvent{Id: event.ID, RunId: event.RunID, Kind: event.Kind,
-			OccurredAt: event.OccurredAt.UTC().Format(time.RFC3339Nano)}
+			OccurredAt: event.OccurredAt.UTC().Format(time.RFC3339Nano), PayloadJson: event.PayloadJSON}
 		if event.TaskID != nil {
 			message.TaskId = *event.TaskID
 		}
@@ -552,7 +578,7 @@ func projectMessage(project workflow.Project) *api.Project {
 
 func projectSourceMessage(source workflow.ProjectSource) *api.ProjectSource {
 	return &api.ProjectSource{ProjectId: source.ProjectID, RepositoryUrl: source.RepositoryURL,
-		Ref: source.Ref, UpdatedAt: source.UpdatedAt.UTC().Format(time.RFC3339Nano)}
+		Ref: source.Ref, UpdatedAt: source.UpdatedAt.UTC().Format(time.RFC3339Nano), GitConnectionId: source.GitConnectionID}
 }
 
 func runMessage(run workflow.Run) *api.Run {
@@ -644,8 +670,12 @@ func workflowError(err error) error {
 		return connect.NewError(connect.CodePermissionDenied, errors.New("project model access denied"))
 	case errors.Is(err, workflow.ErrFenced):
 		return connect.NewError(connect.CodeUnauthenticated, errors.New("session changed during launch"))
+	case errors.Is(err, workflow.ErrGitConnection):
+		return connect.NewError(connect.CodeFailedPrecondition, errors.New("the private Git source has no granted Git connection"))
 	case errors.Is(err, workflow.ErrSourceRoute):
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("repository host has no verified public route"))
+	case errors.Is(err, workflow.ErrAttemptControlDenied):
+		return connect.NewError(connect.CodePermissionDenied, errors.New("attempt control denied"))
 	case errors.Is(err, workflow.ErrReviewDenied):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("human review denied"))
 	default:

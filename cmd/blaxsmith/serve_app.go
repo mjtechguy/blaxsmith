@@ -25,6 +25,8 @@ import (
 	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/interact"
+	"github.com/mjtechguy/blaxsmith/internal/terminal"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -118,7 +120,17 @@ func serveAppContext(ctx context.Context, args []string) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	handler, product, err := newAppHandler(startupCtx, pool, manager, config.origin, config.staticDir, activity, config.dispatchConfig)
+	interactions, err := interact.New(pool)
+	if err != nil {
+		return err
+	}
+	// ponytail: the guest router connection lives for the process.
+	guests, err := appGuestRouter()
+	if err != nil {
+		return err
+	}
+	handler, product, err := newAppHandler(startupCtx, pool, manager, config.origin, config.staticDir, activity,
+		config.dispatchConfig, interactions, guests)
 	if err != nil {
 		return err
 	}
@@ -168,17 +180,23 @@ func serveAppContext(ctx context.Context, args []string) error {
 	if product != nil {
 		go func() {
 			defer close(dispatchDone)
-			runDispatchCoordinator(serveCtx, pool, product.Dispatcher)
+			runDispatchCoordinator(serveCtx, pool, product)
 		}()
 	} else {
 		close(dispatchDone)
 	}
+	interactionDone := make(chan struct{})
+	go func() {
+		defer close(interactionDone)
+		runInteractionCoordinator(serveCtx, pool, interactionStore(pool), interactionWatcher(interactions, guests))
+	}()
 	fmt.Fprintf(os.Stderr, "Blaxsmith HTTPS API on %s\n", listener.Addr())
 	err = server.ServeTLS(listener, "", "")
 	stopServing()
 	shutdownErr := <-shutdownDone
 	<-pruneDone
 	<-dispatchDone
+	<-interactionDone
 	if errors.Is(err, http.ErrServerClosed) {
 		return shutdownErr
 	}
@@ -244,7 +262,8 @@ func validateDatabaseTransport(config *pgxpool.Config, allowLocal bool) error {
 }
 
 func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.SessionManager,
-	origin, staticDir string, activity *activityHub, dispatchConfig dispatchConfig) (http.Handler, *productDispatch, error) {
+	origin, staticDir string, activity *activityHub, dispatchConfig dispatchConfig, interactions *interact.Store,
+	guests *terminal.Router) (http.Handler, *productDispatch, error) {
 	authPath, authHandler, err := identity.NewBrowserHandler(manager, origin)
 	if err != nil {
 		return nil, nil, err
@@ -263,14 +282,20 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	}
 	var product *productDispatch
 	if dispatchConfig.axServer != "" {
-		product, err = newProductDispatch(ctx, dispatchConfig, pool, store, secrets)
+		product, err = newProductDispatch(ctx, dispatchConfig, pool, store, secrets, guests)
 		if err != nil {
 			return nil, nil, fmt.Errorf("initialize run dispatcher: %w", err)
 		}
+		if interactions != nil {
+			product.Escalations = escalationSink{interactions}
+			interactions.OnEscalationAnswer(escalationAnswer(store))
+		}
 	}
+	terminals := terminal.NewHub()
 	mux := http.NewServeMux()
 	mux.Handle("/api"+authPath, http.StripPrefix("/api", authHandler))
-	service := &workflowService{guard: guard, store: store, secrets: secrets}
+	service := &workflowService{guard: guard, store: store, secrets: secrets, interactions: interactions,
+		guests: guests, terminals: terminals}
 	if product != nil {
 		service.dispatcher = product.Dispatcher
 		service.dispatchReady = product.Preflight
@@ -279,6 +304,7 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	workflowPath, workflowHandler := apiv1connect.NewWorkflowServiceHandler(service, connect.WithReadMaxBytes(1<<20))
 	mux.Handle("/api"+workflowPath, http.StripPrefix("/api", guard.Wrap(workflowHandler)))
 	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity}))
+	mux.Handle("/api/terminal/attempts/{attemptID}", guard.Wrap(newTerminalHandler(guard, origin, store, guests, terminals)))
 	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(&catalogService{client: &http.Client{Timeout: 30 * time.Second}})
 	mux.Handle("/api"+catalogPath, http.StripPrefix("/api", catalogHandler))
 	mux.HandleFunc("/api", http.NotFound)
