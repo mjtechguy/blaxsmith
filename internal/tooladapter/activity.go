@@ -617,7 +617,7 @@ func bound(s string, limit int) (string, bool) {
 
 // redactText hides the leased provider keys, like the terminal redactor.
 func redactText(s string) string {
-	for _, name := range []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY"} {
+	for _, name := range []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY"} {
 		if key := os.Getenv(name); len(key) >= 8 {
 			s = strings.ReplaceAll(s, key, "[redacted]")
 		}
