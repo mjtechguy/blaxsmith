@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mjtechguy/blaxsmith/internal/extension"
 	"github.com/mjtechguy/blaxsmith/internal/limit"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 )
@@ -47,17 +48,28 @@ type Runtime struct {
 type ModelEffort struct{ Model, Effort string }
 
 type Invocation struct {
-	runtime        Runtime
-	args           []string
-	resume         []string // native resume flags; Run adds scoped paths, pane adds the session id
-	base           string   // frozen commit; the pane squashes stage changes onto it
-	skills         []string
-	skillNames     []string
-	skillArtifacts []ArtifactDigest
-	model          string        // explicit provider/model, pinned in OpenCode's config too
-	timeout        time.Duration // idle timeout
-	maxRuntime     time.Duration // total cap; zero is unlimited
-	maxOutputBytes int
+	runtime         Runtime
+	args            []string
+	resume          []string // native resume flags; Run adds scoped paths, pane adds the session id
+	base            string   // frozen commit; the pane squashes stage changes onto it
+	skills          []string
+	skillNames      []string
+	skillArtifacts  []ArtifactDigest
+	model           string        // explicit provider/model, pinned in OpenCode's config too
+	timeout         time.Duration // idle timeout
+	maxRuntime      time.Duration // total cap; zero is unlimited
+	maxOutputBytes  int
+	extension       *ExtensionMount // embedded extension stage; nil otherwise
+	extensionSource string          // pinned extension checkout
+}
+
+// withExtension binds an embedded extension stage to its pinned checkout and
+// adds the AskUserQuestion to bx ask mapping to the instruction block.
+func (in Invocation) withExtension(m *ExtensionMount, source string) Invocation {
+	in.extension, in.extensionSource = m, source
+	in.args = append([]string(nil), in.args...)
+	in.args[len(in.args)-1] += extensionInstructions
+	return in
 }
 
 func (in Invocation) Image() string { return in.runtime.Image }
@@ -197,7 +209,20 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 			return nil, err
 		}
 	}
+	var extensionRoots map[string]string
+	var extensionMCP string
+	if in.extension != nil {
+		if in.runtime.Harness != "claude-code" || in.extensionSource == "" {
+			return nil, fmt.Errorf("%w: embedded extension stages run only on Claude Code", ErrBlocked)
+		}
+		if extensionRoots, extensionMCP, err = materializeExtension(in.extensionSource, home, in.extension); err != nil {
+			return nil, err
+		}
+	}
 	env := []string{"HOME=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, ".config"), "PATH=/usr/local/bin:/usr/bin:/bin", "DISABLE_UPDATES=1"}
+	if in.extension != nil {
+		env = append(env, extensionEnv()...)
+	}
 	toolEnv := append([]string(nil), env...)
 	seen := map[string]bool{}
 	for _, entry := range credentialEnv {
@@ -240,6 +265,9 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 	resume := append([]string(nil), in.resume...)
 	switch in.runtime.Harness {
 	case "claude-code":
+		if in.extension != nil {
+			args, resume = extensionArgs(args, resume, extensionRoots, extensionMCP, in.extension)
+		}
 		if claudeSkillDir != "" {
 			args = append(append(append([]string(nil), args[:len(args)-2]...), "--add-dir", claudeSkillDir), args[len(args)-2:]...)
 			resume = append(resume, "--add-dir", claudeSkillDir)
@@ -250,8 +278,12 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 		dir, _ := json.Marshal(workdir)
 		resume = append(resume, "--config", fmt.Sprintf("projects={%s={trust_level=%q}}", dir, "trusted"))
 	}
+	var signals []extension.Signal
+	if in.extension != nil {
+		signals = in.extension.Signals
+	}
 	return runInPane(runCtx, in, workdir, append(toolEnv, "BLAXSMITH_STATE_DIR="+StateDir()), launch{
-		Harness: in.runtime.Harness, Dir: workdir, Base: in.base, Tmux: tmuxBinary,
+		Harness: in.runtime.Harness, Dir: workdir, Base: in.base, Tmux: tmuxBinary, Signals: signals,
 		Run:    append([]string{in.runtime.Binary}, args...),
 		Resume: append([]string{in.runtime.Binary}, resume...),
 	})

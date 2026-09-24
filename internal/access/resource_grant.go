@@ -13,6 +13,7 @@ import (
 const (
 	ResourceConnection = "connection"
 	ResourceRecipe     = "recipe"
+	ResourceExtension  = "extension"
 )
 
 var ErrResourceGrantInvalid = errors.New("invalid resource grant")
@@ -20,7 +21,7 @@ var ErrResourceGrantInvalid = errors.New("invalid resource grant")
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 func validResource(kind, id string) bool {
-	return (kind == ResourceConnection || kind == ResourceRecipe) && id != "" && len(id) <= 200
+	return (kind == ResourceConnection || kind == ResourceRecipe || kind == ResourceExtension) && id != "" && len(id) <= 200
 }
 
 // CanUse reports whether principal may use one organization-level resource,
@@ -42,7 +43,8 @@ func validResource(kind, id string) bool {
 // membership rows are locked FOR SHARE, so a concurrent revocation or role
 // change waits for tx to finish rather than racing the use it authorizes.
 // Unknown kinds and malformed IDs deny (false, nil). resourceKind is
-// ResourceConnection ("connection") or ResourceRecipe ("recipe").
+// ResourceConnection ("connection"), ResourceRecipe ("recipe"), or
+// ResourceExtension ("extension").
 func CanUse(ctx context.Context, tx pgx.Tx, principal identity.Caller, projectID, resourceKind, resourceID string) (bool, error) {
 	_, ok, err := MatchingGrant(ctx, tx, principal, projectID, resourceKind, resourceID)
 	return ok, err

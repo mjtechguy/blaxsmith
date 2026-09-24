@@ -845,6 +845,7 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	interactionID, interactionAttempt := testInteractionBrowserAPI(t, ctx, pool, client, origin, csrf, owner)
 	testAdminBrowserAPI(t, ctx, client, origin, csrf, true)
 	testWorkspaceBrowserAPI(t, ctx, client, origin, true)
+	testExtensionBrowserAPI(t, ctx, client, origin, csrf, true)
 	testUsersBrowserAPI(t, ctx, client, origin, csrf, owner.PrincipalID, true)
 	if _, err := pool.Exec(ctx, `UPDATE identity_memberships SET role='viewer'
 		WHERE organization_id=$1 AND principal_id=$2`, owner.OrganizationID, owner.PrincipalID); err != nil {
@@ -859,6 +860,7 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	}
 	testAdminBrowserAPI(t, ctx, client, origin, csrf, false)
 	testWorkspaceBrowserAPI(t, ctx, client, origin, false)
+	testExtensionBrowserAPI(t, ctx, client, origin, csrf, false)
 	testUsersBrowserAPI(t, ctx, client, origin, csrf, owner.PrincipalID, false)
 	viewerCreate := connect.NewRequest(&api.CreateProjectRequest{Slug: "viewer-denied", Name: "Denied"})
 	viewerCreate.Header().Set("Origin", origin)

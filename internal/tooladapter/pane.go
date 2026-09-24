@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/mjtechguy/blaxsmith/internal/extension"
 )
 
 var (
@@ -47,6 +49,8 @@ type launch struct {
 	Tmux    string   `json:"tmux"`
 	Run     []string `json:"run"`
 	Resume  []string `json:"resume"` // session id is appended
+	// Signals map an embedded extension's MCP tool calls to bx events.
+	Signals []extension.Signal `json:"signals,omitempty"`
 }
 
 func readLaunch() (launch, error) {
@@ -165,6 +169,9 @@ func Pane(args []string) int {
 					_, _ = events.Write(line)
 					text, id, final := renderEvent(line)
 					work.Observe(bytes.TrimSpace(line))
+					for _, event := range signalEvents(bytes.TrimSpace(line), l.Signals) {
+						_ = appendRecord("log", "event", event)
+					}
 					if id != "" && session == "" {
 						session = id
 						_ = writeAtomic(statePath("session-id"), []byte(id+"\n"), 0600)

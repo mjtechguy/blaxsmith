@@ -13,6 +13,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/mjtechguy/blaxsmith/internal/extension"
 )
 
 const Schema = "blaxsmith.recipe/v1alpha1"
@@ -41,6 +43,10 @@ type Stage struct {
 	DependsOn []string `json:"depends_on,omitempty"`
 	Prompt    string   `json:"prompt,omitempty"`
 	Loop      *Loop    `json:"loop,omitempty"`
+	// Template names an installed extension stage template,
+	// "extension@version/template" (docs/extensions-and-runtimes.md). Freeze
+	// resolves it to one installed version and records its digests.
+	Template string `json:"template,omitempty"`
 }
 
 // Loop reruns a review/verify stage after a correction attempt on With until
@@ -180,11 +186,14 @@ func (r Recipe) validate() ([]string, error) {
 				return nil, fieldErr(field, "stage %q requires a known profile and prompt file", s.ID)
 			}
 		case "human_review":
-			if s.Profile != "" || s.Prompt != "" {
+			if s.Profile != "" || s.Prompt != "" || s.Template != "" {
 				return nil, fieldErr(at, "human review %q cannot have an agent profile or prompt", s.ID)
 			}
 		default:
 			return nil, fieldErr(at+".kind", "stage %q has unsupported kind %q", s.ID, s.Kind)
+		}
+		if _, _, _, ok := extension.ParseTemplateRef(s.Template); s.Template != "" && !ok {
+			return nil, fieldErr(at+".template", "stage %q template must be extension@version/template", s.ID)
 		}
 		if s.Loop != nil && (s.Kind != "review" && s.Kind != "verify" || s.Loop.Until != "pass" ||
 			s.Loop.MaxCycles < 1 || s.Loop.MaxCycles > 10) {

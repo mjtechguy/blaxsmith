@@ -47,6 +47,8 @@ type Request struct {
 	// MaxRuntimeSeconds caps total stage time; 0 is unlimited.
 	MaxRuntimeSeconds int `json:"max_runtime_seconds,omitempty"`
 	MaxOutputBytes    int `json:"max_output_bytes"`
+	// Extension is set for an embedded extension stage template.
+	Extension *ExtensionMount `json:"extension,omitempty"`
 }
 
 // ArtifactDigest binds prompt context to regular files in the pinned checkout.
@@ -80,6 +82,11 @@ func Command(request Request) ([]string, error) {
 	}
 	if _, err := credentialProvider(request.Profile); err != nil {
 		return nil, err
+	}
+	if request.Extension != nil {
+		if err := request.Extension.validate(request.Profile.Harness); err != nil {
+			return nil, err
+		}
 	}
 	body, err := json.Marshal(request)
 	if err != nil || len(body) > maxTaskArg {
@@ -147,6 +154,20 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 		return nil, err
 	}
 	in.skillArtifacts = selectedSkillArtifacts(profile.Skills, request.FrozenArtifacts)
+	if request.Extension != nil {
+		// The extension checkout lives outside the workspace so it is never
+		// ambient project configuration; only its copied plugins are used.
+		source, err := os.MkdirTemp("", "blaxsmith-ext-")
+		if err != nil {
+			return nil, err
+		}
+		defer os.RemoveAll(source)
+		ext := request.Extension
+		if checkout == nil || checkout(ctx, ext.RepositoryURL, ext.Commit, ext.Commit, source) != nil {
+			return nil, fmt.Errorf("%w: pinned extension checkout failed", ErrBlocked)
+		}
+		in = in.withExtension(ext, source)
+	}
 	in.base = request.SourceCommit
 	in.maxRuntime = time.Duration(request.MaxRuntimeSeconds) * time.Second
 	variable := CredentialEnv(provider) + "="

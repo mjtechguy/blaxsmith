@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build one credential-free AX runner + pinned CLI image on native Linux/amd64.
 set -euo pipefail
-test "$#" -ge 2 && test "$#" -le 5 || {
-  echo 'usage: build.sh VERIFIED_AX_BUILD NEW_OUTPUT_DIRECTORY [--check|--buildah] [--git-ca PEM]' >&2
+test "$#" -ge 2 && test "$#" -le 7 || {
+  echo 'usage: build.sh VERIFIED_AX_BUILD NEW_OUTPUT_DIRECTORY [--check|--buildah] [--git-ca PEM] [--variant NAME]' >&2
   exit 2
 }
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -10,6 +10,7 @@ ax_build=$(cd "$1" && pwd)
 output=$2
 mode=
 git_ca=
+variant=
 shift 2
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -20,6 +21,11 @@ while [ "$#" -gt 0 ]; do
     --git-ca)
       test -z "$git_ca" && test "$#" -ge 2 || { echo '--git-ca requires one PEM path' >&2; exit 2; }
       git_ca=$2
+      shift
+      ;;
+    --variant)
+      test -z "$variant" && test "$#" -ge 2 || { echo '--variant requires one name' >&2; exit 2; }
+      variant=$2
       shift
       ;;
     *) echo "unknown build option: $1" >&2; exit 2 ;;
@@ -35,6 +41,11 @@ try:
 except (OSError, ssl.SSLError) as exc:
     sys.exit(f'invalid Git CA PEM: {exc}')
 PY
+fi
+if [ -n "$variant" ]; then
+  # A variant layers extension runtimes (deploy/tool-worker/<name>.Dockerfile)
+  # onto the worker image; its pins must match the extension's declaration.
+  python3 "$root/deploy/tool-worker/check-variant.py" "$variant"
 fi
 test ! -e "$output" || { echo 'output directory already exists' >&2; exit 2; }
 test -z "$(git -C "$root" status --porcelain)" || {
@@ -90,26 +101,40 @@ if [ -n "$git_ca" ]; then cp "$git_ca" "$output/bin/blaxsmith-git-ca.pem"; else 
     -o "$output/bin/blaxsmith-tool-worker" ./cmd/blaxsmith-tool-worker
 )
 chmod 0755 "$output/bin/"*
-fingerprint=$(python3 - "$root" "$output" <<'PY'
+fingerprint=$(python3 - "$root" "$output" "$variant" <<'PY'
 import hashlib, pathlib, sys
-root, output = map(pathlib.Path, sys.argv[1:])
+root, output = map(pathlib.Path, sys.argv[1:3])
+variant = sys.argv[3]
 h = hashlib.sha256()
+extra = [root / f'deploy/tool-worker/{variant}.Dockerfile', root / f'deploy/tool-worker/{variant}-runtimes.json'] if variant else []
 for path in [root / 'deploy/runtime-proof/package-lock.json', root / 'deploy/runtime-proof/Dockerfile',
              root / 'deploy/tool-worker/Dockerfile', root / 'deploy/tool-worker/manifest.mjs',
+             root / 'deploy/tool-worker/runtimes.mjs', *extra,
              *sorted((output / 'bin').iterdir())]:
     h.update(path.name.encode() + b'\0' + path.read_bytes())
 print(h.hexdigest()[:16])
 PY
 )
 runtime_image="blaxsmith-runtime-proof:${fingerprint}"
-worker_image="blaxsmith-tool-worker:proof-${fingerprint}"
+base_image="blaxsmith-tool-worker:proof-${fingerprint}"
+worker_image=$base_image
+worker_metadata=worker-build.json
+if [ -n "$variant" ]; then
+  worker_image="blaxsmith-tool-worker:proof-${fingerprint}-${variant}"
+  worker_metadata=base-worker-build.json
+fi
 if [ "$mode" = --buildah ]; then
   buildah bud --format oci --arch amd64 --network host \
     -t "$runtime_image" -f "$root/deploy/runtime-proof/Dockerfile" "$root"
   buildah bud --format oci --arch amd64 --network host \
     --build-arg "RUNTIME_PROOF_IMAGE=localhost/$runtime_image" \
     --build-context "binaries=$output/bin" \
-    -t "$worker_image" -f "$root/deploy/tool-worker/Dockerfile" "$root"
+    -t "$base_image" -f "$root/deploy/tool-worker/Dockerfile" "$root"
+  if [ -n "$variant" ]; then
+    buildah bud --format oci --arch amd64 --network host \
+      --build-arg "TOOL_WORKER_IMAGE=localhost/$base_image" \
+      -t "$worker_image" -f "$root/deploy/tool-worker/$variant.Dockerfile" "$root"
+  fi
   buildah_container=$(buildah from "$worker_image")
   trap 'if [ -n "${buildah_container:-}" ]; then buildah rm "$buildah_container" >/dev/null; fi' EXIT
   buildah run --network none "$buildah_container" -- node /opt/blaxsmith/manifest.mjs > "$output/cli-manifest.json"
@@ -129,19 +154,24 @@ PY
 else
   docker buildx build --platform linux/amd64 --load --metadata-file "$output/runtime-build.json" \
     -t "$runtime_image" -f "$root/deploy/runtime-proof/Dockerfile" "$root"
-  docker buildx build --platform linux/amd64 --load --metadata-file "$output/worker-build.json" \
+  docker buildx build --platform linux/amd64 --load --metadata-file "$output/$worker_metadata" \
     --build-arg "RUNTIME_PROOF_IMAGE=$runtime_image" \
     --build-context "binaries=$output/bin" \
-    -t "$worker_image" -f "$root/deploy/tool-worker/Dockerfile" "$root"
+    -t "$base_image" -f "$root/deploy/tool-worker/Dockerfile" "$root"
+  if [ -n "$variant" ]; then
+    docker buildx build --platform linux/amd64 --load --metadata-file "$output/worker-build.json" \
+      --build-arg "TOOL_WORKER_IMAGE=$base_image" \
+      -t "$worker_image" -f "$root/deploy/tool-worker/$variant.Dockerfile" "$root"
+  fi
   docker run --rm --network none --platform linux/amd64 --entrypoint node "$worker_image" \
     /opt/blaxsmith/manifest.mjs > "$output/cli-manifest.json"
   docker image inspect --format '{{.Id}}' "$runtime_image" > "$output/runtime-image-id.txt"
   docker image inspect --format '{{.Id}}' "$worker_image" > "$output/worker-image-id.txt"
 fi
-python3 - "$root" "$ax_build" "$output" "$worker_image" <<'PY'
+python3 - "$root" "$ax_build" "$output" "$worker_image" "$variant" <<'PY'
 import hashlib, json, pathlib, subprocess, sys
 root, ax, output = map(pathlib.Path, sys.argv[1:4])
-tag = sys.argv[4]
+tag, variant = sys.argv[4:6]
 read = lambda name: json.loads((output / name).read_text())
 manifest, metadata = read('cli-manifest.json'), read('worker-build.json')
 digest = metadata.get('containerimage.digest') or metadata.get('containerimage.descriptor', {}).get('digest')
@@ -150,6 +180,14 @@ if not isinstance(digest, str) or not digest.startswith('sha256:') or len(digest
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 if manifest['ax_runner_sha256'] != sha(ax / 'ax-task-runner') or len(manifest['tools']) != 3:
     sys.exit('image contents differ from verified AX build or CLI set')
+if variant:
+    pins = json.loads((root / f'deploy/tool-worker/{variant}-runtimes.json').read_text())
+    layers = {l['id']: l['version'] for l in manifest.get('runtimes', {}).get('layers', [])}
+    if manifest.get('runtimes', {}).get('variant') != variant or set(layers) != set(pins['runtimes']) or any(
+            not layers[k].startswith(v['version']) for k, v in pins['runtimes'].items()):
+        sys.exit(f'image runtimes differ from the {variant} variant pins')
+elif 'runtimes' in manifest:
+    sys.exit('base image unexpectedly carries variant runtimes')
 proof = {
     'schema': 'blaxsmith.tool-worker-build/v1alpha1',
     'source_commit': subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(),
@@ -158,6 +196,7 @@ proof = {
     'git_ca_sha256': sha(output / 'bin/blaxsmith-git-ca.pem') if (output / 'bin/blaxsmith-git-ca.pem').stat().st_size else None,
     'runtime_image_id': (output / 'runtime-image-id.txt').read_text().strip(),
     'worker_image_id': (output / 'worker-image-id.txt').read_text().strip(),
+    'variant': variant or None,
     'local_tag': tag,
     'local_manifest_digest': digest,
     'cli_manifest': manifest,

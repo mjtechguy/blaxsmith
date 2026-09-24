@@ -180,6 +180,26 @@ hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "demo", kind: "a
 hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "demo", kind: "git", provider: "github", account: "blaxsmith-bot" });
 hubAdd({ scope: "personal", ownerId: principalId, ownerName: "you", kind: "subscription", provider: "codex", account: "acct-7f3c2e", state: "reconnect_required", modelCount: 3,
   health: { state: "error", auth: "unauthenticated", reason: "needs_sign_in", message: "The saved sign-in stopped working; sign in again.", checkedAt: minutesAgo(60 * 26), harness: "codex" } });
+const guildManifest = readFileSync(new URL("../../examples/extensions/guild/blaxsmith-extension.json", import.meta.url), "utf8");
+const extensions = [];
+const extensionSummary = (e) => { const v = e.versions.find((x) => x.id === e.current); return { id: e.id, key: e.key, repositoryUrl: e.repositoryUrl, gitRef: e.gitRef,
+  currentVersionId: v?.id || "", currentVersion: v?.version || "", currentCommit: v?.commit || "", latestRefCommit: e.latestRefCommit || "", updateAvailable: Boolean(v && e.latestRefCommit && e.latestRefCommit !== v.commit),
+  versionCount: e.versions.length, latestCheckedAt: e.checkedAt || "", createdAt: e.createdAt, updatedAt: now() }; };
+function extensionPreview(source) {
+  let m;
+  try { m = JSON.parse(source.overlayManifestJson || guildManifest); } catch (e) { return { errors: [{ path: "$", message: String(e.message) }], permissions: [], templates: [] }; }
+  const permissions = [
+    ...(m.native_subagents ? [{ id: "subagents", kind: "subagents", description: "Embedded templates may use the harness's own subagents", optional: false }] : []),
+    ...(m.mcp_servers || []).map((x) => ({ id: `mcp:${x.id}`, kind: "mcp", description: `MCP server ${x.id}: ${x.purpose || ""}`, optional: Boolean(x.optional) })),
+    ...(m.hooks || []).map((x) => ({ id: `hook:${x.id}`, kind: "hook", description: `${x.event} hook: ${x.purpose || ""}`, optional: Boolean(x.optional) })),
+    ...(m.egress || []).map((x) => ({ id: `egress:${x.host}`, kind: "egress", description: `Sandbox egress to ${x.host}:${x.port}: ${x.purpose || ""}`, optional: false })),
+    ...(m.runtimes || []).map((x) => ({ id: `runtime:${x.id}`, kind: "runtime", description: `Runner runtime layer ${x.id} ${x.version}`, optional: false })),
+  ];
+  const templates = (m.stage_templates || []).map((t) => ({ id: t.id, title: t.title, mode: t.mode, harness: t.harness, kinds: t.kinds, reference: `${m.id}@${m.version}/${t.id}` }));
+  return { commit: "5f14799".padEnd(40, "0"), extensionKey: m.id, version: m.version, manifestJson: JSON.stringify(m, null, 2), manifestSha256: "d".repeat(64), permissions, templates, errors: [],
+    existingExtensionId: extensions.find((x) => x.key === m.id)?.id || "" };
+}
+
 const rpc = {
   GetCsrf: () => ({ token: "A".repeat(43) }),
   CurrentSession: () => ({ session: { organizationId: "org-demo", principalId, role: "owner", accessExpiresAt: new Date(Date.now() + 3_600_000).toISOString() } }),
@@ -248,6 +268,26 @@ const rpc = {
   CloneRecipe: ({ sourceVersionId, projectId: project = "", name, description = "" }) => { const v = recipes.flatMap((r) => r.versions).find((x) => x.id === sourceVersionId); return rpc.CreateRecipe({ projectId: project, name, description, recipeJson: v.recipeJson, frozenPath: v.frozenPath }); },
   GrantRecipe: ({ recipeId, projectId: pid = "", granteeKind, granteeId = "" }) => { const r = recipes.find((x) => x.id === recipeId); if (!r || r.projectId) return connectError(400, "invalid_argument", "invalid workflow request"); const grant = { id: `rgrant-${Date.now()}`, projectId: pid, projectName: pid ? "Demo project" : "", granteeKind, granteeId, granteeName: granteeKind === "user" ? "teammate" : "", createdAt: now() }; (r.grants ||= []).push(grant); return { grant }; },
   RevokeRecipeGrant: ({ grantId }) => { for (const r of recipes) r.grants = (r.grants || []).filter((g) => g.id !== grantId); return {}; },
+  // ExtensionService: previews derive permissions from the example Guild
+  // manifest (or an overlay); the real server validates against the Git tree.
+  ListExtensions: () => ({ extensions: extensions.map(extensionSummary) }),
+  GetExtension: ({ extensionId }) => { const e = extensions.find((x) => x.id === extensionId); return e ? { extension: extensionSummary(e), versions: [...e.versions].reverse(), grants: e.grants } : connectError(404, "not_found", "workflow resource not found"); },
+  PreviewExtensionInstall: ({ source = {} }) => extensionPreview(source),
+  InstallExtension: ({ source = {}, expectedCommit, approvedPermissions = [] }) => {
+    const p = extensionPreview(source);
+    if (p.errors.length) return { errors: p.errors };
+    if (p.commit !== expectedCommit) return connectError(400, "failed_precondition", "the ref moved since the preview; preview again");
+    let e = extensions.find((x) => x.key === p.extensionKey);
+    if (!e) { e = { id: `ext-${extensions.length + 1}`, key: p.extensionKey, repositoryUrl: source.repositoryUrl, gitRef: source.gitRef, createdAt: now(), versions: [], grants: [] }; extensions.push(e); }
+    const version = { id: `extv-${Date.now()}`, extensionId: e.id, version: p.version, repositoryUrl: source.repositoryUrl, gitRef: source.gitRef, commit: p.commit, manifestJson: p.manifestJson,
+      manifestSha256: p.manifestSha256, manifestOrigin: source.overlayManifestJson ? "overlay" : "repository", manifestPath: source.overlayManifestJson ? "" : source.manifestPath || "blaxsmith-extension.json",
+      approvedPermissions: [...approvedPermissions].sort(), permissionsSha256: "c".repeat(64), installedByUsername: "you", createdAt: now(), permissions: p.permissions, templates: p.templates };
+    e.versions.push(version); e.current = version.id; e.latestRefCommit = p.commit; auditEvent("workflow.extension.installed", version.id);
+    return { extension: extensionSummary(e), version };
+  },
+  CheckExtensionUpdate: ({ extensionId }) => { const e = extensions.find((x) => x.id === extensionId); e.latestRefCommit = "9".repeat(40); e.checkedAt = now(); return { extension: extensionSummary(e) }; },
+  GrantExtension: ({ extensionId, projectId: pid = "", granteeKind, granteeId = "" }) => { const grant = { id: `egrant-${Date.now()}`, projectId: pid, projectName: pid ? "Demo project" : "", granteeKind, granteeId, createdAt: now() }; extensions.find((x) => x.id === extensionId)?.grants.push(grant); return { grant }; },
+  RevokeExtensionGrant: ({ grantId }) => { for (const e of extensions) e.grants = e.grants.filter((g) => g.id !== grantId); return {}; },
   GetRecipeEditorOptions: () => ({
     harnesses: [{ harness: "claude-code", provider: "anthropic", efforts: ["low", "medium", "high", "xhigh", "max"] }, { harness: "codex", provider: "openai", efforts: ["minimal", "low", "medium", "high", "xhigh"] }, { harness: "opencode", provider: "", efforts: ["provider-default", "low", "medium", "high"] }],
     stageKinds: ["plan", "interview", "research", "implement", "review", "verify", "integrate", "ui_review", "documentation", "architect_review", "human_review"],

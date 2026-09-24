@@ -1,0 +1,93 @@
+{
+  "$schema": "https://github.com/mjtechguy/blaxsmith/docs/extension-manifest.schema.json",
+  "schema_version": "blaxsmith.extension/v1alpha1",
+  "id": "guild",
+  "version": "1.0.0",
+  "publisher": {"name": "AlphaBravo", "url": "https://github.com/alphabravo-oss/guild"},
+  "description": "Forge (specification interview) and Foundry (build-verify-fix loop) from the Guild Claude Code plugins, each run embedded in one stage.",
+  "harnesses": [
+    {"harness": "claude-code", "min_version": "2.1.229", "capabilities": ["plugins", "skills", "mcp", "subagents", "native_questions", "structured_protocol"]}
+  ],
+  "runtimes": [
+    {"id": "uv", "version": "0.12.18"},
+    {"id": "python", "version": "3.12"},
+    {"id": "serena", "version": "1.7.0"}
+  ],
+  "egress": [
+    {"host": "pypi.org", "port": 443, "purpose": "uv resolves foundry-mcp and serena-agent dependencies"},
+    {"host": "files.pythonhosted.org", "port": 443, "purpose": "Python package downloads for foundry-mcp and Serena"},
+    {"host": "github.com", "port": 443, "purpose": "Pinned extension checkout and Serena language-server downloads"},
+    {"host": "objects.githubusercontent.com", "port": 443, "purpose": "Serena language-server release assets"},
+    {"host": "registry.npmjs.org", "port": 443, "purpose": "Serena installs npm-based language servers on demand"}
+  ],
+  "native_subagents": true,
+  "plugins": [
+    {"id": "forge", "path": "plugins/forge"},
+    {"id": "foundry", "path": "plugins/foundry"}
+  ],
+  "stage_templates": [
+    {
+      "id": "forge-plan",
+      "title": "Forge specification interview",
+      "mode": "embedded",
+      "harness": "claude-code",
+      "kinds": ["plan", "interview"],
+      "plugins": ["forge"],
+      "entrypoint": "/forge:plan",
+      "interactions": ["forge-interview-round", "forge-mode-confirm"],
+      "prompt": "You are running Guild Forge embedded in a Blaxsmith stage. Read {{plugin_root:forge}}/commands/plan.md and follow it exactly as the /forge:plan command, with the feature name and flags given in the stage prompt. Its bundled agents are installed. Every interview question goes through `bx ask` (kind interview_round for rounds, approval for the mode confirmation). Write the final spec where the command says, then give its path and requirement IDs in your final message."
+    },
+    {
+      "id": "foundry-build",
+      "title": "Foundry build-verify-fix loop",
+      "mode": "embedded",
+      "harness": "claude-code",
+      "kinds": ["implement"],
+      "plugins": ["foundry"],
+      "entrypoint": "/foundry:start",
+      "mcp_servers": ["foundry", "serena"],
+      "hooks": ["foundry-serena"],
+      "interactions": ["foundry-escalation"],
+      "signals": [
+        {"plugin": "foundry", "server": "foundry", "tool": "Foundry-Phase", "event": "phase", "name_field": "phase"},
+        {"plugin": "foundry", "server": "foundry", "tool": "Foundry-Handoff", "event": "handoff", "name_field": "event", "text_field": "summary"}
+      ],
+      "prompt": "You are running Guild Foundry embedded in a Blaxsmith stage. Read {{plugin_root:foundry}}/commands/start.md and follow it exactly as the /foundry:start command with arguments `<SCOPE> --spec <frozen spec path> --no-ui`, using the frozen scope and specification named above. Do not run /foundry:setup or install launchd or systemd services; the sandbox already provides uv, Python 3.12, and Serena. Record every phase transition with Foundry-Phase and every handoff with Foundry-Handoff. Escalations go through `bx ask` (kind escalation). Between cycles run `bx inbox` and obey halt, pause, and set_max_cycles."
+    }
+  ],
+  "mcp_servers": [
+    {"id": "foundry", "plugin": "foundry", "server": "foundry", "transport": "stdio", "optional": false, "purpose": "Foundry state engine: phase gates, defect ledger, verification orchestration (uv run foundry-mcp)"},
+    {"id": "serena", "transport": "http", "url": "http://127.0.0.1:9121/mcp", "optional": true, "purpose": "Serena LSP tools for TRACE and FLOW_TRACE; without it those streams report NOT_VERIFIED"}
+  ],
+  "hooks": [
+    {"id": "foundry-serena", "plugin": "foundry", "event": "SessionStart", "command": "hooks/session-start-serena.sh", "optional": true, "purpose": "Starts the in-sandbox Serena daemon on 127.0.0.1:9121; never blocks the session"}
+  ],
+  "interactions": [
+    {"id": "forge-interview-round", "kind": "interview_round", "title": "Forge interview round"},
+    {"id": "forge-mode-confirm", "kind": "approval", "title": "Confirm brownfield, greenfield, or cosmetic mode"},
+    {"id": "foundry-escalation", "kind": "escalation", "title": "Foundry escalation"}
+  ],
+  "checks": [
+    {"id": "foundry-assay", "title": "Foundry assay verdict", "verdicts": ["pass", "fail"]}
+  ],
+  "ui": {
+    "phases": [
+      {"id": "start_cast", "title": "Cast (decompose)"},
+      {"id": "cast", "title": "Cast"},
+      {"id": "inspect_start", "title": "Inspect"},
+      {"id": "inspect_clean", "title": "Inspect clean"},
+      {"id": "grind_start", "title": "Grind"},
+      {"id": "assay_fail", "title": "Assay failed"},
+      {"id": "temper", "title": "Temper"},
+      {"id": "nyquist", "title": "Nyquist audit"},
+      {"id": "nyquist_done", "title": "Nyquist done"},
+      {"id": "done", "title": "Done"},
+      {"id": "halt", "title": "Halted"}
+    ],
+    "artifacts": [
+      {"glob": "foundry-archive/*/defects.md", "renderer": "markdown"},
+      {"glob": "foundry-archive/*/handoffs.md", "renderer": "markdown"},
+      {"glob": "forge-specs/*.md", "renderer": "markdown"}
+    ]
+  }
+}

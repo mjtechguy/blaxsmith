@@ -52,7 +52,12 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 		(in.RecipeVersionID != "" && (!ids(in.RecipeVersionID) || in.Caller == nil || in.Source.RecipeData == nil)) {
 		return Run{}, ErrInvalid
 	}
-	bundle, err := recipe.Freeze(ctx, in.Source)
+	// Extension templates resolve only against this organization's installed
+	// versions; the caller's grant is checked in the creation transaction.
+	extensions := s.extensionResolver(in.OrganizationID)
+	source := in.Source
+	source.ResolveExtension = extensions.Resolve
+	bundle, err := recipe.Freeze(ctx, source)
 	if err != nil {
 		return Run{}, fmt.Errorf("%w: %v", ErrRecipe, err)
 	}
@@ -174,6 +179,9 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 		(organization_id,run_id,bundle_json,verification_json,repository_url,git_ref,git_connection_id)
 		VALUES ($1,$2,$3,$4,NULLIF($5,''),CASE WHEN $5='' THEN NULL ELSE $6 END,NULLIF($7,''))`,
 		in.OrganizationID, run.ID, bundleJSON, policyJSON, in.SourceRepositoryURL, in.SourceRef, gitConnectionID); err != nil {
+		return Run{}, err
+	}
+	if err := extensions.recordRunExtensions(ctx, tx, in.Caller, in.ProjectID, run.ID, bundle.Extensions); err != nil {
 		return Run{}, err
 	}
 	stageByID := make(map[string]recipe.Stage, len(bundle.Recipe.Stages))
