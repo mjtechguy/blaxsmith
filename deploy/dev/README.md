@@ -100,7 +100,7 @@ The original smoke runner above remains a baseline comparison. Build the patched
 controller/runner using the product files, not edits to the reference checkout:
 
 ```sh
-cd /opt/blaxsmith-dev/blaxsmith
+cd /opt/blaxsmith-dev/blaxsmith-work
 bash integrations/ax/build.sh /opt/blaxsmith-dev/ax /opt/blaxsmith-dev/ax-fail-closed-build
 bash deploy/dev/publish-ax.sh /opt/blaxsmith-dev/ax-fail-closed-build
 ```
@@ -153,7 +153,7 @@ and ports that gateway cannot enforce and persists empty deny-all policies.
 Build both from exported pinned sources on this node:
 
 ```sh
-cd /opt/blaxsmith-dev/blaxsmith
+cd /opt/blaxsmith-dev/blaxsmith-work
 bash integrations/substrate/build.sh /opt/blaxsmith-dev/substrate \
   /opt/blaxsmith-dev/substrate-egress-build-1
 bash deploy/dev/publish-atenet.sh /opt/blaxsmith-dev/substrate-egress-build-1
@@ -278,7 +278,7 @@ key and the exact runner image digest. Existing older runner images are denied
 when the controller is gated.
 
 ```sh
-cd /opt/blaxsmith-dev/blaxsmith
+cd /opt/blaxsmith-dev/blaxsmith-work
 built=/opt/blaxsmith-dev/ax-platform-key-build-$(date +%s)
 bash integrations/ax/build.sh /opt/blaxsmith-dev/ax "$built"
 bash deploy/dev/publish-ax.sh "$built"
@@ -311,7 +311,7 @@ publish the verified worker binary atop the original digest-pinned worker
 image. Use a new build directory each time:
 
 ```sh
-cd /opt/blaxsmith-dev/blaxsmith
+cd /opt/blaxsmith-dev/blaxsmith-work
 built=/opt/blaxsmith-dev/ateom-attest-build-$(date +%s)
 bash integrations/substrate/build.sh /opt/blaxsmith-dev/substrate \
   "$built"
@@ -343,7 +343,7 @@ Publish the newly verified `atenet` binary and configure the router's
 audience, connector service-account username, and TokenReview permission:
 
 ```sh
-cd /opt/blaxsmith-dev/blaxsmith
+cd /opt/blaxsmith-dev/blaxsmith-work
 built=/opt/blaxsmith-dev/substrate-router-auth-build-$(date +%s)
 bash integrations/substrate/build.sh /opt/blaxsmith-dev/substrate "$built"
 bash deploy/dev/publish-atenet.sh "$built"
@@ -383,7 +383,7 @@ rows, and the sixth records delivery leases. Run with a new output directory
 each time:
 
 ```sh
-cd /opt/blaxsmith-dev/blaxsmith
+cd /opt/blaxsmith-dev/blaxsmith-work
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 export BLAXSMITH_DEV_SIGNING_KEY_FILE=/opt/blaxsmith-dev/platform-bootstrap-signing.key
 export BLAXSMITH_DEV_LEDGER=1
@@ -411,7 +411,7 @@ digest-pinned runner image; the Task and Workspace contain only the clean
 repository URL. Use fresh fixture, build, and evidence directories:
 
 ```sh
-cd /opt/blaxsmith-dev/blaxsmith
+cd /opt/blaxsmith-dev/blaxsmith-work
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 fixture=/opt/blaxsmith-dev/private-git-fixture-$(date +%s)
 python3 deploy/dev/private-git-fixture.py prepare "$fixture"
@@ -419,7 +419,7 @@ unit=blaxsmith-private-git-fixture
 systemctl stop "$unit" 2>/dev/null || true
 systemctl reset-failed "$unit" 2>/dev/null || true
 systemd-run --unit="$unit" --property=RuntimeMaxSec=900 \
-  /usr/bin/python3 /opt/blaxsmith-dev/blaxsmith/deploy/dev/private-git-fixture.py serve "$fixture"
+  /usr/bin/python3 /opt/blaxsmith-dev/blaxsmith-work/deploy/dev/private-git-fixture.py serve "$fixture"
 substrate_built=/opt/blaxsmith-dev/substrate-bootstrap-phase-$(date +%s)
 bash integrations/substrate/build.sh /opt/blaxsmith-dev/substrate "$substrate_built"
 bash deploy/dev/publish-ateom.sh "$substrate_built" "$(cat /opt/blaxsmith-dev/worker-image.txt)"
@@ -484,7 +484,7 @@ On the dev node, build a fresh AX/tool-worker chain, publish both images, and
 temporarily allow the probe image:
 
 ```sh
-cd /opt/blaxsmith-dev/blaxsmith
+cd /opt/blaxsmith-dev/blaxsmith-work
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 ax_built=/opt/blaxsmith-dev/ax-model-probe-$(date +%s)
 bash integrations/ax/build.sh /opt/blaxsmith-dev/ax "$ax_built"
