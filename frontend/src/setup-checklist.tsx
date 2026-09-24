@@ -5,12 +5,26 @@ import { ArrowRight, CircleCheck, CircleDashed, ListChecks, X } from "lucide-rea
 import { listAuditEvents } from "./admin";
 import { currentSession, sessionQueryKey } from "./auth";
 import { listConnections } from "./connections";
-import { listRecipes } from "./recipes";
+import { listRecipes, recipesKey } from "./recipes";
 import { listMembers } from "./users";
-import { getProjectSource, getProjectVerification, listProjectModelAccess, listProjects, listRuns } from "./workflow";
+import {
+  getProjectSource, getProjectVerification, listProjectModelAccess, listProjects, listRuns, projectModelAccessQueryKey, projectSourceQueryKey,
+  projectVerificationQueryKey,
+} from "./workflow";
 
 // One step: done is undefined while its data loads. to is an app path.
 export type ChecklistItem = { id: string; label: string; hint: string; done: boolean | undefined; to: string };
+
+// One summary for a checklist and any tile that reports on it, so both read the same.
+export function checklistProgress(items: ChecklistItem[]) {
+  const done = items.filter((item) => item.done).length;
+  const left = items.length - done;
+  return {
+    done, total: items.length, left, loading: items.some((item) => item.done === undefined), complete: left === 0,
+    next: items.find((item) => item.done === false),
+    label: `${done} of ${items.length} done`, leftLabel: `${left} ${left === 1 ? "step" : "steps"} left`,
+  };
+}
 
 // Dismissal is a per-user browser convenience, so localStorage is enough;
 // storage can be unavailable, and then the list simply shows again.
@@ -29,13 +43,12 @@ function useSession() {
 
 export function SetupChecklist({ title, items, storageKey }: { title: string; items: ChecklistItem[]; storageKey: string }) {
   const [dismissed, setDismissed] = useDismissed(storageKey);
-  const done = items.filter((item) => item.done).length;
-  const loading = items.some((item) => item.done === undefined);
-  if (!loading && done === items.length) return null;
+  const { done, loading, complete, label } = checklistProgress(items);
+  if (!loading && complete) return null;
   if (dismissed) return <button type="button" className="text-action checklist-restore" onClick={() => setDismissed(false)}><ListChecks size={14} aria-hidden="true" /> Show setup checklist ({done} of {items.length})</button>;
   return <section className="table-section checklist" aria-labelledby={`${storageKey}-heading`}>
     <div className="table-heading"><div><h2 id={`${storageKey}-heading`}><ListChecks size={15} aria-hidden="true" /> {title}</h2>
-      <p>{loading ? "Checking what is set up…" : `${done} of ${items.length} done. Each step links to where you do it.`}</p></div>
+      <p>{loading ? "Checking what is set up…" : `${label}. Each step links to where you do it.`}</p></div>
       <button type="button" className="secondary-button" onClick={() => setDismissed(true)} aria-label={`Dismiss ${title}`}><X size={15} aria-hidden="true" /> Dismiss</button></div>
     <ol className="checklist-items">
       {items.map((item) => <li key={item.id} className={item.done ? "is-done" : undefined}>
@@ -73,18 +86,19 @@ export function OrgSetupChecklist() {
   return <SetupChecklist title="Set up your organization" items={items} storageKey={`blaxsmith-checklist:${org}:${principal}:org`} />;
 }
 
-// Project setup; each step matches a prerequisite for launching runs.
-export function ProjectSetupChecklist({ projectId }: { projectId: string }) {
-  const { org, principal } = useSession();
+// Project setup; each step matches a prerequisite for launching runs. The
+// project overview's Setup tile reads these same steps.
+export function useProjectSetupItems(projectId: string): ChecklistItem[] {
+  const { org } = useSession();
   const on = Boolean(org && projectId);
-  const source = useQuery({ queryKey: ["project-source", org, projectId], enabled: on, queryFn: ({ signal }) => getProjectSource(projectId, signal) });
-  const verification = useQuery({ queryKey: ["project-verification", org, projectId], enabled: on, queryFn: ({ signal }) => getProjectVerification(projectId, signal) });
-  const recipes = useQuery({ queryKey: ["recipes", org, projectId], enabled: on, queryFn: ({ signal }) => listRecipes(projectId, signal) });
-  const access = useQuery({ queryKey: ["project-model-access", org, projectId], enabled: on, queryFn: ({ signal }) => listProjectModelAccess(projectId, signal) });
+  const source = useQuery({ queryKey: projectSourceQueryKey(org, projectId), enabled: on, queryFn: ({ signal }) => getProjectSource(projectId, signal) });
+  const verification = useQuery({ queryKey: projectVerificationQueryKey(org, projectId), enabled: on, queryFn: ({ signal }) => getProjectVerification(projectId, signal) });
+  const recipes = useQuery({ queryKey: recipesKey(org, projectId), enabled: on, queryFn: ({ signal }) => listRecipes(projectId, signal) });
+  const access = useQuery({ queryKey: projectModelAccessQueryKey(org, projectId), enabled: on, queryFn: ({ signal }) => listProjectModelAccess(projectId, signal) });
   const runs = useQuery({ queryKey: ["runs", org, projectId, "checklist"], enabled: on, queryFn: ({ signal }) => listRuns(projectId, "", "", "created_at", "desc", signal) });
   const settled = <T,>(q: { isSuccess: boolean; isError: boolean; data?: T }, done: (data: T) => boolean) =>
     q.isSuccess ? done(q.data as T) : q.isError ? false : undefined;
-  const items: ChecklistItem[] = [
+  return [
     { id: "source", label: "Connect the repository", hint: "Choose the Git repository and ref runs start from.", to: `/projects/${projectId}/settings/source`, done: settled(source, Boolean) },
     { id: "verification", label: "Set verification checks", hint: "At least one check is required to launch.", to: `/projects/${projectId}/settings/verification`, done: settled(verification, Boolean) },
     { id: "recipe", label: "Make a recipe available", hint: "Create a project recipe or ask an admin to grant one.", to: `/projects/${projectId}/recipes`,
@@ -93,5 +107,10 @@ export function ProjectSetupChecklist({ projectId }: { projectId: string }) {
       done: settled(access, (a) => a.access.length > 0) },
     { id: "run", label: "Start the first run", hint: "Pick a recipe version and committed inputs.", to: `/projects/${projectId}/runs/new`, done: settled(runs, (r) => r.runs.length > 0) },
   ];
+}
+
+export function ProjectSetupChecklist({ projectId }: { projectId: string }) {
+  const { org, principal } = useSession();
+  const items = useProjectSetupItems(projectId);
   return <SetupChecklist title="Set up this project" items={items} storageKey={`blaxsmith-checklist:${org}:${principal}:project:${projectId}`} />;
 }

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, BookCopy, Check, GitBranch, KeyRound, ListChecks, Plus, Settings } from "lucide-react";
 import { DashboardLayout } from "../layouts";
+import { checklistProgress, useProjectSetupItems } from "../setup-checklist";
 import { Slot } from "../slots";
 import type { TableView } from "../table-state";
 import { Card, CopyValue, EmptyState, ShowMore, StatePanel, StatTile, Timestamp } from "../ui";
@@ -48,6 +49,8 @@ function ProjectOverview() {
       detail: recipes.data ? `${recipes.data.recipes.length} available to this project` : "Loading…" },
   ];
   const doneCount = setup.filter((s) => s.done).length;
+  // The Setup tile reports the setup checklist, so the two always agree.
+  const checklist = checklistProgress(useProjectSetupItems(ready ? projectId : ""));
 
   if (project.isPending) return <StatePanel kind="loading" title="Loading project" />;
   if (project.isError || !p) return <StatePanel kind="error" title="Project unavailable" retry={() => void project.refetch()}>This project could not be loaded, or it is not in your organization.</StatePanel>;
@@ -60,7 +63,9 @@ function ProjectOverview() {
     tiles={<>
       <StatTile label="Waiting on you" value={waiting.data?.totalCount ?? "—"} tone={waiting.data?.totalCount ? "attention" : undefined} href={`/inbox?q=${encodeURIComponent(p.name)}`} />
       <StatTile label="Runs" value={runs.data?.totalCount ?? "—"} meta="All time" href={`${base}/runs`} />
-      <StatTile label="Setup" value={`${doneCount} of ${setup.length}`} tone={doneCount === setup.length ? "ok" : undefined} meta={doneCount === setup.length ? "Ready" : "Steps remaining"} />
+      <StatTile label="Setup" value={checklist.loading ? "—" : checklist.complete ? "Ready" : checklist.label} tone={!checklist.loading && checklist.complete ? "ok" : undefined}
+        meta={checklist.loading ? "Checking…" : checklist.complete ? `All ${checklist.total} steps done` : checklist.leftLabel}
+        href={!checklist.loading && checklist.next ? checklist.next.to : undefined} />
       <StatTile label="New runs" value={launch.data ? launch.data.enabled ? "Enabled" : "Blocked" : "—"} tone={launch.data && !launch.data.enabled ? "danger" : undefined}
         meta={launch.data && !launch.data.enabled ? launch.data.reason : "Launch availability"} />
     </>}
