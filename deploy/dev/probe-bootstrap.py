@@ -32,6 +32,7 @@ git_repo = os.environ.get("BLAXSMITH_DEV_GIT_REPO", "")
 git_commit = os.environ.get("BLAXSMITH_DEV_GIT_COMMIT", "")
 git_token_file = os.environ.get("BLAXSMITH_DEV_GIT_TOKEN_FILE", "")
 secret_key_file = os.environ.get("BLAXSMITH_DEV_SECRET_KEY_FILE", "")
+report["debug_task"] = bool(git_repo)
 if (git_repo == "") != (git_token_file == "") or (git_repo == "") != (git_commit == "") or (git_repo and not ledger_mode):
     sys.exit("private Git probe requires BLAXSMITH_DEV_LEDGER=1 and repository, commit, and token inputs")
 if git_repo and not secret_key_file:
