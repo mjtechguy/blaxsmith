@@ -50,7 +50,6 @@ test("recipe mutations send CSRF, launch sends the library version, and the form
     assert.equal(profiles.stages.find((s) => s.id === "review").profile, "critic");
     assert.equal(recipes.parseRecipe("{ nope"), null);
     assert.deepEqual(recipes.parseRecipe(recipes.formatRecipe(guild)), guild);
-    assert.deepEqual(await recipes.connectionModels.listConnectionModels({ models: ["opus"] }), ["opus"]);
     assert.deepEqual(["owner", "admin", "member", "viewer"].map((role) => recipes.mayEditRecipes({ role })), [true, true, false, false]);
   } finally {
     await server.close();

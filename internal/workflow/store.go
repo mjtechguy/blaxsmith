@@ -31,10 +31,8 @@ var (
 )
 
 type Store struct {
-	pool   *pgxpool.Pool
-	authz  ConnectionAuthorizer
-	access ResourceAccess   // nil: organization recipes are usable by every project.
-	models ConnectionModels // nil: models already granted through the connection.
+	pool  *pgxpool.Pool
+	authz ConnectionAuthorizer
 }
 
 func New(pool *pgxpool.Pool) (*Store, error) {

@@ -5,12 +5,13 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, ArrowRight, BookCopy, Check, CopyPlus, FileJson, GitFork, ListTree, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { currentSession, sessionQueryKey } from "./auth";
+import { ModelSelect } from "./connection-ui";
 import { DataTable } from "./data-table";
 import { TextField } from "./form-field";
 import type { LibraryRecipe, RecipeModelConnection, RecipeValidationError, RecipeVersion } from "./gen/blaxsmith/api/v1/recipes_pb";
 import { PageHeader, PageShell } from "./page";
 import {
-  cloneRecipe, connectionModels, createRecipe, createRecipeVersion, emptyRecipe, formatRecipe, getRecipe, getRecipeEditorOptions,
+  cloneRecipe, createRecipe, createRecipeVersion, emptyRecipe, formatRecipe, getRecipe, getRecipeEditorOptions,
   getRecipeVersion, listProjectRecipeFiles, listRecipes, mayEditRecipes, parseRecipe, recipeFilesKey, recipeKey, recipeOptionsKey,
   recipesKey, recipeVersionKey, renameProfile, renameStage, setCurrentRecipeVersion, stageRows, validateRecipe,
   type RecipeDocument, type RecipeProfile, type RecipeStage, type StageRow,
@@ -355,9 +356,10 @@ function ProfileCard({ id, profile, errors, harnesses, allHarnesses, connections
   const connectionId = eligible.some((c) => c.id === chosenConnection) ? chosenConnection
     : eligible.find((c) => c.provider === modelProvider && c.models.some((m) => profile.model === m || profile.model === `${c.provider}/${m}`))?.id || eligible[0]?.id || "";
   const connection = eligible.find((c) => c.id === connectionId);
-  const [models, setModels] = useState<string[]>([]);
-  useEffect(() => { let live = true; if (connection) void connectionModels.listConnectionModels(connection).then((m) => { if (live) setModels(m); }); else setModels([]); return () => { live = false; }; }, [connection]);
-  const modelChoices: Array<[string, string]> = models.map((m) => profile.harness === "opencode" && connection ? [`${connection.provider}/${m}`, `${connection.provider}/${m}`] : [m, m]);
+  // OpenCode records provider/model; the connection lists provider-native ids.
+  const prefix = profile.harness === "opencode" && connection ? `${connection.provider}/` : "";
+  const shownModel = prefix && profile.model.startsWith(prefix) ? profile.model.slice(prefix.length) : profile.model;
+  const setModel = (model: string) => onChange({ ...profile, model: prefix && model && !model.includes("/") ? prefix + model : model });
   const skills = profile.skills || [];
   const at = `profiles.${id}`;
   return <div className="verification-check">
@@ -368,11 +370,10 @@ function ProfileCard({ id, profile, errors, harnesses, allHarnesses, connections
       <Select label="Harness" value={profile.harness} choices={harnesses.map((h) => [h.harness, h.harness])}
         onChange={(value) => onChange({ ...profile, harness: value, effort: allHarnesses.find((h) => h.harness === value)?.efforts.includes(profile.effort) ? profile.effort : allHarnesses.find((h) => h.harness === value)?.efforts[0] || profile.effort })} />
       <Select label="Connection" value={connectionId} choices={eligible.map((c) => [c.id, `${c.provider} · ${c.account}`])} onChange={setConnectionId} />
-      {modelChoices.length ? <Select label="Model" value={profile.model} choices={modelChoices} onChange={(model) => onChange({ ...profile, model })} error={fieldError(errors, `${at}.model`)} />
-        : <TextField label="Model" name={`${at}-model`} autoComplete="off" placeholder={profile.harness === "opencode" ? "provider/model" : "model id"} value={profile.model} onChange={(model) => onChange({ ...profile, model })} onBlur={() => undefined} error={fieldError(errors, `${at}.model`)} />}
       <Select label="Effort" value={profile.effort} choices={(harness?.efforts || []).map((e) => [e, e])} onChange={(effort) => onChange({ ...profile, effort })} />
     </div>
-    {!eligible.length ? <p className="form-hint">No active {harness?.provider || "model"} connection lists models yet; type the model ID.</p> : null}
+    <ModelSelect connectionId={connectionId} harness={harness ? profile.harness : ""} fieldId={`${at}-model`} value={shownModel} onChange={setModel} error={fieldError(errors, `${at}.model`)} />
+    {!eligible.length ? <p className="form-hint">No active {harness?.provider || "model"} connection lists models yet; type the model ID under Advanced.</p> : null}
     {skillPaths ? <fieldset className="recipe-fieldset"><legend>Skills</legend>
       {[...new Set([...skillPaths, ...skills])].map((path) => <label key={path} className="recipe-check"><input type="checkbox" checked={skills.includes(path)}
         onChange={(event) => onChange({ ...profile, skills: event.target.checked ? [...skills, path] : skills.filter((s) => s !== path) })} /> <span className="mono">{path}</span></label>)}

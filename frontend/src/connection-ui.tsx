@@ -90,33 +90,41 @@ const harnesses = [["", "Any harness"], ["codex", "Codex"], ["claude-code", "Cla
 const modelId = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/;
 
 // Models the connection can actually use; free text only under Advanced.
-export function ModelSelect({ connectionId, value, onChange }: { connectionId: string; value: string; onChange: (model: string) => void }) {
+// harness fixes the harness filter (a recipe profile already chose one);
+// without a connection only the Advanced free-text field is offered. fieldId
+// keeps element ids unique when several selects share a connection.
+export function ModelSelect({ connectionId, value, onChange, harness: fixedHarness, fieldId, error }: {
+  connectionId: string; value: string; onChange: (model: string) => void; harness?: string; fieldId?: string; error?: string;
+}) {
   const { org } = useOrg();
-  const [harness, setHarness] = useState("");
+  const [chosenHarness, setHarness] = useState("");
+  const harness = fixedHarness ?? chosenHarness;
   const [search, setSearch] = useState("");
   const models = useQuery({ queryKey: connectionModelsKey(org, connectionId, harness), enabled: Boolean(org && connectionId),
     queryFn: ({ signal }) => listConnectionModels(connectionId, harness, signal) });
-  const list = models.data?.models ?? [];
+  const list = connectionId ? models.data?.models ?? [] : [];
   const needle = search.trim().toLowerCase();
   const shown = needle ? list.filter((m) => m.id.toLowerCase().includes(needle) || m.displayName.toLowerCase().includes(needle)) : list;
   const listed = list.some((m) => m.id === value);
+  const id = fieldId || connectionId || "none";
   return <div className="editor-form">
-    <div className="form-field"><label htmlFor={`harness-${connectionId}`}>Harness</label>
-      <select id={`harness-${connectionId}`} value={harness} onChange={(event) => setHarness(event.target.value)}>
-        {harnesses.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-      </select></div>
-    {list.length > 12 ? <TextField label="Search models" name="model-search" autoComplete="off" placeholder="Filter by id or name" value={search} onChange={setSearch} onBlur={() => {}} required={false} /> : null}
-    <div className="form-field"><label htmlFor={`model-${connectionId}`}>Model</label>
-      <select id={`model-${connectionId}`} value={listed ? value : ""} onChange={(event) => onChange(event.target.value)} disabled={models.isPending}>
+    {connectionId && fixedHarness === undefined ? <div className="form-field"><label htmlFor={`harness-${id}`}>Harness</label>
+      <select id={`harness-${id}`} value={harness} onChange={(event) => setHarness(event.target.value)}>
+        {harnesses.map(([hid, name]) => <option key={hid} value={hid}>{name}</option>)}
+      </select></div> : null}
+    {list.length > 12 ? <TextField label="Search models" name={`model-search-${id}`} autoComplete="off" placeholder="Filter by id or name" value={search} onChange={setSearch} onBlur={() => {}} required={false} /> : null}
+    {connectionId ? <div className="form-field"><label htmlFor={`model-${id}`}>Model</label>
+      <select id={`model-${id}`} value={listed ? value : ""} onChange={(event) => onChange(event.target.value)} disabled={models.isPending} aria-invalid={error ? true : undefined}>
         <option value="">{models.isPending ? "Loading models…" : list.length ? "Choose a model" : "No models available"}</option>
         {shown.map((m) => <option key={m.id} value={m.id}>{m.displayName && m.displayName !== m.id ? `${m.displayName} (${m.id})` : m.id}{m.contextTokens ? ` · ${Math.round(m.contextTokens / 1000)}k` : ""}</option>)}
       </select>
       {models.data?.error ? <span className="form-field-error">{models.data.error}</span> : null}
       {models.isError ? <span className="form-field-error">Models could not be loaded.</span> : null}
-    </div>
-    <details className="advanced-disclosure"><summary>Advanced: type a model id</summary>
-      <TextField label="Model id" name="model-free-text" autoComplete="off" placeholder="Exact provider model id" value={listed ? "" : value} onChange={onChange} onBlur={() => {}} required={false}
-        error={value && !listed && !modelId.test(value) ? "Use up to 128 letters, numbers, periods, underscores, slashes, or hyphens." : undefined} />
+      {error && listed ? <span className="form-field-error">{error}</span> : null}
+    </div> : null}
+    <details className="advanced-disclosure" open={!connectionId || (Boolean(value) && !listed && !models.isPending) || undefined}><summary>Advanced: type a model id</summary>
+      <TextField label="Model id" name={`model-free-text-${id}`} autoComplete="off" placeholder="Exact provider model id" value={listed ? "" : value} onChange={onChange} onBlur={() => {}} required={false}
+        error={value && !listed && !modelId.test(value) ? "Use up to 128 letters, numbers, periods, underscores, slashes, or hyphens." : !listed ? error : undefined} />
     </details>
   </div>;
 }

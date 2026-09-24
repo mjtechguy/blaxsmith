@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 )
@@ -38,45 +39,6 @@ type RecipeVersion struct {
 	SHA256, FrozenPath       string
 	AuthorID, AuthorUsername string // Empty for the installation seed.
 	CreatedAt                time.Time
-}
-
-// ResourceAccess decides whether a principal may use an organization-level
-// resource from a project. It runs inside the caller's transaction.
-// merge: lane U CanUse — satisfied by access.CanUse (lane-u-users 9c58ffa);
-// use access.ResourceRecipe for the kind. There, owners and admins get no
-// implicit use: every project needs an access_resource_grants row.
-type ResourceAccess interface {
-	CanUse(ctx context.Context, tx pgx.Tx, principal identity.Caller, projectID, resourceKind, resourceID string) (bool, error)
-}
-
-// ResourceRecipe is the resourceKind for library recipes.
-const ResourceRecipe = "recipe"
-
-// orgVisibleRecipes is the temporary grant policy: an organization recipe is
-// usable by every project in its organization.
-// merge: lane U CanUse — delete once access.CanUse is wired in New.
-type orgVisibleRecipes struct{}
-
-func (orgVisibleRecipes) CanUse(ctx context.Context, tx pgx.Tx, principal identity.Caller, projectID, resourceKind, resourceID string) (bool, error) {
-	if resourceKind != ResourceRecipe || !ids(principal.OrganizationID, projectID, resourceID) {
-		return false, nil
-	}
-	var ok bool
-	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM workflow_recipes r JOIN workflow_projects p
-		ON p.organization_id=r.organization_id AND p.id=$3
-		WHERE r.organization_id=$1 AND r.id=$2 AND r.project_id IS NULL)`,
-		principal.OrganizationID, resourceID, projectID).Scan(&ok)
-	return ok, err
-}
-
-// SetResourceAccess replaces the organization-resource grant policy.
-func (s *Store) SetResourceAccess(access ResourceAccess) { s.access = access }
-
-func (s *Store) resourceAccess() ResourceAccess {
-	if s.access == nil {
-		return orgVisibleRecipes{}
-	}
-	return s.access
 }
 
 const recipeListLimit = 500
@@ -110,7 +72,7 @@ func (s *Store) ListRecipes(ctx context.Context, caller identity.Caller, project
 	if !ids(caller.OrganizationID) || (projectID != "" && !ids(projectID)) {
 		return nil, ErrInvalid
 	}
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	tx, err := s.pool.Begin(ctx) // Not read-only: access.CanUse locks grant rows FOR SHARE.
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +95,7 @@ func (s *Store) ListRecipes(ctx context.Context, caller identity.Caller, project
 	out := make([]LibraryRecipe, 0, len(all))
 	for _, r := range all {
 		if projectID != "" && r.ProjectID == "" {
-			ok, err := s.resourceAccess().CanUse(ctx, tx, caller, projectID, ResourceRecipe, r.ID)
+			ok, err := s.authz.CanUse(ctx, tx, caller, projectID, access.ResourceRecipe, r.ID)
 			if err != nil {
 				return nil, err
 			}
@@ -267,12 +229,12 @@ func (s *Store) CloneRecipeAs(ctx context.Context, caller identity.Caller, sourc
 }
 
 func (s *Store) canUseInTx(ctx context.Context, caller identity.Caller, projectID, recipeID string) error {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	tx, err := s.pool.Begin(ctx) // Not read-only: access.CanUse locks grant rows FOR SHARE.
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
-	ok, err := s.resourceAccess().CanUse(ctx, tx, caller, projectID, ResourceRecipe, recipeID)
+	ok, err := s.authz.CanUse(ctx, tx, caller, projectID, access.ResourceRecipe, recipeID)
 	if err != nil {
 		return err
 	}
@@ -350,7 +312,7 @@ func (s *Store) LibraryRecipeForLaunch(ctx context.Context, caller identity.Call
 	if !ids(caller.OrganizationID, projectID, versionID) {
 		return RecipeVersion{}, ErrInvalid
 	}
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	tx, err := s.pool.Begin(ctx) // Not read-only: access.CanUse locks grant rows FOR SHARE.
 	if err != nil {
 		return RecipeVersion{}, err
 	}
@@ -375,7 +337,7 @@ func (s *Store) launchableVersion(ctx context.Context, tx pgx.Tx, caller identit
 	switch {
 	case recipeProject == projectID:
 	case recipeProject == "":
-		ok, err := s.resourceAccess().CanUse(ctx, tx, caller, projectID, ResourceRecipe, v.RecipeID)
+		ok, err := s.authz.CanUse(ctx, tx, caller, projectID, access.ResourceRecipe, v.RecipeID)
 		if err != nil {
 			return RecipeVersion{}, err
 		}

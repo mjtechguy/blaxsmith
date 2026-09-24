@@ -1,7 +1,7 @@
 import { createClient } from "@connectrpc/connect";
 import { browserTransport, csrfToken } from "./auth";
 import type { SessionIdentity } from "./gen/blaxsmith/api/v1/auth_pb";
-import { RecipeService, type RecipeModelConnection } from "./gen/blaxsmith/api/v1/recipes_pb";
+import { RecipeService } from "./gen/blaxsmith/api/v1/recipes_pb";
 
 const client = createClient(RecipeService, browserTransport);
 const csrf = async () => ({ headers: { "X-Blaxsmith-CSRF": await csrfToken() } });
@@ -38,16 +38,6 @@ export async function setCurrentRecipeVersion(recipeId: string, versionId: strin
 export async function cloneRecipe(sourceVersionId: string, projectId: string, name: string, description: string) {
   return client.cloneRecipe({ sourceVersionId, projectId, name, description }, await csrf());
 }
-
-// Models offered by a model connection.
-// merge: lane C ListConnectionModels — swap the stub for ConnectionService.
-export interface ConnectionModelSource {
-  listConnectionModels(connection: RecipeModelConnection): Promise<string[]>;
-}
-export const connectionModels: ConnectionModelSource = {
-  // Stub: GetRecipeEditorOptions already carries each connection's models.
-  listConnectionModels: async (connection) => [...connection.models],
-};
 
 // Recipe JSON shape, as written by the editor. Unknown fields are preserved
 // by editing a parsed copy of the document.

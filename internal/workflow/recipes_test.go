@@ -8,16 +8,44 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/db"
+	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 )
 
-type denyRecipes struct{}
+// grantRecipe records an organization recipe grant through lane U's
+// access.GrantResource and returns the grant ID.
+func grantRecipe(t *testing.T, store *Store, owner identity.Caller, recipeID string, to access.Grantee) string {
+	t.Helper()
+	tx, err := store.pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(context.Background())
+	id, err := access.GrantResource(t.Context(), tx, owner, access.ResourceRecipe, recipeID, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
 
-func (denyRecipes) CanUse(context.Context, pgx.Tx, identity.Caller, string, string, string) (bool, error) {
-	return false, nil
+func revokeRecipeGrant(t *testing.T, store *Store, owner identity.Caller, grantID string) {
+	t.Helper()
+	tx, err := store.pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(context.Background())
+	if err := access.RevokeResourceGrant(t.Context(), tx, owner, grantID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func guildRecipe(t *testing.T) []byte {
@@ -194,6 +222,10 @@ func TestRecipeScopesAndPermissions(t *testing.T) {
 	if err != nil || orgRecipe.ProjectID != "" || orgRecipe.CurrentVersionID != orgVersion.ID {
 		t.Fatalf("owner org recipe: %+v %v", orgRecipe, err)
 	}
+	guild, _ := seededGuild(t, store, owner)
+	grantRecipe(t, store, owner, guild.ID, access.Grantee{Role: "member"})
+	orgFastGrants := []string{grantRecipe(t, store, owner, orgRecipe.ID, access.Grantee{ProjectID: project}),
+		grantRecipe(t, store, owner, orgRecipe.ID, access.Grantee{ProjectID: sibling})}
 	projectRecipe, projectVersion, err := store.CreateRecipeAs(ctx, admin, project, "Org fast", "Same name, project scope", data, "")
 	if err != nil || projectRecipe.ProjectID != project {
 		t.Fatalf("admin project recipe: %+v %v", projectRecipe, err)
@@ -251,8 +283,10 @@ func TestRecipeScopesAndPermissions(t *testing.T) {
 	if _, _, err := store.CloneRecipeAs(ctx, owner, projectVersion.ID, sibling, "Stolen", ""); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cloned another project's recipe: %v", err)
 	}
-	store.SetResourceAccess(denyRecipes{})
-	if list, err := store.ListRecipes(ctx, member, project); err != nil || strings.Join(names(list), ",") != "Org fast@project" {
+	for _, id := range orgFastGrants {
+		revokeRecipeGrant(t, store, owner, id)
+	}
+	if list, err := store.ListRecipes(ctx, member, project); err != nil || strings.Join(names(list), ",") != "Org fast@project,Guild engineering@org" {
 		t.Fatalf("ungranted org recipes visible: %v %v", names(list), err)
 	}
 	if _, err := store.LibraryRecipeForLaunch(ctx, member, project, orgVersion.ID); !errors.Is(err, ErrNotFound) {
@@ -308,7 +342,8 @@ func TestLaunchFromLibraryFreezesSameDigestAsFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, seed := seededGuild(t, store, member)
+	guild, seed := seededGuild(t, store, member)
+	guildGrant := grantRecipe(t, store, owner, guild.ID, access.Grantee{Role: "member"})
 	library, err := store.LibraryRecipeForLaunch(ctx, member, project, seed.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -339,7 +374,7 @@ func TestLaunchFromLibraryFreezesSameDigestAsFile(t *testing.T) {
 	if _, err := launch("tampered", tampered, library.ID); !errors.Is(err, ErrConflict) {
 		t.Fatalf("tampered library bytes launched: %v", err)
 	}
-	store.SetResourceAccess(denyRecipes{})
+	revokeRecipeGrant(t, store, owner, guildGrant)
 	if _, err := launch("ungranted", fromLibrary, library.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("ungranted library recipe launched: %v", err)
 	}
