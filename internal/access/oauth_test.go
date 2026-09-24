@@ -245,6 +245,36 @@ func TestCodexSubscriptionRefreshCustodyPostgres(t *testing.T) {
 	if err != nil || string(renewed.AccessToken) != string(results[0].AccessToken) || calls.Load() != 1 {
 		t.Fatalf("renewal: %v calls=%d", err, calls.Load())
 	}
+	// The renewal hook's database half rebuilds the binding from the lease
+	// alone and keeps the lease inside the token's expiry minus 5 minutes.
+	hookDelivery, announced, err := refresher.RenewLease(ctx, RenewedLease{OrganizationID: "org-a", AttemptID: "attempt",
+		LeaseID: leaseID, DeliveryMode: "oauth_access", ExpiresAt: until})
+	if err != nil || string(hookDelivery.AccessToken) != string(results[0].AccessToken) ||
+		announced.After(hookDelivery.ExpiresAt.Add(-CodexLeaseMargin)) || calls.Load() != 1 {
+		t.Fatalf("renewal hook: announced=%v token=%v %v calls=%d", announced, hookDelivery.ExpiresAt, err, calls.Load())
+	}
+	var leaseExpiry time.Time
+	if err := pool.QueryRow(ctx, `SELECT expires_at FROM access_leases WHERE organization_id='org-a' AND id=$1`,
+		leaseID).Scan(&leaseExpiry); err != nil || !leaseExpiry.Equal(announced) {
+		t.Fatalf("lease expiry %v, announced %v: %v", leaseExpiry, announced, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE access_leases SET expires_at=$2 WHERE organization_id='org-a' AND id=$1`,
+		leaseID, results[0].ExpiresAt.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if _, capped, err := refresher.RenewLease(ctx, RenewedLease{OrganizationID: "org-a", AttemptID: "attempt",
+		LeaseID: leaseID, DeliveryMode: "oauth_access", ExpiresAt: until}); err != nil ||
+		!capped.Equal(results[0].ExpiresAt.Add(-CodexLeaseMargin).Truncate(time.Microsecond)) {
+		t.Fatalf("lease past the token's expiry was not capped: %v %v", capped, err)
+	}
+	for _, bad := range []RenewedLease{
+		{OrganizationID: "org-a", AttemptID: "attempt", LeaseID: leaseID, DeliveryMode: "native_raw", ExpiresAt: until},
+		{OrganizationID: "org-a", AttemptID: "other", LeaseID: leaseID, DeliveryMode: "oauth_access", ExpiresAt: until},
+	} {
+		if _, _, err := refresher.RenewLease(ctx, bad); !errors.Is(err, ErrDenied) {
+			t.Fatalf("renewal hook accepted %+v: %v", bad, err)
+		}
+	}
 
 	// A revoked connection fails closed without touching the provider.
 	if err := RevokeConnection(ctx, pool, "org-a", alice); err != nil {

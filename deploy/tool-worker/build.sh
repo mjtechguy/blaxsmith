@@ -73,6 +73,7 @@ patches = {
     'task_resources_patch_sha256': 'task-resources.patch',
     'upstream_refresh_patch_sha256': 'upstream-refresh-f009cc8.patch',
     'opencode_provider_patch_sha256': 'opencode-provider.patch',
+    'codex_auth_patch_sha256': 'codex-auth-credential.patch',
     'askpass_sha256': 'blaxsmith-git-askpass',
 }
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()

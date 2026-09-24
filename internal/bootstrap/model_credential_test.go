@@ -102,9 +102,41 @@ func TestCodexAuthSealedWithoutRefreshToken(t *testing.T) {
 		{AttemptID: "attempt-a", Provider: "openai", ExpiresAt: credential.ExpiresAt, CodexAuthJSON: []byte(`{"tokens":{}}`)},
 		{AttemptID: "attempt-a", Provider: "anthropic", ExpiresAt: credential.ExpiresAt, CodexAuthJSON: credential.CodexAuthJSON},
 		{AttemptID: "attempt-a", Provider: "openai", ExpiresAt: credential.ExpiresAt, CodexAuthJSON: credential.CodexAuthJSON, APIKey: []byte("k")},
+		{AttemptID: "attempt-a", Provider: "openai", ExpiresAt: credential.ExpiresAt,
+			CodexAuthJSON: []byte(`{"tokens":{"id_token":"` + strings.Repeat("i", 16384) + `","access_token":"a","refresh_token":""}}`)},
+		{AttemptID: "attempt-a", Provider: "opencode-go", ExpiresAt: credential.ExpiresAt, CodexAuthJSON: credential.CodexAuthJSON},
 	} {
 		if _, err := sealCredentials(challenge, "attempt-a", nil, &bad); !errors.Is(err, ErrDenied) {
 			t.Fatalf("unsafe codex payload sealed: %+v %v", bad, err)
 		}
+	}
+}
+
+// OpenCode Go keys are sealed as ordinary model_api_key payloads for their
+// own provider id; unknown providers are refused.
+func TestOpenCodeGoKeySealedAsAPIKey(t *testing.T) {
+	guest, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
+		t.Fatal(err)
+	}
+	challenge := Challenge{Nonce: base64.RawURLEncoding.EncodeToString(nonce), ExpiresAt: time.Now().Add(time.Minute).Unix(), Phase: PhaseModel,
+		Atespace: "space", Task: "task", RecipientKey: base64.RawURLEncoding.EncodeToString(guest.PublicKey().Bytes())}
+	credential := ModelCredential{AttemptID: "attempt-a", Provider: "opencode-go", ExpiresAt: time.Now().Add(10 * time.Minute), APIKey: []byte("go-key")}
+	sealed, err := sealCredentials(challenge, "attempt-a", nil, &credential)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, err := Open(challenge, guest, sealed)
+	if err != nil || !bytes.Contains(opened, []byte(`"kind":"model_api_key"`)) || !bytes.Contains(opened, []byte(`"provider":"opencode-go"`)) ||
+		!bytes.Contains(opened, []byte(`"api_key":"go-key"`)) {
+		t.Fatalf("opencode-go payload: %s %v", opened, err)
+	}
+	credential.Provider = "opencode-zen"
+	if _, err := sealCredentials(challenge, "attempt-a", nil, &credential); !errors.Is(err, ErrDenied) {
+		t.Fatalf("unknown provider sealed: %v", err)
 	}
 }

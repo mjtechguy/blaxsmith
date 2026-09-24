@@ -9,8 +9,8 @@ through the existing overlay stack; the build fails if the checkout differs.
 `platform-bootstrap-key.patch`, `encrypted-git-bootstrap.patch`,
 `command-exit-readback.patch`, `task-tombstones.patch`, `redis-ha.patch`,
 `consumer-recovery.patch`, `provider-credential.patch`, `post-ready-model.patch`,
-`task-resources.patch`, and `opencode-provider.patch` change the files named in their
-diffs; the reference checkout stays untouched. This is a temporary integration overlay, not a claim that AX
+`task-resources.patch`, `opencode-provider.patch`, and `codex-auth-credential.patch`
+change the files named in their diffs; the reference checkout stays untouched. This is a temporary integration overlay, not a claim that AX
 has accepted these changes or that secure bootstrap is finished.
 
 The patch closes observed launch failures at their source:
@@ -150,11 +150,17 @@ reserved only for their matching phase. The AX runner requires the exact
 `/usr/local/bin/blaxsmith-tool-worker` command for model keys, matches the
 encrypted attempt and provider to its public selection (`openai` for Codex,
 `anthropic` for Claude Code, and the `provider/` prefix of an OpenCode model,
-which `opencode-provider.patch` allows to be `openai`, `anthropic`, or
-`opencode` for an OpenCode Zen API key; other OpenCode providers stay
-rejected), and writes the model
+which `opencode-provider.patch` allows to be `openai`, `anthropic`,
+`opencode` for an OpenCode Zen API key, or `opencode-go` for an OpenCode Go
+API key; other OpenCode providers stay rejected), and writes the model
 key only after setup to `/run/blaxsmith/agent-credential.json` (0600) in a
 pre-owned private directory. The runner removes that file on command exit.
+`codex-auth-credential.patch` also accepts kind `model_codex_auth` (an
+owner's Codex ChatGPT sign-in) for the Codex harness and provider `openai`
+only. Its `auth.json` must be at most 16 KiB and carry an access token and a
+present, empty `refresh_token`; anything else fails closed in the guest too.
+The runner writes it to the same 0600 file as `codex_auth_json`, never as an
+API key, and the worker places it at `$CODEX_HOME/auth.json`.
 The product must supply a combined immutable runner/CLI/worker image and
 current grant, binding, secret, lease, and frozen Workspace inputs. Revocation
 after a raw credential has entered the pod must stop that actor and rotate the

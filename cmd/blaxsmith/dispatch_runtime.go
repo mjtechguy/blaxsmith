@@ -217,8 +217,11 @@ func newProductDispatch(ctx context.Context, config dispatchConfig, pool *pgxpoo
 	}}
 	ax := axbridge.CLI{AXPath: config.axCLI, Server: config.axServer, AtePath: config.substrateCLI,
 		AteEndpoint: config.substrateEndpoint, AteTokenFile: config.substrateTokenFile, AteCAFile: config.substrateCAFile}
+	// The one refresher for owner-only Codex subscription logins: it alone
+	// spends refresh tokens; guests receive access tokens only.
+	oauth := &access.OAuthRefresher{DB: pool, Secrets: secrets}
 	activator := &dispatch.ModelActivator{DB: pool, Secrets: secrets, ClusterID: config.clusterID,
-		LeaseTTL: mustParseDuration(config.leaseTTL), Actor: ax, Base: bootstrap.Connector{
+		LeaseTTL: mustParseDuration(config.leaseTTL), Actor: ax, OAuth: oauth, Base: bootstrap.Connector{
 			Client: client, RouterURL: config.routerURL,
 			Token: func(context.Context) (string, error) { return dispatchToken(config.bootstrapTokenFile) },
 			Roots: actorRoots, Signer: signer,
@@ -270,7 +273,7 @@ func newProductDispatch(ctx context.Context, config dispatchConfig, pool *pgxpoo
 	result := &productDispatch{Dispatcher: d, Activator: activator, ax: ax, Workflow: store, Completion: completion,
 		Recovery: &axbridge.RecoverySweep{Workflow: store, Bridge: d.AttemptBridge}}
 	if guests != nil {
-		result.RenewLeases = leaseRenewer(pool, store, guests, mustParseDuration(config.leaseTTL))
+		result.RenewLeases = leaseRenewer(pool, store, guests, mustParseDuration(config.leaseTTL), oauth)
 	}
 	if err := result.Preflight(ctx); err != nil {
 		result.Close()

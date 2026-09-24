@@ -78,10 +78,23 @@ In the caller's transaction, `RenewOAuthDelivery`:
 
 Refreshing, if needed, commits in the refresher's own transaction first. The loop must keep the lease expiry at or before `d.ExpiresAt - 5m`. `RenewOAuthDelivery` is a method on `*access.OAuthRefresher`, because it needs the pool, keys and HTTP client.
 
-## Not done
+The dispatch leader's renewal loop registers this for `oauth_access`
+(`cmd/blaxsmith/lease_renewal.go`). `OAuthRefresher.RenewLease` rebuilds the
+binding from the lease, calls `RenewOAuthDelivery`, and caps the lease at the
+token's expiry minus 5 minutes in the same transaction. The hook then reads the
+path the worker recorded in `/tmp/blaxsmith/codex-auth-path`. It must match
+`/tmp/blaxsmith-tool-<n>/.codex/auth.json`. The hook rewrites that file in
+place with guest `WriteFile`, which truncates the existing file, so the worker
+keeps ownership and mode 0600. Only then does it announce the new expiry.
 
-- **Guest.** The pinned AX runner patch accepts only `model_api_key`. A `model_codex_auth` envelope is therefore rejected in the guest, which fails closed. Writing `auth.json` into the worker's temporary HOME is not implemented yet.
-- **Dispatch.** Runs record `initiator_principal_id` at launch. A personal (user-owned) grant is bound only when the run's initiator owns that connection and is its grantee; otherwise the project's workload selection applies. Delivery of a personal Codex login still stops at the guest (above).
+## Guest delivery
+
+- **Runner.** `integrations/ax/codex-auth-credential.patch` accepts `model_codex_auth` in the model phase only for the Codex harness and provider `openai`. The `auth.json` must be at most 16 KiB, with an access token and a present, empty `refresh_token`. Every other kind, provider, or harness combination fails closed. The runner writes the same 0600 credential file it uses for API keys, as `codex_auth_json`.
+- **Worker.** `tooladapter` writes it to `$CODEX_HOME/auth.json` (0600) under the attempt's temporary home and sets `CODEX_HOME`. It never sets `OPENAI_API_KEY` for this mode. The resume pane skips `codex login --with-api-key`. The pane and activity redactors hide the access and id tokens, including renewed ones.
+- **Dispatch.** Runs record `initiator_principal_id` at launch. A personal (user-owned) grant is bound only when the run's initiator owns that connection and is its grantee; otherwise the project's workload selection applies (`TestDispatchBatchPostgres` covers a Codex subscription).
+- **Egress.** Codex with a ChatGPT sign-in talks to `chatgpt.com`, not `api.openai.com`. The `exact` Gateway mode checks only `api.openai.com` for provider `openai`, so subscription runs need `open-dev` egress until `providerHost` accounts for the delivery mode.
+
+## Not done
 - **Device code.** The connections hub runs the Codex device-code sign-in server-side (`access.CodexDevice`, from `codex-rs/login/src/device_code_auth.rs`): `POST /api/accounts/deviceauth/usercode`, the user approves at `/codex/device`, `POST /api/accounts/deviceauth/token` polls, and `/oauth/token` exchanges the code once. Pasting `auth.json` stays as the Advanced fallback. Pending sign-ins live in app memory (single replica or session affinity). Not yet tried against the live endpoint.
 - **Reconnect and cleanup.** Reconnect creates a new connection. `SecretStore.Rotate` on a refreshed connection fails on a version conflict, which fails closed. Superseded secret versions are not pruned.
 - **Live endpoint.** Nothing has been tested against the live `auth.openai.com` endpoint or a real Codex CLI.

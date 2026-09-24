@@ -230,8 +230,8 @@ type modelCredentialPayload struct {
 	Provider  string `json:"provider"`
 	ExpiresAt int64  `json:"expires_at"`
 	APIKey    string `json:"api_key,omitempty"`
-	// Kind model_codex_auth only. Guest materialization is not implemented
-	// yet; the pinned runner rejects this kind, so it fails closed.
+	// Kind model_codex_auth only. The runner overlay (codex-auth-credential.patch)
+	// accepts it for Codex/openai; the worker writes it to $CODEX_HOME/auth.json.
 	CodexAuthJSON string `json:"codex_auth_json,omitempty"`
 }
 

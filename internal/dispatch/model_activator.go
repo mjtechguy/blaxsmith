@@ -25,6 +25,9 @@ type ModelActivator struct {
 	LeaseTTL  time.Duration
 	Actor     axbridge.Inspector
 	Base      bootstrap.Connector
+	// OAuth delivers owner-only Codex subscription bindings (oauth_access).
+	// Nil denies them at release.
+	OAuth *access.OAuthRefresher
 }
 
 // Preflight checks local connector trust material, the database, and the
@@ -121,7 +124,7 @@ func (a *ModelActivator) attemptConnector(ctx context.Context, attempt workflow.
 	base.Current = func(ctx context.Context) (bootstrap.Runtime, error) {
 		return a.Actor.Current(ctx, runtime.Actor.Atespace, runtime.Actor.Name)
 	}
-	model := bootstrap.ModelAttempt{Scope: scope, Attempt: attempt, Runtime: binding, Invoke: invoke, TTL: a.LeaseTTL}
+	model := bootstrap.ModelAttempt{Scope: scope, Attempt: attempt, Runtime: binding, Invoke: invoke, TTL: a.LeaseTTL, OAuth: a.OAuth}
 	// A private source's frozen git.read binding rides the setup phase only.
 	read, username, private, err := access.AttemptGitRead(ctx, a.DB, attempt.OrganizationID, attempt.ID)
 	if err == nil && private {

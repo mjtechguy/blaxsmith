@@ -95,11 +95,14 @@ func Command(request Request) ([]string, error) {
 	return []string{WorkerBinary, string(body)}, nil
 }
 
+// credential is the runner's 0600 model file: exactly one of an API key or
+// (Codex, provider openai) a ChatGPT sign-in auth.json.
 type credential struct {
-	AttemptID string `json:"attempt_id"`
-	Provider  string `json:"provider"`
-	ExpiresAt int64  `json:"expires_at"`
-	APIKey    string `json:"api_key"`
+	AttemptID     string `json:"attempt_id"`
+	Provider      string `json:"provider"`
+	ExpiresAt     int64  `json:"expires_at"`
+	APIKey        string `json:"api_key,omitempty"`
+	CodexAuthJSON string `json:"codex_auth_json,omitempty"`
 }
 
 // Execute is the AX task command's pod-side entrypoint. A missing, stale, or
@@ -124,11 +127,12 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 	if err != nil {
 		return nil, err
 	}
-	key, expiry, err := readCredential(credentialPath, request.AttemptID, provider)
+	key, codexAuth, expiry, err := readCredential(credentialPath, request.AttemptID, provider, request.Profile.Harness)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(key)
+	defer clear(codexAuth)
 	sourcePath := workdir
 	if request.SourceDirectory == "" {
 		if checkout == nil || checkout(ctx, request.RepositoryURL, request.SourceRef, request.SourceCommit, sourcePath) != nil {
@@ -170,9 +174,17 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 	}
 	in.base = request.SourceCommit
 	in.maxRuntime = time.Duration(request.MaxRuntimeSeconds) * time.Second
-	variable := CredentialEnv(provider) + "="
 	leaseContext, cancel := watchLease(ctx, expiry)
 	defer cancel()
+	if codexAuth != nil {
+		secrets, err := ParseCodexAuth(codexAuth)
+		if err != nil {
+			return nil, err
+		}
+		output, err := Run(leaseContext, in.withCodexAuth(codexAuth), sourcePath, nil)
+		return redactSecrets(output, secrets), err
+	}
+	variable := CredentialEnv(provider) + "="
 	output, err := Run(leaseContext, in, sourcePath, []string{variable + string(key)})
 	return bytes.ReplaceAll(output, key, []byte("[redacted]")), err
 }
@@ -555,33 +567,51 @@ func credentialProvider(profile recipe.Profile) (string, error) {
 	return "", fmt.Errorf("%w: provider credential adapter unavailable", ErrBlocked)
 }
 
-func readCredential(path, attemptID, provider string) ([]byte, time.Time, error) {
+// readCredential returns either the leased API key or, for Codex with
+// provider openai only, the delivered ChatGPT sign-in auth.json.
+func readCredential(path, attemptID, provider, harness string) ([]byte, []byte, time.Time, error) {
 	if path == "" {
-		return nil, time.Time{}, ErrBlocked
+		return nil, nil, time.Time{}, ErrBlocked
 	}
 	info, err := os.Lstat(path)
 	if err != nil {
-		return nil, time.Time{}, fmt.Errorf("%w: credential unavailable", ErrBlocked)
+		return nil, nil, time.Time{}, fmt.Errorf("%w: credential unavailable", ErrBlocked)
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > 16384 {
-		return nil, time.Time{}, fmt.Errorf("%w: credential file is not private", ErrBlocked)
+	// The file may hold a JSON-escaped auth.json of up to 16 KiB.
+	const maxFile = 64 << 10
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > maxFile {
+		return nil, nil, time.Time{}, fmt.Errorf("%w: credential file is not private", ErrBlocked)
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, time.Time{}, fmt.Errorf("%w: credential unavailable", ErrBlocked)
+		return nil, nil, time.Time{}, fmt.Errorf("%w: credential unavailable", ErrBlocked)
 	}
 	defer f.Close()
-	body, err := io.ReadAll(io.LimitReader(f, 16385))
-	if err != nil || len(body) > 16384 {
-		return nil, time.Time{}, ErrBlocked
+	body, err := io.ReadAll(io.LimitReader(f, maxFile+1))
+	defer clear(body)
+	if err != nil || len(body) > maxFile {
+		return nil, nil, time.Time{}, ErrBlocked
 	}
 	var value credential
+	stale := fmt.Errorf("%w: credential is stale or mismatched", ErrBlocked)
 	if err := strictJSON(body, &value); err != nil || value.AttemptID != attemptID || value.Provider != provider ||
-		value.ExpiresAt <= time.Now().Unix() || value.ExpiresAt > time.Now().Add(time.Hour).Unix() ||
-		len(value.APIKey) == 0 || len(value.APIKey) > 8192 || strings.ContainsAny(value.APIKey, "\r\n\x00") {
-		return nil, time.Time{}, fmt.Errorf("%w: credential is stale or mismatched", ErrBlocked)
+		value.ExpiresAt <= time.Now().Unix() || value.ExpiresAt > time.Now().Add(time.Hour).Unix() {
+		return nil, nil, time.Time{}, stale
 	}
-	return []byte(value.APIKey), time.Unix(value.ExpiresAt, 0), nil
+	expiry := time.Unix(value.ExpiresAt, 0)
+	if value.CodexAuthJSON != "" {
+		if value.APIKey != "" || harness != "codex" || provider != "openai" {
+			return nil, nil, time.Time{}, stale
+		}
+		if _, err := ParseCodexAuth([]byte(value.CodexAuthJSON)); err != nil {
+			return nil, nil, time.Time{}, err
+		}
+		return nil, []byte(value.CodexAuthJSON), expiry, nil
+	}
+	if len(value.APIKey) == 0 || len(value.APIKey) > 8192 || strings.ContainsAny(value.APIKey, "\r\n\x00") {
+		return nil, nil, time.Time{}, stale
+	}
+	return []byte(value.APIKey), nil, expiry, nil
 }
 
 func strictJSON(body []byte, into any) error {

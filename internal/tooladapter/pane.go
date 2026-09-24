@@ -237,17 +237,12 @@ func exitCode(err error) int {
 	}
 }
 
-// redactor hides the leased provider key from anything rendered to viewers.
+// redactor hides the leased provider key or Codex tokens from anything
+// rendered to viewers.
 type redactor struct{ w io.Writer }
 
 func (r redactor) Write(p []byte) (int, error) {
-	out := p
-	for _, name := range []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY"} {
-		if key := os.Getenv(name); len(key) >= 8 {
-			out = bytes.ReplaceAll(out, []byte(key), []byte("[redacted]"))
-		}
-	}
-	if _, err := r.w.Write(out); err != nil {
+	if _, err := r.w.Write(redactSecrets(p, leasedSecrets())); err != nil {
 		return 0, err
 	}
 	return len(p), nil
@@ -261,8 +256,14 @@ func prepareInteractive(l launch) {
 	switch l.Harness {
 	case "codex":
 		// The Codex TUI ignores OPENAI_API_KEY until an API-key login exists.
+		// A delivered ChatGPT sign-in is already $CODEX_HOME/auth.json, and
+		// an API-key login would overwrite it.
+		key := os.Getenv("OPENAI_API_KEY")
+		if key == "" {
+			return
+		}
 		login := exec.Command(l.Run[0], "login", "--with-api-key") // #nosec G204 -- verified binary
-		login.Stdin = strings.NewReader(os.Getenv("OPENAI_API_KEY"))
+		login.Stdin = strings.NewReader(key)
 		_ = login.Run()
 	case "claude-code":
 		// Skip onboarding, the custom-key confirmation, and the trust dialog.

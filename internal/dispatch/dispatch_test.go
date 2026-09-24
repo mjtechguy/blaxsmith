@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -599,6 +600,116 @@ func TestDispatchBatchPostgres(t *testing.T) {
 	}
 	if err := access.PreflightGitRead(ctx, pool, orgID, projectID, "git-connection", repo); !errors.Is(err, access.ErrDenied) {
 		t.Fatalf("public source kept a Git grant: %v", err)
+	}
+
+	// Codex subscription (oauth_access): Alice's personal ChatGPT sign-in is
+	// bound only for runs Alice launched; Bob's run in the same project gets
+	// the project's workload key.
+	codexSubscriptionBindsOnlyForOwnersRun(t, ctx, pool, store, secretStore, ax, &dispatcher, orgID, projectID,
+		bundleJSON, policyJSON, bundle.Source.Commit, bundle.Digest, policySHA, inputSHA)
+}
+
+func codexSubscriptionBindsOnlyForOwnersRun(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store *workflow.Store,
+	secretStore *access.SecretStore, ax *dispatchAX, dispatcher *Dispatcher, orgID, projectID string,
+	bundleJSON, policyJSON []byte, sourceCommit, bundleDigest, policySHA, inputSHA string) {
+	t.Helper()
+	var alice, bob string
+	if err := pool.QueryRow(ctx, `SELECT gen_random_uuid()::text, gen_random_uuid()::text`).Scan(&alice, &bob); err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		`UPDATE access_provider_registrations SET delivery_modes=ARRAY['native_raw','oauth_access'] WHERE organization_id=$1 AND id='openai'`,
+		`UPDATE access_project_policies SET delivery_modes=ARRAY['native_raw','oauth_access'] WHERE organization_id=$1`,
+	} {
+		if _, err := pool.Exec(ctx, statement, orgID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	jwt := func(claims map[string]any) string {
+		body, _ := json.Marshal(claims)
+		return "e30." + base64.RawURLEncoding.EncodeToString(body) + ".sig"
+	}
+	auth, _ := json.Marshal(map[string]any{"OPENAI_API_KEY": nil, "last_refresh": "2026-09-24T00:00:00Z",
+		"tokens": map[string]string{"access_token": jwt(map[string]any{"exp": time.Now().Add(2 * time.Hour).Unix()}),
+			"refresh_token": "rt-alice", "id_token": jwt(map[string]any{"https://api.openai.com/auth": map[string]string{
+				"chatgpt_account_id": "acct-alice", "chatgpt_plan_type": "pro"}})}})
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	connection, _, err := access.CreateCodexConnection(ctx, tx, secretStore, orgID, alice, "openai", auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO access_grants
+		(organization_id,id,connection_id,project_id,grantee_kind,grantee_id,capability,resource,delivery_mode,issuer_id)
+		VALUES ($1,'grant-alice-codex',$2,$3,'user',$4,'model.invoke','openai/gpt-6-luna','oauth_access',$4)`,
+		orgID, connection, projectID, alice); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var invokes []access.ModelInvoke
+	dispatcher.Activate = func(_ context.Context, _ workflow.Attempt, _ bootstrap.Runtime, _ workflow.RuntimeBinding, invoke access.ModelInvoke) error {
+		invokes = append(invokes, invoke)
+		return nil
+	}
+	dispatchFor := func(launchKey, initiator string) (string, access.ModelInvoke) {
+		t.Helper()
+		run, err := store.CreateRun(ctx, workflow.RunInput{OrganizationID: orgID, ProjectID: projectID, LaunchKey: launchKey,
+			SourceCommit: sourceCommit, BundleSHA256: bundleDigest, VerificationSHA256: policySHA})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO workflow_run_bundles
+			(organization_id,run_id,bundle_json,verification_json,repository_url,git_ref)
+			VALUES ($1,$2,$3,$4,'https://github.com/owner/repo','main')`, orgID, run.ID, bundleJSON, policyJSON); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.AddTask(ctx, orgID, run.ID, "plan", inputSHA, 2); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true,initiator_principal_id=NULLIF($3,'') WHERE organization_id=$1 AND id=$2`,
+			orgID, run.ID, initiator); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE workflow_tasks SET state='cancelled' WHERE organization_id=$1 AND run_id<>$2 AND state='pending'`,
+			orgID, run.ID); err != nil {
+			t.Fatal(err)
+		}
+		ax.task = nil
+		invokes = nil
+		batch, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
+		if err != nil || len(batch.Outcomes) != 1 || batch.Outcomes[0].State != "started" || len(invokes) != 1 {
+			t.Fatalf("%s dispatch: %+v %v", launchKey, batch, err)
+		}
+		var grant string
+		if err := pool.QueryRow(ctx, `SELECT grant_id FROM access_bindings WHERE organization_id=$1 AND attempt_id=$2`,
+			orgID, batch.Outcomes[0].AttemptID).Scan(&grant); err != nil {
+			t.Fatal(err)
+		}
+		return grant, invokes[0]
+	}
+	grant, invoke := dispatchFor("codex-alice", alice)
+	if grant != "grant-alice-codex" || invoke.GranteeKind != "user" || invoke.GranteeID != alice {
+		t.Fatalf("alice's run did not bind her Codex subscription: grant=%s invoke=%+v", grant, invoke)
+	}
+	check, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision, err := access.AuthorizeModelInvoke(ctx, check, invoke)
+	_ = check.Rollback(ctx)
+	if err != nil || decision.DeliveryMode != "oauth_access" || decision.ConnectionID != connection {
+		t.Fatalf("alice's binding is not an oauth_access delivery: %+v %v", decision, err)
+	}
+	grant, invoke = dispatchFor("codex-bob", bob)
+	if grant != "grant" || invoke.GranteeKind != "workload" || invoke.GranteeID == bob {
+		t.Fatalf("bob's run bound alice's Codex subscription: grant=%s invoke=%+v", grant, invoke)
+	}
+	if grant, _ = dispatchFor("codex-no-initiator", ""); grant != "grant" {
+		t.Fatalf("a run without an initiator bound a personal subscription: %s", grant)
 	}
 }
 

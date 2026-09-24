@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -61,6 +62,14 @@ type Invocation struct {
 	maxOutputBytes  int
 	extension       *ExtensionMount // embedded extension stage; nil otherwise
 	extensionSource string          // pinned extension checkout
+	codexAuth       []byte          // delivered Codex ChatGPT sign-in; never env or argv
+}
+
+// withCodexAuth delivers an owner's Codex sign-in as $CODEX_HOME/auth.json
+// instead of OPENAI_API_KEY.
+func (in Invocation) withCodexAuth(data []byte) Invocation {
+	in.codexAuth = data
+	return in
 }
 
 // withExtension binds an embedded extension stage to its pinned checkout and
@@ -223,11 +232,25 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 	if in.extension != nil {
 		env = append(env, extensionEnv()...)
 	}
+	if in.codexAuth != nil {
+		if in.runtime.Harness != "codex" || len(credentialEnv) != 0 {
+			return nil, fmt.Errorf("%w: a Codex sign-in is only for Codex, alone", ErrBlocked)
+		}
+		if _, err := ParseCodexAuth(in.codexAuth); err != nil {
+			return nil, err
+		}
+		codexHome, err := writeCodexAuth(home, in.codexAuth)
+		defer os.Remove(statePath(CodexAuthPathFile))
+		if err != nil {
+			return nil, err
+		}
+		env = append(env, "CODEX_HOME="+codexHome)
+	}
 	toolEnv := append([]string(nil), env...)
 	seen := map[string]bool{}
 	for _, entry := range credentialEnv {
 		key, _, ok := strings.Cut(entry, "=")
-		if !ok || (key != "OPENAI_API_KEY" && key != "ANTHROPIC_API_KEY" && key != "OPENCODE_API_KEY") || seen[key] || strings.ContainsRune(entry, 0) {
+		if !ok || !slices.Contains(credentialEnvNames, key) || seen[key] || strings.ContainsRune(entry, 0) {
 			return nil, fmt.Errorf("%w: forbidden environment key", ErrBlocked)
 		}
 		seen[key] = true
@@ -282,11 +305,21 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 	if in.extension != nil {
 		signals = in.extension.Signals
 	}
-	return runInPane(runCtx, in, workdir, append(toolEnv, "BLAXSMITH_STATE_DIR="+StateDir()), launch{
+	output, err := runInPane(runCtx, in, workdir, append(toolEnv, "BLAXSMITH_STATE_DIR="+StateDir()), launch{
 		Harness: in.runtime.Harness, Dir: workdir, Base: in.base, Tmux: tmuxBinary, Signals: signals,
 		Run:    append([]string{in.runtime.Binary}, args...),
 		Resume: append([]string{in.runtime.Binary}, resume...),
 	})
+	if in.codexAuth != nil {
+		// The platform may have renewed the sign-in in place; hide those tokens too.
+		if data, readErr := os.ReadFile(filepath.Join(home, ".codex", "auth.json")); readErr == nil {
+			if secrets, parseErr := ParseCodexAuth(data); parseErr == nil {
+				output = redactSecrets(output, secrets)
+			}
+			clear(data)
+		}
+	}
+	return output, err
 }
 
 // runInPane starts the harness in the attempt's tmux session and blocks until

@@ -230,6 +230,61 @@ func (r *OAuthRefresher) RenewOAuthDelivery(ctx context.Context, tx pgx.Tx, leas
 	return r.Deliver(ctx, lease.Invoke.OrganizationID, decision.ConnectionID, lease.Until)
 }
 
+// CodexLeaseMargin keeps a Codex lease this far inside its access token's
+// expiry, so the CLI (which refreshes within 5 minutes of exp) never tries.
+const CodexLeaseMargin = 5 * time.Minute
+
+// RenewLease is the oauth_access renewal hook's database half. It rebuilds
+// the frozen binding for a lease RenewModelLeases just extended, runs
+// RenewOAuthDelivery in one transaction, and caps the lease at the delivered
+// token's expiry minus CodexLeaseMargin. It returns the delivery and the
+// lease expiry to announce to the guest.
+func (r *OAuthRefresher) RenewLease(ctx context.Context, renewed RenewedLease) (Delivery, time.Time, error) {
+	if r == nil || r.DB == nil || renewed.DeliveryMode != "oauth_access" || renewed.LeaseID == "" {
+		return Delivery{}, time.Time{}, ErrDenied
+	}
+	tx, err := r.DB.Begin(ctx)
+	if err != nil {
+		return Delivery{}, time.Time{}, err
+	}
+	defer tx.Rollback(ctx)
+	invoke := ModelInvoke{OrganizationID: renewed.OrganizationID}
+	var resource string
+	err = tx.QueryRow(ctx, `SELECT b.project_id,b.attempt_id,b.id,g.grantee_kind,g.grantee_id,b.resource,b.policy_version
+		FROM access_leases l
+		JOIN access_bindings b ON b.organization_id=l.organization_id AND b.id=l.binding_id
+		JOIN access_grants g ON g.organization_id=b.organization_id AND g.id=b.grant_id
+		WHERE l.organization_id=$1 AND l.id=$2 AND l.attempt_id=$3 AND l.capability='model.invoke'`,
+		renewed.OrganizationID, renewed.LeaseID, renewed.AttemptID).Scan(&invoke.ProjectID, &invoke.AttemptID,
+		&invoke.BindingID, &invoke.GranteeKind, &invoke.GranteeID, &resource, &invoke.PolicyVersion)
+	if err != nil {
+		return Delivery{}, time.Time{}, deniedOrError("oauth lease binding", err)
+	}
+	var ok bool
+	if invoke.Provider, invoke.Model, ok = strings.Cut(resource, "/"); !ok {
+		return Delivery{}, time.Time{}, ErrDenied
+	}
+	delivery, err := r.RenewOAuthDelivery(ctx, tx, OAuthLease{Invoke: invoke, LeaseID: renewed.LeaseID, Until: renewed.ExpiresAt})
+	if err != nil {
+		return Delivery{}, time.Time{}, err
+	}
+	var expiresAt time.Time
+	err = tx.QueryRow(ctx, `UPDATE access_leases SET expires_at=LEAST(expires_at,$3)
+		WHERE organization_id=$1 AND id=$2 RETURNING expires_at`,
+		renewed.OrganizationID, renewed.LeaseID, delivery.ExpiresAt.Add(-CodexLeaseMargin)).Scan(&expiresAt)
+	if err == nil {
+		err = tx.Commit(ctx)
+	}
+	if err == nil && !expiresAt.After(time.Now()) {
+		err = ErrDenied
+	}
+	if err != nil {
+		delivery.Clear()
+		return Delivery{}, time.Time{}, err
+	}
+	return delivery, expiresAt, nil
+}
+
 // accessToken serializes refresh per connection with a row lock on its
 // session. Refresh tokens rotate on use, so only the lock holder may spend
 // one, and the rotated token commits before the new access token is used.

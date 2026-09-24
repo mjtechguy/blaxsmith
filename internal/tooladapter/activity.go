@@ -17,7 +17,6 @@ package tooladapter
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -615,12 +614,11 @@ func bound(s string, limit int) (string, bool) {
 	return string([]rune(s)[:limit]) + "…", true
 }
 
-// redactText hides the leased provider keys, like the terminal redactor.
+// redactText hides the leased provider keys and Codex tokens, like the
+// terminal redactor.
 func redactText(s string) string {
-	for _, name := range []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY"} {
-		if key := os.Getenv(name); len(key) >= 8 {
-			s = strings.ReplaceAll(s, key, "[redacted]")
-		}
+	for _, secret := range leasedSecrets() {
+		s = strings.ReplaceAll(s, string(secret), "[redacted]")
 	}
 	return s
 }
