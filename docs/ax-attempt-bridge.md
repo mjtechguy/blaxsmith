@@ -37,8 +37,9 @@ The dispatcher now requires an activator before it will reserve work. It copies
 the validated Gateway's narrow egress allowlist into an attempt-named Gateway,
 reads that definition back, and binds it alongside the attempt Workspace before
 creating the Task. After AX/Substrate readback, it re-reads both bound resources
-while the runner is still held behind the bootstrap gate, then passes the
-persisted runtime binding and exact model grant to the activation callback. A
+while the runner is still held behind the bootstrap gate. It waits for AX
+Workspace setup completion before it passes the persisted runtime binding and
+exact model grant to the activation callback. A
 changed input fences the actor without releasing credentials. This removes the
 shared-name dependency for a running attempt, but AX still permits privileged
 writers to mutate those attempt resources and the readback does not prove the

@@ -40,14 +40,15 @@ networking disabled. It does not prove real-provider authentication, every
 permission denial against hostile requests, MCP calls or revocation, or AX
 workspace/lifecycle behavior.
 
-After bootstrap activation, dispatch now waits for AX's exact
-`WorkspaceReady=True/SetupComplete` condition and rechecks the actor against
-the frozen runtime binding before reporting `started`. This closes the
-premature-status path. The authenticated [workspace-ready probe](ax-workspace-ready-probe.json)
-now confirms the bridge stays pending when AX is `Running` but setup is not
-complete, and cleans the Task, actor, Workspace, and Gateways afterward. It
-released no credentials. The successful product activation-to-ready transition
-through this same bridge call remains unproved.
+Dispatch keeps the bootstrap gate closed until AX reports
+`WorkspaceReady=True/SetupComplete`, then rechecks the actor against the frozen
+runtime binding and the attempt inputs before opening the model lease. A
+PostgreSQL-backed test delays readiness and verifies activation happens only
+after that condition is observed. The authenticated
+[workspace-ready probe](ax-workspace-ready-probe.json) confirms the bridge
+stays pending when AX is `Running` but setup is not complete, and cleans the
+Task, actor, Workspace, and Gateways afterward. It released no credentials.
+Successful product activation after live workspace setup remains unproved.
 
 Blaxsmith delivers declared `instructions`, applicable `AGENTS.md`, Forge
 specification, decision transcript, and stage prompt as bounded instruction
