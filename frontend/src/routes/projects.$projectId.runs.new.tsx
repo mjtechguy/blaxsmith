@@ -14,7 +14,9 @@ import { StageDag } from "../recipe-pages";
 import { getRecipe, getRecipeVersion, listRecipes, parseRecipe, recipeKey, recipesKey, recipeVersionKey, validateRecipe } from "../recipes";
 import { getLaunchAvailability, getProject, getProjectSource, getProjectVerification, launchAvailabilityQueryKey, launchRun, projectSourceQueryKey, projectVerificationQueryKey } from "../workflow";
 
-export const Route = createFileRoute("/projects/$projectId/runs/new")({ component: NewRun });
+// ?recipe= preselects a library recipe (the command palette's "Start run from recipe").
+export const Route = createFileRoute("/projects/$projectId/runs/new")({ component: NewRun,
+  validateSearch: (search: Record<string, unknown>): { recipe?: string } => typeof search.recipe === "string" ? { recipe: search.recipe } : {} });
 
 function NewRun() {
   const { projectId } = Route.useParams();
@@ -49,7 +51,8 @@ function RunEditor({ projectId, org, source, verification }: { projectId: string
   const [error, setError] = useState("");
   const [launchKey] = useState(() => `run-${new Date().toISOString().slice(0, 19).replaceAll(":", "-")}-${crypto.randomUUID().slice(0, 8)}`);
   const recipes = useQuery({ queryKey: recipesKey(org, projectId), enabled: Boolean(org), queryFn: ({ signal }) => listRecipes(projectId, signal) });
-  const [recipeId, setRecipeId] = useState("");
+  const requested = Route.useSearch().recipe ?? "";
+  const [recipeId, setRecipeId] = useState(requested);
   // Preselect the repository's suggested recipe (by library name) once.
   const suggestion = useRepositoryInspection(projectId);
   const [preselected, setPreselected] = useState(false);

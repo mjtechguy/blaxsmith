@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Hammer, KeyRound, LayoutDashboard, LogOut, Menu, Moon, ShieldCheck, Sun, Wrench, X } from "lucide-react";
 import { isOrgAdmin } from "./admin";
+import { CommandPalette } from "./command-palette";
 import { announceSessionChange, clearWorkspaceCache, logout, sessionQueryKey } from "./auth";
 import type { SessionIdentity } from "./gen/blaxsmith/api/v1/auth_pb";
 
@@ -102,6 +103,7 @@ export function Shell({ children, session }: { children: ReactNode; session?: Se
         </div>
         <div className="topbar-right">
           <span className="preview-pill">Preview</span>
+          {session ? <CommandPalette session={session} /> : null}
           <button type="button" className="icon-button theme-button" onClick={() => setTheme(nextTheme)} aria-label={`Theme: ${theme}. Switch to ${nextTheme}`} title={`Theme: ${theme}`}>
             {theme === "dark" ? <Moon size={17} /> : <Sun size={17} />}
           </button>
