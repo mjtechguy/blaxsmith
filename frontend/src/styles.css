@@ -536,6 +536,9 @@ a { color: inherit; text-decoration: none; }
 .access-chain strong { color: var(--text); font-weight: 650; }
 .access-check-title { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; }
 
+.repo-suggestion { display: flex; flex-direction: column; gap: 6px; }
+.repo-suggestion .form-hint code { margin-right: 6px; }
+
 /* Connection health line. */
 .health-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .health-line .state-badge { flex: none; }

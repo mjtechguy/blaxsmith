@@ -230,6 +230,199 @@ func (x *ExplainAccessResponse) GetPrincipalLabel() string {
 	return ""
 }
 
+// One suggested check or setup step: an exact argv, no shell.
+type RepositoryCommand struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Command       []string               `protobuf:"bytes,2,rep,name=command,proto3" json:"command,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RepositoryCommand) Reset() {
+	*x = RepositoryCommand{}
+	mi := &file_blaxsmith_api_v1_setup_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RepositoryCommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RepositoryCommand) ProtoMessage() {}
+
+func (x *RepositoryCommand) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_setup_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RepositoryCommand.ProtoReflect.Descriptor instead.
+func (*RepositoryCommand) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_setup_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *RepositoryCommand) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *RepositoryCommand) GetCommand() []string {
+	if x != nil {
+		return x.Command
+	}
+	return nil
+}
+
+// Reads the project's Git source at its pinned commit through the same fetch
+// path as runs (the project's Git connection for private sources). A valid
+// .blaxsmith.json (docs/project-file.md) wins; otherwise root manifests are
+// detected. Suggestions only: the caller confirms before anything is saved.
+type InspectRepositoryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InspectRepositoryRequest) Reset() {
+	*x = InspectRepositoryRequest{}
+	mi := &file_blaxsmith_api_v1_setup_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InspectRepositoryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InspectRepositoryRequest) ProtoMessage() {}
+
+func (x *InspectRepositoryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_setup_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InspectRepositoryRequest.ProtoReflect.Descriptor instead.
+func (*InspectRepositoryRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_setup_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *InspectRepositoryRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+type InspectRepositoryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Commit        string                 `protobuf:"bytes,1,opt,name=commit,proto3" json:"commit,omitempty"`
+	Source        string                 `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`                        // file, detected, or none.
+	FileError     string                 `protobuf:"bytes,3,opt,name=file_error,json=fileError,proto3" json:"file_error,omitempty"` // Why .blaxsmith.json was ignored; empty if valid or absent.
+	Verification  []*RepositoryCommand   `protobuf:"bytes,4,rep,name=verification,proto3" json:"verification,omitempty"`
+	Setup         []*RepositoryCommand   `protobuf:"bytes,5,rep,name=setup,proto3" json:"setup,omitempty"`
+	Recipe        string                 `protobuf:"bytes,6,opt,name=recipe,proto3" json:"recipe,omitempty"`     // Suggested library recipe name.
+	Evidence      []string               `protobuf:"bytes,7,rep,name=evidence,proto3" json:"evidence,omitempty"` // What the suggestion is based on, e.g. "go.mod".
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InspectRepositoryResponse) Reset() {
+	*x = InspectRepositoryResponse{}
+	mi := &file_blaxsmith_api_v1_setup_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InspectRepositoryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InspectRepositoryResponse) ProtoMessage() {}
+
+func (x *InspectRepositoryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_setup_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InspectRepositoryResponse.ProtoReflect.Descriptor instead.
+func (*InspectRepositoryResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_setup_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *InspectRepositoryResponse) GetCommit() string {
+	if x != nil {
+		return x.Commit
+	}
+	return ""
+}
+
+func (x *InspectRepositoryResponse) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *InspectRepositoryResponse) GetFileError() string {
+	if x != nil {
+		return x.FileError
+	}
+	return ""
+}
+
+func (x *InspectRepositoryResponse) GetVerification() []*RepositoryCommand {
+	if x != nil {
+		return x.Verification
+	}
+	return nil
+}
+
+func (x *InspectRepositoryResponse) GetSetup() []*RepositoryCommand {
+	if x != nil {
+		return x.Setup
+	}
+	return nil
+}
+
+func (x *InspectRepositoryResponse) GetRecipe() string {
+	if x != nil {
+		return x.Recipe
+	}
+	return ""
+}
+
+func (x *InspectRepositoryResponse) GetEvidence() []string {
+	if x != nil {
+		return x.Evidence
+	}
+	return nil
+}
+
 var File_blaxsmith_api_v1_setup_proto protoreflect.FileDescriptor
 
 const file_blaxsmith_api_v1_setup_proto_rawDesc = "" +
@@ -252,9 +445,25 @@ const file_blaxsmith_api_v1_setup_proto_rawDesc = "" +
 	"\x05steps\x18\x02 \x03(\v2\x1c.blaxsmith.api.v1.AccessStepR\x05steps\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x19\n" +
 	"\bgrant_id\x18\x04 \x01(\tR\agrantId\x12'\n" +
-	"\x0fprincipal_label\x18\x05 \x01(\tR\x0eprincipalLabel2p\n" +
+	"\x0fprincipal_label\x18\x05 \x01(\tR\x0eprincipalLabel\"=\n" +
+	"\x11RepositoryCommand\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
+	"\acommand\x18\x02 \x03(\tR\acommand\"9\n" +
+	"\x18InspectRepositoryRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\"\xa2\x02\n" +
+	"\x19InspectRepositoryResponse\x12\x16\n" +
+	"\x06commit\x18\x01 \x01(\tR\x06commit\x12\x16\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\x12\x1d\n" +
+	"\n" +
+	"file_error\x18\x03 \x01(\tR\tfileError\x12G\n" +
+	"\fverification\x18\x04 \x03(\v2#.blaxsmith.api.v1.RepositoryCommandR\fverification\x129\n" +
+	"\x05setup\x18\x05 \x03(\v2#.blaxsmith.api.v1.RepositoryCommandR\x05setup\x12\x16\n" +
+	"\x06recipe\x18\x06 \x01(\tR\x06recipe\x12\x1a\n" +
+	"\bevidence\x18\a \x03(\tR\bevidence2\xde\x01\n" +
 	"\fSetupService\x12`\n" +
-	"\rExplainAccess\x12&.blaxsmith.api.v1.ExplainAccessRequest\x1a'.blaxsmith.api.v1.ExplainAccessResponseB\xc2\x01\n" +
+	"\rExplainAccess\x12&.blaxsmith.api.v1.ExplainAccessRequest\x1a'.blaxsmith.api.v1.ExplainAccessResponse\x12l\n" +
+	"\x11InspectRepository\x12*.blaxsmith.api.v1.InspectRepositoryRequest\x1a+.blaxsmith.api.v1.InspectRepositoryResponseB\xc2\x01\n" +
 	"\x14com.blaxsmith.api.v1B\n" +
 	"SetupProtoP\x01Z<github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1;apiv1\xa2\x02\x03BAX\xaa\x02\x10Blaxsmith.Api.V1\xca\x02\x10Blaxsmith\\Api\\V1\xe2\x02\x1cBlaxsmith\\Api\\V1\\GPBMetadata\xea\x02\x12Blaxsmith::Api::V1b\x06proto3"
 
@@ -270,21 +479,28 @@ func file_blaxsmith_api_v1_setup_proto_rawDescGZIP() []byte {
 	return file_blaxsmith_api_v1_setup_proto_rawDescData
 }
 
-var file_blaxsmith_api_v1_setup_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_blaxsmith_api_v1_setup_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_blaxsmith_api_v1_setup_proto_goTypes = []any{
-	(*AccessStep)(nil),            // 0: blaxsmith.api.v1.AccessStep
-	(*ExplainAccessRequest)(nil),  // 1: blaxsmith.api.v1.ExplainAccessRequest
-	(*ExplainAccessResponse)(nil), // 2: blaxsmith.api.v1.ExplainAccessResponse
+	(*AccessStep)(nil),                // 0: blaxsmith.api.v1.AccessStep
+	(*ExplainAccessRequest)(nil),      // 1: blaxsmith.api.v1.ExplainAccessRequest
+	(*ExplainAccessResponse)(nil),     // 2: blaxsmith.api.v1.ExplainAccessResponse
+	(*RepositoryCommand)(nil),         // 3: blaxsmith.api.v1.RepositoryCommand
+	(*InspectRepositoryRequest)(nil),  // 4: blaxsmith.api.v1.InspectRepositoryRequest
+	(*InspectRepositoryResponse)(nil), // 5: blaxsmith.api.v1.InspectRepositoryResponse
 }
 var file_blaxsmith_api_v1_setup_proto_depIdxs = []int32{
 	0, // 0: blaxsmith.api.v1.ExplainAccessResponse.steps:type_name -> blaxsmith.api.v1.AccessStep
-	1, // 1: blaxsmith.api.v1.SetupService.ExplainAccess:input_type -> blaxsmith.api.v1.ExplainAccessRequest
-	2, // 2: blaxsmith.api.v1.SetupService.ExplainAccess:output_type -> blaxsmith.api.v1.ExplainAccessResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3, // 1: blaxsmith.api.v1.InspectRepositoryResponse.verification:type_name -> blaxsmith.api.v1.RepositoryCommand
+	3, // 2: blaxsmith.api.v1.InspectRepositoryResponse.setup:type_name -> blaxsmith.api.v1.RepositoryCommand
+	1, // 3: blaxsmith.api.v1.SetupService.ExplainAccess:input_type -> blaxsmith.api.v1.ExplainAccessRequest
+	4, // 4: blaxsmith.api.v1.SetupService.InspectRepository:input_type -> blaxsmith.api.v1.InspectRepositoryRequest
+	2, // 5: blaxsmith.api.v1.SetupService.ExplainAccess:output_type -> blaxsmith.api.v1.ExplainAccessResponse
+	5, // 6: blaxsmith.api.v1.SetupService.InspectRepository:output_type -> blaxsmith.api.v1.InspectRepositoryResponse
+	5, // [5:7] is the sub-list for method output_type
+	3, // [3:5] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_blaxsmith_api_v1_setup_proto_init() }
@@ -298,7 +514,7 @@ func file_blaxsmith_api_v1_setup_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blaxsmith_api_v1_setup_proto_rawDesc), len(file_blaxsmith_api_v1_setup_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

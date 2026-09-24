@@ -36,11 +36,15 @@ const (
 	// SetupServiceExplainAccessProcedure is the fully-qualified name of the SetupService's
 	// ExplainAccess RPC.
 	SetupServiceExplainAccessProcedure = "/blaxsmith.api.v1.SetupService/ExplainAccess"
+	// SetupServiceInspectRepositoryProcedure is the fully-qualified name of the SetupService's
+	// InspectRepository RPC.
+	SetupServiceInspectRepositoryProcedure = "/blaxsmith.api.v1.SetupService/InspectRepository"
 )
 
 // SetupServiceClient is a client for the blaxsmith.api.v1.SetupService service.
 type SetupServiceClient interface {
 	ExplainAccess(context.Context, *connect.Request[v1.ExplainAccessRequest]) (*connect.Response[v1.ExplainAccessResponse], error)
+	InspectRepository(context.Context, *connect.Request[v1.InspectRepositoryRequest]) (*connect.Response[v1.InspectRepositoryResponse], error)
 }
 
 // NewSetupServiceClient constructs a client for the blaxsmith.api.v1.SetupService service. By
@@ -60,12 +64,19 @@ func NewSetupServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(setupServiceMethods.ByName("ExplainAccess")),
 			connect.WithClientOptions(opts...),
 		),
+		inspectRepository: connect.NewClient[v1.InspectRepositoryRequest, v1.InspectRepositoryResponse](
+			httpClient,
+			baseURL+SetupServiceInspectRepositoryProcedure,
+			connect.WithSchema(setupServiceMethods.ByName("InspectRepository")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // setupServiceClient implements SetupServiceClient.
 type setupServiceClient struct {
-	explainAccess *connect.Client[v1.ExplainAccessRequest, v1.ExplainAccessResponse]
+	explainAccess     *connect.Client[v1.ExplainAccessRequest, v1.ExplainAccessResponse]
+	inspectRepository *connect.Client[v1.InspectRepositoryRequest, v1.InspectRepositoryResponse]
 }
 
 // ExplainAccess calls blaxsmith.api.v1.SetupService.ExplainAccess.
@@ -73,9 +84,15 @@ func (c *setupServiceClient) ExplainAccess(ctx context.Context, req *connect.Req
 	return c.explainAccess.CallUnary(ctx, req)
 }
 
+// InspectRepository calls blaxsmith.api.v1.SetupService.InspectRepository.
+func (c *setupServiceClient) InspectRepository(ctx context.Context, req *connect.Request[v1.InspectRepositoryRequest]) (*connect.Response[v1.InspectRepositoryResponse], error) {
+	return c.inspectRepository.CallUnary(ctx, req)
+}
+
 // SetupServiceHandler is an implementation of the blaxsmith.api.v1.SetupService service.
 type SetupServiceHandler interface {
 	ExplainAccess(context.Context, *connect.Request[v1.ExplainAccessRequest]) (*connect.Response[v1.ExplainAccessResponse], error)
+	InspectRepository(context.Context, *connect.Request[v1.InspectRepositoryRequest]) (*connect.Response[v1.InspectRepositoryResponse], error)
 }
 
 // NewSetupServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -91,10 +108,18 @@ func NewSetupServiceHandler(svc SetupServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(setupServiceMethods.ByName("ExplainAccess")),
 		connect.WithHandlerOptions(opts...),
 	)
+	setupServiceInspectRepositoryHandler := connect.NewUnaryHandler(
+		SetupServiceInspectRepositoryProcedure,
+		svc.InspectRepository,
+		connect.WithSchema(setupServiceMethods.ByName("InspectRepository")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blaxsmith.api.v1.SetupService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SetupServiceExplainAccessProcedure:
 			setupServiceExplainAccessHandler.ServeHTTP(w, r)
+		case SetupServiceInspectRepositoryProcedure:
+			setupServiceInspectRepositoryHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -106,4 +131,8 @@ type UnimplementedSetupServiceHandler struct{}
 
 func (UnimplementedSetupServiceHandler) ExplainAccess(context.Context, *connect.Request[v1.ExplainAccessRequest]) (*connect.Response[v1.ExplainAccessResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.SetupService.ExplainAccess is not implemented"))
+}
+
+func (UnimplementedSetupServiceHandler) InspectRepository(context.Context, *connect.Request[v1.InspectRepositoryRequest]) (*connect.Response[v1.InspectRepositoryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.SetupService.InspectRepository is not implemented"))
 }

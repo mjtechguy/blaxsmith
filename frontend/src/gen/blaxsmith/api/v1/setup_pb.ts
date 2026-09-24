@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file blaxsmith/api/v1/setup.proto.
  */
 export const file_blaxsmith_api_v1_setup: GenFile = /*@__PURE__*/
-  fileDesc("ChxibGF4c21pdGgvYXBpL3YxL3NldHVwLnByb3RvEhBibGF4c21pdGguYXBpLnYxIjUKCkFjY2Vzc1N0ZXASDAoEa2luZBgBIAEoCRINCgVsYWJlbBgCIAEoCRIKCgJpZBgDIAEoCSJsChRFeHBsYWluQWNjZXNzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhUKDXJlc291cmNlX2tpbmQYAiABKAkSEwoLcmVzb3VyY2VfaWQYAyABKAkSFAoMcHJpbmNpcGFsX2lkGAQgASgJIo8BChVFeHBsYWluQWNjZXNzUmVzcG9uc2USDgoGdXNhYmxlGAEgASgIEisKBXN0ZXBzGAIgAygLMhwuYmxheHNtaXRoLmFwaS52MS5BY2Nlc3NTdGVwEg4KBnJlYXNvbhgDIAEoCRIQCghncmFudF9pZBgEIAEoCRIXCg9wcmluY2lwYWxfbGFiZWwYBSABKAkycAoMU2V0dXBTZXJ2aWNlEmAKDUV4cGxhaW5BY2Nlc3MSJi5ibGF4c21pdGguYXBpLnYxLkV4cGxhaW5BY2Nlc3NSZXF1ZXN0GicuYmxheHNtaXRoLmFwaS52MS5FeHBsYWluQWNjZXNzUmVzcG9uc2VCwgEKFGNvbS5ibGF4c21pdGguYXBpLnYxQgpTZXR1cFByb3RvUAFaPGdpdGh1Yi5jb20vbWp0ZWNoZ3V5L2JsYXhzbWl0aC9nZW4vZ28vYmxheHNtaXRoL2FwaS92MTthcGl2MaICA0JBWKoCEEJsYXhzbWl0aC5BcGkuVjHKAhBCbGF4c21pdGhcQXBpXFYx4gIcQmxheHNtaXRoXEFwaVxWMVxHUEJNZXRhZGF0YeoCEkJsYXhzbWl0aDo6QXBpOjpWMWIGcHJvdG8z");
+  fileDesc("ChxibGF4c21pdGgvYXBpL3YxL3NldHVwLnByb3RvEhBibGF4c21pdGguYXBpLnYxIjUKCkFjY2Vzc1N0ZXASDAoEa2luZBgBIAEoCRINCgVsYWJlbBgCIAEoCRIKCgJpZBgDIAEoCSJsChRFeHBsYWluQWNjZXNzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhUKDXJlc291cmNlX2tpbmQYAiABKAkSEwoLcmVzb3VyY2VfaWQYAyABKAkSFAoMcHJpbmNpcGFsX2lkGAQgASgJIo8BChVFeHBsYWluQWNjZXNzUmVzcG9uc2USDgoGdXNhYmxlGAEgASgIEisKBXN0ZXBzGAIgAygLMhwuYmxheHNtaXRoLmFwaS52MS5BY2Nlc3NTdGVwEg4KBnJlYXNvbhgDIAEoCRIQCghncmFudF9pZBgEIAEoCRIXCg9wcmluY2lwYWxfbGFiZWwYBSABKAkiMAoRUmVwb3NpdG9yeUNvbW1hbmQSCgoCaWQYASABKAkSDwoHY29tbWFuZBgCIAMoCSIuChhJbnNwZWN0UmVwb3NpdG9yeVJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCSLgAQoZSW5zcGVjdFJlcG9zaXRvcnlSZXNwb25zZRIOCgZjb21taXQYASABKAkSDgoGc291cmNlGAIgASgJEhIKCmZpbGVfZXJyb3IYAyABKAkSOQoMdmVyaWZpY2F0aW9uGAQgAygLMiMuYmxheHNtaXRoLmFwaS52MS5SZXBvc2l0b3J5Q29tbWFuZBIyCgVzZXR1cBgFIAMoCzIjLmJsYXhzbWl0aC5hcGkudjEuUmVwb3NpdG9yeUNvbW1hbmQSDgoGcmVjaXBlGAYgASgJEhAKCGV2aWRlbmNlGAcgAygJMt4BCgxTZXR1cFNlcnZpY2USYAoNRXhwbGFpbkFjY2VzcxImLmJsYXhzbWl0aC5hcGkudjEuRXhwbGFpbkFjY2Vzc1JlcXVlc3QaJy5ibGF4c21pdGguYXBpLnYxLkV4cGxhaW5BY2Nlc3NSZXNwb25zZRJsChFJbnNwZWN0UmVwb3NpdG9yeRIqLmJsYXhzbWl0aC5hcGkudjEuSW5zcGVjdFJlcG9zaXRvcnlSZXF1ZXN0GisuYmxheHNtaXRoLmFwaS52MS5JbnNwZWN0UmVwb3NpdG9yeVJlc3BvbnNlQsIBChRjb20uYmxheHNtaXRoLmFwaS52MUIKU2V0dXBQcm90b1ABWjxnaXRodWIuY29tL21qdGVjaGd1eS9ibGF4c21pdGgvZ2VuL2dvL2JsYXhzbWl0aC9hcGkvdjE7YXBpdjGiAgNCQViqAhBCbGF4c21pdGguQXBpLlYxygIQQmxheHNtaXRoXEFwaVxWMeICHEJsYXhzbWl0aFxBcGlcVjFcR1BCTWV0YWRhdGHqAhJCbGF4c21pdGg6OkFwaTo6VjFiBnByb3RvMw");
 
 /**
  * One link of an access chain, closest to the principal first:
@@ -124,6 +124,107 @@ export const ExplainAccessResponseSchema: GenMessage<ExplainAccessResponse> = /*
   messageDesc(file_blaxsmith_api_v1_setup, 2);
 
 /**
+ * One suggested check or setup step: an exact argv, no shell.
+ *
+ * @generated from message blaxsmith.api.v1.RepositoryCommand
+ */
+export type RepositoryCommand = Message<"blaxsmith.api.v1.RepositoryCommand"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: repeated string command = 2;
+   */
+  command: string[];
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.RepositoryCommand.
+ * Use `create(RepositoryCommandSchema)` to create a new message.
+ */
+export const RepositoryCommandSchema: GenMessage<RepositoryCommand> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_setup, 3);
+
+/**
+ * Reads the project's Git source at its pinned commit through the same fetch
+ * path as runs (the project's Git connection for private sources). A valid
+ * .blaxsmith.json (docs/project-file.md) wins; otherwise root manifests are
+ * detected. Suggestions only: the caller confirms before anything is saved.
+ *
+ * @generated from message blaxsmith.api.v1.InspectRepositoryRequest
+ */
+export type InspectRepositoryRequest = Message<"blaxsmith.api.v1.InspectRepositoryRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.InspectRepositoryRequest.
+ * Use `create(InspectRepositoryRequestSchema)` to create a new message.
+ */
+export const InspectRepositoryRequestSchema: GenMessage<InspectRepositoryRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_setup, 4);
+
+/**
+ * @generated from message blaxsmith.api.v1.InspectRepositoryResponse
+ */
+export type InspectRepositoryResponse = Message<"blaxsmith.api.v1.InspectRepositoryResponse"> & {
+  /**
+   * @generated from field: string commit = 1;
+   */
+  commit: string;
+
+  /**
+   * file, detected, or none.
+   *
+   * @generated from field: string source = 2;
+   */
+  source: string;
+
+  /**
+   * Why .blaxsmith.json was ignored; empty if valid or absent.
+   *
+   * @generated from field: string file_error = 3;
+   */
+  fileError: string;
+
+  /**
+   * @generated from field: repeated blaxsmith.api.v1.RepositoryCommand verification = 4;
+   */
+  verification: RepositoryCommand[];
+
+  /**
+   * @generated from field: repeated blaxsmith.api.v1.RepositoryCommand setup = 5;
+   */
+  setup: RepositoryCommand[];
+
+  /**
+   * Suggested library recipe name.
+   *
+   * @generated from field: string recipe = 6;
+   */
+  recipe: string;
+
+  /**
+   * What the suggestion is based on, e.g. "go.mod".
+   *
+   * @generated from field: repeated string evidence = 7;
+   */
+  evidence: string[];
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.InspectRepositoryResponse.
+ * Use `create(InspectRepositoryResponseSchema)` to create a new message.
+ */
+export const InspectRepositoryResponseSchema: GenMessage<InspectRepositoryResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_setup, 5);
+
+/**
  * @generated from service blaxsmith.api.v1.SetupService
  */
 export const SetupService: GenService<{
@@ -134,6 +235,14 @@ export const SetupService: GenService<{
     methodKind: "unary";
     input: typeof ExplainAccessRequestSchema;
     output: typeof ExplainAccessResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.SetupService.InspectRepository
+   */
+  inspectRepository: {
+    methodKind: "unary";
+    input: typeof InspectRepositoryRequestSchema;
+    output: typeof InspectRepositoryResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_blaxsmith_api_v1_setup, 0);

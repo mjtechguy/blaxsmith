@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useForm } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,6 +8,7 @@ import { currentSession, sessionQueryKey } from "../auth";
 import { TextField } from "../form-field";
 import type { ProjectSource, ProjectVerification } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { AccessExplanation } from "../access-explain";
+import { useRepositoryInspection } from "../repo-inspect";
 import { PageHeader, PageShell } from "../page";
 import { StageDag } from "../recipe-pages";
 import { getRecipe, getRecipeVersion, listRecipes, parseRecipe, recipeKey, recipesKey, recipeVersionKey, validateRecipe } from "../recipes";
@@ -49,6 +50,16 @@ function RunEditor({ projectId, org, source, verification }: { projectId: string
   const [launchKey] = useState(() => `run-${new Date().toISOString().slice(0, 19).replaceAll(":", "-")}-${crypto.randomUUID().slice(0, 8)}`);
   const recipes = useQuery({ queryKey: recipesKey(org, projectId), enabled: Boolean(org), queryFn: ({ signal }) => listRecipes(projectId, signal) });
   const [recipeId, setRecipeId] = useState("");
+  // Preselect the repository's suggested recipe (by library name) once.
+  const suggestion = useRepositoryInspection(projectId);
+  const [preselected, setPreselected] = useState(false);
+  useEffect(() => {
+    const name = suggestion.data?.recipe;
+    if (preselected || recipeId || !name || !recipes.data) return;
+    const match = recipes.data.recipes.find((r) => r.name === name);
+    if (match) setRecipeId(match.id);
+    setPreselected(true);
+  }, [preselected, recipeId, suggestion.data?.recipe, recipes.data]);
   const [versionChoice, setVersionChoice] = useState("");
   const chosenRecipe = recipes.data?.recipes.find((r) => r.id === recipeId);
   const recipe = useQuery({ queryKey: recipeKey(org, recipeId), enabled: Boolean(org && recipeId), queryFn: ({ signal }) => getRecipe(recipeId, signal) });
@@ -109,6 +120,8 @@ function RunEditor({ projectId, org, source, verification }: { projectId: string
             </select></label>
         </div>
         {recipeId ? <AccessExplanation projectId={projectId} kind="recipe" resourceId={recipeId} /> : null}
+        {preselected && suggestion.data?.recipe ? <p className="form-hint">{recipes.data?.recipes.some((r) => r.name === suggestion.data?.recipe)
+          ? `Preselected “${suggestion.data.recipe}” from the repository's .blaxsmith.json.` : `The repository suggests “${suggestion.data.recipe}”, which is not available to this project.`}</p> : null}
         {version.data?.version ? <p className="form-hint">Freezes v{version.data.version.version} (<code>{version.data.version.sha256.slice(0, 12)}</code>) as <code>{version.data.version.frozenPath}</code>. Its prompts and skills are read from the repository commit.</p> : null}
         <p className="form-hint"><Link className="text-action" to="/projects/$projectId/recipes" params={{ projectId }}><BookCopy size={14} aria-hidden="true" /> Manage recipes</Link></p>
         <details className="recipe-advanced"><summary>Advanced: use a committed recipe file</summary>

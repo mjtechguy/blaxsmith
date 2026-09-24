@@ -11,6 +11,12 @@ export async function explainAccess(projectId: string, resourceKind: "connection
   return client.explainAccess({ projectId, resourceKind, resourceId, principalId }, { signal });
 }
 
+export const inspectKey = (org: string, projectId: string) => ["inspect-repository", org, projectId] as const;
+
+export async function inspectRepository(projectId: string, signal?: AbortSignal) {
+  return client.inspectRepository({ projectId }, { signal });
+}
+
 const stepNames: Record<string, string> = {
   project_grant: "project grant", user_grant: "user grant", role_grant: "role grant",
   organization_connection: "org connection", project_connection: "project connection", personal_connection: "personal connection",

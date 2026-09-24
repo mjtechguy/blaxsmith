@@ -317,6 +317,9 @@ const rpc = {
   ListGitBranches: () => ({ branches: ["main", "develop", "release/1.0"] }),
   GetGitHubApp: () => ({ clientId: gitHubApp.clientId, configured: gitHubApp.configured, callbackUrl: "http://localhost:5173/oauth/github/callback" }),
   SetGitHubApp: ({ clientId, clientSecret = "" }) => { gitHubApp = { clientId, configured: gitHubApp.configured || Boolean(clientSecret) }; return gitHubApp; },
+  InspectRepository: () => ({ commit: run.sourceCommit, source: "file", fileError: "", recipe: "Guild engineering", evidence: [".blaxsmith.json"],
+    verification: [{ id: "go-test", command: ["go", "test", "./..."] }, { id: "go-vet", command: ["go", "vet", "./..."] }, { id: "lint", command: ["make", "lint"] }],
+    setup: [{ id: "go-mod-download", command: ["go", "mod", "download"] }] }),
   // SetupService: a simplified grant walk; the server runs access.MatchingGrant.
   ExplainAccess: ({ projectId: pid, resourceKind, resourceId, principalId: who = "" }) => {
     const reach = { member: "members and above", admin: "admins and owners", owner: "owners only" };

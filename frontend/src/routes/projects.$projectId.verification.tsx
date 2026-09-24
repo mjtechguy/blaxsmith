@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useForm } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,6 +8,7 @@ import { currentSession, sessionQueryKey } from "../auth";
 import { TextField } from "../form-field";
 import type { ProjectVerification } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
+import { RepositorySuggestion, useRepositoryInspection } from "../repo-inspect";
 import { getProject, getProjectVerification, launchAvailabilityQueryKey, projectVerificationQueryKey, setProjectVerification } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId/verification")({ component: VerificationSettings });
@@ -36,6 +37,11 @@ function VerificationEditor({ projectId, org, current }: { projectId: string; or
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
+  // Suggestions from .blaxsmith.json or detection prefill an empty policy;
+  // an existing one is only replaced on request. Nothing saves until Save.
+  const inspection = useRepositoryInspection(projectId);
+  const suggested = inspection.data?.verification.map((c) => ({ id: c.id, command: [...c.command] })) ?? [];
+  const [prefilled, setPrefilled] = useState(false);
   const form = useForm({
     defaultValues: { checks: current?.checks.map((check) => ({ id: check.id, command: [...check.command] })) || [{ id: "", command: [""] }] },
     onSubmit: async ({ value }) => {
@@ -63,9 +69,17 @@ function VerificationEditor({ projectId, org, current }: { projectId: string; or
     },
   });
 
+  useEffect(() => {
+    if (current || prefilled || !suggested.length || form.state.isDirty) return;
+    form.setFieldValue("checks", suggested);
+    setPrefilled(true);
+  }, [current, prefilled, suggested.length]);
   return <div className="editor-layout">
     <section className="editor-card" aria-labelledby="checks-heading">
       <div className="editor-card-heading"><span className="project-symbol"><ShieldCheck size={18} aria-hidden="true" /></span><div><h2 id="checks-heading">Checks</h2><p>{current ? `Version ${current.version.toString()} · Updated ${new Date(current.updatedAt).toLocaleString()}` : "At least one check is required to launch a run."}</p></div></div>
+      <RepositorySuggestion projectId={projectId} />
+      {prefilled ? <p className="notice" role="status">These checks were prefilled from the repository. Review them, then save.</p> : null}
+      {current && suggested.length ? <button type="button" className="secondary-button" onClick={() => { form.setFieldValue("checks", suggested); setPrefilled(true); }}>Use suggested checks</button> : null}
       <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
         <form.Field name="checks" mode="array">{(checksField) => <>
           {checksField.state.value.map((_, checkIndex) => <div className="verification-check" key={checkIndex}>

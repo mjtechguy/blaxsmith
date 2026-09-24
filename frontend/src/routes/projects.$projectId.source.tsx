@@ -10,6 +10,7 @@ import { listGitBranches, listGitRepositories, providerLabel } from "../connecti
 import { TextField } from "../form-field";
 import type { ProjectSource } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
+import { RepositorySuggestion } from "../repo-inspect";
 import {
   createGitConnection, getProject, getProjectSource, gitConnectionsQueryKey, launchAvailabilityQueryKey, listGitConnections,
   projectSourceQueryKey, setProjectSource,
@@ -33,6 +34,9 @@ function ProjectSourceSettings() {
     {source.isError ? <div className="state-panel" role="alert"><h2>Source unavailable</h2><p>Source settings could not be loaded.</p><button type="button" className="secondary-button" onClick={() => void source.refetch()}>Try again</button></div> : null}
     {project.data?.project && source.isSuccess && !mayEdit ? <div className="state-panel" role="note"><h2>Source settings are read-only</h2><p>Only organization owners and admins can change a project’s Git source.</p></div> : null}
     {project.data?.project && source.isSuccess && mayEdit ? <SourceEditor projectId={projectId} org={org} source={source.data} /> : null}
+    {source.data ? <section className="table-section" aria-labelledby="repo-suggestion-heading"><div className="table-heading"><div><h2 id="repo-suggestion-heading">What this repository suggests</h2>
+      <p>Read from .blaxsmith.json at the pinned commit, or detected from its manifests. Nothing is saved until you confirm.</p></div></div>
+      <div className="source-summary"><RepositorySuggestion projectId={projectId} reviewLink={mayEdit} /></div></section> : null}
   </PageShell>;
 }
 

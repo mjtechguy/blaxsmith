@@ -58,6 +58,10 @@ func ListFiles(ctx context.Context, repo, ref string) (string, []string, error) 
 	if err != nil {
 		return "", nil, err
 	}
+	return g.commit, g.regularFiles(), nil
+}
+
+func (g gitSource) regularFiles() []string {
 	names := make([]string, 0, len(g.files))
 	for name, f := range g.files {
 		if (f.mode == "100644" || f.mode == "100755") && validPath(name) {
@@ -65,7 +69,30 @@ func ListFiles(ctx context.Context, repo, ref string) (string, []string, error) 
 		}
 	}
 	slices.Sort(names)
-	return g.commit, names, nil
+	return names
+}
+
+// ReadFiles resolves ref once and returns the commit, its regular files, and
+// the contents of each named file that exists at that commit (1 MiB max).
+// Repository inspection uses it to read root manifests without a checkout.
+func ReadFiles(ctx context.Context, repo, ref string, names []string) (string, []string, map[string][]byte, error) {
+	g, err := openGit(ctx, repo, ref)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	all := g.regularFiles()
+	contents := map[string][]byte{}
+	for _, name := range names {
+		if _, ok := g.files[name]; !ok {
+			continue
+		}
+		data, err := g.read(ctx, name)
+		if err != nil {
+			continue // Too large, a symlink, or an LFS pointer: treat as unreadable.
+		}
+		contents[name] = data
+	}
+	return g.commit, all, contents, nil
 }
 
 func (g gitSource) read(ctx context.Context, name string) ([]byte, error) {
