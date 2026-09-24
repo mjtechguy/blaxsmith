@@ -198,10 +198,13 @@ func (b *Bridge) CheckGateway(ctx context.Context, organizationID, repositoryURL
 	if err != nil {
 		return ErrInputs
 	}
-	return b.checkGateway(ctx, gateway, b.Gateway, space, repositoryURL, provider)
+	return b.checkGateway(ctx, gateway, b.Gateway, space, repositoryURL, b.modelEgressHost(provider))
 }
 
-func (b *Bridge) checkGateway(ctx context.Context, gateway Gateway, name, space, repositoryURL, provider string) error {
+// checkGateway verifies a Gateway allows exactly the Git host and modelHost:
+// the provider's host, or the model gateway's for brokered attempts whose
+// direct provider egress is removed (model_gateway.go).
+func (b *Bridge) checkGateway(ctx context.Context, gateway Gateway, name, space, repositoryURL, modelHost string) error {
 	if gateway.APIVersion != "ax.io/v1alpha1" || gateway.Kind != "Gateway" ||
 		gateway.Metadata.Name != name || gateway.Metadata.Atespace != space ||
 		len(gateway.Spec.Listeners) != 0 || len(gateway.Spec.Other) != 0 ||
@@ -211,7 +214,7 @@ func (b *Bridge) checkGateway(ctx context.Context, gateway Gateway, name, space,
 	}
 	if b.GatewayEgressMode == "open-dev" {
 		hosts := gateway.Spec.Egress.Allowlist.Hosts
-		if gitfetch.Validate(repositoryURL, "") == nil && providerHost(provider) != "" &&
+		if gitfetch.Validate(repositoryURL, "") == nil && modelHost != "" &&
 			len(hosts) == 1 && hosts[0].Host == "*" && hosts[0].Port == 0 && len(hosts[0].Other) == 0 {
 			return nil
 		}
@@ -223,33 +226,9 @@ func (b *Bridge) checkGateway(ctx context.Context, gateway Gateway, name, space,
 	if gitfetch.Validate(repositoryURL, "") != nil {
 		return ErrInputs
 	}
-	source, err := url.Parse(repositoryURL)
+	expected, err := b.exactEgress(ctx, repositoryURL, modelHost)
 	if err != nil {
-		return ErrInputs
-	}
-	providerHost := providerHost(provider)
-	if providerHost == "" {
-		return ErrInputs
-	}
-	lookup := b.LookupIPv4
-	if lookup == nil {
-		lookup = func(ctx context.Context, host string) ([]netip.Addr, error) {
-			return net.DefaultResolver.LookupNetIP(ctx, "ip4", host)
-		}
-	}
-	expected := map[netip.Addr]bool{}
-	for _, host := range []string{source.Hostname(), providerHost} {
-		addresses, err := lookup(ctx, host)
-		if err != nil || len(addresses) == 0 {
-			return ErrInputs
-		}
-		for _, address := range addresses {
-			address = address.Unmap()
-			if !gitfetch.PublicIPv4(address) {
-				return ErrInputs
-			}
-			expected[address] = true
-		}
+		return err
 	}
 	hosts := gateway.Spec.Egress.Allowlist.Hosts
 	if len(hosts) != len(expected) {
@@ -267,6 +246,36 @@ func (b *Bridge) checkGateway(ctx context.Context, gateway Gateway, name, space,
 		return ErrInputs
 	}
 	return nil
+}
+
+// exactEgress resolves the public IPv4 addresses a tool attempt may reach:
+// its Git host and one model host.
+func (b *Bridge) exactEgress(ctx context.Context, repositoryURL, modelHost string) (map[netip.Addr]bool, error) {
+	source, err := url.Parse(repositoryURL)
+	if err != nil || modelHost == "" {
+		return nil, ErrInputs
+	}
+	lookup := b.LookupIPv4
+	if lookup == nil {
+		lookup = func(ctx context.Context, host string) ([]netip.Addr, error) {
+			return net.DefaultResolver.LookupNetIP(ctx, "ip4", host)
+		}
+	}
+	expected := map[netip.Addr]bool{}
+	for _, host := range []string{source.Hostname(), modelHost} {
+		addresses, err := lookup(ctx, host)
+		if err != nil || len(addresses) == 0 {
+			return nil, ErrInputs
+		}
+		for _, address := range addresses {
+			address = address.Unmap()
+			if !gitfetch.PublicIPv4(address) {
+				return nil, ErrInputs
+			}
+			expected[address] = true
+		}
+	}
+	return expected, nil
 }
 
 func emptyWorkspaceSpec(spec map[string]any) bool {

@@ -240,6 +240,7 @@ func newProductDispatch(ctx context.Context, config dispatchConfig, pool *pgxpoo
 		PreflightActivation: activator.Preflight,
 		Activate:            activator.Activate,
 		ReleaseModel:        activator.ReleaseModel,
+		GatewayURL:          appGatewayURL(),
 	}
 	// Completion signs current-actor exit readbacks with the connector key.
 	reader := &axbridge.CommandExitReader{Client: client, RouterURL: config.routerURL,

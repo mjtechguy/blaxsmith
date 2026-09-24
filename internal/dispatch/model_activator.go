@@ -9,10 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/axbridge"
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
+	"github.com/mjtechguy/blaxsmith/internal/gateway"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -122,6 +124,12 @@ func (a *ModelActivator) attemptConnector(ctx context.Context, attempt workflow.
 		return a.Actor.Current(ctx, runtime.Actor.Atespace, runtime.Actor.Name)
 	}
 	model := bootstrap.ModelAttempt{Scope: scope, Attempt: attempt, Runtime: binding, Invoke: invoke, TTL: a.LeaseTTL}
+	// A brokered_gateway attempt receives a lease-bound gateway token instead
+	// of the raw key (docs/model-gateway-plan.md §3).
+	model.Gateway = func(ctx context.Context, tx pgx.Tx, leaseID string) ([]byte, bool, error) {
+		return gateway.Mint(ctx, tx, gateway.MintRequest{Invoke: invoke, RunID: attempt.RunID, TaskID: attempt.TaskID,
+			LeaseID: leaseID, OwnerGeneration: scope.OwnerGeneration})
+	}
 	// A private source's frozen git.read binding rides the setup phase only.
 	read, username, private, err := access.AttemptGitRead(ctx, a.DB, attempt.OrganizationID, attempt.ID)
 	if err == nil && private {
