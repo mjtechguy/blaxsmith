@@ -66,6 +66,15 @@ const (
 	// WorkflowServiceRevokeProjectModelAccessProcedure is the fully-qualified name of the
 	// WorkflowService's RevokeProjectModelAccess RPC.
 	WorkflowServiceRevokeProjectModelAccessProcedure = "/blaxsmith.api.v1.WorkflowService/RevokeProjectModelAccess"
+	// WorkflowServiceListSubscriptionConnectionsProcedure is the fully-qualified name of the
+	// WorkflowService's ListSubscriptionConnections RPC.
+	WorkflowServiceListSubscriptionConnectionsProcedure = "/blaxsmith.api.v1.WorkflowService/ListSubscriptionConnections"
+	// WorkflowServiceCreateSubscriptionConnectionProcedure is the fully-qualified name of the
+	// WorkflowService's CreateSubscriptionConnection RPC.
+	WorkflowServiceCreateSubscriptionConnectionProcedure = "/blaxsmith.api.v1.WorkflowService/CreateSubscriptionConnection"
+	// WorkflowServiceRevokeSubscriptionConnectionProcedure is the fully-qualified name of the
+	// WorkflowService's RevokeSubscriptionConnection RPC.
+	WorkflowServiceRevokeSubscriptionConnectionProcedure = "/blaxsmith.api.v1.WorkflowService/RevokeSubscriptionConnection"
 	// WorkflowServiceListProjectsProcedure is the fully-qualified name of the WorkflowService's
 	// ListProjects RPC.
 	WorkflowServiceListProjectsProcedure = "/blaxsmith.api.v1.WorkflowService/ListProjects"
@@ -128,6 +137,9 @@ type WorkflowServiceClient interface {
 	ListProjectModelAccess(context.Context, *connect.Request[v1.ListProjectModelAccessRequest]) (*connect.Response[v1.ListProjectModelAccessResponse], error)
 	CreateProjectModelAccess(context.Context, *connect.Request[v1.CreateProjectModelAccessRequest]) (*connect.Response[v1.CreateProjectModelAccessResponse], error)
 	RevokeProjectModelAccess(context.Context, *connect.Request[v1.RevokeProjectModelAccessRequest]) (*connect.Response[v1.RevokeProjectModelAccessResponse], error)
+	ListSubscriptionConnections(context.Context, *connect.Request[v1.ListSubscriptionConnectionsRequest]) (*connect.Response[v1.ListSubscriptionConnectionsResponse], error)
+	CreateSubscriptionConnection(context.Context, *connect.Request[v1.CreateSubscriptionConnectionRequest]) (*connect.Response[v1.CreateSubscriptionConnectionResponse], error)
+	RevokeSubscriptionConnection(context.Context, *connect.Request[v1.RevokeSubscriptionConnectionRequest]) (*connect.Response[v1.RevokeSubscriptionConnectionResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	LaunchRun(context.Context, *connect.Request[v1.LaunchRunRequest]) (*connect.Response[v1.LaunchRunResponse], error)
@@ -221,6 +233,24 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			httpClient,
 			baseURL+WorkflowServiceRevokeProjectModelAccessProcedure,
 			connect.WithSchema(workflowServiceMethods.ByName("RevokeProjectModelAccess")),
+			connect.WithClientOptions(opts...),
+		),
+		listSubscriptionConnections: connect.NewClient[v1.ListSubscriptionConnectionsRequest, v1.ListSubscriptionConnectionsResponse](
+			httpClient,
+			baseURL+WorkflowServiceListSubscriptionConnectionsProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ListSubscriptionConnections")),
+			connect.WithClientOptions(opts...),
+		),
+		createSubscriptionConnection: connect.NewClient[v1.CreateSubscriptionConnectionRequest, v1.CreateSubscriptionConnectionResponse](
+			httpClient,
+			baseURL+WorkflowServiceCreateSubscriptionConnectionProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("CreateSubscriptionConnection")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeSubscriptionConnection: connect.NewClient[v1.RevokeSubscriptionConnectionRequest, v1.RevokeSubscriptionConnectionResponse](
+			httpClient,
+			baseURL+WorkflowServiceRevokeSubscriptionConnectionProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("RevokeSubscriptionConnection")),
 			connect.WithClientOptions(opts...),
 		),
 		listProjects: connect.NewClient[v1.ListProjectsRequest, v1.ListProjectsResponse](
@@ -324,33 +354,36 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 
 // workflowServiceClient implements WorkflowServiceClient.
 type workflowServiceClient struct {
-	createProject            *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
-	getProject               *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
-	getProjectSource         *connect.Client[v1.GetProjectSourceRequest, v1.GetProjectSourceResponse]
-	setProjectSource         *connect.Client[v1.SetProjectSourceRequest, v1.SetProjectSourceResponse]
-	listGitConnections       *connect.Client[v1.ListGitConnectionsRequest, v1.ListGitConnectionsResponse]
-	createGitConnection      *connect.Client[v1.CreateGitConnectionRequest, v1.CreateGitConnectionResponse]
-	getProjectVerification   *connect.Client[v1.GetProjectVerificationRequest, v1.GetProjectVerificationResponse]
-	setProjectVerification   *connect.Client[v1.SetProjectVerificationRequest, v1.SetProjectVerificationResponse]
-	listProjectModelAccess   *connect.Client[v1.ListProjectModelAccessRequest, v1.ListProjectModelAccessResponse]
-	createProjectModelAccess *connect.Client[v1.CreateProjectModelAccessRequest, v1.CreateProjectModelAccessResponse]
-	revokeProjectModelAccess *connect.Client[v1.RevokeProjectModelAccessRequest, v1.RevokeProjectModelAccessResponse]
-	listProjects             *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
-	getRun                   *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
-	launchRun                *connect.Client[v1.LaunchRunRequest, v1.LaunchRunResponse]
-	getLaunchAvailability    *connect.Client[v1.GetLaunchAvailabilityRequest, v1.GetLaunchAvailabilityResponse]
-	listRunTasks             *connect.Client[v1.ListRunTasksRequest, v1.ListRunTasksResponse]
-	listRuns                 *connect.Client[v1.ListRunsRequest, v1.ListRunsResponse]
-	eventsAfter              *connect.Client[v1.EventsAfterRequest, v1.EventsAfterResponse]
-	listCommandExits         *connect.Client[v1.ListCommandExitsRequest, v1.ListCommandExitsResponse]
-	getCurrentReview         *connect.Client[v1.GetCurrentReviewRequest, v1.GetCurrentReviewResponse]
-	decideReview             *connect.Client[v1.DecideReviewRequest, v1.DecideReviewResponse]
-	getAttemptControl        *connect.Client[v1.GetAttemptControlRequest, v1.GetAttemptControlResponse]
-	takeOverAttempt          *connect.Client[v1.TakeOverAttemptRequest, v1.TakeOverAttemptResponse]
-	handBackAttempt          *connect.Client[v1.HandBackAttemptRequest, v1.HandBackAttemptResponse]
-	listInteractions         *connect.Client[v1.ListInteractionsRequest, v1.ListInteractionsResponse]
-	answerInteraction        *connect.Client[v1.AnswerInteractionRequest, v1.AnswerInteractionResponse]
-	steerAttempt             *connect.Client[v1.SteerAttemptRequest, v1.SteerAttemptResponse]
+	createProject                *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
+	getProject                   *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
+	getProjectSource             *connect.Client[v1.GetProjectSourceRequest, v1.GetProjectSourceResponse]
+	setProjectSource             *connect.Client[v1.SetProjectSourceRequest, v1.SetProjectSourceResponse]
+	listGitConnections           *connect.Client[v1.ListGitConnectionsRequest, v1.ListGitConnectionsResponse]
+	createGitConnection          *connect.Client[v1.CreateGitConnectionRequest, v1.CreateGitConnectionResponse]
+	getProjectVerification       *connect.Client[v1.GetProjectVerificationRequest, v1.GetProjectVerificationResponse]
+	setProjectVerification       *connect.Client[v1.SetProjectVerificationRequest, v1.SetProjectVerificationResponse]
+	listProjectModelAccess       *connect.Client[v1.ListProjectModelAccessRequest, v1.ListProjectModelAccessResponse]
+	createProjectModelAccess     *connect.Client[v1.CreateProjectModelAccessRequest, v1.CreateProjectModelAccessResponse]
+	revokeProjectModelAccess     *connect.Client[v1.RevokeProjectModelAccessRequest, v1.RevokeProjectModelAccessResponse]
+	listSubscriptionConnections  *connect.Client[v1.ListSubscriptionConnectionsRequest, v1.ListSubscriptionConnectionsResponse]
+	createSubscriptionConnection *connect.Client[v1.CreateSubscriptionConnectionRequest, v1.CreateSubscriptionConnectionResponse]
+	revokeSubscriptionConnection *connect.Client[v1.RevokeSubscriptionConnectionRequest, v1.RevokeSubscriptionConnectionResponse]
+	listProjects                 *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
+	getRun                       *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
+	launchRun                    *connect.Client[v1.LaunchRunRequest, v1.LaunchRunResponse]
+	getLaunchAvailability        *connect.Client[v1.GetLaunchAvailabilityRequest, v1.GetLaunchAvailabilityResponse]
+	listRunTasks                 *connect.Client[v1.ListRunTasksRequest, v1.ListRunTasksResponse]
+	listRuns                     *connect.Client[v1.ListRunsRequest, v1.ListRunsResponse]
+	eventsAfter                  *connect.Client[v1.EventsAfterRequest, v1.EventsAfterResponse]
+	listCommandExits             *connect.Client[v1.ListCommandExitsRequest, v1.ListCommandExitsResponse]
+	getCurrentReview             *connect.Client[v1.GetCurrentReviewRequest, v1.GetCurrentReviewResponse]
+	decideReview                 *connect.Client[v1.DecideReviewRequest, v1.DecideReviewResponse]
+	getAttemptControl            *connect.Client[v1.GetAttemptControlRequest, v1.GetAttemptControlResponse]
+	takeOverAttempt              *connect.Client[v1.TakeOverAttemptRequest, v1.TakeOverAttemptResponse]
+	handBackAttempt              *connect.Client[v1.HandBackAttemptRequest, v1.HandBackAttemptResponse]
+	listInteractions             *connect.Client[v1.ListInteractionsRequest, v1.ListInteractionsResponse]
+	answerInteraction            *connect.Client[v1.AnswerInteractionRequest, v1.AnswerInteractionResponse]
+	steerAttempt                 *connect.Client[v1.SteerAttemptRequest, v1.SteerAttemptResponse]
 }
 
 // CreateProject calls blaxsmith.api.v1.WorkflowService.CreateProject.
@@ -406,6 +439,21 @@ func (c *workflowServiceClient) CreateProjectModelAccess(ctx context.Context, re
 // RevokeProjectModelAccess calls blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess.
 func (c *workflowServiceClient) RevokeProjectModelAccess(ctx context.Context, req *connect.Request[v1.RevokeProjectModelAccessRequest]) (*connect.Response[v1.RevokeProjectModelAccessResponse], error) {
 	return c.revokeProjectModelAccess.CallUnary(ctx, req)
+}
+
+// ListSubscriptionConnections calls blaxsmith.api.v1.WorkflowService.ListSubscriptionConnections.
+func (c *workflowServiceClient) ListSubscriptionConnections(ctx context.Context, req *connect.Request[v1.ListSubscriptionConnectionsRequest]) (*connect.Response[v1.ListSubscriptionConnectionsResponse], error) {
+	return c.listSubscriptionConnections.CallUnary(ctx, req)
+}
+
+// CreateSubscriptionConnection calls blaxsmith.api.v1.WorkflowService.CreateSubscriptionConnection.
+func (c *workflowServiceClient) CreateSubscriptionConnection(ctx context.Context, req *connect.Request[v1.CreateSubscriptionConnectionRequest]) (*connect.Response[v1.CreateSubscriptionConnectionResponse], error) {
+	return c.createSubscriptionConnection.CallUnary(ctx, req)
+}
+
+// RevokeSubscriptionConnection calls blaxsmith.api.v1.WorkflowService.RevokeSubscriptionConnection.
+func (c *workflowServiceClient) RevokeSubscriptionConnection(ctx context.Context, req *connect.Request[v1.RevokeSubscriptionConnectionRequest]) (*connect.Response[v1.RevokeSubscriptionConnectionResponse], error) {
+	return c.revokeSubscriptionConnection.CallUnary(ctx, req)
 }
 
 // ListProjects calls blaxsmith.api.v1.WorkflowService.ListProjects.
@@ -501,6 +549,9 @@ type WorkflowServiceHandler interface {
 	ListProjectModelAccess(context.Context, *connect.Request[v1.ListProjectModelAccessRequest]) (*connect.Response[v1.ListProjectModelAccessResponse], error)
 	CreateProjectModelAccess(context.Context, *connect.Request[v1.CreateProjectModelAccessRequest]) (*connect.Response[v1.CreateProjectModelAccessResponse], error)
 	RevokeProjectModelAccess(context.Context, *connect.Request[v1.RevokeProjectModelAccessRequest]) (*connect.Response[v1.RevokeProjectModelAccessResponse], error)
+	ListSubscriptionConnections(context.Context, *connect.Request[v1.ListSubscriptionConnectionsRequest]) (*connect.Response[v1.ListSubscriptionConnectionsResponse], error)
+	CreateSubscriptionConnection(context.Context, *connect.Request[v1.CreateSubscriptionConnectionRequest]) (*connect.Response[v1.CreateSubscriptionConnectionResponse], error)
+	RevokeSubscriptionConnection(context.Context, *connect.Request[v1.RevokeSubscriptionConnectionRequest]) (*connect.Response[v1.RevokeSubscriptionConnectionResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	LaunchRun(context.Context, *connect.Request[v1.LaunchRunRequest]) (*connect.Response[v1.LaunchRunResponse], error)
@@ -590,6 +641,24 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		WorkflowServiceRevokeProjectModelAccessProcedure,
 		svc.RevokeProjectModelAccess,
 		connect.WithSchema(workflowServiceMethods.ByName("RevokeProjectModelAccess")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceListSubscriptionConnectionsHandler := connect.NewUnaryHandler(
+		WorkflowServiceListSubscriptionConnectionsProcedure,
+		svc.ListSubscriptionConnections,
+		connect.WithSchema(workflowServiceMethods.ByName("ListSubscriptionConnections")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceCreateSubscriptionConnectionHandler := connect.NewUnaryHandler(
+		WorkflowServiceCreateSubscriptionConnectionProcedure,
+		svc.CreateSubscriptionConnection,
+		connect.WithSchema(workflowServiceMethods.ByName("CreateSubscriptionConnection")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceRevokeSubscriptionConnectionHandler := connect.NewUnaryHandler(
+		WorkflowServiceRevokeSubscriptionConnectionProcedure,
+		svc.RevokeSubscriptionConnection,
+		connect.WithSchema(workflowServiceMethods.ByName("RevokeSubscriptionConnection")),
 		connect.WithHandlerOptions(opts...),
 	)
 	workflowServiceListProjectsHandler := connect.NewUnaryHandler(
@@ -712,6 +781,12 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 			workflowServiceCreateProjectModelAccessHandler.ServeHTTP(w, r)
 		case WorkflowServiceRevokeProjectModelAccessProcedure:
 			workflowServiceRevokeProjectModelAccessHandler.ServeHTTP(w, r)
+		case WorkflowServiceListSubscriptionConnectionsProcedure:
+			workflowServiceListSubscriptionConnectionsHandler.ServeHTTP(w, r)
+		case WorkflowServiceCreateSubscriptionConnectionProcedure:
+			workflowServiceCreateSubscriptionConnectionHandler.ServeHTTP(w, r)
+		case WorkflowServiceRevokeSubscriptionConnectionProcedure:
+			workflowServiceRevokeSubscriptionConnectionHandler.ServeHTTP(w, r)
 		case WorkflowServiceListProjectsProcedure:
 			workflowServiceListProjectsHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetRunProcedure:
@@ -795,6 +870,18 @@ func (UnimplementedWorkflowServiceHandler) CreateProjectModelAccess(context.Cont
 
 func (UnimplementedWorkflowServiceHandler) RevokeProjectModelAccess(context.Context, *connect.Request[v1.RevokeProjectModelAccessRequest]) (*connect.Response[v1.RevokeProjectModelAccessResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) ListSubscriptionConnections(context.Context, *connect.Request[v1.ListSubscriptionConnectionsRequest]) (*connect.Response[v1.ListSubscriptionConnectionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ListSubscriptionConnections is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) CreateSubscriptionConnection(context.Context, *connect.Request[v1.CreateSubscriptionConnectionRequest]) (*connect.Response[v1.CreateSubscriptionConnectionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.CreateSubscriptionConnection is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) RevokeSubscriptionConnection(context.Context, *connect.Request[v1.RevokeSubscriptionConnectionRequest]) (*connect.Response[v1.RevokeSubscriptionConnectionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.RevokeSubscriptionConnection is not implemented"))
 }
 
 func (UnimplementedWorkflowServiceHandler) ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error) {

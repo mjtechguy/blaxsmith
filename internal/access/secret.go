@@ -109,24 +109,8 @@ func (s *SecretStore) RotateTx(ctx context.Context, tx pgx.Tx, organizationID, c
 		return 0, ErrDenied
 	}
 	version := current + 1
-	block, err := aes.NewCipher(s.keys[s.current])
-	if err != nil {
+	if err := s.insertVersion(ctx, tx, organizationID, connectionID, version, plaintext, expiresAt); err != nil {
 		return 0, err
-	}
-	aead, err := cipher.NewGCM(block)
-	if err != nil {
-		return 0, err
-	}
-	nonce := make([]byte, aead.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
-		return 0, err
-	}
-	ciphertext := aead.Seal(nil, nonce, plaintext, secretAAD(organizationID, connectionID, version, s.current))
-	if _, err := tx.Exec(ctx, `INSERT INTO access_secret_versions
-		(organization_id,connection_id,version,key_id,algorithm,nonce,ciphertext,expires_at)
-		VALUES ($1,$2,$3,$4,'AES-256-GCM',$5,$6,$7)`,
-		organizationID, connectionID, version, s.current, nonce, ciphertext, expiresAt); err != nil {
-		return 0, fmt.Errorf("insert secret version: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `UPDATE access_connections SET active_secret_version=$3
 		WHERE organization_id=$1 AND id=$2`, organizationID, connectionID, version); err != nil {
@@ -152,12 +136,45 @@ func (s *SecretStore) ReadCurrent(ctx context.Context, tx pgx.Tx, organizationID
 	if state != "active" || version == nil {
 		return Secret{}, ErrDenied
 	}
+	return s.readVersion(ctx, tx, organizationID, connectionID, *version)
+}
+
+// insertVersion encrypts one new version without moving the connection's
+// active pointer. OAuth refresh uses it under its own session lock.
+func (s *SecretStore) insertVersion(ctx context.Context, tx pgx.Tx, organizationID, connectionID string,
+	version int64, plaintext []byte, expiresAt *time.Time) error {
+	if len(plaintext) == 0 || len(plaintext) > maxSecretBytes {
+		return ErrDenied
+	}
+	block, err := aes.NewCipher(s.keys[s.current])
+	if err != nil {
+		return err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return err
+	}
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return err
+	}
+	ciphertext := aead.Seal(nil, nonce, plaintext, secretAAD(organizationID, connectionID, version, s.current))
+	if _, err := tx.Exec(ctx, `INSERT INTO access_secret_versions
+		(organization_id,connection_id,version,key_id,algorithm,nonce,ciphertext,expires_at)
+		VALUES ($1,$2,$3,$4,'AES-256-GCM',$5,$6,$7)`,
+		organizationID, connectionID, version, s.current, nonce, ciphertext, expiresAt); err != nil {
+		return fmt.Errorf("insert secret version: %w", err)
+	}
+	return nil
+}
+
+func (s *SecretStore) readVersion(ctx context.Context, tx pgx.Tx, organizationID, connectionID string, version int64) (Secret, error) {
 	var keyID string
 	var nonce, ciphertext []byte
 	var expiresAt *time.Time
-	err = tx.QueryRow(ctx, `SELECT key_id, nonce, ciphertext, expires_at FROM access_secret_versions
+	err := tx.QueryRow(ctx, `SELECT key_id, nonce, ciphertext, expires_at FROM access_secret_versions
 		WHERE organization_id=$1 AND connection_id=$2 AND version=$3 FOR SHARE`,
-		organizationID, connectionID, *version).Scan(&keyID, &nonce, &ciphertext, &expiresAt)
+		organizationID, connectionID, version).Scan(&keyID, &nonce, &ciphertext, &expiresAt)
 	if err != nil {
 		return Secret{}, deniedOrError("secret version", err)
 	}
@@ -180,11 +197,11 @@ func (s *SecretStore) ReadCurrent(ctx context.Context, tx pgx.Tx, organizationID
 	if err != nil {
 		return Secret{}, ErrDenied
 	}
-	data, err := aead.Open(nil, nonce, ciphertext, secretAAD(organizationID, connectionID, *version, keyID))
+	data, err := aead.Open(nil, nonce, ciphertext, secretAAD(organizationID, connectionID, version, keyID))
 	if err != nil || len(data) == 0 || len(data) > maxSecretBytes {
 		return Secret{}, ErrDenied
 	}
-	return Secret{Version: *version, KeyID: keyID, Bytes: data, ExpiresAt: expiresAt}, nil
+	return Secret{Version: version, KeyID: keyID, Bytes: data, ExpiresAt: expiresAt}, nil
 }
 
 func secretAAD(organizationID, connectionID string, version int64, keyID string) []byte {

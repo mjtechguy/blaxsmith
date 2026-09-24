@@ -1,0 +1,362 @@
+package access
+
+import (
+	"bytes"
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// CodexSubscriptionAuth marks a personal ChatGPT-plan Codex login. Its secret
+// versions hold refresh material and are never delivered by native_raw.
+const CodexSubscriptionAuth = "codex_chatgpt"
+
+const (
+	codexTokenURL = "https://auth.openai.com/oauth/token"
+	codexClientID = "app_EMoamEEZ73f0CkXaXp7hrann" // Codex CLI's public client (codex-rs/login).
+	// Codex refreshes by itself when exp is within 5 minutes. Delivered tokens
+	// must outlive the lease by more than that so the pod never tries.
+	codexRefreshSkew = 10 * time.Minute
+)
+
+var (
+	// ErrClaudeSubscriptionDisabled is a policy decision, not a missing
+	// feature; see docs/subscription-auth.md.
+	ErrClaudeSubscriptionDisabled = errors.New("Claude subscription connections are disabled by policy: " +
+		"Anthropic does not permit third-party platforms to collect, store, or intermediate Claude.ai " +
+		"credentials, and the Claude Code adapter runs --bare, which ignores CLAUDE_CODE_OAUTH_TOKEN; use an Anthropic API key")
+	ErrReconnect   = errors.New("subscription login must be reconnected")
+	ErrRateLimited = errors.New("subscription token endpoint rate limited")
+)
+
+type codexTokens struct {
+	IDToken      string `json:"id_token"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	AccountID    string `json:"account_id,omitempty"`
+}
+
+func (t *codexTokens) clear() { *t = codexTokens{} }
+
+// CodexAccount is the non-secret identity read from the pasted login.
+type CodexAccount struct {
+	AccountID, PlanType string
+	AccessExpiresAt     time.Time
+}
+
+// ParseCodexAuth validates a pasted ~/.codex/auth.json from `codex login` or
+// `codex login --device-auth`. Claims are read, not signature-verified: the
+// account ID labels the owner's own connection and grants nothing by itself.
+func ParseCodexAuth(raw []byte) (codexTokens, CodexAccount, error) {
+	var file struct {
+		APIKey *string      `json:"OPENAI_API_KEY"`
+		Tokens *codexTokens `json:"tokens"`
+	}
+	if len(raw) == 0 || len(raw) > 12<<10 || json.Unmarshal(raw, &file) != nil || file.Tokens == nil ||
+		(file.APIKey != nil && *file.APIKey != "") {
+		return codexTokens{}, CodexAccount{}, ErrDenied
+	}
+	tokens := *file.Tokens
+	account, err := codexAccount(tokens)
+	if err != nil || tokens.RefreshToken == "" || len(tokens.RefreshToken) > 4096 ||
+		strings.ContainsAny(tokens.RefreshToken, " \r\n\x00") {
+		return codexTokens{}, CodexAccount{}, ErrDenied
+	}
+	tokens.AccountID = account.AccountID
+	return tokens, account, nil
+}
+
+func codexAccount(tokens codexTokens) (CodexAccount, error) {
+	var access struct {
+		Exp int64 `json:"exp"`
+	}
+	var id struct {
+		Auth struct {
+			AccountID string `json:"chatgpt_account_id"`
+			PlanType  string `json:"chatgpt_plan_type"`
+		} `json:"https://api.openai.com/auth"`
+	}
+	if jwtClaims(tokens.AccessToken, &access) != nil || access.Exp <= 0 || jwtClaims(tokens.IDToken, &id) != nil {
+		return CodexAccount{}, ErrDenied
+	}
+	accountID := tokens.AccountID
+	if accountID == "" {
+		accountID = id.Auth.AccountID
+	}
+	if accountID == "" || len(accountID) > 128 || strings.ContainsAny(accountID, "\r\n\x00") ||
+		(id.Auth.AccountID != "" && id.Auth.AccountID != accountID) || len(id.Auth.PlanType) > 64 {
+		return CodexAccount{}, ErrDenied
+	}
+	return CodexAccount{accountID, id.Auth.PlanType, time.Unix(access.Exp, 0)}, nil
+}
+
+func jwtClaims(token string, into any) error {
+	parts := strings.Split(token, ".")
+	if len(token) > 8192 || len(parts) != 3 {
+		return ErrDenied
+	}
+	body, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ErrDenied
+	}
+	return json.Unmarshal(body, into)
+}
+
+// CreateCodexConnection stores a validated login as the owner's personal
+// connection in the caller's transaction. Reconnect creates a new connection.
+func CreateCodexConnection(ctx context.Context, tx pgx.Tx, secrets *SecretStore,
+	organizationID, ownerID, providerRegistrationID string, raw []byte) (string, CodexAccount, error) {
+	if tx == nil || secrets == nil || organizationID == "" || ownerID == "" || providerRegistrationID == "" {
+		return "", CodexAccount{}, ErrDenied
+	}
+	tokens, account, err := ParseCodexAuth(raw)
+	if err != nil {
+		return "", CodexAccount{}, err
+	}
+	defer tokens.clear()
+	bundle, err := json.Marshal(tokens)
+	if err != nil {
+		return "", CodexAccount{}, err
+	}
+	defer clear(bundle)
+	var connectionID string
+	err = tx.QueryRow(ctx, `INSERT INTO access_connections
+		(organization_id,id,owner_kind,owner_id,provider_registration_id,external_account_id,auth_method,state)
+		VALUES ($1,gen_random_uuid()::text,'user',$2,$3,$4,$5,'active') RETURNING id`,
+		organizationID, ownerID, providerRegistrationID, account.AccountID, CodexSubscriptionAuth).Scan(&connectionID)
+	if err != nil {
+		return "", CodexAccount{}, fmt.Errorf("create subscription connection: %w", err)
+	}
+	version, err := secrets.RotateTx(ctx, tx, organizationID, connectionID, 0, bundle, nil)
+	if err != nil {
+		return "", CodexAccount{}, err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO access_oauth_sessions
+		(organization_id,connection_id,secret_version,access_expires_at) VALUES ($1,$2,$3,$4)`,
+		organizationID, connectionID, version, account.AccessExpiresAt); err != nil {
+		return "", CodexAccount{}, fmt.Errorf("create subscription session: %w", err)
+	}
+	return connectionID, account, nil
+}
+
+// OAuthRefresher is the only component that uses a subscription refresh
+// token. Pods receive access tokens only.
+type OAuthRefresher struct {
+	DB       *pgxpool.Pool
+	Secrets  *SecretStore
+	Client   *http.Client // nil selects a 30-second client.
+	TokenURL string       // empty selects the Codex production endpoint.
+}
+
+// Delivery is what one attempt may receive: an access token, its provider
+// expiry, and the native credential file with an empty refresh token.
+type Delivery struct {
+	AccessToken   []byte
+	ExpiresAt     time.Time
+	SecretVersion int64
+	FileName      string // Relative to the harness HOME.
+	File          []byte
+}
+
+func (d *Delivery) Clear() { clear(d.AccessToken); clear(d.File) }
+
+// Deliver returns an access token valid past until plus the Codex refresh
+// skew, refreshing first if needed. The caller must already have authorized
+// the binding (AuthorizeModelInvoke) in its own transaction.
+func (r *OAuthRefresher) Deliver(ctx context.Context, organizationID, connectionID string, until time.Time) (Delivery, error) {
+	tokens, expiresAt, version, err := r.accessToken(ctx, organizationID, connectionID, until)
+	if err != nil {
+		return Delivery{}, err
+	}
+	defer tokens.clear()
+	file, err := json.Marshal(map[string]any{
+		"OPENAI_API_KEY": nil,
+		// Codex requires the field to parse. Empty means the CLI cannot
+		// refresh and so cannot rotate the shared login out from under its
+		// siblings; a refresh attempt fails instead.
+		"tokens": codexTokens{IDToken: tokens.IDToken, AccessToken: tokens.AccessToken,
+			RefreshToken: "", AccountID: tokens.AccountID},
+		// Now, so Codex's 8-day last_refresh fallback never triggers.
+		"last_refresh": time.Now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		return Delivery{}, err
+	}
+	return Delivery{AccessToken: []byte(tokens.AccessToken), ExpiresAt: expiresAt, SecretVersion: version,
+		FileName: ".codex/auth.json", File: file}, nil
+}
+
+// OAuthLease names one delivered model lease being renewed until Until.
+type OAuthLease struct {
+	Invoke  ModelInvoke
+	LeaseID string
+	Until   time.Time
+}
+
+// RenewOAuthDelivery is the renewal-loop seam. In the caller's transaction it
+// re-authorizes the frozen binding (current grant, policy, owner-only rule)
+// and checks the delivered, unrevoked lease; the refresh itself commits in
+// its own transaction first, so a rotated refresh token is durable before any
+// access token leaves. The caller pushes Delivery.File to the guest and
+// extends the lease no later than Delivery.ExpiresAt minus the Codex skew.
+func (r *OAuthRefresher) RenewOAuthDelivery(ctx context.Context, tx pgx.Tx, lease OAuthLease) (Delivery, error) {
+	if tx == nil || lease.LeaseID == "" || !lease.Until.After(time.Now()) {
+		return Delivery{}, ErrDenied
+	}
+	decision, err := AuthorizeModelInvoke(ctx, tx, lease.Invoke)
+	if err != nil {
+		return Delivery{}, err
+	}
+	if decision.DeliveryMode != "oauth_access" {
+		return Delivery{}, ErrDenied
+	}
+	var id string
+	err = tx.QueryRow(ctx, `SELECT id FROM access_leases WHERE organization_id=$1 AND id=$2
+		AND binding_id=$3 AND attempt_id=$4 AND connection_id=$5 AND capability='model.invoke'
+		AND delivered_at IS NOT NULL AND revoked_at IS NULL AND expires_at>clock_timestamp()
+		FOR SHARE`, lease.Invoke.OrganizationID, lease.LeaseID, lease.Invoke.BindingID,
+		lease.Invoke.AttemptID, decision.ConnectionID).Scan(&id)
+	if err != nil {
+		return Delivery{}, deniedOrError("oauth lease", err)
+	}
+	return r.Deliver(ctx, lease.Invoke.OrganizationID, decision.ConnectionID, lease.Until)
+}
+
+// accessToken serializes refresh per connection with a row lock on its
+// session. Refresh tokens rotate on use, so only the lock holder may spend
+// one, and the rotated token commits before the new access token is used.
+func (r *OAuthRefresher) accessToken(ctx context.Context, organizationID, connectionID string,
+	until time.Time) (codexTokens, time.Time, int64, error) {
+	if r == nil || r.DB == nil || r.Secrets == nil || organizationID == "" || connectionID == "" {
+		return codexTokens{}, time.Time{}, 0, ErrDenied
+	}
+	tx, err := r.DB.Begin(ctx)
+	if err != nil {
+		return codexTokens{}, time.Time{}, 0, err
+	}
+	defer tx.Rollback(ctx)
+	var state, method string
+	var version int64
+	var expiresAt time.Time
+	var reason *string
+	err = tx.QueryRow(ctx, `SELECT c.state,c.auth_method,o.secret_version,o.access_expires_at,o.reconnect_reason
+		FROM access_oauth_sessions o JOIN access_connections c
+		ON c.organization_id=o.organization_id AND c.id=o.connection_id
+		WHERE o.organization_id=$1 AND o.connection_id=$2 FOR UPDATE OF o`,
+		organizationID, connectionID).Scan(&state, &method, &version, &expiresAt, &reason)
+	if err != nil {
+		return codexTokens{}, time.Time{}, 0, deniedOrError("oauth session", err)
+	}
+	if state != "active" || method != CodexSubscriptionAuth {
+		return codexTokens{}, time.Time{}, 0, ErrDenied
+	}
+	if reason != nil {
+		return codexTokens{}, time.Time{}, 0, ErrReconnect
+	}
+	secret, err := r.Secrets.readVersion(ctx, tx, organizationID, connectionID, version)
+	if err != nil {
+		return codexTokens{}, time.Time{}, 0, err
+	}
+	var tokens codexTokens
+	err = json.Unmarshal(secret.Bytes, &tokens)
+	secret.Clear()
+	if err != nil || tokens.RefreshToken == "" {
+		return codexTokens{}, time.Time{}, 0, ErrDenied
+	}
+	if expiresAt.After(until.Add(codexRefreshSkew)) {
+		return tokens, expiresAt, version, tx.Commit(ctx)
+	}
+	fresh, outcome := r.refresh(ctx, tokens)
+	tokens.clear()
+	if outcome != "" {
+		if outcome == "rate_limited" {
+			return codexTokens{}, time.Time{}, 0, ErrRateLimited
+		}
+		// A lost or rejected response may already have spent the refresh
+		// token. Never retry it blindly; the owner reconnects.
+		if _, err := tx.Exec(ctx, `UPDATE access_oauth_sessions SET reconnect_reason=$3
+			WHERE organization_id=$1 AND connection_id=$2`, organizationID, connectionID, outcome); err != nil {
+			return codexTokens{}, time.Time{}, 0, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return codexTokens{}, time.Time{}, 0, err
+		}
+		return codexTokens{}, time.Time{}, 0, ErrReconnect
+	}
+	account, err := codexAccount(fresh)
+	if err != nil || account.AccountID != fresh.AccountID {
+		fresh.clear()
+		return codexTokens{}, time.Time{}, 0, ErrReconnect
+	}
+	bundle, err := json.Marshal(fresh)
+	if err != nil {
+		return codexTokens{}, time.Time{}, 0, err
+	}
+	defer clear(bundle)
+	if err := r.Secrets.insertVersion(ctx, tx, organizationID, connectionID, version+1, bundle, nil); err != nil {
+		return codexTokens{}, time.Time{}, 0, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE access_oauth_sessions SET secret_version=$3,access_expires_at=$4,
+		refreshed_at=clock_timestamp() WHERE organization_id=$1 AND connection_id=$2`,
+		organizationID, connectionID, version+1, account.AccessExpiresAt); err != nil {
+		return codexTokens{}, time.Time{}, 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return codexTokens{}, time.Time{}, 0, err
+	}
+	return fresh, account.AccessExpiresAt, version + 1, nil
+}
+
+// refresh returns a non-empty outcome for any failure: rate_limited,
+// refresh_rejected (the provider answered no), or refresh_outcome_unknown.
+func (r *OAuthRefresher) refresh(ctx context.Context, tokens codexTokens) (codexTokens, string) {
+	body, _ := json.Marshal(map[string]string{"client_id": codexClientID, "grant_type": "refresh_token",
+		"refresh_token": tokens.RefreshToken, "scope": "openid profile email"})
+	defer clear(body)
+	url := r.TokenURL
+	if url == "" {
+		url = codexTokenURL
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return codexTokens{}, "refresh_outcome_unknown"
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := r.Client
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return codexTokens{}, "refresh_outcome_unknown"
+	}
+	defer resp.Body.Close()
+	switch {
+	case resp.StatusCode == http.StatusTooManyRequests:
+		return codexTokens{}, "rate_limited"
+	case resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnauthorized:
+		return codexTokens{}, "refresh_rejected"
+	case resp.StatusCode != http.StatusOK:
+		return codexTokens{}, "refresh_outcome_unknown"
+	}
+	var fresh codexTokens
+	if json.NewDecoder(http.MaxBytesReader(nil, resp.Body, 64<<10)).Decode(&fresh) != nil || fresh.AccessToken == "" {
+		return codexTokens{}, "refresh_outcome_unknown"
+	}
+	if fresh.RefreshToken == "" {
+		fresh.RefreshToken = tokens.RefreshToken
+	}
+	if fresh.IDToken == "" {
+		fresh.IDToken = tokens.IDToken
+	}
+	fresh.AccountID = tokens.AccountID
+	return fresh, ""
+}

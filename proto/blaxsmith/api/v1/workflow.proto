@@ -115,6 +115,30 @@ message CreateProjectModelAccessResponse { ProjectModelAccess access = 1; }
 message RevokeProjectModelAccessRequest { string access_id = 1; }
 message RevokeProjectModelAccessResponse { string access_id = 1; }
 
+// The caller's own coding-plan login for one project model. Only attempts
+// whose grantee is the owner may use it; refresh material stays on the
+// platform and is never returned.
+message SubscriptionConnection {
+  string connection_id = 1;
+  string project_id = 2;
+  string provider = 3; // openai (Codex ChatGPT sign-in).
+  string model = 4;
+  string account_id = 5; // ChatGPT account ID read from the login; not a secret.
+  string state = 6; // active, reconnect_required, or revoked.
+  string created_at = 7; // RFC 3339.
+}
+message ListSubscriptionConnectionsRequest { string project_id = 1; }
+message ListSubscriptionConnectionsResponse { repeated SubscriptionConnection connections = 1; }
+message CreateSubscriptionConnectionRequest {
+  string project_id = 1;
+  string provider = 2;
+  string model = 3;
+  string credential = 4; // Write-only: the contents of ~/.codex/auth.json.
+}
+message CreateSubscriptionConnectionResponse { SubscriptionConnection connection = 1; }
+message RevokeSubscriptionConnectionRequest { string connection_id = 1; }
+message RevokeSubscriptionConnectionResponse { string connection_id = 1; }
+
 message ListProjectsRequest {
   int32 page_size = 1; // 1-100; zero selects 50.
   string page_token = 2;
@@ -342,6 +366,9 @@ service WorkflowService {
   rpc ListProjectModelAccess(ListProjectModelAccessRequest) returns (ListProjectModelAccessResponse);
   rpc CreateProjectModelAccess(CreateProjectModelAccessRequest) returns (CreateProjectModelAccessResponse);
   rpc RevokeProjectModelAccess(RevokeProjectModelAccessRequest) returns (RevokeProjectModelAccessResponse);
+  rpc ListSubscriptionConnections(ListSubscriptionConnectionsRequest) returns (ListSubscriptionConnectionsResponse);
+  rpc CreateSubscriptionConnection(CreateSubscriptionConnectionRequest) returns (CreateSubscriptionConnectionResponse);
+  rpc RevokeSubscriptionConnection(RevokeSubscriptionConnectionRequest) returns (RevokeSubscriptionConnectionResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
   rpc LaunchRun(LaunchRunRequest) returns (LaunchRunResponse);

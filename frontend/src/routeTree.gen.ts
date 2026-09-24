@@ -20,6 +20,7 @@ import { Route as ProjectsProjectIdModelAccessRouteImport } from './routes/proje
 import { Route as ProjectsProjectIdSourceRouteImport } from './routes/projects.$projectId.source'
 import { Route as ProjectsProjectIdVerificationRouteImport } from './routes/projects.$projectId.verification'
 import { Route as ProjectsProjectIdModelAccessNewRouteImport } from './routes/projects.$projectId.model-access.new'
+import { Route as ProjectsProjectIdModelAccessSubscriptionRouteImport } from './routes/projects.$projectId.model-access.subscription'
 import { Route as ProjectsProjectIdRunsRunIdRouteImport } from './routes/projects.$projectId.runs.$runId'
 import { Route as ProjectsProjectIdRunsNewRouteImport } from './routes/projects.$projectId.runs.new'
 
@@ -81,6 +82,12 @@ const ProjectsProjectIdModelAccessNewRoute =
     path: '/new',
     getParentRoute: () => ProjectsProjectIdModelAccessRoute,
   } as any)
+const ProjectsProjectIdModelAccessSubscriptionRoute =
+  ProjectsProjectIdModelAccessSubscriptionRouteImport.update({
+    id: '/subscription',
+    path: '/subscription',
+    getParentRoute: () => ProjectsProjectIdModelAccessRoute,
+  } as any)
 const ProjectsProjectIdRunsRunIdRoute =
   ProjectsProjectIdRunsRunIdRouteImport.update({
     id: '/runs/$runId',
@@ -106,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
+  '/projects/$projectId/model-access/subscription': typeof ProjectsProjectIdModelAccessSubscriptionRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
 }
@@ -121,6 +129,7 @@ export interface FileRoutesByTo {
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
+  '/projects/$projectId/model-access/subscription': typeof ProjectsProjectIdModelAccessSubscriptionRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
 }
@@ -137,6 +146,7 @@ export interface FileRoutesById {
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
+  '/projects/$projectId/model-access/subscription': typeof ProjectsProjectIdModelAccessSubscriptionRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
 }
@@ -154,6 +164,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
     | '/projects/$projectId/model-access/new'
+    | '/projects/$projectId/model-access/subscription'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
   fileRoutesByTo: FileRoutesByTo
@@ -169,6 +180,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
     | '/projects/$projectId/model-access/new'
+    | '/projects/$projectId/model-access/subscription'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
   id:
@@ -184,6 +196,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
     | '/projects/$projectId/model-access/new'
+    | '/projects/$projectId/model-access/subscription'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
   fileRoutesById: FileRoutesById
@@ -277,6 +290,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdModelAccessNewRouteImport
       parentRoute: typeof ProjectsProjectIdModelAccessRoute
     }
+    '/projects/$projectId/model-access/subscription': {
+      id: '/projects/$projectId/model-access/subscription'
+      path: '/subscription'
+      fullPath: '/projects/$projectId/model-access/subscription'
+      preLoaderRoute: typeof ProjectsProjectIdModelAccessSubscriptionRouteImport
+      parentRoute: typeof ProjectsProjectIdModelAccessRoute
+    }
     '/projects/$projectId/runs/$runId': {
       id: '/projects/$projectId/runs/$runId'
       path: '/runs/$runId'
@@ -296,11 +316,14 @@ declare module '@tanstack/react-router' {
 
 interface ProjectsProjectIdModelAccessRouteChildren {
   ProjectsProjectIdModelAccessNewRoute: typeof ProjectsProjectIdModelAccessNewRoute
+  ProjectsProjectIdModelAccessSubscriptionRoute: typeof ProjectsProjectIdModelAccessSubscriptionRoute
 }
 
 const ProjectsProjectIdModelAccessRouteChildren: ProjectsProjectIdModelAccessRouteChildren =
   {
     ProjectsProjectIdModelAccessNewRoute: ProjectsProjectIdModelAccessNewRoute,
+    ProjectsProjectIdModelAccessSubscriptionRoute:
+      ProjectsProjectIdModelAccessSubscriptionRoute,
   }
 
 const ProjectsProjectIdModelAccessRouteWithChildren =

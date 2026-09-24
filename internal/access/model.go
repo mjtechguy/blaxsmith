@@ -41,8 +41,9 @@ func modelOrigin(provider string) string {
 }
 
 // AuthorizeModelInvoke holds share locks on every revocable authority row
-// through the caller's bootstrap send transaction. Only raw API-key delivery
-// is implemented; brokered and OAuth refresh modes fail closed.
+// through the caller's bootstrap send transaction. Raw API-key delivery and
+// owner-only Codex subscription access (oauth_access) are implemented;
+// brokered and short-lived modes fail closed.
 func AuthorizeModelInvoke(ctx context.Context, tx pgx.Tx, request ModelInvoke) (Decision, error) {
 	if tx == nil || request.OrganizationID == "" || request.ProjectID == "" || request.AttemptID == "" ||
 		request.BindingID == "" || request.GranteeKind == "" || request.GranteeID == "" ||
@@ -53,6 +54,7 @@ func AuthorizeModelInvoke(ctx context.Context, tx pgx.Tx, request ModelInvoke) (
 	var bindingGrantID, grantID, connectionID, grantProject, granteeKind, granteeID string
 	var grantCapability, grantResource, deliveryMode, connectionState, providerID string
 	var providerKind, providerOrigin, providerState, externalAccountID string
+	var ownerKind, ownerID, authMethod string
 	var grantVersion, currentGrantVersion, policyVersion, currentPolicyVersion int64
 	var inputCommit *string
 	var policyModes, providerModes []string
@@ -60,7 +62,7 @@ func AuthorizeModelInvoke(ctx context.Context, tx pgx.Tx, request ModelInvoke) (
 	err := tx.QueryRow(ctx, `SELECT b.project_id,b.capability,b.resource,b.input_commit,b.grant_id,b.grant_version,b.policy_version,
 		p.version,p.delivery_modes,g.id,g.connection_id,g.project_id,g.grantee_kind,g.grantee_id,
 		g.capability,g.resource,g.delivery_mode,g.version,g.expires_at,g.revoked_at,
-		c.state,c.provider_registration_id,c.external_account_id,
+		c.state,c.provider_registration_id,c.external_account_id,c.owner_kind,c.owner_id,c.auth_method,
 		r.provider_kind,r.origin,r.delivery_modes,r.state
 		FROM access_bindings b
 		JOIN access_project_policies p ON p.organization_id=b.organization_id AND p.project_id=b.project_id
@@ -72,7 +74,7 @@ func AuthorizeModelInvoke(ctx context.Context, tx pgx.Tx, request ModelInvoke) (
 		&projectID, &capability, &resource, &inputCommit, &bindingGrantID, &grantVersion, &policyVersion,
 		&currentPolicyVersion, &policyModes, &grantID, &connectionID, &grantProject, &granteeKind, &granteeID,
 		&grantCapability, &grantResource, &deliveryMode, &currentGrantVersion, &grantExpiresAt, &revokedAt,
-		&connectionState, &providerID, &externalAccountID,
+		&connectionState, &providerID, &externalAccountID, &ownerKind, &ownerID, &authMethod,
 		&providerKind, &providerOrigin, &providerModes, &providerState)
 	if err != nil {
 		return Decision{}, deniedOrError("model authority", err)
@@ -81,7 +83,8 @@ func AuthorizeModelInvoke(ctx context.Context, tx pgx.Tx, request ModelInvoke) (
 		inputCommit != nil || bindingGrantID != grantID || grantVersion != currentGrantVersion ||
 		policyVersion != request.PolicyVersion || currentPolicyVersion != policyVersion ||
 		grantProject != projectID || granteeKind != request.GranteeKind || granteeID != request.GranteeID ||
-		grantCapability != capability || grantResource != resource || deliveryMode != "native_raw" ||
+		grantCapability != capability || grantResource != resource ||
+		!deliveryAllowed(deliveryMode, authMethod, request.Provider, ownerKind, ownerID, granteeKind, granteeID) ||
 		!slices.Contains(policyModes, deliveryMode) || !slices.Contains(providerModes, deliveryMode) ||
 		revokedAt != nil || connectionState != "active" || providerState != "active" ||
 		providerKind != request.Provider || providerOrigin != modelOrigin(request.Provider) {
@@ -96,4 +99,18 @@ func AuthorizeModelInvoke(ctx context.Context, tx pgx.Tx, request ModelInvoke) (
 	}
 	return Decision{ConnectionID: connectionID, ProviderID: providerID, ExternalAccountID: externalAccountID,
 		GrantID: grantID, BindingID: request.BindingID, DeliveryMode: deliveryMode}, nil
+}
+
+// deliveryAllowed keeps each credential shape on its own delivery path. A
+// personal subscription login (plan §10.3) is usable only by attempts whose
+// grantee is the connection owner, never a workload, team, or another user.
+func deliveryAllowed(mode, authMethod, provider, ownerKind, ownerID, granteeKind, granteeID string) bool {
+	switch mode {
+	case "native_raw":
+		return authMethod != CodexSubscriptionAuth
+	case "oauth_access":
+		return authMethod == CodexSubscriptionAuth && provider == "openai" &&
+			ownerKind == "user" && granteeKind == "user" && granteeID == ownerID
+	}
+	return false
 }
