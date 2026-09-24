@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file blaxsmith/api/v1/workflow.proto.
  */
 export const file_blaxsmith_api_v1_workflow: GenFile = /*@__PURE__*/
-  fileDesc("Ch9ibGF4c21pdGgvYXBpL3YxL3dvcmtmbG93LnByb3RvEhBibGF4c21pdGguYXBpLnYxIkUKB1Byb2plY3QSCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEhIKCmNyZWF0ZWRfYXQYBCABKAkipwEKA1J1bhIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhIKCmxhdW5jaF9rZXkYAyABKAkSFQoNc291cmNlX2NvbW1pdBgEIAEoCRIVCg1idW5kbGVfc2hhMjU2GAUgASgJEhsKE3ZlcmlmaWNhdGlvbl9zaGEyNTYYBiABKAkSDQoFc3RhdGUYByABKAkSEgoKY3JlYXRlZF9hdBgIIAEoCSJzCg1Xb3JrZmxvd0V2ZW50EgoKAmlkGAEgASgDEg4KBnJ1bl9pZBgCIAEoCRIPCgd0YXNrX2lkGAMgASgJEhIKCmF0dGVtcHRfaWQYBCABKAkSDAoEa2luZBgFIAEoCRITCgtvY2N1cnJlZF9hdBgGIAEoCSIyChRDcmVhdGVQcm9qZWN0UmVxdWVzdBIMCgRzbHVnGAEgASgJEgwKBG5hbWUYAiABKAkiQwoVQ3JlYXRlUHJvamVjdFJlc3BvbnNlEioKB3Byb2plY3QYASABKAsyGS5ibGF4c21pdGguYXBpLnYxLlByb2plY3QiJwoRR2V0UHJvamVjdFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCSJAChJHZXRQcm9qZWN0UmVzcG9uc2USKgoHcHJvamVjdBgBIAEoCzIZLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdCJ1ChNMaXN0UHJvamVjdHNSZXF1ZXN0EhEKCXBhZ2Vfc2l6ZRgBIAEoBRISCgpwYWdlX3Rva2VuGAIgASgJEg4KBnNlYXJjaBgDIAEoCRIPCgdzb3J0X2J5GAQgASgJEhYKDnNvcnRfZGlyZWN0aW9uGAUgASgJIlwKFExpc3RQcm9qZWN0c1Jlc3BvbnNlEisKCHByb2plY3RzGAEgAygLMhkuYmxheHNtaXRoLmFwaS52MS5Qcm9qZWN0EhcKD25leHRfcGFnZV90b2tlbhgCIAEoCSIfCg1HZXRSdW5SZXF1ZXN0Eg4KBnJ1bl9pZBgBIAEoCSI0Cg5HZXRSdW5SZXNwb25zZRIiCgNydW4YASABKAsyFS5ibGF4c21pdGguYXBpLnYxLlJ1biKFAQoPTGlzdFJ1bnNSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEQoJcGFnZV9zaXplGAIgASgFEhIKCnBhZ2VfdG9rZW4YAyABKAkSDgoGc2VhcmNoGAQgASgJEg8KB3NvcnRfYnkYBSABKAkSFgoOc29ydF9kaXJlY3Rpb24YBiABKAkiUAoQTGlzdFJ1bnNSZXNwb25zZRIjCgRydW5zGAEgAygLMhUuYmxheHNtaXRoLmFwaS52MS5SdW4SFwoPbmV4dF9wYWdlX3Rva2VuGAIgASgJIkUKEkV2ZW50c0FmdGVyUmVxdWVzdBIOCgZydW5faWQYASABKAkSEAoIYWZ0ZXJfaWQYAiABKAMSDQoFbGltaXQYAyABKAUiXQoTRXZlbnRzQWZ0ZXJSZXNwb25zZRIvCgZldmVudHMYASADKAsyHy5ibGF4c21pdGguYXBpLnYxLldvcmtmbG93RXZlbnQSFQoNbmV4dF9hZnRlcl9pZBgCIAEoAyL6AQoWQ29tbWFuZEV4aXRPYnNlcnZhdGlvbhIQCghldmVudF9pZBgBIAEoAxIPCgd0YXNrX2lkGAIgASgJEhIKCmF0dGVtcHRfaWQYAyABKAkSEQoJYWN0b3JfdWlkGAQgASgJEhYKDnJlY2VpcHRfc2hhMjU2GAUgASgJEhEKCWV4aXRfY29kZRgGIAEoBRIOCgZzaWduYWwYByABKAUSEwoLaW50ZXJydXB0ZWQYCCABKAgSHgoWb2JzZXJ2ZWRfYXRfdW5peF9uYW5vcxgJIAEoAxITCgtyZWNlaXZlZF9hdBgKIAEoCRIRCglzaWduZXJfaWQYCyABKAkiUAoXTGlzdENvbW1hbmRFeGl0c1JlcXVlc3QSDgoGcnVuX2lkGAEgASgJEhYKDmFmdGVyX2V2ZW50X2lkGAIgASgDEg0KBWxpbWl0GAMgASgFIncKGExpc3RDb21tYW5kRXhpdHNSZXNwb25zZRI+CgxvYnNlcnZhdGlvbnMYASADKAsyKC5ibGF4c21pdGguYXBpLnYxLkNvbW1hbmRFeGl0T2JzZXJ2YXRpb24SGwoTbmV4dF9hZnRlcl9ldmVudF9pZBgCIAEoAyJ8Cg5SZXZpZXdEZWNpc2lvbhIKCgJpZBgBIAEoCRISCgpwYWNrYWdlX2lkGAIgASgJEhQKDHByaW5jaXBhbF9pZBgDIAEoCRIOCgZhY3Rpb24YBCABKAkSEgoKZGVjaWRlZF9hdBgFIAEoCRIQCghmZWVkYmFjaxgGIAEoCSKGAgoNUmV2aWV3UGFja2FnZRIKCgJpZBgBIAEoCRIOCgZydW5faWQYAiABKAkSEAoIcmV2aXNpb24YAyABKAMSFQoNc291cmNlX2NvbW1pdBgEIAEoCRIVCg1idW5kbGVfc2hhMjU2GAUgASgJEhsKE3ZlcmlmaWNhdGlvbl9zaGEyNTYYBiABKAkSGQoRaW50ZWdyYXRlZF9jb21taXQYByABKAkSFwoPZXZpZGVuY2Vfc2hhMjU2GAggASgJEhQKDHByZXNlbnRlZF9hdBgJIAEoCRIyCghkZWNpc2lvbhgKIAEoCzIgLmJsYXhzbWl0aC5hcGkudjEuUmV2aWV3RGVjaXNpb24iKQoXR2V0Q3VycmVudFJldmlld1JlcXVlc3QSDgoGcnVuX2lkGAEgASgJIkwKGEdldEN1cnJlbnRSZXZpZXdSZXNwb25zZRIwCgdwYWNrYWdlGAEgASgLMh8uYmxheHNtaXRoLmFwaS52MS5SZXZpZXdQYWNrYWdlInQKE0RlY2lkZVJldmlld1JlcXVlc3QSDgoGcnVuX2lkGAEgASgJEhIKCnBhY2thZ2VfaWQYAiABKAkSFwoPaWRlbXBvdGVuY3lfa2V5GAMgASgJEg4KBmFjdGlvbhgEIAEoCRIQCghmZWVkYmFjaxgFIAEoCSJKChREZWNpZGVSZXZpZXdSZXNwb25zZRIyCghkZWNpc2lvbhgBIAEoCzIgLmJsYXhzbWl0aC5hcGkudjEuUmV2aWV3RGVjaXNpb24y3AYKD1dvcmtmbG93U2VydmljZRJgCg1DcmVhdGVQcm9qZWN0EiYuYmxheHNtaXRoLmFwaS52MS5DcmVhdGVQcm9qZWN0UmVxdWVzdBonLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlUHJvamVjdFJlc3BvbnNlElcKCkdldFByb2plY3QSIy5ibGF4c21pdGguYXBpLnYxLkdldFByb2plY3RSZXF1ZXN0GiQuYmxheHNtaXRoLmFwaS52MS5HZXRQcm9qZWN0UmVzcG9uc2USXQoMTGlzdFByb2plY3RzEiUuYmxheHNtaXRoLmFwaS52MS5MaXN0UHJvamVjdHNSZXF1ZXN0GiYuYmxheHNtaXRoLmFwaS52MS5MaXN0UHJvamVjdHNSZXNwb25zZRJLCgZHZXRSdW4SHy5ibGF4c21pdGguYXBpLnYxLkdldFJ1blJlcXVlc3QaIC5ibGF4c21pdGguYXBpLnYxLkdldFJ1blJlc3BvbnNlElEKCExpc3RSdW5zEiEuYmxheHNtaXRoLmFwaS52MS5MaXN0UnVuc1JlcXVlc3QaIi5ibGF4c21pdGguYXBpLnYxLkxpc3RSdW5zUmVzcG9uc2USWgoLRXZlbnRzQWZ0ZXISJC5ibGF4c21pdGguYXBpLnYxLkV2ZW50c0FmdGVyUmVxdWVzdBolLmJsYXhzbWl0aC5hcGkudjEuRXZlbnRzQWZ0ZXJSZXNwb25zZRJpChBMaXN0Q29tbWFuZEV4aXRzEikuYmxheHNtaXRoLmFwaS52MS5MaXN0Q29tbWFuZEV4aXRzUmVxdWVzdBoqLmJsYXhzbWl0aC5hcGkudjEuTGlzdENvbW1hbmRFeGl0c1Jlc3BvbnNlEmkKEEdldEN1cnJlbnRSZXZpZXcSKS5ibGF4c21pdGguYXBpLnYxLkdldEN1cnJlbnRSZXZpZXdSZXF1ZXN0GiouYmxheHNtaXRoLmFwaS52MS5HZXRDdXJyZW50UmV2aWV3UmVzcG9uc2USXQoMRGVjaWRlUmV2aWV3EiUuYmxheHNtaXRoLmFwaS52MS5EZWNpZGVSZXZpZXdSZXF1ZXN0GiYuYmxheHNtaXRoLmFwaS52MS5EZWNpZGVSZXZpZXdSZXNwb25zZULFAQoUY29tLmJsYXhzbWl0aC5hcGkudjFCDVdvcmtmbG93UHJvdG9QAVo8Z2l0aHViLmNvbS9tanRlY2hndXkvYmxheHNtaXRoL2dlbi9nby9ibGF4c21pdGgvYXBpL3YxO2FwaXYxogIDQkFYqgIQQmxheHNtaXRoLkFwaS5WMcoCEEJsYXhzbWl0aFxBcGlcVjHiAhxCbGF4c21pdGhcQXBpXFYxXEdQQk1ldGFkYXRh6gISQmxheHNtaXRoOjpBcGk6OlYxYgZwcm90bzM");
+  fileDesc("Ch9ibGF4c21pdGgvYXBpL3YxL3dvcmtmbG93LnByb3RvEhBibGF4c21pdGguYXBpLnYxIkUKB1Byb2plY3QSCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEhIKCmNyZWF0ZWRfYXQYBCABKAkipwEKA1J1bhIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhIKCmxhdW5jaF9rZXkYAyABKAkSFQoNc291cmNlX2NvbW1pdBgEIAEoCRIVCg1idW5kbGVfc2hhMjU2GAUgASgJEhsKE3ZlcmlmaWNhdGlvbl9zaGEyNTYYBiABKAkSDQoFc3RhdGUYByABKAkSEgoKY3JlYXRlZF9hdBgIIAEoCSJzCg1Xb3JrZmxvd0V2ZW50EgoKAmlkGAEgASgDEg4KBnJ1bl9pZBgCIAEoCRIPCgd0YXNrX2lkGAMgASgJEhIKCmF0dGVtcHRfaWQYBCABKAkSDAoEa2luZBgFIAEoCRITCgtvY2N1cnJlZF9hdBgGIAEoCSIyChRDcmVhdGVQcm9qZWN0UmVxdWVzdBIMCgRzbHVnGAEgASgJEgwKBG5hbWUYAiABKAkiQwoVQ3JlYXRlUHJvamVjdFJlc3BvbnNlEioKB3Byb2plY3QYASABKAsyGS5ibGF4c21pdGguYXBpLnYxLlByb2plY3QiJwoRR2V0UHJvamVjdFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCSJAChJHZXRQcm9qZWN0UmVzcG9uc2USKgoHcHJvamVjdBgBIAEoCzIZLmJsYXhzbWl0aC5hcGkudjEuUHJvamVjdCJ1ChNMaXN0UHJvamVjdHNSZXF1ZXN0EhEKCXBhZ2Vfc2l6ZRgBIAEoBRISCgpwYWdlX3Rva2VuGAIgASgJEg4KBnNlYXJjaBgDIAEoCRIPCgdzb3J0X2J5GAQgASgJEhYKDnNvcnRfZGlyZWN0aW9uGAUgASgJIlwKFExpc3RQcm9qZWN0c1Jlc3BvbnNlEisKCHByb2plY3RzGAEgAygLMhkuYmxheHNtaXRoLmFwaS52MS5Qcm9qZWN0EhcKD25leHRfcGFnZV90b2tlbhgCIAEoCSIfCg1HZXRSdW5SZXF1ZXN0Eg4KBnJ1bl9pZBgBIAEoCSI0Cg5HZXRSdW5SZXNwb25zZRIiCgNydW4YASABKAsyFS5ibGF4c21pdGguYXBpLnYxLlJ1biKKAQoHUnVuVGFzaxIKCgJpZBgBIAEoCRILCgNrZXkYAiABKAkSDQoFc3RhdGUYAyABKAkSEgoKZ2VuZXJhdGlvbhgEIAEoAxIUCgxtYXhfYXR0ZW1wdHMYBSABKAUSGQoRYWN0aXZlX2F0dGVtcHRfaWQYBiABKAkSEgoKZGVwZW5kc19vbhgHIAMoCSIlChNMaXN0UnVuVGFza3NSZXF1ZXN0Eg4KBnJ1bl9pZBgBIAEoCSJAChRMaXN0UnVuVGFza3NSZXNwb25zZRIoCgV0YXNrcxgBIAMoCzIZLmJsYXhzbWl0aC5hcGkudjEuUnVuVGFzayKFAQoPTGlzdFJ1bnNSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEQoJcGFnZV9zaXplGAIgASgFEhIKCnBhZ2VfdG9rZW4YAyABKAkSDgoGc2VhcmNoGAQgASgJEg8KB3NvcnRfYnkYBSABKAkSFgoOc29ydF9kaXJlY3Rpb24YBiABKAkiUAoQTGlzdFJ1bnNSZXNwb25zZRIjCgRydW5zGAEgAygLMhUuYmxheHNtaXRoLmFwaS52MS5SdW4SFwoPbmV4dF9wYWdlX3Rva2VuGAIgASgJIkUKEkV2ZW50c0FmdGVyUmVxdWVzdBIOCgZydW5faWQYASABKAkSEAoIYWZ0ZXJfaWQYAiABKAMSDQoFbGltaXQYAyABKAUiXQoTRXZlbnRzQWZ0ZXJSZXNwb25zZRIvCgZldmVudHMYASADKAsyHy5ibGF4c21pdGguYXBpLnYxLldvcmtmbG93RXZlbnQSFQoNbmV4dF9hZnRlcl9pZBgCIAEoAyL6AQoWQ29tbWFuZEV4aXRPYnNlcnZhdGlvbhIQCghldmVudF9pZBgBIAEoAxIPCgd0YXNrX2lkGAIgASgJEhIKCmF0dGVtcHRfaWQYAyABKAkSEQoJYWN0b3JfdWlkGAQgASgJEhYKDnJlY2VpcHRfc2hhMjU2GAUgASgJEhEKCWV4aXRfY29kZRgGIAEoBRIOCgZzaWduYWwYByABKAUSEwoLaW50ZXJydXB0ZWQYCCABKAgSHgoWb2JzZXJ2ZWRfYXRfdW5peF9uYW5vcxgJIAEoAxITCgtyZWNlaXZlZF9hdBgKIAEoCRIRCglzaWduZXJfaWQYCyABKAkiUAoXTGlzdENvbW1hbmRFeGl0c1JlcXVlc3QSDgoGcnVuX2lkGAEgASgJEhYKDmFmdGVyX2V2ZW50X2lkGAIgASgDEg0KBWxpbWl0GAMgASgFIncKGExpc3RDb21tYW5kRXhpdHNSZXNwb25zZRI+CgxvYnNlcnZhdGlvbnMYASADKAsyKC5ibGF4c21pdGguYXBpLnYxLkNvbW1hbmRFeGl0T2JzZXJ2YXRpb24SGwoTbmV4dF9hZnRlcl9ldmVudF9pZBgCIAEoAyJ8Cg5SZXZpZXdEZWNpc2lvbhIKCgJpZBgBIAEoCRISCgpwYWNrYWdlX2lkGAIgASgJEhQKDHByaW5jaXBhbF9pZBgDIAEoCRIOCgZhY3Rpb24YBCABKAkSEgoKZGVjaWRlZF9hdBgFIAEoCRIQCghmZWVkYmFjaxgGIAEoCSKGAgoNUmV2aWV3UGFja2FnZRIKCgJpZBgBIAEoCRIOCgZydW5faWQYAiABKAkSEAoIcmV2aXNpb24YAyABKAMSFQoNc291cmNlX2NvbW1pdBgEIAEoCRIVCg1idW5kbGVfc2hhMjU2GAUgASgJEhsKE3ZlcmlmaWNhdGlvbl9zaGEyNTYYBiABKAkSGQoRaW50ZWdyYXRlZF9jb21taXQYByABKAkSFwoPZXZpZGVuY2Vfc2hhMjU2GAggASgJEhQKDHByZXNlbnRlZF9hdBgJIAEoCRIyCghkZWNpc2lvbhgKIAEoCzIgLmJsYXhzbWl0aC5hcGkudjEuUmV2aWV3RGVjaXNpb24iKQoXR2V0Q3VycmVudFJldmlld1JlcXVlc3QSDgoGcnVuX2lkGAEgASgJIkwKGEdldEN1cnJlbnRSZXZpZXdSZXNwb25zZRIwCgdwYWNrYWdlGAEgASgLMh8uYmxheHNtaXRoLmFwaS52MS5SZXZpZXdQYWNrYWdlInQKE0RlY2lkZVJldmlld1JlcXVlc3QSDgoGcnVuX2lkGAEgASgJEhIKCnBhY2thZ2VfaWQYAiABKAkSFwoPaWRlbXBvdGVuY3lfa2V5GAMgASgJEg4KBmFjdGlvbhgEIAEoCRIQCghmZWVkYmFjaxgFIAEoCSJKChREZWNpZGVSZXZpZXdSZXNwb25zZRIyCghkZWNpc2lvbhgBIAEoCzIgLmJsYXhzbWl0aC5hcGkudjEuUmV2aWV3RGVjaXNpb24yuwcKD1dvcmtmbG93U2VydmljZRJgCg1DcmVhdGVQcm9qZWN0EiYuYmxheHNtaXRoLmFwaS52MS5DcmVhdGVQcm9qZWN0UmVxdWVzdBonLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlUHJvamVjdFJlc3BvbnNlElcKCkdldFByb2plY3QSIy5ibGF4c21pdGguYXBpLnYxLkdldFByb2plY3RSZXF1ZXN0GiQuYmxheHNtaXRoLmFwaS52MS5HZXRQcm9qZWN0UmVzcG9uc2USXQoMTGlzdFByb2plY3RzEiUuYmxheHNtaXRoLmFwaS52MS5MaXN0UHJvamVjdHNSZXF1ZXN0GiYuYmxheHNtaXRoLmFwaS52MS5MaXN0UHJvamVjdHNSZXNwb25zZRJLCgZHZXRSdW4SHy5ibGF4c21pdGguYXBpLnYxLkdldFJ1blJlcXVlc3QaIC5ibGF4c21pdGguYXBpLnYxLkdldFJ1blJlc3BvbnNlEl0KDExpc3RSdW5UYXNrcxIlLmJsYXhzbWl0aC5hcGkudjEuTGlzdFJ1blRhc2tzUmVxdWVzdBomLmJsYXhzbWl0aC5hcGkudjEuTGlzdFJ1blRhc2tzUmVzcG9uc2USUQoITGlzdFJ1bnMSIS5ibGF4c21pdGguYXBpLnYxLkxpc3RSdW5zUmVxdWVzdBoiLmJsYXhzbWl0aC5hcGkudjEuTGlzdFJ1bnNSZXNwb25zZRJaCgtFdmVudHNBZnRlchIkLmJsYXhzbWl0aC5hcGkudjEuRXZlbnRzQWZ0ZXJSZXF1ZXN0GiUuYmxheHNtaXRoLmFwaS52MS5FdmVudHNBZnRlclJlc3BvbnNlEmkKEExpc3RDb21tYW5kRXhpdHMSKS5ibGF4c21pdGguYXBpLnYxLkxpc3RDb21tYW5kRXhpdHNSZXF1ZXN0GiouYmxheHNtaXRoLmFwaS52MS5MaXN0Q29tbWFuZEV4aXRzUmVzcG9uc2USaQoQR2V0Q3VycmVudFJldmlldxIpLmJsYXhzbWl0aC5hcGkudjEuR2V0Q3VycmVudFJldmlld1JlcXVlc3QaKi5ibGF4c21pdGguYXBpLnYxLkdldEN1cnJlbnRSZXZpZXdSZXNwb25zZRJdCgxEZWNpZGVSZXZpZXcSJS5ibGF4c21pdGguYXBpLnYxLkRlY2lkZVJldmlld1JlcXVlc3QaJi5ibGF4c21pdGguYXBpLnYxLkRlY2lkZVJldmlld1Jlc3BvbnNlQsUBChRjb20uYmxheHNtaXRoLmFwaS52MUINV29ya2Zsb3dQcm90b1ABWjxnaXRodWIuY29tL21qdGVjaGd1eS9ibGF4c21pdGgvZ2VuL2dvL2JsYXhzbWl0aC9hcGkvdjE7YXBpdjGiAgNCQViqAhBCbGF4c21pdGguQXBpLlYxygIQQmxheHNtaXRoXEFwaVxWMeICHEJsYXhzbWl0aFxBcGlcVjFcR1BCTWV0YWRhdGHqAhJCbGF4c21pdGg6OkFwaTo6VjFiBnByb3RvMw");
 
 /**
  * @generated from message blaxsmith.api.v1.Project
@@ -319,6 +319,91 @@ export const GetRunResponseSchema: GenMessage<GetRunResponse> = /*@__PURE__*/
   messageDesc(file_blaxsmith_api_v1_workflow, 10);
 
 /**
+ * @generated from message blaxsmith.api.v1.RunTask
+ */
+export type RunTask = Message<"blaxsmith.api.v1.RunTask"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string key = 2;
+   */
+  key: string;
+
+  /**
+   * @generated from field: string state = 3;
+   */
+  state: string;
+
+  /**
+   * Number of reserved attempts.
+   *
+   * @generated from field: int64 generation = 4;
+   */
+  generation: bigint;
+
+  /**
+   * @generated from field: int32 max_attempts = 5;
+   */
+  maxAttempts: number;
+
+  /**
+   * @generated from field: string active_attempt_id = 6;
+   */
+  activeAttemptId: string;
+
+  /**
+   * Frozen stage keys.
+   *
+   * @generated from field: repeated string depends_on = 7;
+   */
+  dependsOn: string[];
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.RunTask.
+ * Use `create(RunTaskSchema)` to create a new message.
+ */
+export const RunTaskSchema: GenMessage<RunTask> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 11);
+
+/**
+ * @generated from message blaxsmith.api.v1.ListRunTasksRequest
+ */
+export type ListRunTasksRequest = Message<"blaxsmith.api.v1.ListRunTasksRequest"> & {
+  /**
+   * @generated from field: string run_id = 1;
+   */
+  runId: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ListRunTasksRequest.
+ * Use `create(ListRunTasksRequestSchema)` to create a new message.
+ */
+export const ListRunTasksRequestSchema: GenMessage<ListRunTasksRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 12);
+
+/**
+ * @generated from message blaxsmith.api.v1.ListRunTasksResponse
+ */
+export type ListRunTasksResponse = Message<"blaxsmith.api.v1.ListRunTasksResponse"> & {
+  /**
+   * @generated from field: repeated blaxsmith.api.v1.RunTask tasks = 1;
+   */
+  tasks: RunTask[];
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ListRunTasksResponse.
+ * Use `create(ListRunTasksResponseSchema)` to create a new message.
+ */
+export const ListRunTasksResponseSchema: GenMessage<ListRunTasksResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_workflow, 13);
+
+/**
  * @generated from message blaxsmith.api.v1.ListRunsRequest
  */
 export type ListRunsRequest = Message<"blaxsmith.api.v1.ListRunsRequest"> & {
@@ -366,7 +451,7 @@ export type ListRunsRequest = Message<"blaxsmith.api.v1.ListRunsRequest"> & {
  * Use `create(ListRunsRequestSchema)` to create a new message.
  */
 export const ListRunsRequestSchema: GenMessage<ListRunsRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 11);
+  messageDesc(file_blaxsmith_api_v1_workflow, 14);
 
 /**
  * @generated from message blaxsmith.api.v1.ListRunsResponse
@@ -388,7 +473,7 @@ export type ListRunsResponse = Message<"blaxsmith.api.v1.ListRunsResponse"> & {
  * Use `create(ListRunsResponseSchema)` to create a new message.
  */
 export const ListRunsResponseSchema: GenMessage<ListRunsResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 12);
+  messageDesc(file_blaxsmith_api_v1_workflow, 15);
 
 /**
  * @generated from message blaxsmith.api.v1.EventsAfterRequest
@@ -417,7 +502,7 @@ export type EventsAfterRequest = Message<"blaxsmith.api.v1.EventsAfterRequest"> 
  * Use `create(EventsAfterRequestSchema)` to create a new message.
  */
 export const EventsAfterRequestSchema: GenMessage<EventsAfterRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 13);
+  messageDesc(file_blaxsmith_api_v1_workflow, 16);
 
 /**
  * @generated from message blaxsmith.api.v1.EventsAfterResponse
@@ -439,7 +524,7 @@ export type EventsAfterResponse = Message<"blaxsmith.api.v1.EventsAfterResponse"
  * Use `create(EventsAfterResponseSchema)` to create a new message.
  */
 export const EventsAfterResponseSchema: GenMessage<EventsAfterResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 14);
+  messageDesc(file_blaxsmith_api_v1_workflow, 17);
 
 /**
  * A signed connector readback. It does not verify task success or artifacts.
@@ -514,7 +599,7 @@ export type CommandExitObservation = Message<"blaxsmith.api.v1.CommandExitObserv
  * Use `create(CommandExitObservationSchema)` to create a new message.
  */
 export const CommandExitObservationSchema: GenMessage<CommandExitObservation> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 15);
+  messageDesc(file_blaxsmith_api_v1_workflow, 18);
 
 /**
  * @generated from message blaxsmith.api.v1.ListCommandExitsRequest
@@ -543,7 +628,7 @@ export type ListCommandExitsRequest = Message<"blaxsmith.api.v1.ListCommandExits
  * Use `create(ListCommandExitsRequestSchema)` to create a new message.
  */
 export const ListCommandExitsRequestSchema: GenMessage<ListCommandExitsRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 16);
+  messageDesc(file_blaxsmith_api_v1_workflow, 19);
 
 /**
  * @generated from message blaxsmith.api.v1.ListCommandExitsResponse
@@ -565,7 +650,7 @@ export type ListCommandExitsResponse = Message<"blaxsmith.api.v1.ListCommandExit
  * Use `create(ListCommandExitsResponseSchema)` to create a new message.
  */
 export const ListCommandExitsResponseSchema: GenMessage<ListCommandExitsResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 17);
+  messageDesc(file_blaxsmith_api_v1_workflow, 20);
 
 /**
  * @generated from message blaxsmith.api.v1.ReviewDecision
@@ -613,7 +698,7 @@ export type ReviewDecision = Message<"blaxsmith.api.v1.ReviewDecision"> & {
  * Use `create(ReviewDecisionSchema)` to create a new message.
  */
 export const ReviewDecisionSchema: GenMessage<ReviewDecision> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 18);
+  messageDesc(file_blaxsmith_api_v1_workflow, 21);
 
 /**
  * @generated from message blaxsmith.api.v1.ReviewPackage
@@ -677,7 +762,7 @@ export type ReviewPackage = Message<"blaxsmith.api.v1.ReviewPackage"> & {
  * Use `create(ReviewPackageSchema)` to create a new message.
  */
 export const ReviewPackageSchema: GenMessage<ReviewPackage> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 19);
+  messageDesc(file_blaxsmith_api_v1_workflow, 22);
 
 /**
  * @generated from message blaxsmith.api.v1.GetCurrentReviewRequest
@@ -694,7 +779,7 @@ export type GetCurrentReviewRequest = Message<"blaxsmith.api.v1.GetCurrentReview
  * Use `create(GetCurrentReviewRequestSchema)` to create a new message.
  */
 export const GetCurrentReviewRequestSchema: GenMessage<GetCurrentReviewRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 20);
+  messageDesc(file_blaxsmith_api_v1_workflow, 23);
 
 /**
  * @generated from message blaxsmith.api.v1.GetCurrentReviewResponse
@@ -711,7 +796,7 @@ export type GetCurrentReviewResponse = Message<"blaxsmith.api.v1.GetCurrentRevie
  * Use `create(GetCurrentReviewResponseSchema)` to create a new message.
  */
 export const GetCurrentReviewResponseSchema: GenMessage<GetCurrentReviewResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 21);
+  messageDesc(file_blaxsmith_api_v1_workflow, 24);
 
 /**
  * @generated from message blaxsmith.api.v1.DecideReviewRequest
@@ -752,7 +837,7 @@ export type DecideReviewRequest = Message<"blaxsmith.api.v1.DecideReviewRequest"
  * Use `create(DecideReviewRequestSchema)` to create a new message.
  */
 export const DecideReviewRequestSchema: GenMessage<DecideReviewRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 22);
+  messageDesc(file_blaxsmith_api_v1_workflow, 25);
 
 /**
  * @generated from message blaxsmith.api.v1.DecideReviewResponse
@@ -769,7 +854,7 @@ export type DecideReviewResponse = Message<"blaxsmith.api.v1.DecideReviewRespons
  * Use `create(DecideReviewResponseSchema)` to create a new message.
  */
 export const DecideReviewResponseSchema: GenMessage<DecideReviewResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_workflow, 23);
+  messageDesc(file_blaxsmith_api_v1_workflow, 26);
 
 /**
  * Browser requests derive their organization exclusively from a live session.
@@ -808,6 +893,14 @@ export const WorkflowService: GenService<{
     methodKind: "unary";
     input: typeof GetRunRequestSchema;
     output: typeof GetRunResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.WorkflowService.ListRunTasks
+   */
+  listRunTasks: {
+    methodKind: "unary";
+    input: typeof ListRunTasksRequestSchema;
+    output: typeof ListRunTasksResponseSchema;
   },
   /**
    * @generated from rpc blaxsmith.api.v1.WorkflowService.ListRuns

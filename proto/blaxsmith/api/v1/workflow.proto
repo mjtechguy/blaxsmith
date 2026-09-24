@@ -53,6 +53,18 @@ message ListProjectsResponse {
 message GetRunRequest { string run_id = 1; }
 message GetRunResponse { Run run = 1; }
 
+message RunTask {
+  string id = 1;
+  string key = 2;
+  string state = 3;
+  int64 generation = 4; // Number of reserved attempts.
+  int32 max_attempts = 5;
+  string active_attempt_id = 6;
+  repeated string depends_on = 7; // Frozen stage keys.
+}
+message ListRunTasksRequest { string run_id = 1; }
+message ListRunTasksResponse { repeated RunTask tasks = 1; }
+
 message ListRunsRequest {
   string project_id = 1;
   int32 page_size = 2; // 1-100; zero selects 50.
@@ -141,6 +153,7 @@ service WorkflowService {
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  rpc ListRunTasks(ListRunTasksRequest) returns (ListRunTasksResponse);
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
   rpc EventsAfter(EventsAfterRequest) returns (EventsAfterResponse);
   rpc ListCommandExits(ListCommandExitsRequest) returns (ListCommandExitsResponse);

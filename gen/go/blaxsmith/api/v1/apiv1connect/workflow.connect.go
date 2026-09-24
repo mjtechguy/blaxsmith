@@ -44,6 +44,9 @@ const (
 	WorkflowServiceListProjectsProcedure = "/blaxsmith.api.v1.WorkflowService/ListProjects"
 	// WorkflowServiceGetRunProcedure is the fully-qualified name of the WorkflowService's GetRun RPC.
 	WorkflowServiceGetRunProcedure = "/blaxsmith.api.v1.WorkflowService/GetRun"
+	// WorkflowServiceListRunTasksProcedure is the fully-qualified name of the WorkflowService's
+	// ListRunTasks RPC.
+	WorkflowServiceListRunTasksProcedure = "/blaxsmith.api.v1.WorkflowService/ListRunTasks"
 	// WorkflowServiceListRunsProcedure is the fully-qualified name of the WorkflowService's ListRuns
 	// RPC.
 	WorkflowServiceListRunsProcedure = "/blaxsmith.api.v1.WorkflowService/ListRuns"
@@ -67,6 +70,7 @@ type WorkflowServiceClient interface {
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
+	ListRunTasks(context.Context, *connect.Request[v1.ListRunTasksRequest]) (*connect.Response[v1.ListRunTasksResponse], error)
 	ListRuns(context.Context, *connect.Request[v1.ListRunsRequest]) (*connect.Response[v1.ListRunsResponse], error)
 	EventsAfter(context.Context, *connect.Request[v1.EventsAfterRequest]) (*connect.Response[v1.EventsAfterResponse], error)
 	ListCommandExits(context.Context, *connect.Request[v1.ListCommandExitsRequest]) (*connect.Response[v1.ListCommandExitsResponse], error)
@@ -109,6 +113,12 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(workflowServiceMethods.ByName("GetRun")),
 			connect.WithClientOptions(opts...),
 		),
+		listRunTasks: connect.NewClient[v1.ListRunTasksRequest, v1.ListRunTasksResponse](
+			httpClient,
+			baseURL+WorkflowServiceListRunTasksProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ListRunTasks")),
+			connect.WithClientOptions(opts...),
+		),
 		listRuns: connect.NewClient[v1.ListRunsRequest, v1.ListRunsResponse](
 			httpClient,
 			baseURL+WorkflowServiceListRunsProcedure,
@@ -148,6 +158,7 @@ type workflowServiceClient struct {
 	getProject       *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
 	listProjects     *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
 	getRun           *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
+	listRunTasks     *connect.Client[v1.ListRunTasksRequest, v1.ListRunTasksResponse]
 	listRuns         *connect.Client[v1.ListRunsRequest, v1.ListRunsResponse]
 	eventsAfter      *connect.Client[v1.EventsAfterRequest, v1.EventsAfterResponse]
 	listCommandExits *connect.Client[v1.ListCommandExitsRequest, v1.ListCommandExitsResponse]
@@ -173,6 +184,11 @@ func (c *workflowServiceClient) ListProjects(ctx context.Context, req *connect.R
 // GetRun calls blaxsmith.api.v1.WorkflowService.GetRun.
 func (c *workflowServiceClient) GetRun(ctx context.Context, req *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error) {
 	return c.getRun.CallUnary(ctx, req)
+}
+
+// ListRunTasks calls blaxsmith.api.v1.WorkflowService.ListRunTasks.
+func (c *workflowServiceClient) ListRunTasks(ctx context.Context, req *connect.Request[v1.ListRunTasksRequest]) (*connect.Response[v1.ListRunTasksResponse], error) {
+	return c.listRunTasks.CallUnary(ctx, req)
 }
 
 // ListRuns calls blaxsmith.api.v1.WorkflowService.ListRuns.
@@ -206,6 +222,7 @@ type WorkflowServiceHandler interface {
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
+	ListRunTasks(context.Context, *connect.Request[v1.ListRunTasksRequest]) (*connect.Response[v1.ListRunTasksResponse], error)
 	ListRuns(context.Context, *connect.Request[v1.ListRunsRequest]) (*connect.Response[v1.ListRunsResponse], error)
 	EventsAfter(context.Context, *connect.Request[v1.EventsAfterRequest]) (*connect.Response[v1.EventsAfterResponse], error)
 	ListCommandExits(context.Context, *connect.Request[v1.ListCommandExitsRequest]) (*connect.Response[v1.ListCommandExitsResponse], error)
@@ -242,6 +259,12 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		WorkflowServiceGetRunProcedure,
 		svc.GetRun,
 		connect.WithSchema(workflowServiceMethods.ByName("GetRun")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceListRunTasksHandler := connect.NewUnaryHandler(
+		WorkflowServiceListRunTasksProcedure,
+		svc.ListRunTasks,
+		connect.WithSchema(workflowServiceMethods.ByName("ListRunTasks")),
 		connect.WithHandlerOptions(opts...),
 	)
 	workflowServiceListRunsHandler := connect.NewUnaryHandler(
@@ -284,6 +307,8 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 			workflowServiceListProjectsHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetRunProcedure:
 			workflowServiceGetRunHandler.ServeHTTP(w, r)
+		case WorkflowServiceListRunTasksProcedure:
+			workflowServiceListRunTasksHandler.ServeHTTP(w, r)
 		case WorkflowServiceListRunsProcedure:
 			workflowServiceListRunsHandler.ServeHTTP(w, r)
 		case WorkflowServiceEventsAfterProcedure:
@@ -317,6 +342,10 @@ func (UnimplementedWorkflowServiceHandler) ListProjects(context.Context, *connec
 
 func (UnimplementedWorkflowServiceHandler) GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetRun is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) ListRunTasks(context.Context, *connect.Request[v1.ListRunTasksRequest]) (*connect.Response[v1.ListRunTasksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ListRunTasks is not implemented"))
 }
 
 func (UnimplementedWorkflowServiceHandler) ListRuns(context.Context, *connect.Request[v1.ListRunsRequest]) (*connect.Response[v1.ListRunsResponse], error) {

@@ -571,6 +571,12 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if err != nil {
 		t.Fatal(err)
 	}
+	runTasks := connect.NewRequest(&api.ListRunTasksRequest{RunId: run.ID})
+	runTasks.Header().Set("Origin", origin)
+	if got, err := w.ListRunTasks(ctx, runTasks); err != nil || len(got.Msg.Tasks) != 1 ||
+		got.Msg.Tasks[0].Id != task || got.Msg.Tasks[0].Key != "implement" || got.Msg.Tasks[0].State != "pending" {
+		t.Fatalf("own run graph: %+v, %v", got, err)
+	}
 	if got := readRunActivityEvent(t, reader); got.ID != "2" || got.Kind != "task.created" || got.TaskID != task {
 		t.Fatalf("live committed stream event: %+v", got)
 	}
@@ -803,6 +809,10 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	getRun.Header().Set("Cookie", cookie)
 	if _, err := other.GetRun(ctx, getRun); connect.CodeOf(err) != connect.CodeNotFound {
 		t.Fatalf("cross-tenant run lookup: %v", err)
+	}
+	runTasks.Header().Set("Cookie", cookie)
+	if _, err := other.ListRunTasks(ctx, runTasks); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("cross-tenant run graph: %v", err)
 	}
 	listRuns.Header().Set("Cookie", cookie)
 	if _, err := other.ListRuns(ctx, listRuns); connect.CodeOf(err) != connect.CodeNotFound {

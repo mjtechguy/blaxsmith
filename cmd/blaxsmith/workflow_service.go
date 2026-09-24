@@ -105,6 +105,30 @@ func (s *workflowService) GetRun(ctx context.Context, req *connect.Request[api.G
 	return connect.NewResponse(&api.GetRunResponse{Run: runMessage(run)}), nil
 }
 
+func (s *workflowService) ListRunTasks(ctx context.Context, req *connect.Request[api.ListRunTasksRequest]) (*connect.Response[api.ListRunTasksResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.store.GetRun(ctx, caller.OrganizationID, req.Msg.RunId); err != nil {
+		return nil, workflowError(err)
+	}
+	tasks, err := s.store.ListRunTasks(ctx, caller.OrganizationID, req.Msg.RunId)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	response := &api.ListRunTasksResponse{}
+	for _, task := range tasks {
+		item := &api.RunTask{Id: task.ID, Key: task.Key, State: task.State, Generation: task.Generation,
+			MaxAttempts: task.MaxAttempts, DependsOn: task.DependsOn}
+		if task.ActiveAttemptID != nil {
+			item.ActiveAttemptId = *task.ActiveAttemptID
+		}
+		response.Tasks = append(response.Tasks, item)
+	}
+	return connect.NewResponse(response), nil
+}
+
 func (s *workflowService) ListRuns(ctx context.Context, req *connect.Request[api.ListRunsRequest]) (*connect.Response[api.ListRunsResponse], error) {
 	caller, err := s.guard.Caller(ctx, req.Header(), false)
 	if err != nil {

@@ -8,7 +8,7 @@ type RunTask struct {
 	Key             string
 	State           string
 	Generation      int64
-	MaxAttempts     int
+	MaxAttempts     int32
 	ActiveAttemptID *string
 	DependsOn       []string
 }
