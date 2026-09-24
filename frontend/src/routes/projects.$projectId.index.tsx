@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, BookCopy, Check, GitBranch, KeyRound, ListChecks, Plus, Settings } from "lucide-react";
+import { ArrowRight, KeyRound, Plus, Settings } from "lucide-react";
+import { HealthLine, useConnections } from "../connection-ui";
+import { providerLabel } from "../connections";
 import { DashboardLayout } from "../layouts";
 import { checklistProgress, useProjectSetupItems } from "../setup-checklist";
 import { Slot } from "../slots";
@@ -10,10 +12,9 @@ import { StatusPill, useAttentionTitle } from "../work-log";
 import { asStatus, InboxLink, KindMark, RunStateBadge, useScope } from "../workspace-ui";
 import { inboxKey, kindLabel, listInbox, listWorkspaceRuns, workspaceRunsKey } from "../workspace";
 import {
-  getLaunchAvailability, getProject, getProjectSource, getProjectVerification, launchAvailabilityQueryKey, listProjectModelAccess,
-  projectModelAccessQueryKey, projectSourceQueryKey, projectVerificationQueryKey,
+  getLaunchAvailability, getProject, getProjectSource, getProjectVerification, launchAvailabilityQueryKey,
+  projectSourceQueryKey, projectVerificationQueryKey,
 } from "../workflow";
-import { listRecipes, recipesKey } from "../recipes";
 
 export const Route = createFileRoute("/projects/$projectId/")({ component: ProjectOverview });
 
@@ -26,9 +27,11 @@ function ProjectOverview() {
   const ready = Boolean(org && project.data?.project);
   const source = useQuery({ queryKey: projectSourceQueryKey(org, projectId), enabled: ready, queryFn: ({ signal }) => getProjectSource(projectId, signal) });
   const verification = useQuery({ queryKey: projectVerificationQueryKey(org, projectId), enabled: ready, queryFn: ({ signal }) => getProjectVerification(projectId, signal) });
-  const modelAccess = useQuery({ queryKey: projectModelAccessQueryKey(org, projectId), enabled: ready, queryFn: ({ signal }) => listProjectModelAccess(projectId, signal) });
   const launch = useQuery({ queryKey: launchAvailabilityQueryKey(org, projectId), enabled: ready, queryFn: ({ signal }) => getLaunchAvailability(projectId, signal) });
-  const recipes = useQuery({ queryKey: recipesKey(org, projectId), enabled: ready, queryFn: ({ signal }) => listRecipes(projectId, signal) });
+  // Connections in use: project connections plus granted organization ones
+  // that this project's runs draw models from. Setup lives in the checklist.
+  const own = useConnections("project", projectId, ready);
+  const granted = useConnections("project_available", projectId, ready);
   const runs = useQuery({ queryKey: workspaceRunsKey(scope, firstPage(6), projectId), enabled: ready && Boolean(scope), refetchInterval: 20_000,
     queryFn: ({ signal }) => listWorkspaceRuns(firstPage(6), projectId, signal) });
   const waiting = useQuery({ queryKey: inboxKey(scope, firstPage(25), true, projectId), enabled: ready && Boolean(scope), refetchInterval: 15_000,
@@ -38,17 +41,10 @@ function ProjectOverview() {
   const p = project.data?.project;
   const base = `/projects/${projectId}`;
   const canLaunch = isMember && launch.data?.enabled && source.data && verification.data;
-  const setup = [
-    { label: "Git source", done: Boolean(source.data), href: `${base}/settings/source`, icon: GitBranch,
-      detail: source.data ? `${source.data.repositoryUrl.replace(/^https:\/\//, "")}${source.data.ref ? ` @ ${source.data.ref}` : ""}` : "Add a GitHub or GitLab repository" },
-    { label: "Verification checks", done: Boolean(verification.data), href: `${base}/settings/verification`, icon: ListChecks,
-      detail: verification.data ? `${verification.data.checks.length} ${verification.data.checks.length === 1 ? "check" : "checks"} · version ${verification.data.version.toString()}` : "At least one check is required to launch" },
-    { label: "Model access", done: Boolean(modelAccess.data?.access.length), href: `${base}/connections`, icon: KeyRound,
-      detail: modelAccess.data?.access.length ? `${modelAccess.data.access.length} model ${modelAccess.data.access.length === 1 ? "grant" : "grants"}` : "Attach a key or a granted connection" },
-    { label: "Recipes", done: Boolean(recipes.data?.recipes.length), href: `${base}/recipes`, icon: BookCopy,
-      detail: recipes.data ? `${recipes.data.recipes.length} available to this project` : "Loading…" },
-  ];
-  const doneCount = setup.filter((s) => s.done).length;
+  const inUse = [...(own.data ?? []), ...(granted.data ?? [])].filter((c) => c.kind !== "git" && c.state !== "revoked")
+    .map((c) => ({ connection: c, models: [...new Set(c.uses.filter((u) => u.projectId === projectId).map((u) => u.model))] }))
+    .filter((c) => c.models.length);
+  const available = (own.data?.length ?? 0) + (granted.data?.length ?? 0);
   // The Setup tile reports the setup checklist, so the two always agree.
   const checklist = checklistProgress(useProjectSetupItems(ready ? projectId : ""));
 
@@ -83,12 +79,15 @@ function ProjectOverview() {
         : waiting.isSuccess ? <EmptyState title="Nothing is waiting on you here" /> : null}
     </Card>
 
-    <Card title="Setup" className="dash-side" description={doneCount === setup.length ? "Everything a run needs is configured." : "What a run needs before it can launch."}>
-      <ul className="setup-list">{setup.map((step) => <li key={step.label} className={step.done ? "is-done" : undefined}>
-        <span className="setup-mark" aria-hidden="true">{step.done ? <Check size={13} /> : <step.icon size={13} />}</span>
-        <Link to={step.href as "/"}><strong>{step.label}</strong><small>{step.detail}</small></Link>
-        <span className="sr-only">{step.done ? "configured" : "not configured"}</span></li>)}</ul>
-      {!isAdmin && (!source.data || !verification.data) ? <p className="card-note">Owners and admins configure the source and checks.</p> : null}
+    <Card title="Connections in use" className="dash-side" description="Model connections this project's runs draw on."
+      actions={<Link className="text-action" to="/projects/$projectId/connections" params={{ projectId }}>Connections <ArrowRight size={13} aria-hidden="true" /></Link>}>
+      {own.isError || granted.isError ? <p className="card-body" role="alert">Connections could not be loaded.</p> : null}
+      {inUse.length ? <ul className="ledger-list">{inUse.map(({ connection: c, models }) => <li key={c.id} className="ledger-item">
+        <span className="project-symbol" aria-hidden="true"><KeyRound size={14} /></span>
+        <div className="ledger-main"><Link className="row-title" to="/projects/$projectId/connections/$connectionId" params={{ projectId, connectionId: c.id }}>{c.label || `${providerLabel(c.provider)} ${c.kind === "subscription" ? "subscription" : "key"}`}</Link>
+          <small>{providerLabel(c.provider)} · {c.scope === "project" ? "project" : "organization, granted"} · <span className="mono">{models.join(", ")}</span></small>
+          <HealthLine connection={c} compact /></div></li>)}</ul>
+        : own.isSuccess && granted.isSuccess ? <EmptyState title="No connections in use yet">{available ? `${available} ${available === 1 ? "connection is" : "connections are"} available; choose models to use from Connections.` : "Add a key or ask an admin to grant a connection."}</EmptyState> : null}
     </Card>
 
     <Card title="Recent runs" className="dash-wide" description="The latest runs in this project."
