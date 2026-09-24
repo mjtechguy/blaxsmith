@@ -19,6 +19,7 @@ var (
 	ErrNotFound = errors.New("workflow resource not found")
 	ErrConflict = errors.New("workflow state conflict")
 	ErrFenced   = errors.New("stale attempt owner")
+	ErrRecipe   = errors.New("committed recipe inputs failed validation")
 )
 
 var (

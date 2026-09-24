@@ -131,7 +131,7 @@ func serveAppContext(ctx context.Context, args []string) error {
 	}
 	defer listener.Close()
 	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout: 15 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 60 * time.Second,
+		ReadTimeout: 15 * time.Second, WriteTimeout: 180 * time.Second, IdleTimeout: 60 * time.Second,
 		MaxHeaderBytes: 16 << 10,
 		TLSConfig:      &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{certificate}}}
 	shutdownDone := make(chan error, 1)
@@ -235,7 +235,7 @@ func newAppHandler(pool *pgxpool.Pool, manager *identity.SessionManager, origin,
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/api"+authPath, http.StripPrefix("/api", authHandler))
-	workflowPath, workflowHandler := apiv1connect.NewWorkflowServiceHandler(&workflowService{guard: guard, store: store}, connect.WithReadMaxBytes(4096))
+	workflowPath, workflowHandler := apiv1connect.NewWorkflowServiceHandler(&workflowService{guard: guard, store: store}, connect.WithReadMaxBytes(1<<20))
 	mux.Handle("/api"+workflowPath, http.StripPrefix("/api", guard.Wrap(workflowHandler)))
 	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity}))
 	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(&catalogService{client: &http.Client{Timeout: 30 * time.Second}})

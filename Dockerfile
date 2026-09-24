@@ -32,7 +32,11 @@ ENV XDG_CONFIG_HOME=/tmp/caddy-config XDG_DATA_HOME=/tmp/caddy-data
 USER 65532:65532
 EXPOSE 8080
 
-FROM api AS app
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS app
+RUN apk add --no-cache ca-certificates git
+COPY --from=api-build /out/blaxsmith /blaxsmith
 COPY --from=web-build /src/frontend/dist /srv
+USER 65532:65532
 EXPOSE 8443
+ENTRYPOINT ["/blaxsmith"]
 CMD ["serve-app"]

@@ -13,7 +13,9 @@ import (
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5/pgconn"
 	api "github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1"
+	"github.com/mjtechguy/blaxsmith/internal/gitfetch"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -88,6 +90,43 @@ func (s *workflowService) SetProjectSource(ctx context.Context, req *connect.Req
 	return connect.NewResponse(&api.SetProjectSourceResponse{Source: projectSourceMessage(source)}), nil
 }
 
+func (s *workflowService) GetProjectVerification(ctx context.Context, req *connect.Request[api.GetProjectVerificationRequest]) (*connect.Response[api.GetProjectVerificationResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	verification, err := s.store.GetProjectVerification(ctx, caller.OrganizationID, req.Msg.ProjectId)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.GetProjectVerificationResponse{Verification: projectVerificationMessage(req.Msg.ProjectId, verification)}), nil
+}
+
+func (s *workflowService) SetProjectVerification(ctx context.Context, req *connect.Request[api.SetProjectVerificationRequest]) (*connect.Response[api.SetProjectVerificationResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	policy := workflow.VerificationPolicy{SchemaVersion: "blaxsmith.verification/v1alpha1"}
+	for _, check := range req.Msg.Checks {
+		policy.Checks = append(policy.Checks, workflow.VerificationCheck{ID: check.Id, Command: check.Command})
+	}
+	verification, err := s.store.SetProjectVerificationAs(ctx, caller, req.Msg.ProjectId, policy)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.SetProjectVerificationResponse{Verification: projectVerificationMessage(req.Msg.ProjectId, verification)}), nil
+}
+
+func projectVerificationMessage(projectID string, verification workflow.ProjectVerification) *api.ProjectVerification {
+	message := &api.ProjectVerification{ProjectId: projectID, Version: verification.Version,
+		UpdatedAt: verification.UpdatedAt.UTC().Format(time.RFC3339Nano)}
+	for _, check := range verification.Policy.Checks {
+		message.Checks = append(message.Checks, &api.VerificationCheck{Id: check.ID, Command: check.Command})
+	}
+	return message
+}
+
 func (s *workflowService) ListProjects(ctx context.Context, req *connect.Request[api.ListProjectsRequest]) (*connect.Response[api.ListProjectsResponse], error) {
 	caller, err := s.guard.Caller(ctx, req.Header(), false)
 	if err != nil {
@@ -127,6 +166,44 @@ func (s *workflowService) GetRun(ctx context.Context, req *connect.Request[api.G
 		return nil, workflowError(err)
 	}
 	return connect.NewResponse(&api.GetRunResponse{Run: runMessage(run)}), nil
+}
+
+func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[api.LaunchRunRequest]) (*connect.Response[api.LaunchRunResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	if caller.Role != "owner" && caller.Role != "admin" && caller.Role != "member" {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("run launch denied"))
+	}
+	source, err := s.store.GetProjectSource(ctx, caller.OrganizationID, req.Msg.ProjectId)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	verification, err := s.store.GetProjectVerification(ctx, caller.OrganizationID, req.Msg.ProjectId)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	repositoryURL, ref, err := workflow.ValidatePublicGitSource(ctx, source.RepositoryURL, source.Ref)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	fetched, err := gitfetch.Fetch(ctx, repositoryURL, ref)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("repository fetch failed; check the URL, ref, and public access"))
+	}
+	defer fetched.Close()
+	run, err := s.store.CreateFrozenRun(ctx, workflow.FrozenRunInput{
+		OrganizationID: caller.OrganizationID, ProjectID: req.Msg.ProjectId, LaunchKey: req.Msg.LaunchKey,
+		Source: recipe.Input{Repo: fetched.Directory, Ref: fetched.Commit, Recipe: req.Msg.RecipePath,
+			Spec: req.Msg.SpecPath, Transcript: req.Msg.TranscriptPath, Scope: req.Msg.Scope},
+		Verification: verification.Policy, Caller: &caller, SourceRepositoryURL: source.RepositoryURL,
+		SourceRef: source.Ref, VerificationVersion: verification.Version,
+	})
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.LaunchRunResponse{Run: runMessage(run)}), nil
 }
 
 func (s *workflowService) ListRunTasks(ctx context.Context, req *connect.Request[api.ListRunTasksRequest]) (*connect.Response[api.ListRunTasksResponse], error) {
@@ -385,10 +462,16 @@ func workflowError(err error) error {
 		return connect.NewError(connect.CodeNotFound, errors.New("workflow resource not found"))
 	case errors.Is(err, workflow.ErrConflict):
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("workflow state conflict"))
+	case errors.Is(err, workflow.ErrRecipe):
+		return connect.NewError(connect.CodeFailedPrecondition, errors.New("committed recipe, specification, or transcript failed validation"))
 	case errors.Is(err, workflow.ErrProjectDenied):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("project creation denied"))
 	case errors.Is(err, workflow.ErrProjectSourceDenied):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("project source change denied"))
+	case errors.Is(err, workflow.ErrProjectVerificationDenied):
+		return connect.NewError(connect.CodePermissionDenied, errors.New("project verification change denied"))
+	case errors.Is(err, workflow.ErrFenced):
+		return connect.NewError(connect.CodeUnauthenticated, errors.New("session changed during launch"))
 	case errors.Is(err, workflow.ErrSourceRoute):
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("repository host has no verified public route"))
 	case errors.Is(err, workflow.ErrReviewDenied):

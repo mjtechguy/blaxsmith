@@ -53,6 +53,24 @@ message SetProjectSourceRequest {
 }
 message SetProjectSourceResponse { ProjectSource source = 1; }
 
+message VerificationCheck {
+  string id = 1;
+  repeated string command = 2;
+}
+message ProjectVerification {
+  string project_id = 1;
+  int64 version = 2;
+  repeated VerificationCheck checks = 3;
+  string updated_at = 4; // RFC 3339.
+}
+message GetProjectVerificationRequest { string project_id = 1; }
+message GetProjectVerificationResponse { ProjectVerification verification = 1; }
+message SetProjectVerificationRequest {
+  string project_id = 1;
+  repeated VerificationCheck checks = 2;
+}
+message SetProjectVerificationResponse { ProjectVerification verification = 1; }
+
 message ListProjectsRequest {
   int32 page_size = 1; // 1-100; zero selects 50.
   string page_token = 2;
@@ -67,6 +85,16 @@ message ListProjectsResponse {
 
 message GetRunRequest { string run_id = 1; }
 message GetRunResponse { Run run = 1; }
+
+message LaunchRunRequest {
+  string project_id = 1;
+  string launch_key = 2; // Project-scoped idempotency key.
+  string recipe_path = 3; // Committed repository path.
+  string spec_path = 4; // Committed repository path.
+  string transcript_path = 5; // Committed repository path.
+  string scope = 6; // Repository-relative code scope.
+}
+message LaunchRunResponse { Run run = 1; }
 
 message RunTask {
   string id = 1;
@@ -168,8 +196,11 @@ service WorkflowService {
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc GetProjectSource(GetProjectSourceRequest) returns (GetProjectSourceResponse);
   rpc SetProjectSource(SetProjectSourceRequest) returns (SetProjectSourceResponse);
+  rpc GetProjectVerification(GetProjectVerificationRequest) returns (GetProjectVerificationResponse);
+  rpc SetProjectVerification(SetProjectVerificationRequest) returns (SetProjectVerificationResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  rpc LaunchRun(LaunchRunRequest) returns (LaunchRunResponse);
   rpc ListRunTasks(ListRunTasksRequest) returns (ListRunTasksResponse);
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
   rpc EventsAfter(EventsAfterRequest) returns (EventsAfterResponse);

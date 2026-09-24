@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 )
 
@@ -31,6 +33,12 @@ type FrozenRunInput struct {
 	LaunchKey      string
 	Source         recipe.Input // Repo must be selected by the authorized server, not the browser.
 	Verification   VerificationPolicy
+	// Browser admission rechecks these against the live session and the
+	// project settings after Git preparation, in the run creation transaction.
+	Caller              *identity.Caller
+	SourceRepositoryURL string
+	SourceRef           string
+	VerificationVersion int64
 }
 
 // CreateFrozenRun compiles committed inputs, then atomically persists their
@@ -42,7 +50,7 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 	}
 	bundle, err := recipe.Freeze(ctx, in.Source)
 	if err != nil {
-		return Run{}, fmt.Errorf("freeze recipe: %w", err)
+		return Run{}, fmt.Errorf("%w: %v", ErrRecipe, err)
 	}
 	policyJSON, err := validateVerification(in.Verification, bundle.Recipe.RequiredChecks)
 	if err != nil {
@@ -58,6 +66,62 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 		return Run{}, err
 	}
 	defer tx.Rollback(ctx)
+	if in.Caller != nil {
+		caller := *in.Caller
+		if caller.OrganizationID != in.OrganizationID || !ids(caller.PrincipalID, caller.SessionID) ||
+			(caller.Role != "owner" && caller.Role != "admin" && caller.Role != "member") ||
+			in.SourceRepositoryURL == "" || in.VerificationVersion < 1 {
+			return Run{}, ErrInvalid
+		}
+		var role string
+		err = tx.QueryRow(ctx, `SELECT m.role FROM identity_sessions s
+			JOIN identity_memberships m ON m.organization_id=s.organization_id AND m.principal_id=s.principal_id
+			JOIN identity_principals p ON p.id=s.principal_id
+			JOIN identity_organizations o ON o.id=s.organization_id
+			WHERE s.organization_id=$1 AND s.id=$2 AND s.principal_id=$3
+			AND m.role=$4 AND m.role IN ('owner','admin','member') AND $5::timestamptz>clock_timestamp()
+			AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
+			AND m.state='active' AND p.state='active'
+			AND (s.auth_method<>'local' OR o.login_policy IN ('local','mixed'))
+			AND (o.mfa_policy<>'required' OR s.mfa_level='totp')
+			FOR SHARE OF s,m,p,o`, caller.OrganizationID, caller.SessionID, caller.PrincipalID,
+			caller.Role, caller.AccessExpires).Scan(&role)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Run{}, ErrFenced
+		}
+		if err != nil {
+			return Run{}, err
+		}
+		var repositoryURL, sourceRef string
+		err = tx.QueryRow(ctx, `SELECT repository_url,git_ref FROM workflow_project_sources
+			WHERE organization_id=$1 AND project_id=$2 FOR SHARE`, in.OrganizationID, in.ProjectID).
+			Scan(&repositoryURL, &sourceRef)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && (repositoryURL != in.SourceRepositoryURL || sourceRef != in.SourceRef)) {
+			return Run{}, ErrConflict
+		}
+		if err != nil {
+			return Run{}, err
+		}
+		var version int64
+		var currentPolicy []byte
+		err = tx.QueryRow(ctx, `SELECT version,policy_json FROM workflow_project_verification
+			WHERE organization_id=$1 AND project_id=$2 FOR SHARE`, in.OrganizationID, in.ProjectID).
+			Scan(&version, &currentPolicy)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Run{}, ErrConflict
+		}
+		if err != nil {
+			return Run{}, err
+		}
+		var parsed VerificationPolicy
+		if err := json.Unmarshal(currentPolicy, &parsed); err != nil {
+			return Run{}, err
+		}
+		canonical, err := json.Marshal(parsed)
+		if err != nil || version != in.VerificationVersion || !bytes.Equal(canonical, policyJSON) {
+			return Run{}, ErrConflict
+		}
+	}
 	var runID string
 	err = tx.QueryRow(ctx, `INSERT INTO workflow_runs
 		(organization_id,project_id,launch_key,source_commit,bundle_sha256,verification_sha256)
@@ -137,6 +201,14 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 	}
 	if err := event(ctx, tx, in.OrganizationID, run.ID, "", "", "run.graph_sealed"); err != nil {
 		return Run{}, err
+	}
+	if in.Caller != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO identity_audit_events
+			(organization_id,actor_kind,actor_id,action,subject_id)
+			VALUES ($1,'principal',$2,'workflow.run.launched',$3)`,
+			in.OrganizationID, in.Caller.PrincipalID, run.ID); err != nil {
+			return Run{}, err
+		}
 	}
 	return run, tx.Commit(ctx)
 }
