@@ -158,4 +158,42 @@ if helm template app "$chart" "$@" $dispatch_args \
   echo 'dispatch unexpectedly accepted without the credential-encryption key' >&2
   exit 1
 fi
+helm template app "$chart" "$@" > "$rendered"
+if grep -F -q 'blaxsmith-gw' "$rendered" || grep -F -q 'BLAXSMITH_GATEWAY_URL' "$rendered"; then
+  echo 'model gateway is unexpectedly enabled by default' >&2
+  exit 1
+fi
+gateway_args='--set gateway.enabled=true
+--set-string gateway.publicURL=https://gw.example.test
+--set-string gateway.tlsSecretName=gw-tls
+--set-string accessKeySecretName=app-access-key'
+# Intentional splitting: fixed chart fixture arguments.
+helm lint "$chart" "$@" $gateway_args
+helm template app "$chart" "$@" $gateway_args > "$rendered"
+grep -F -q 'name: app-gw' "$rendered"
+grep -F -q -- '- gateway' "$rendered"
+grep -F -q -- '- /run/blaxsmith/gateway-tls/tls.crt' "$rendered"
+grep -F -q 'kind: NetworkPolicy' "$rendered"
+grep -F -q 'policyTypes: ["Ingress", "Egress"]' "$rendered"
+grep -F -q 'name: BLAXSMITH_GATEWAY_URL' "$rendered"
+grep -F -q 'value: "https://gw.example.test"' "$rendered"
+grep -F -q 'terminationGracePeriodSeconds: 915' "$rendered"
+if grep -F -q -- '--allow-plaintext' "$rendered"; then
+  echo 'gateway with a TLS secret unexpectedly serves plaintext' >&2
+  exit 1
+fi
+helm template app "$chart" "$@" $gateway_args --set-string gateway.tlsSecretName= \
+  --set gateway.networkPolicy.enabled=false > "$rendered"
+grep -F -q -- '- --allow-plaintext' "$rendered"
+if grep -F -q 'kind: NetworkPolicy' "$rendered"; then
+  echo 'gateway NetworkPolicy rendered while disabled' >&2
+  exit 1
+fi
+for invalid in '--set-string gateway.publicURL=' '--set-string gateway.publicURL=https://gw.example.test/path' \
+  '--set-string accessKeySecretName='; do
+  if helm template app "$chart" "$@" $gateway_args $invalid >/dev/null 2>&1; then
+    echo "invalid gateway values unexpectedly accepted: $invalid" >&2
+    exit 1
+  fi
+done
 echo 'application chart checks passed'
