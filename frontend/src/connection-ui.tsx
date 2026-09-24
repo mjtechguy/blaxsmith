@@ -13,6 +13,8 @@ import {
   type ListScope, type Scope,
 } from "./connections";
 import { DataTable } from "./data-table";
+import { CreateFlow, type FlowStep } from "./layouts";
+import { Disclosure } from "./ui";
 import { TextField } from "./form-field";
 import type { Connection, ConnectionGrant, ConnectionUse } from "./gen/blaxsmith/api/v1/connections_pb";
 import { listProjects } from "./workflow";
@@ -122,10 +124,10 @@ export function ModelSelect({ connectionId, value, onChange, harness: fixedHarne
       {models.isError ? <span className="form-field-error">Models could not be loaded.</span> : null}
       {error && listed ? <span className="form-field-error">{error}</span> : null}
     </div> : null}
-    <details className="advanced-disclosure" open={!connectionId || (Boolean(value) && !listed && !models.isPending) || undefined}><summary>Advanced: type a model id</summary>
+    <Disclosure key={connectionId || "none"} summary="Advanced: type a model id" defaultOpen={!connectionId || (Boolean(value) && !listed && !models.isPending)}>
       <TextField label="Model id" name={`model-free-text-${id}`} autoComplete="off" placeholder="Exact provider model id" value={listed ? "" : value} onChange={onChange} onBlur={() => {}} required={false}
         error={value && !listed && !modelId.test(value) ? "Use up to 128 letters, numbers, periods, underscores, slashes, or hyphens." : !listed ? error : undefined} />
-    </details>
+    </Disclosure>
   </div>;
 }
 
@@ -145,7 +147,21 @@ export function ProjectSelect({ value, onChange }: { value: string; onChange: (i
   </>;
 }
 
-export function NewApiKey({ scope, projectId = "", cancel, onDone }: { scope: Scope; projectId?: string; cancel: ReactNode; onDone: (c: Connection) => void }) {
+export type ConnectionFlowInfo = { title: string; description: string; back: { href: string; label: string }; typeHref?: string };
+
+// Type → Details → Validate → Grants (organization) or Use (project, personal).
+function connectionSteps(flow: ConnectionFlowInfo, scope: Scope, created: boolean): FlowStep[] {
+  return [
+    { id: "type", label: "Type", state: "done", href: flow.typeHref },
+    { id: "details", label: "Details", state: created ? "done" : "current" },
+    { id: "validate", label: "Validate", state: created ? "current" : "todo" },
+    { id: "access", label: scope === "organization" ? "Grants" : "Use in a project", state: "todo" },
+  ];
+}
+
+const scopeNote = (scope: Scope) => scope === "personal" ? "A personal connection serves only runs you launch." : scope === "project" ? "A project connection serves only this project's runs." : "An organization connection serves the projects, users, and roles you grant it to.";
+
+export function NewApiKey({ scope, projectId = "", cancel, onDone, flow }: { scope: Scope; projectId?: string; cancel: ReactNode; onDone: (c: Connection) => void; flow: ConnectionFlowInfo }) {
   const queryClient = useQueryClient();
   const { org } = useOrg();
   const [error, setError] = useState("");
@@ -169,12 +185,14 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone }: { scope: Sc
       }
     },
   });
-  if (created) return <section className="editor-card" aria-labelledby="api-key-created-heading">
+  const summary = <><h2>Summary</h2><p className="form-hint">{scopeNote(scope)} The key is sent once, checked with the provider, and never returned.</p>
+    <p className="form-hint">OpenCode Zen and OpenCode Go are OpenCode’s own providers; OpenCode Go is its subscription and also uses an API key.</p></>;
+  if (created) return <CreateFlow {...flow} steps={connectionSteps(flow, scope, true)} summary={summary}><section className="editor-card" aria-labelledby="api-key-created-heading">
     <div className="editor-card-heading"><span className="project-symbol"><KeyRound size={18} aria-hidden="true" /></span><div><h2 id="api-key-created-heading">{providerLabel(created.provider)} key added</h2>
-      <p className={created.modelsError ? "form-field-error" : undefined}>{modelsSummary(created)}</p></div></div>
-    <div className="editor-actions"><button type="button" className="primary-button" onClick={() => onDone(created)}>Continue</button></div>
-  </section>;
-  return <div className="editor-layout">
+      <p className={created.modelsError ? "form-field-error" : undefined}>{created.modelsError ? `The provider check failed: ${modelsSummary(created)}` : `Validated with the provider: ${modelsSummary(created)}.`}</p></div></div>
+    <div className="editor-actions"><button type="button" className="primary-button" onClick={() => onDone(created)}>{scope === "organization" ? "Continue to grants" : "Continue to use it"}</button></div>
+  </section></CreateFlow>;
+  return <CreateFlow {...flow} steps={connectionSteps(flow, scope, false)} summary={summary}>
     <section className="editor-card" aria-labelledby="api-key-heading">
       <div className="editor-card-heading"><span className="project-symbol"><KeyRound size={18} aria-hidden="true" /></span><div><h2 id="api-key-heading">Provider API key</h2><p>The platform checks the key with the provider and loads the models it can use.</p></div></div>
       <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
@@ -190,11 +208,10 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone }: { scope: Sc
         </form.Subscribe></div>
       </form>
     </section>
-    <aside className="editor-note"><h2>Write-only key</h2><p>The key is sent once and never returned. {scope === "personal" ? "A personal key serves only runs you launch." : scope === "project" ? "A project key serves only this project's runs." : "An organization key serves the projects, users, and roles you grant it to."} OpenCode Zen and OpenCode Go are OpenCode's own providers; OpenCode Go is its subscription and also uses an API key.</p></aside>
-  </div>;
+  </CreateFlow>;
 }
 
-export function NewGit({ scope, projectId = "", returnTo, cancel, onDone }: { scope: Scope; projectId?: string; returnTo: string; cancel: ReactNode; onDone: (c: Connection) => void }) {
+export function NewGit({ scope, projectId = "", returnTo, cancel, onDone, flow }: { scope: Scope; projectId?: string; returnTo: string; cancel: ReactNode; onDone: (c: Connection) => void; flow: ConnectionFlowInfo }) {
   const queryClient = useQueryClient();
   const { org } = useOrg();
   const app = useQuery({ queryKey: gitHubAppKey(org), enabled: Boolean(org), queryFn: ({ signal }) => getGitHubApp(signal) });
@@ -225,7 +242,8 @@ export function NewGit({ scope, projectId = "", returnTo, cancel, onDone }: { sc
     },
   });
   const configured = app.data?.configured ?? false;
-  return <div className="editor-layout">
+  return <CreateFlow {...flow} steps={connectionSteps(flow, scope, false)}
+    summary={<><h2>Summary</h2><p className="form-hint">{scopeNote(scope)} The platform uses the Git credential to fetch sources and push run branches; agents never receive it. Tokens are write-only.</p></>}>
     <section className="editor-card" aria-labelledby="git-heading">
       <div className="editor-card-heading"><span className="project-symbol"><GitBranch size={18} aria-hidden="true" /></span><div><h2 id="git-heading">Connect Git</h2><p>Sign in with GitHub, then pick repositories and branches on the project source page.</p></div></div>
       <div className="editor-form">
@@ -234,7 +252,7 @@ export function NewGit({ scope, projectId = "", returnTo, cancel, onDone }: { sc
         {app.isSuccess && !configured ? <p className="admin-note">An organization owner or admin must register the GitHub OAuth App under Admin → Connections → GitHub App first.</p> : null}
         {error ? <p className="auth-alert" role="alert">{error}</p> : null}
       </div>
-      <details className="advanced-disclosure"><summary>Advanced: use a token</summary>
+      <Disclosure summary="Advanced: use a token instead">
         <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
           <form.Field name="host">{(field) => <div className="form-field"><label htmlFor="git-host">Host</label><select id="git-host" name={field.name} value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} onBlur={field.handleBlur}><option value="github.com">GitHub</option><option value="gitlab.com">GitLab</option></select></div>}</form.Field>
           <form.Field name="username">{(field) => <TextField label="Username" name={field.name} autoComplete="off" placeholder="x-access-token" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} />}</form.Field>
@@ -243,10 +261,9 @@ export function NewGit({ scope, projectId = "", returnTo, cancel, onDone }: { sc
             {([canSubmit, submitting]) => <button className="primary-button" type="submit" disabled={!canSubmit || submitting}>{submitting ? <RefreshCw size={15} className="spin" aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}{submitting ? "Adding…" : "Add Git token"}</button>}
           </form.Subscribe></div>
         </form>
-      </details>
+      </Disclosure>
     </section>
-    <aside className="editor-note"><h2>Platform-only token</h2><p>The Git credential is used by the platform to fetch sources and push run branches; agents never receive it. Tokens are write-only.</p></aside>
-  </div>;
+  </CreateFlow>;
 }
 
 type Pending = { kind: "use"; use: ConnectionUse } | { kind: "connection" };
@@ -315,7 +332,7 @@ export function ConnectionDetail({ connection, scope, projectId = "", onRevoked 
   </>;
 }
 
-function AddUse({ connection, projectId }: { connection: Connection; projectId: string }) {
+export function AddUse({ connection, projectId }: { connection: Connection; projectId: string }) {
   const queryClient = useQueryClient();
   const { org } = useOrg();
   const [project, setProject] = useState(projectId);
