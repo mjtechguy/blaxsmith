@@ -31,7 +31,7 @@ import (
 
 func main() {
 	var database, server, image, signer, poolName, storage, repositoryURL, sourceRef string
-	var toolInputs bool
+	var toolInputs, workspaceReadyProbe bool
 	flag.StringVar(&database, "database", "host=/var/run/postgresql user=root dbname=blaxsmith_dev sslmode=disable", "development database")
 	flag.StringVar(&server, "ax-server", "", "AX loopback tunnel URL")
 	flag.StringVar(&image, "image", "", "pinned synthetic AX runner image")
@@ -39,16 +39,20 @@ func main() {
 	flag.StringVar(&poolName, "pool", "", "worker pool")
 	flag.StringVar(&storage, "storage", "", "approved data snapshot location")
 	flag.BoolVar(&toolInputs, "tool-inputs", false, "exercise public Git Workspace and per-attempt Gateway without releasing credentials")
+	flag.BoolVar(&workspaceReadyProbe, "workspace-ready", false, "exercise Bridge.WaitWorkspaceReady on the live attempt without releasing credentials")
 	flag.StringVar(&repositoryURL, "repository", "https://github.com/octocat/Hello-World", "public Git repository for --tool-inputs")
 	flag.StringVar(&sourceRef, "ref", "HEAD", "public Git ref for --tool-inputs")
 	flag.Parse()
-	if err := run(database, server, image, signer, poolName, storage, toolInputs, repositoryURL, sourceRef); err != nil {
+	if err := run(database, server, image, signer, poolName, storage, toolInputs, workspaceReadyProbe, repositoryURL, sourceRef); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(database, server, image, signer, poolName, storage string, toolInputs bool, repositoryURL, sourceRef string) error {
+func run(database, server, image, signer, poolName, storage string, toolInputs, workspaceReadyProbe bool, repositoryURL, sourceRef string) error {
+	if workspaceReadyProbe && !toolInputs {
+		return errors.New("--workspace-ready requires --tool-inputs")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	admin, err := pgxpool.New(ctx, database)
@@ -167,6 +171,31 @@ func run(database, server, image, signer, poolName, storage string, toolInputs b
 	if err != nil {
 		return fmt.Errorf("launch AX probe attempt: %w", err)
 	}
+	var workspaceReadyEvidence map[string]any
+	var workspaceReadyCheck string
+	if workspaceReadyProbe {
+		readyCtx, stop := context.WithTimeout(ctx, 30*time.Second)
+		readyErr := bridge.WaitWorkspaceReady(readyCtx, a)
+		stop()
+		switch {
+		case readyErr == nil:
+			workspaceReadyEvidence = map[string]any{"result": "ready", "actor_runtime_rechecked": true}
+			workspaceReadyCheck = "Bridge WaitWorkspaceReady observed AX setup completion and rechecked the bound actor runtime"
+		case errors.Is(readyErr, axbridge.ErrPending):
+			task, getErr := cli.Get(ctx, space, name)
+			if getErr != nil {
+				return fmt.Errorf("read AX task after workspace readiness timeout: %w", getErr)
+			}
+			if workspaceSetupComplete(task) {
+				return errors.New("workspace readiness timed out after AX reported setup complete")
+			}
+			workspaceReadyEvidence = map[string]any{"result": "pending", "phase": task.Status.Phase, "actor": task.Status.Actor,
+				"setup_condition": "WorkspaceReady is not True/SetupComplete", "credentials_released": false}
+			workspaceReadyCheck = fmt.Sprintf("Bridge WaitWorkspaceReady stayed pending at AX phase %s without WorkspaceReady=True/SetupComplete", task.Status.Phase)
+		default:
+			return fmt.Errorf("wait for AX Workspace setup: %w", readyErr)
+		}
+	}
 	if toolInputs {
 		if err := bridge.CheckToolInputs(ctx, org, repositoryURL, "openai"); err != nil {
 			return err
@@ -201,11 +230,14 @@ func run(database, server, image, signer, poolName, storage string, toolInputs b
 		"Substrate actor and template UID, image, pool, gVisor and data snapshots matched",
 		"workflow cancellation fenced result publication", "AX Task and Substrate actor NotFound after teardown",
 		"temporary database schema absent after cleanup"}
+	if workspaceReadyCheck != "" {
+		checks = append(checks, workspaceReadyCheck)
+	}
 	if toolInputs {
 		checks = append(checks, "attempt Workspace pinned to the public Git commit", "attempt Gateway copied exact public-Git/model CIDRs",
 			"AX Task bound both per-attempt resources", "no credential was released and the tool command stayed behind the gate")
 	}
-	return json.NewEncoder(os.Stdout).Encode(map[string]any{
+	report := map[string]any{
 		"check": "persisted-attempt-to-AX-and-cancel", "result": "passed", "organization_id": org,
 		"run_id": run.ID, "attempt_id": a.ID, "owner_generation": a.OwnerGeneration,
 		"atespace": space, "task": name, "actor_uid": runtime.Actor.UID,
@@ -213,7 +245,20 @@ func run(database, server, image, signer, poolName, storage string, toolInputs b
 		"workspace": bridge.Workspace, "gateway": bridge.Gateway, "gateway_template": templateGateway,
 		"checks": checks, "credentials_used": false, "model_invoked": false,
 		"ax_task_removed": true, "database_schema_cleanup_scheduled": true,
-	})
+	}
+	if workspaceReadyProbe {
+		report["workspace_ready_probe"] = workspaceReadyEvidence
+	}
+	return json.NewEncoder(os.Stdout).Encode(report)
+}
+
+func workspaceSetupComplete(task axbridge.Task) bool {
+	for _, condition := range task.Status.Conditions {
+		if condition.Type == "WorkspaceReady" && condition.Status == "True" && condition.Reason == "SetupComplete" {
+			return true
+		}
+	}
+	return false
 }
 
 func probeGateway(ctx context.Context, space, name, repositoryURL string) (axbridge.Gateway, map[string][]netip.Addr, error) {

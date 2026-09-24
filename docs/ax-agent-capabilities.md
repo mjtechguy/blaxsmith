@@ -43,9 +43,11 @@ workspace/lifecycle behavior.
 After bootstrap activation, dispatch now waits for AX's exact
 `WorkspaceReady=True/SetupComplete` condition and rechecks the actor against
 the frozen runtime binding before reporting `started`. This closes the
-premature-status path; the live attempt-input probe deliberately stayed behind
-the bootstrap gate, so the authenticated startup/readiness transition still
-needs a live proof.
+premature-status path. The authenticated [workspace-ready probe](ax-workspace-ready-probe.json)
+now confirms the bridge stays pending when AX is `Running` but setup is not
+complete, and cleans the Task, actor, Workspace, and Gateways afterward. It
+released no credentials. The successful product activation-to-ready transition
+through this same bridge call remains unproved.
 
 Blaxsmith delivers declared `instructions`, applicable `AGENTS.md`, Forge
 specification, decision transcript, and stage prompt as bounded instruction

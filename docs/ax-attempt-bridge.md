@@ -71,6 +71,17 @@ passed: [record](ax-attempt-bridge-probe.json). An independent post-run AX
 `GetTask` and Substrate `GetActor` both returned NotFound, and PostgreSQL
 listed no `axbridge_%` schema. No credential or model work ran.
 
+The follow-up [workspace-ready probe](ax-workspace-ready-probe.json) runs the
+same bridge with a public Git Workspace and calls `WaitWorkspaceReady` without
+releasing a credential. AX reached `Running` with the matching actor while
+`WorkspaceReady=True/SetupComplete` was absent; the bridge stayed pending, then
+cancelled and proved Task/actor absence before deleting the attempt resources.
+To repeat on the node, build `deploy/dev/axbridge-probe`, set
+`KUBECONFIG=/etc/rancher/k3s/k3s.yaml`, port-forward `ax-server` to loopback,
+and pass the controller's pinned runner image/public key with
+`--tool-inputs --workspace-ready`. This proves the fail-closed wait only; the
+successful product activation-to-ready path is still open.
+
 The pinned AX `Running` phase is a workload lifecycle status, **not** a
 supervised command-exit result. During the first live run it reported `Running`
 while `WorkspaceReady=False` and the bootstrap gate still blocked the command.

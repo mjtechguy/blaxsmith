@@ -1,0 +1,41 @@
+{
+  "schema_version": "blaxsmith.ax-workspace-ready-probe/v1",
+  "recorded_at_utc": "2026-09-24T07:53:09Z",
+  "cluster": "authorized single-node Linux/amd64 k3s development cluster",
+  "k3s_version": "v1.36.4+k3s1",
+  "ax_commit": "d8ed0fe38bceb7842d3c47817d53d16ccdfcb601",
+  "probe_binary_sha256": "753fbf2494d63655ded7a618802772eafaac8bf6294356a98b634276a54fca2b",
+  "attempt_id": "891d50dd-8159-4b2f-8065-4418ebc89cd8",
+  "run_id": "68f0babf-24c7-425a-a0b4-3c6f075bfdd9",
+  "ax_atespace": "blaxsmith-8c829e5882074edb944963e7b8289caa",
+  "ax_task": "attempt-891d50dd81594b2f80654418ebc89cd8",
+  "actor_uid": "6cfe95aa-0d26-4ccb-9e75-b2240ec145ea",
+  "template_uid": "32858207-c985-4be4-88b4-ecd64b86a9f7",
+  "runner_image": "127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:e1e75e0417c392f3680ea14dff5451c4f3e2b9cf8697df04ca1a10ad6d1711a2",
+  "worker_pool": "blaxsmith-smoke",
+  "workspace_ready_probe": {
+    "bridge_result": "pending",
+    "ax_phase": "Running",
+    "ax_actor": "attempt-891d50dd81594b2f80654418ebc89cd8",
+    "workspace_ready": false,
+    "credentials_released": false,
+    "model_invoked": false
+  },
+  "cleanup": {
+    "ax_task_not_found": true,
+    "substrate_actor_not_found": true,
+    "workspace_deleted": true,
+    "attempt_gateway_deleted": true,
+    "template_gateway_deleted": true,
+    "temporary_database_schemas_remaining": 0
+  },
+  "proves": [
+    "The live attempt had the exact AX task and Substrate actor/runtime binding.",
+    "WaitWorkspaceReady did not equate AX Running with WorkspaceReady=True/SetupComplete.",
+    "The attempt remained pending until workspace setup completion; no model credential was released."
+  ],
+  "does_not_prove": [
+    "Successful product activation followed by WorkspaceReady=True/SetupComplete in the same bridge call.",
+    "Private Git, model inference, MCP, effective network policy, or credential revocation."
+  ]
+}
