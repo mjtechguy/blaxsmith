@@ -99,7 +99,10 @@ func (b *Bridge) task(a workflow.Attempt) (Task, error) {
 	for i, arg := range command {
 		argv[i] = arg
 	}
-	spec := map[string]any{"image": b.Image, "command": argv, "debug": b.Tool == nil}
+	spec := map[string]any{"image": b.Image, "command": argv} // AX omits debug:false on read-back.
+	if b.Tool == nil {
+		spec["debug"] = true
+	}
 	if b.Tool != nil {
 		if !axResourceName.MatchString(b.Workspace) || !axResourceName.MatchString(b.Gateway) {
 			return Task{}, ErrInputs
