@@ -339,6 +339,110 @@ for (const [i, action] of ["installation.bootstrap_owner", "identity.login", "wo
   auditEvent(action, `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, i % 3 === 1 ? "mara" : "you", 600 - i * 45);
 }
 
+// WorkspaceService (Home, Inbox, all runs, paged members) over the scenario above plus a
+// few static projects and runs. MOCK_ROLE=member|viewer|admin|owner switches the session role.
+const mockRole = process.env.MOCK_ROLE || "owner";
+const mayAnswer = () => ["owner", "admin", "member"].includes(mockRole);
+const mayDecide = () => ["owner", "admin"].includes(mockRole);
+const projects = [
+  { id: projectId, slug: "demo", name: "Demo project", createdAt: minutesAgo(60 * 24 * 21) },
+  { id: "proj-billing", slug: "billing-service", name: "Billing service", createdAt: minutesAgo(60 * 24 * 14) },
+  { id: "proj-mobile", slug: "mobile-app", name: "Mobile app", createdAt: minutesAgo(60 * 24 * 9) },
+  { id: "proj-data", slug: "data-platform", name: "Data platform", createdAt: minutesAgo(60 * 24 * 3) },
+];
+const projectName = (id) => projects.find((p) => p.id === id)?.name ?? id;
+const sha = (n) => (n * 2654435761 >>> 0).toString(16).padStart(8, "0").repeat(5);
+const staticRuns = [
+  ["invoice-retry-fix", "proj-billing", "active", 190, "awaiting_input", 1, 2, 5],
+  ["ledger-export-v2", "proj-billing", "succeeded", 60 * 5, "needs_approval", 0, 6, 6],
+  ["tax-rounding", "proj-billing", "failed", 60 * 9, "failed", 0, 3, 5],
+  ["push-opt-in", "proj-mobile", "active", 35, "working", 0, 1, 4],
+  ["offline-cache", "proj-mobile", "succeeded", 60 * 30, "done", 0, 5, 5],
+  ["dark-mode-audit", "proj-mobile", "cancelled", 60 * 50, "", 0, 2, 5],
+  ["schema-drift-check", "proj-data", "queued", 4, "", 0, 0, 5],
+  ["backfill-partitions", "proj-data", "succeeded", 60 * 26, "done", 0, 4, 4],
+  ["export-retention", projectId, "succeeded", 60 * 72, "done", 0, 6, 6],
+  ["csv-header-fix", projectId, "failed", 60 * 96, "failed", 0, 2, 6],
+  ...Array.from({ length: 14 }, (_, i) => [`nightly-refresh-${String(i + 1).padStart(2, "0")}`, "proj-data", i % 5 === 3 ? "failed" : "succeeded", 60 * (100 + i * 20), i % 5 === 3 ? "failed" : "done", 0, 4, 4]),
+].map(([launchKey, pid, state, minutes, status, open, done, count], i) => ({ id: `run-${launchKey}`, projectId: pid, projectName: projectName(pid), launchKey, sourceCommit: sha(i + 3), state, createdAt: minutesAgo(minutes), status, openInteractions: open, reviewWaiting: status === "needs_approval" && state === "succeeded", stageCount: count, stagesSucceeded: done }));
+function liveRun() {
+  const open = interactions.filter((i) => i.state === "open");
+  const status = open.some((i) => i.kind === "approval") || (reviewPackage && !reviewPackage.decision) ? "needs_approval" : open.length ? "awaiting_input" : run.state === "active" ? "working" : run.state === "succeeded" ? "done" : "";
+  return { ...run, projectName: projectName(projectId), status, openInteractions: open.length, reviewWaiting: Boolean(reviewPackage && !reviewPackage.decision), stageCount: tasks.length, stagesSucceeded: tasks.filter((t) => t.state === "succeeded").length };
+}
+const allRuns = () => [liveRun(), ...staticRuns];
+function inboxItems() {
+  const items = interactions.filter((i) => i.state === "open").map((i) => ({ id: i.id, kind: i.kind, runId, projectId, projectName: projectName(projectId), runLaunchKey: run.launchKey, stage: i.stage, title: i.title, blocking: i.blocking, createdAt: i.createdAt, canAct: mayAnswer() }));
+  if (reviewPackage && !reviewPackage.decision) items.push({ id: reviewPackage.id, kind: "review", runId, projectId, projectName: projectName(projectId), runLaunchKey: run.launchKey, stage: "", title: "Review package revision 1", blocking: true, createdAt: reviewPackage.presentedAt, canAct: mayDecide() });
+  items.push(
+    { id: "ix-billing-1", kind: "question", runId: "run-invoice-retry-fix", projectId: "proj-billing", projectName: "Billing service", runLaunchKey: "invoice-retry-fix", stage: "implement", title: "Should retries back off exponentially or on a fixed schedule?", blocking: true, createdAt: minutesAgo(52), canAct: mayAnswer() },
+    { id: "pkg-ledger", kind: "review", runId: "run-ledger-export-v2", projectId: "proj-billing", projectName: "Billing service", runLaunchKey: "ledger-export-v2", stage: "", title: "Review package revision 2", blocking: true, createdAt: minutesAgo(60 * 4), canAct: mayDecide() },
+  );
+  return items.sort((a, b) => Number(b.blocking) - Number(a.blocking) || a.createdAt.localeCompare(b.createdAt));
+}
+const page = (rows, pageNumber = 1, size = 25) => rows.slice((Math.max(1, pageNumber) - 1) * size, Math.max(1, pageNumber) * size);
+const members = [
+  ["you", "You", "owner", "active", 2, 1], ["mara", "Mara Lindqvist", "admin", "active", 1, 30], ["dev.okafor", "Chidi Okafor", "member", "active", 3, 90],
+  ["j.tanaka", "Jun Tanaka", "member", "active", 0, 60 * 26], ["priya", "Priya Raman", "member", "invited", 0, 0], ["sam.reviewer", "Sam Ortiz", "viewer", "active", 1, 60 * 8],
+  ["ops-bot", "Operations", "admin", "active", 0, 60 * 24 * 6], ["l.chen", "Lena Chen", "member", "disabled", 0, 60 * 24 * 40], ["auditor", "External auditor", "viewer", "active", 0, 60 * 24 * 2],
+  ...Array.from({ length: 16 }, (_, i) => [`eng${i + 1}`, `Engineer ${i + 1}`, i % 4 === 0 ? "viewer" : "member", i % 7 === 6 ? "invited" : "active", i % 3, 60 * (i + 2)]),
+].map(([username, displayName, role, status, sessions, minutes], i) => ({ principalId: i === 0 ? principalId : `p-${username}`, username, displayName, role, status, activeSessions: sessions, lastLoginAt: status === "invited" ? "" : minutesAgo(minutes), createdAt: minutesAgo(60 * 24 * (30 - i)) }));
+const roleOrder = ["owner", "admin", "member", "viewer"];
+Object.assign(rpc, {
+  CurrentSession: () => ({ session: { organizationId: "org-demo", principalId, role: mockRole, accessExpiresAt: new Date(Date.now() + 3_600_000).toISOString() } }),
+  GetProject: ({ projectId: pid = projectId }) => { const p = projects.find((x) => x.id === pid); return p ? { project: p } : connectError(404, "not_found", "workflow resource not found"); },
+  ListProjects: ({ search = "", sortBy = "created_at", sortDirection = "desc" }) => {
+    const rows = projects.filter((p) => `${p.name} ${p.slug}`.toLowerCase().includes(search.toLowerCase()))
+      .sort((a, b) => (sortBy === "name" ? a.name.localeCompare(b.name) : a.createdAt.localeCompare(b.createdAt)) * (sortDirection === "asc" ? 1 : -1));
+    return { projects: rows, nextPageToken: "" };
+  },
+  GetWorkspaceHome: () => {
+    const items = inboxItems();
+    const actionable = items.filter((i) => i.canAct);
+    const runsNow = allRuns();
+    const agents = rpc.GetAdminOverview().liveAttempts.map((a) => ({ ...a, takenOver: Boolean(a.controllerPrincipalId) }));
+    return { organizationName: "Acme Engineering", organizationSlug: "acme", username: "you", displayName: "You",
+      waitingOnYou: actionable.length, openItems: items.length, runningAgents: agents.length, activeRuns: runsNow.filter((r) => ["queued", "active", "cancel_requested"].includes(r.state)).length,
+      runsLast24h: runsNow.filter((r) => Date.now() - Date.parse(r.createdAt) < 86_400_000).length, failedLast24h: runsNow.filter((r) => r.state === "failed" && Date.now() - Date.parse(r.createdAt) < 86_400_000).length,
+      waiting: actionable.slice(0, 5), agents: agents.slice(0, 10), recentRuns: [...runsNow].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8), generatedAt: now() };
+  },
+  ListInbox: ({ page: p = 1, pageSize = 25, kinds = [], projectId: pid = "", search = "", actionableOnly = false }) => {
+    const rows = inboxItems().filter((i) => (!actionableOnly || i.canAct) && (!kinds.length || kinds.includes(i.kind)) && (!pid || i.projectId === pid)
+      && (!search || `${i.title} ${i.projectName} ${i.runLaunchKey} ${i.stage}`.toLowerCase().includes(search.toLowerCase())));
+    return { items: page(rows, p, pageSize), totalCount: rows.length };
+  },
+  ListWorkspaceRuns: ({ page: p = 1, pageSize = 25, search = "", states = [], projectId: pid = "", sortBy = "created_at", sortDirection = "desc" }) => {
+    const key = { launch_key: "launchKey", project: "projectName", state: "state", created_at: "createdAt" }[sortBy] ?? "createdAt";
+    const rows = allRuns().filter((r) => (!pid || r.projectId === pid) && (!states.length || states.includes(r.state))
+      && (!search || `${r.launchKey} ${r.sourceCommit} ${r.projectName}`.toLowerCase().includes(search.toLowerCase())))
+      .sort((a, b) => String(a[key]).localeCompare(String(b[key])) * (sortDirection === "asc" ? 1 : -1));
+    return { runs: page(rows, p, pageSize), totalCount: rows.length };
+  },
+  ListOrgMembers: () => mayDecide() ? { members } : connectError(403, "permission_denied", "organization administration denied"),
+  ListMembersPage: ({ page: p = 1, pageSize = 25, search = "", roles = [], statuses = [], sortBy = "role", sortDirection = "asc" }) => {
+    if (!mayDecide()) return connectError(403, "permission_denied", "organization administration denied");
+    const cmp = { role: (a, b) => roleOrder.indexOf(a.role) - roleOrder.indexOf(b.role), username: (a, b) => a.username.localeCompare(b.username),
+      last_login: (a, b) => a.lastLoginAt.localeCompare(b.lastLoginAt), created_at: (a, b) => a.createdAt.localeCompare(b.createdAt) }[sortBy] ?? (() => 0);
+    const rows = members.filter((m) => (!search || `${m.username} ${m.displayName}`.toLowerCase().includes(search.toLowerCase())) && (!roles.length || roles.includes(m.role)) && (!statuses.length || statuses.includes(m.status)))
+      .sort((a, b) => cmp(a, b) * (sortDirection === "desc" ? -1 : 1) || a.username.localeCompare(b.username));
+    return { members: page(rows, p, pageSize), totalCount: rows.length };
+  },
+  SetUserEnabled: ({ principalId: id, enabled }) => { const m = members.find((x) => x.principalId === id); if (!m) return connectError(404, "not_found", "no such member"); if (id === principalId) return connectError(400, "failed_precondition", "you cannot disable yourself"); m.status = enabled ? "active" : "disabled"; if (!enabled) m.activeSessions = 0; auditEvent(enabled ? "identity.user.enabled" : "identity.user.disabled", id); return {}; },
+  SetUserRole: ({ principalId: id, role }) => { const m = members.find((x) => x.principalId === id); if (m) { m.role = role; m.activeSessions = 0; } auditEvent("identity.user.role_changed", id); return {}; },
+  RevokeUserSessions: ({ principalId: id }) => { const m = members.find((x) => x.principalId === id); const revoked = m?.activeSessions ?? 0; if (m) m.activeSessions = 0; auditEvent("identity.user.sessions_revoked", id); return { revoked: String(revoked) }; },
+  IssueResetLink: ({ principalId: id }) => { auditEvent("identity.user.reset_link_issued", id); return { link: { token: "mock-reset-token", purpose: "reset", expiresAt: new Date(Date.now() + 86_400_000).toISOString() } }; },
+  InviteUser: ({ username, displayName = "", role = "member" }) => { members.push({ principalId: `p-${username}`, username, displayName, role, status: "invited", activeSessions: 0, lastLoginAt: "", createdAt: now() }); return { principalId: `p-${username}`, link: { token: "mock-setup-token", purpose: "setup", expiresAt: new Date(Date.now() + 86_400_000).toISOString() } }; },
+});
+// Seed the connections hub so connection lists and detail tabs have content.
+hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "Acme Engineering", kind: "api_key", provider: "anthropic", label: "Platform team", account: "sk-ant-…a41f", modelCount: 6, modelsCheckedAt: minutesAgo(40), lastUsedAt: minutesAgo(3), createdAt: minutesAgo(60 * 24 * 12),
+  grants: [{ id: "cg-1", projectId, projectName: "Demo project", granteeKind: "project", granteeId: "", granteeName: "", createdAt: minutesAgo(60 * 24 * 10) }, { id: "cg-2", projectId: "", projectName: "", granteeKind: "role", granteeId: "member", granteeName: "", createdAt: minutesAgo(60 * 24 * 8) }],
+  uses: [{ id: "cu-1", projectId, projectName: "Demo project", model: "claude-opus-5-5", granteeKind: "workload", createdAt: minutesAgo(60 * 24 * 9) }] });
+hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "Acme Engineering", kind: "git", provider: "github", label: "", account: "acme-bot", lastUsedAt: minutesAgo(12), createdAt: minutesAgo(60 * 24 * 20) });
+hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "Acme Engineering", kind: "api_key", provider: "openai", label: "Evaluation", account: "sk-…9c2e", modelCount: 0, modelsCheckedAt: minutesAgo(15), modelsError: "The provider rejected the key (401).", state: "reconnect_required", createdAt: minutesAgo(60 * 24 * 2) });
+hubAdd({ scope: "personal", ownerId: principalId, ownerName: "You", kind: "subscription", provider: "codex", label: "", account: "acct-demo", modelCount: 3, modelsCheckedAt: minutesAgo(90), lastUsedAt: minutesAgo(200), createdAt: minutesAgo(60 * 24 * 5),
+  uses: [{ id: "cu-2", projectId, projectName: "Demo project", model: "gpt-5.6-luna", granteeKind: "user", createdAt: minutesAgo(60 * 24 * 4) }] });
+hubAdd({ scope: "project", ownerId: projectId, ownerName: "Demo project", kind: "api_key", provider: "anthropic", label: "Project key", account: "sk-ant-…77b0", modelCount: 4, modelsCheckedAt: minutesAgo(300), createdAt: minutesAgo(60 * 24 * 6) });
+
 const server = createHttp(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   if (req.method === "GET" && url.pathname === `/api/runs/${runId}/events`) {
@@ -392,5 +496,5 @@ server.listen(apiPort, "127.0.0.1", async () => {
   const vite = await createVite({ root: new URL("..", import.meta.url).pathname,
     server: { port: webPort, strictPort: true, proxy: { "/api": { target: `http://127.0.0.1:${apiPort}`, ws: true } } } });
   await vite.listen();
-  console.log(`[mock] API on http://127.0.0.1:${apiPort} · open http://127.0.0.1:${webPort}/projects/${projectId}/runs/${runId} or /admin`);
+  console.log(`[mock] API on http://127.0.0.1:${apiPort} · open http://127.0.0.1:${webPort}/projects/${projectId}/runs/${runId} or /admin (role ${process.env.MOCK_ROLE || "owner"})`);
 });
