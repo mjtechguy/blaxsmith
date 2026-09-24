@@ -292,9 +292,16 @@ func (s *workflowService) ListRunTasks(ctx context.Context, req *connect.Request
 	response := &api.ListRunTasksResponse{}
 	for _, task := range tasks {
 		item := &api.RunTask{Id: task.ID, Key: task.Key, State: task.State, Generation: task.Generation,
-			MaxAttempts: task.MaxAttempts, DependsOn: task.DependsOn}
+			MaxAttempts: task.MaxAttempts, DependsOn: task.DependsOn, Harness: task.Harness,
+			Model: task.Model, Effort: task.Effort}
 		if task.ActiveAttemptID != nil {
 			item.ActiveAttemptId = *task.ActiveAttemptID
+		}
+		for _, file := range task.Instructions {
+			item.InstructionFiles = append(item.InstructionFiles, &api.FrozenInputFile{Path: file.Path, Sha256: file.SHA256})
+		}
+		for _, file := range task.Skills {
+			item.SkillFiles = append(item.SkillFiles, &api.FrozenInputFile{Path: file.Path, Sha256: file.SHA256})
 		}
 		response.Tasks = append(response.Tasks, item)
 	}

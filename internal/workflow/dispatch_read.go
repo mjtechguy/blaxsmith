@@ -138,21 +138,8 @@ func (s *Store) LoadFrozenTask(ctx context.Context, orgID, runID, taskID string)
 }
 
 func decodeFrozenTask(task FrozenTask, sourceCommit, bundleSHA, verificationSHA, inputSHA string, bundleJSON, verificationJSON []byte) (FrozenTask, error) {
-	var bundle recipe.Bundle
-	var verification VerificationPolicy
-	if json.Unmarshal(bundleJSON, &bundle) != nil || json.Unmarshal(verificationJSON, &verification) != nil ||
-		bundle.SchemaVersion != "blaxsmith.bundle/v1alpha1" || bundle.Source.Commit != sourceCommit ||
-		bundle.Digest != bundleSHA || inputSHA != sha([]byte(bundleSHA+":"+verificationSHA+":"+task.Key)) {
-		return FrozenTask{}, ErrConflict
-	}
-	canonicalBundle := bundle
-	canonicalBundle.Digest = ""
-	encodedBundle, err := json.Marshal(canonicalBundle)
-	if err != nil || sha(encodedBundle) != bundleSHA {
-		return FrozenTask{}, ErrConflict
-	}
-	encodedPolicy, err := validateVerification(verification, bundle.Recipe.RequiredChecks)
-	if err != nil || sha(encodedPolicy) != verificationSHA {
+	bundle, verification, err := decodeFrozenBundle(sourceCommit, bundleSHA, verificationSHA, bundleJSON, verificationJSON)
+	if err != nil || inputSHA != sha([]byte(bundleSHA+":"+verificationSHA+":"+task.Key)) {
 		return FrozenTask{}, ErrConflict
 	}
 	found := false
@@ -170,6 +157,26 @@ func decodeFrozenTask(task FrozenTask, sourceCommit, bundleSHA, verificationSHA,
 	if !found {
 		return FrozenTask{}, ErrConflict
 	}
-	task.Bundle, task.Verification = &bundle, verification
+	task.Bundle, task.Verification = bundle, verification
 	return task, nil
+}
+
+func decodeFrozenBundle(sourceCommit, bundleSHA, verificationSHA string, bundleJSON, verificationJSON []byte) (*recipe.Bundle, VerificationPolicy, error) {
+	var bundle recipe.Bundle
+	var verification VerificationPolicy
+	if json.Unmarshal(bundleJSON, &bundle) != nil || json.Unmarshal(verificationJSON, &verification) != nil ||
+		bundle.SchemaVersion != "blaxsmith.bundle/v1alpha1" || bundle.Source.Commit != sourceCommit || bundle.Digest != bundleSHA {
+		return nil, VerificationPolicy{}, ErrConflict
+	}
+	canonicalBundle := bundle
+	canonicalBundle.Digest = ""
+	encodedBundle, err := json.Marshal(canonicalBundle)
+	if err != nil || sha(encodedBundle) != bundleSHA {
+		return nil, VerificationPolicy{}, ErrConflict
+	}
+	encodedPolicy, err := validateVerification(verification, bundle.Recipe.RequiredChecks)
+	if err != nil || sha(encodedPolicy) != verificationSHA {
+		return nil, VerificationPolicy{}, ErrConflict
+	}
+	return &bundle, verification, nil
 }

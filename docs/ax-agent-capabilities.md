@@ -28,6 +28,10 @@ mention MCP configuration, but does not make it a CLI capability.
 | Agent lifecycle | AX Task/actor state, suspend/resume, worker assignment, and startup/setup status | Workflow stages, fair dispatch, owner fences, connection leases, steering/stop, trusted exit/readback, artifacts/checks, architect validation, audit, and final human approval |
 | Human workspace | No product UI or user authorization model | Tenant/RBAC-aware workspace, durable Q&A and activity, SSE replay, review, configuration, audit, and operational controls |
 
+Run details now expose the frozen harness/model/effort and selected instruction
+and skill file digests from the validated recipe bundle. This is configured-input
+provenance; it does not yet prove a native CLI loaded the files.
+
 After bootstrap activation, dispatch now waits for AX's exact
 `WorkspaceReady=True/SetupComplete` condition and rechecks the actor against
 the frozen runtime binding before reporting `started`. This closes the

@@ -130,7 +130,13 @@ message RunTask {
   int32 max_attempts = 5;
   string active_attempt_id = 6;
   repeated string depends_on = 7; // Frozen stage keys.
+  string harness = 8;
+  string model = 9;
+  string effort = 10;
+  repeated FrozenInputFile instruction_files = 11;
+  repeated FrozenInputFile skill_files = 12;
 }
+message FrozenInputFile { string path = 1; string sha256 = 2; }
 message ListRunTasksRequest { string run_id = 1; }
 message ListRunTasksResponse { repeated RunTask tasks = 1; }
 

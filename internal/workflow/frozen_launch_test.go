@@ -75,6 +75,11 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 		byKey["plan"].Generation != 0 || byKey["plan"].State != "pending" {
 		t.Fatalf("wrong task read model: %+v", byKey)
 	}
+	if byKey["plan"].Harness != "claude-code" || byKey["plan"].Model != "opus" || byKey["plan"].Effort != "high" ||
+		len(byKey["plan"].Skills) != 1 || byKey["plan"].Skills[0].Path != "examples/guild/skills/evidence/SKILL.md" ||
+		len(byKey["implement"].Skills) != 0 {
+		t.Fatalf("frozen tool provenance differs from the recipe: %+v / %+v", byKey["plan"], byKey["implement"])
+	}
 	var bundle, verification []byte
 	if err := pool.QueryRow(t.Context(), `SELECT bundle_json,verification_json FROM workflow_run_bundles
 		WHERE organization_id=$1 AND run_id=$2`, org, run.ID).Scan(&bundle, &verification); err != nil || len(bundle) == 0 || len(verification) == 0 {

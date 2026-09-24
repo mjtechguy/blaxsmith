@@ -15,6 +15,21 @@ export const Route = createFileRoute("/projects/$projectId/runs/$runId")({ compo
 const taskFeatures = tableFeatures({});
 const taskColumns: ColumnDef<typeof taskFeatures, RunTask>[] = [
   { id: "stage", accessorKey: "key", header: "Stage", cell: ({ row }) => <span className="task-stage"><strong>{row.original.key}</strong><small title={row.original.id}>Task {row.original.id.slice(0, 8)}</small></span> },
+  { id: "profile", header: "Selected runtime", cell: ({ row }) => row.original.harness
+    ? <span className="task-stage"><strong>{row.original.harness}</strong><small>{row.original.model} · {row.original.effort}</small></span>
+    : "Human checkpoint" },
+  { id: "inputs", header: "Frozen skills and instructions", cell: ({ row }) => {
+    const task = row.original;
+    const files = [
+      ...task.instructionFiles.map((file) => ({ ...file, kind: "Instruction" })),
+      ...task.skillFiles.map((file) => ({ ...file, kind: "Skill" })),
+    ];
+    if (!files.length) return "—";
+    return <details><summary>{task.skillFiles.length} skills · {task.instructionFiles.length} instructions</summary>
+      <ul>{files.map((file) => <li key={`${file.kind}:${file.path}`}><strong>{file.kind}</strong> <code>{file.path}</code>
+        <small title={file.sha256}>SHA-256 {file.sha256.slice(0, 12)}…</small></li>)}</ul>
+    </details>;
+  } },
   { id: "depends", accessorKey: "dependsOn", header: "Depends on", cell: ({ row }) => row.original.dependsOn.length ? row.original.dependsOn.join(", ") : "Start" },
   { id: "state", accessorKey: "state", header: "State", cell: ({ row }) => <span className={`state-badge state-${row.original.state}`}>{row.original.state.replaceAll("_", " ")}</span> },
   { id: "attempts", accessorKey: "generation", header: "Attempts", cell: ({ row }) => `${row.original.generation.toString()} of ${row.original.maxAttempts}` },
