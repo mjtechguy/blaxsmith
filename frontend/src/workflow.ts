@@ -30,6 +30,10 @@ export async function getRun(runId: string, signal?: AbortSignal) {
   return client.getRun({ runId }, { signal });
 }
 
+export async function listRunTasks(runId: string, signal?: AbortSignal) {
+  return client.listRunTasks({ runId }, { signal });
+}
+
 export async function eventsAfter(runId: string, afterId = 0n, signal?: AbortSignal) {
   return client.eventsAfter({ runId, afterId, limit: 100 }, { signal });
 }

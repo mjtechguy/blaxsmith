@@ -2,12 +2,24 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, Check, GitCommitHorizontal, RefreshCw, Terminal } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
+import { DataTable } from "../data-table";
+import type { RunTask } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
-import { appendRunEvent, decideReview, eventsAfter, getCurrentReview, getRun, listCommandExits, liveEventsUrl, parseLiveEvent, recoverRunEventBatch, type RunEventPages } from "../workflow";
+import { appendRunEvent, decideReview, eventsAfter, getCurrentReview, getRun, listCommandExits, listRunTasks, liveEventsUrl, parseLiveEvent, recoverRunEventBatch, type RunEventPages } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId/runs/$runId")({ component: RunDetail });
+
+const taskFeatures = tableFeatures({});
+const taskColumns: ColumnDef<typeof taskFeatures, RunTask>[] = [
+  { id: "stage", accessorKey: "key", header: "Stage", cell: ({ row }) => <span className="task-stage"><strong>{row.original.key}</strong><small title={row.original.id}>Task {row.original.id.slice(0, 8)}</small></span> },
+  { id: "depends", accessorKey: "dependsOn", header: "Depends on", cell: ({ row }) => row.original.dependsOn.length ? row.original.dependsOn.join(", ") : "Start" },
+  { id: "state", accessorKey: "state", header: "State", cell: ({ row }) => <span className={`state-badge state-${row.original.state}`}>{row.original.state.replaceAll("_", " ")}</span> },
+  { id: "attempts", accessorKey: "generation", header: "Attempts", cell: ({ row }) => `${row.original.generation.toString()} of ${row.original.maxAttempts}` },
+  { id: "active", accessorKey: "activeAttemptId", header: "Active attempt", cell: ({ row }) => row.original.activeAttemptId ? <code title={row.original.activeAttemptId}>{row.original.activeAttemptId.slice(0, 8)}</code> : "—" },
+];
 
 function RunDetail() {
   const { projectId, runId } = Route.useParams();
@@ -18,7 +30,10 @@ function RunDetail() {
   const eventKey = ["run-events", scope, runId];
   const reviewKey = ["run-review", scope, runId];
   const exitKey = ["run-command-exits", scope, runId];
+  const taskKey = ["run-tasks", scope, runId];
   const run = useQuery({ queryKey: runKey, queryFn: ({ signal }) => getRun(runId, signal), enabled: !!scope });
+  const tasks = useQuery({ queryKey: taskKey, queryFn: ({ signal }) => listRunTasks(runId, signal), enabled: !!scope && run.data?.run?.projectId === projectId });
+  const taskTable = useTable({ features: taskFeatures, data: tasks.data?.tasks || [], columns: taskColumns, getRowId: (task) => task.id });
   const activity = useInfiniteQuery({
     queryKey: eventKey, enabled: !!scope && run.data?.run?.projectId === projectId, initialPageParam: 0n,
     queryFn: ({ pageParam, signal }) => eventsAfter(runId, pageParam, signal),
@@ -49,9 +64,11 @@ function RunDetail() {
       retryRecovery = undefined;
       recovering = true;
       let more = false;
+      const before = cursor();
       try {
         more = await recoverRunEventBatch((after) => eventsAfter(runId, after), cursor,
           (event) => { if (!closed) queryClient.setQueryData<RunEventPages>(key, (old) => appendRunEvent(old, event).data); });
+        if (!closed && cursor() !== before) void queryClient.invalidateQueries({ queryKey: ["run-tasks", scope, runId] });
       } catch {
         if (!closed) retryRecovery = window.setTimeout(() => void recover(), 5_000);
       } finally {
@@ -76,6 +93,7 @@ function RunDetail() {
         });
         if (gap) void recover();
         if (event.kind.startsWith("run.")) void queryClient.invalidateQueries({ queryKey: ["run", scope, runId] });
+        if (event.kind.startsWith("task.") || event.kind.startsWith("attempt.")) void queryClient.invalidateQueries({ queryKey: ["run-tasks", scope, runId] });
         if (event.kind.startsWith("review.")) void queryClient.invalidateQueries({ queryKey: ["run-review", scope, runId] });
         if (event.kind === "attempt.command_exited") void queryClient.invalidateQueries({ queryKey: ["run-command-exits", scope, runId] });
       } catch { void recover(); }
@@ -98,7 +116,7 @@ function RunDetail() {
 
   return <PageShell>
     <PageHeader eyebrow="Project / Run" title={run.data?.run?.launchKey || "Run"} description="Execution record and durable event history."
-      actions={<button type="button" className="secondary-button" onClick={() => { void run.refetch(); void activity.refetch(); void commandExits.refetch(); void queryClient.invalidateQueries({ queryKey: reviewKey }); }}><RefreshCw size={15} aria-hidden="true" /> Refresh</button>} />
+      actions={<button type="button" className="secondary-button" onClick={() => { void run.refetch(); void tasks.refetch(); void activity.refetch(); void commandExits.refetch(); void queryClient.invalidateQueries({ queryKey: reviewKey }); }}><RefreshCw size={15} aria-hidden="true" /> Refresh</button>} />
     <Link to="/projects/$projectId" params={{ projectId }} className="text-action"><ArrowLeft size={15} aria-hidden="true" /> Project runs</Link>
     {run.isPending ? <div className="state-panel" role="status"><RefreshCw className="spin" size={22} aria-hidden="true" /><h2>Loading run</h2></div> : null}
     {run.isError ? <div className="state-panel" role="alert"><h2>Run unavailable</h2><p>This run could not be loaded.</p><button type="button" className="secondary-button" onClick={() => void run.refetch()}>Try again</button></div> : null}
@@ -107,6 +125,12 @@ function RunDetail() {
       <section className="summary-card"><span className="summary-label">Source commit</span><strong className="summary-value mono" title={run.data.run.sourceCommit}>{run.data.run.sourceCommit.slice(0, 12)}</strong><span className="summary-meta">Pinned at launch</span></section>
       <section className="summary-card"><span className="summary-label">Created</span><strong className="summary-value"><time dateTime={run.data.run.createdAt}>{new Date(run.data.run.createdAt).toLocaleDateString()}</time></strong><span className="summary-meta">{new Date(run.data.run.createdAt).toLocaleTimeString()}</span></section>
     </div> : null}
+    {run.data?.run ? <section className="table-section" aria-labelledby="run-tasks-heading">
+      <div className="table-heading"><div><h2 id="run-tasks-heading">Execution plan</h2><p>Frozen stages run after their dependencies. Attempts count reservations, not verified results.</p></div><span className="fetched-time">{tasks.data?.tasks.length ?? 0} stages</span></div>
+      {tasks.isPending ? <div className="table-empty" role="status">Loading stages…</div> : null}
+      {tasks.isError ? <div className="table-empty" role="alert">Execution plan is unavailable. <button type="button" className="text-action" onClick={() => void tasks.refetch()}>Try again</button></div> : null}
+      {tasks.data ? <DataTable table={taskTable} label="Run execution plan" empty="No stages have been frozen for this run." /> : null}
+    </section> : null}
     {run.data?.run ? <FinalReview runId={runId} scope={scope} state={run.data.run.state} /> : null}
     {run.data?.run ? <section className="table-section" aria-labelledby="command-exits-heading">
       <div className="table-heading"><div><h2 id="command-exits-heading">Command observations</h2><p>Connector-signed exits are unverified. A zero exit does not verify artifacts or complete a task.</p></div><span className="fetched-time">{observations.length} observed</span></div>
