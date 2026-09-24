@@ -194,9 +194,21 @@ def public_gateway(name):
             if not address.is_global:
                 raise RuntimeError(f"{hostname} resolved to a non-public address")
             addresses.add(str(address) + "/32")
+    # A cluster resolver can return another public A record than the host
+    # resolver. Keep exact routes and let the operator add only addresses
+    # observed in the dev cluster's egress log.
+    extra = os.environ.get("BLAXSMITH_DEV_MODEL_GIT_EGRESS_IPS", "")
+    for value in filter(None, (item.strip() for item in extra.split(","))):
+        address = ipaddress.ip_address(value)
+        if not isinstance(address, ipaddress.IPv4Address) or not address.is_global:
+            raise RuntimeError("extra model Git egress entries must be public IPv4 addresses")
+        addresses.add(str(address) + "/32")
+    routes = sorted(addresses)
+    if name == "model-gateway":
+        report["model_probe"]["git_egress_routes"] = routes
     return {"apiVersion": "ax.io/v1alpha1", "kind": "Gateway",
         "metadata": {"name": name, "atespace": space},
-        "spec": {"egress": {"allowlist": {"hosts": [{"host": host} for host in sorted(addresses)]}}}}
+        "spec": {"egress": {"allowlist": {"hosts": [{"host": host} for host in routes]}}}}
 
 
 def wait_workspace_ready():
