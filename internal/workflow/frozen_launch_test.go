@@ -80,6 +80,19 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 		WHERE organization_id=$1 AND run_id=$2`, org, run.ID).Scan(&bundle, &verification); err != nil || len(bundle) == 0 || len(verification) == 0 {
 		t.Fatalf("frozen inputs missing: %v", err)
 	}
+	readyOrgs, err := store.ListReadyOrganizationIDs(t.Context(), "", 1)
+	if err != nil || !slices.Equal(readyOrgs, []string{org}) {
+		t.Fatalf("ready organization discovery: %v, %v", readyOrgs, err)
+	}
+	ready, err := store.ListReadyTasks(t.Context(), org, 1)
+	if err != nil || len(ready) != 1 || ready[0].Key != "plan" || ready[0].RunID != run.ID {
+		t.Fatalf("ready task selection: %+v, %v", ready, err)
+	}
+	frozen, err := store.LoadFrozenTask(t.Context(), org, run.ID, ready[0].TaskID)
+	if err != nil || frozen.Bundle.Source.Commit != run.SourceCommit || frozen.Stage.ID != "plan" ||
+		frozen.Profile.Harness != "claude-code" || frozen.Verification.SchemaVersion != "blaxsmith.verification/v1alpha1" {
+		t.Fatalf("frozen task loading: %+v, %v", frozen, err)
+	}
 	again, err := store.CreateFrozenRun(t.Context(), in)
 	if err != nil || again.ID != run.ID {
 		t.Fatalf("idempotent replay: %+v, %v", again, err)
@@ -101,6 +114,9 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 	attempt, err := store.ReserveAttempt(context.Background(), org, run.ID, firstTask)
 	if err != nil {
 		t.Fatalf("sealed root task could not reserve: %v", err)
+	}
+	if ready, err := store.ListReadyTasks(t.Context(), org, 1); err != nil || len(ready) != 0 {
+		t.Fatalf("reserved task remained ready: %+v, %v", ready, err)
 	}
 	binding := RuntimeBinding{AXAtespace: "team", AXTask: "attempt", ActorUID: "actor-one",
 		TemplateUID: "template-one", Image: "runner@sha256:" + strings.Repeat("a", 64),
@@ -175,6 +191,12 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 		t.Fatalf("receipt cursor replay: %+v, %v", older, err)
 	}
 	other := organization(t, pool, "frozen-other")
+	if ready, err := store.ListReadyTasks(t.Context(), other, 1); err != nil || len(ready) != 0 {
+		t.Fatalf("cross-tenant ready tasks: %+v, %v", ready, err)
+	}
+	if _, err := store.LoadFrozenTask(t.Context(), other, run.ID, firstTask); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cross-tenant frozen task: %v", err)
+	}
 	if leaked, err := store.ListRunTasks(t.Context(), other, run.ID); err != nil || len(leaked) != 0 {
 		t.Fatalf("cross-tenant task graph: %+v, %v", leaked, err)
 	}
