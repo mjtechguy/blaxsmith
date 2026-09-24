@@ -333,6 +333,12 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	extensionPath, extensionHandler := apiv1connect.NewExtensionServiceHandler(newExtensionService(guard, store),
 		connect.WithReadMaxBytes(256<<10))
 	mux.Handle("/api"+extensionPath, http.StripPrefix("/api", guard.Wrap(extensionHandler)))
+	gatewayAdminPath, gatewayAdminHandler := apiv1connect.NewGatewayAdminServiceHandler(
+		&gatewayAdminService{guard: guard, store: store, installed: appGatewayURL() != ""}, connect.WithReadMaxBytes(1<<14))
+	mux.Handle("/api"+gatewayAdminPath, http.StripPrefix("/api", guard.Wrap(gatewayAdminHandler)))
+	usagePath, usageHandler := apiv1connect.NewUsageServiceHandler(&usageService{guard: guard, store: store},
+		connect.WithReadMaxBytes(1<<14))
+	mux.Handle("/api"+usagePath, http.StripPrefix("/api", guard.Wrap(usageHandler)))
 	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity}))
 	mux.Handle("/api/terminal/attempts/{attemptID}", guard.Wrap(newTerminalHandler(guard, origin, store, guests, terminals)))
 	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(tools)
