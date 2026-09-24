@@ -64,7 +64,12 @@ per-attempt Gateway, and the bridge checks its readback before launch and again
 before credential release. Both attempt resources are removed after actor
 absence is proved. This narrows shared-name races; AX does not make the
 definitions immutable, and these reads do not prove the effective network
-dataplane. P1-27 still needs live route and revocation evidence.
+dataplane. The [live attempt-input probe](ax-attempt-inputs-probe.json) verified
+the Workspace/Gateway/Task bindings, observed the Substrate runtime, and proved
+actor-gone cleanup with no credential release. It did not prove Workspace
+setup completion, checkout isolation, effective route enforcement, or revocation
+convergence. P1-26/27 remain open for those runtime proofs and the policy-derived
+destination contract.
 
 ## Substrate connector authority
 
