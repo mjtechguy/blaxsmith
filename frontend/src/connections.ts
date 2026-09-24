@@ -74,8 +74,8 @@ export async function listConnections(scope: ListScope, projectId = "", signal?:
 }
 
 // Secrets are write-only: sent once, never returned.
-export async function createApiKeyConnection(scope: Scope, projectId: string, provider: string, apiKey: string, label: string) {
-  return (await client.createApiKeyConnection({ scope, projectId, provider, apiKey, label }, await csrf())).connection;
+export async function createApiKeyConnection(scope: Scope, projectId: string, provider: string, apiKey: string, label: string, signal?: AbortSignal) {
+  return (await client.createApiKeyConnection({ scope, projectId, provider, apiKey, label }, { ...(await csrf()), signal })).connection;
 }
 
 export async function createGitTokenConnection(scope: Scope, projectId: string, host: string, username: string, token: string) {

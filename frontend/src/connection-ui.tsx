@@ -3,7 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, GitBranch, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { ago } from "./admin";
 import { currentSession, sessionQueryKey } from "./auth";
@@ -15,6 +15,8 @@ import {
 } from "./connections";
 import { DataTable } from "./data-table";
 import { TextField } from "./form-field";
+import { isBusy, type SignInState } from "./sign-in";
+import { SignInStatus, useSignIn } from "./sign-in-flow";
 import type { Connection, ConnectionGrant, ConnectionUse } from "./gen/blaxsmith/api/v1/connections_pb";
 import { listProjects } from "./workflow";
 
@@ -186,6 +188,8 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone }: { scope: Sc
   const { org } = useOrg();
   const [error, setError] = useState("");
   const [created, setCreated] = useState<Connection | null>(null);
+  const [signIn, dispatch] = useSignIn();
+  const abort = useRef<AbortController | null>(null);
   const form = useForm({
     defaultValues: { provider: "anthropic", apiKey: "", label: "" },
     onSubmit: async ({ value }) => {
@@ -196,15 +200,24 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone }: { scope: Sc
         return;
       }
       form.setFieldValue("apiKey", "");
+      dispatch({ type: "start" });
+      dispatch({ type: "verify" });
+      abort.current = new AbortController();
       try {
-        const connection = await createApiKeyConnection(scope, projectId, value.provider, apiKey, value.label.trim());
+        const connection = await createApiKeyConnection(scope, projectId, value.provider, apiKey, value.label.trim(), abort.current.signal);
         await queryClient.invalidateQueries({ queryKey: ["connections", org] });
+        dispatch({ type: "succeed" });
         if (connection) setCreated(connection);
       } catch (cause) {
-        setError(failure(cause, "The API key could not be added. Please try again."));
+        dispatch({ type: "fail", error: failure(cause, "The API key could not be added. Please try again.") });
       }
     },
   });
+  const cancelCheck = () => {
+    dispatch({ type: "cancel" });
+    abort.current?.abort();
+    void queryClient.invalidateQueries({ queryKey: ["connections", org] }); // The server may have stored it already.
+  };
   if (created) return <section className="editor-card" aria-labelledby="api-key-created-heading">
     <div className="editor-card-heading"><span className="project-symbol"><KeyRound size={18} aria-hidden="true" /></span><div><h2 id="api-key-created-heading">{providerLabel(created.provider)} key added</h2>
       <p className={created.modelsError ? "form-field-error" : undefined}>{modelsSummary(created)}</p></div></div>
@@ -213,7 +226,9 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone }: { scope: Sc
   return <div className="editor-layout">
     <section className="editor-card" aria-labelledby="api-key-heading">
       <div className="editor-card-heading"><span className="project-symbol"><KeyRound size={18} aria-hidden="true" /></span><div><h2 id="api-key-heading">Provider API key</h2><p>The platform checks the key with the provider and loads the models it can use.</p></div></div>
-      <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
+      <SignInStatus state={signIn} onCancel={cancelCheck} onRetry={() => dispatch({ type: "retry" })}
+        labels={{ starting: "Sending the key…", verifying: "Validating the key with the provider…", succeeded: "Key accepted." }} />
+      {isBusy(signIn.phase) ? null : <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
         <form.Field name="provider">{(field) => <div className="form-field"><label htmlFor="api-key-provider">Provider</label>
           <select id="api-key-provider" name={field.name} value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} onBlur={field.handleBlur}>
             {apiKeyProviders.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
@@ -224,7 +239,7 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone }: { scope: Sc
         <div className="editor-actions">{cancel}<form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
           {([canSubmit, submitting]) => <button className="primary-button" type="submit" disabled={!canSubmit || submitting}>{submitting ? <RefreshCw size={15} className="spin" aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}{submitting ? "Checking…" : "Add API key"}</button>}
         </form.Subscribe></div>
-      </form>
+      </form>}
     </section>
     <aside className="editor-note"><h2>Write-only key</h2><p>The key is sent once and never returned. {scope === "personal" ? "A personal key serves only runs you launch." : scope === "project" ? "A project key serves only this project's runs." : "An organization key serves the projects, users, and roles you grant it to."} OpenCode Zen and OpenCode Go are OpenCode's own providers; OpenCode Go is its subscription and also uses an API key.</p></aside>
   </div>;
@@ -235,10 +250,13 @@ export function NewGit({ scope, projectId = "", returnTo, cancel, onDone }: { sc
   const { org } = useOrg();
   const app = useQuery({ queryKey: gitHubAppKey(org), enabled: Boolean(org), queryFn: ({ signal }) => getGitHubApp(signal) });
   const [error, setError] = useState("");
+  const [signIn, dispatch] = useSignIn();
   const connect = useMutation({
     mutationFn: () => startGitHubConnect(scope, projectId, returnTo),
-    onSuccess: (url) => { if (url) window.location.assign(url); },
-    onError: (cause) => setError(failure(cause, "GitHub sign-in could not start. Please try again.")),
+    onMutate: () => dispatch({ type: "start" }),
+    // The callback returns to returnTo with ?github=…; GitHubReturnNotice shows the outcome.
+    onSuccess: (url) => { dispatch({ type: "started" }); if (url) window.location.assign(url); },
+    onError: (cause) => dispatch({ type: "fail", error: failure(cause, "GitHub sign-in could not start. Please try again.") }),
   });
   const form = useForm({
     defaultValues: { host: "github.com", username: "x-access-token", token: "" },
@@ -265,8 +283,10 @@ export function NewGit({ scope, projectId = "", returnTo, cancel, onDone }: { sc
     <section className="editor-card" aria-labelledby="git-heading">
       <div className="editor-card-heading"><span className="project-symbol"><GitBranch size={18} aria-hidden="true" /></span><div><h2 id="git-heading">Connect Git</h2><p>Sign in with GitHub, then pick repositories and branches on the project source page.</p></div></div>
       <div className="editor-form">
-        <button type="button" className="primary-button" disabled={!configured || connect.isPending} onClick={() => { setError(""); connect.mutate(); }}>
-          <GitBranch size={15} aria-hidden="true" /> {connect.isPending ? "Opening GitHub…" : "Connect GitHub"}</button>
+        {signIn.phase === "idle" ? <button type="button" className="primary-button" disabled={!configured} onClick={() => { setError(""); connect.mutate(); }}>
+          <GitBranch size={15} aria-hidden="true" /> Connect GitHub</button> : null}
+        <SignInStatus state={signIn} onRetry={() => dispatch({ type: "retry" })}
+          labels={{ starting: "Preparing GitHub sign-in…", waiting: "Opening GitHub…", verifying: "Finishing sign-in…", succeeded: "GitHub connected." }} />
         {app.isSuccess && !configured ? <p className="admin-note">An organization owner or admin must register the GitHub OAuth App under Admin → Connections → GitHub App first.</p> : null}
         {error ? <p className="auth-alert" role="alert">{error}</p> : null}
       </div>
@@ -435,8 +455,12 @@ function AddGrant({ grant, onChanged }: { grant: (kind: string, projectId: strin
 }
 
 // ?github=connected|error&message=… is set by the /oauth/github/callback redirect.
+// It ends the OAuth sign-in state machine started by NewGit's Connect GitHub.
 export function GitHubReturnNotice({ search }: { search: Record<string, unknown> }) {
-  if (search.github === "connected") return <div className="notice" role="status"><strong>GitHub connected.</strong> Pick repositories on a project's source page.</div>;
-  if (search.github === "error") return <div className="notice" role="alert"><strong>GitHub connection failed.</strong> {typeof search.message === "string" ? search.message : "Please try again."}</div>;
-  return null;
+  const navigate = useNavigate();
+  const state: SignInState | null = search.github === "connected" ? { phase: "succeeded", attempt: 1 }
+    : search.github === "error" ? { phase: "failed", attempt: 1, error: typeof search.message === "string" ? search.message : "Please try again." } : null;
+  if (!state) return null;
+  return <SignInStatus state={state} onRetry={() => void navigate({ to: ".", search: {} as never, replace: true })}
+    labels={{ starting: "", verifying: "", succeeded: "GitHub connected." }} done="Pick repositories on a project's source page." />;
 }
