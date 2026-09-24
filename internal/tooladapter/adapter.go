@@ -280,6 +280,7 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 		// The TUI otherwise stops at a folder-trust prompt; exec never asks.
 		dir, _ := json.Marshal(workdir)
 		resume = append(resume, "--config", fmt.Sprintf("projects={%s={trust_level=%q}}", dir, "trusted"))
+		args, resume = codexGatewayArgs(args, resume, in.gatewayBaseURL)
 	}
 	var signals []extension.Signal
 	if in.extension != nil {

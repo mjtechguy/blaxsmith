@@ -1,6 +1,7 @@
 package tooladapter
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -21,39 +22,52 @@ func (g *Gateway) validate() error {
 	u, err := url.Parse(g.BaseURL)
 	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
 		u.Path != "" || u.RawQuery != "" || u.Fragment != "" || len(g.BaseURL) > 256 ||
-		strings.ContainsAny(g.BaseURL, " \r\n\x00") {
+		strings.ContainsAny(g.BaseURL, " \r\n\x00\"'") {
 		return fmt.Errorf("%w: invalid model gateway base URL", ErrBlocked)
 	}
 	return nil
 }
 
-// familyURL is the gateway prefix for a provider: <base>/<provider>.
-func (g *Gateway) familyURL(provider string) string { return g.BaseURL + "/" + provider }
-
-// gatewayCredentialEnv replaces the one-key environment for a brokered attempt:
-//   - Claude Code: ANTHROPIC_BASE_URL plus ANTHROPIC_AUTH_TOKEN (sent as
-//     Authorization: Bearer). --bare reads only ANTHROPIC_API_KEY for auth, so
-//     the token is also given there; both carry the same gateway token.
-//   - Codex: OPENAI_BASE_URL for the built-in openai provider, OPENAI_API_KEY =
-//     token.
-//   - OpenCode: the provider's options.baseURL in the scoped opencode.json
-//     (openCodeGatewayProvider); the key stays OPENCODE_API_KEY = token and is
-//     read from the environment by the config, never written to disk.
+// gatewayCredentialEnv replaces the one-key environment for a brokered
+// attempt. Verified with real CLIs against a mock upstream through the
+// gateway (internal/gateway/harness_probe_test.go):
+//   - Claude Code 2.1.282 --bare honours ANTHROPIC_BASE_URL and sends
+//     ANTHROPIC_AUTH_TOKEN as Authorization: Bearer. ANTHROPIC_API_KEY carries
+//     the same token so apiKeySource matches the native path; it is never a
+//     provider key.
+//   - Codex 0.156.1 ignores OPENAI_BASE_URL; it gets a model provider in argv
+//     (codexGatewayArgs) that reads the token from OPENAI_API_KEY.
+//   - OpenCode reads options.baseURL from its scoped config
+//     (openCodeGatewayProvider) and the token from OPENCODE_API_KEY.
 func gatewayCredentialEnv(g *Gateway, harness, provider string, token []byte) []string {
 	key := CredentialEnv(provider) + "=" + string(token)
-	switch harness {
-	case "claude-code":
-		return []string{"ANTHROPIC_BASE_URL=" + g.familyURL(provider), "ANTHROPIC_AUTH_TOKEN=" + string(token), key}
-	case "codex":
-		return []string{"OPENAI_BASE_URL=" + g.familyURL(provider) + "/v1", key}
-	default:
-		return []string{key}
+	if harness == "claude-code" {
+		return []string{"ANTHROPIC_BASE_URL=" + g.BaseURL + "/" + provider, "ANTHROPIC_AUTH_TOKEN=" + string(token), key}
 	}
+	return []string{key}
 }
 
 // gatewayEnvKey reports the extra variables a brokered attempt may set.
 func gatewayEnvKey(key string) bool {
-	return key == "ANTHROPIC_BASE_URL" || key == "ANTHROPIC_AUTH_TOKEN" || key == "OPENAI_BASE_URL"
+	return key == "ANTHROPIC_BASE_URL" || key == "ANTHROPIC_AUTH_TOKEN"
+}
+
+// codexGatewayArgs selects a gateway model provider for exec and the takeover
+// resume. The built-in openai provider cannot be re-pointed without also
+// opening Responses WebSockets, which the gateway does not proxy in G1; a
+// named provider with supports_websockets=false uses HTTPS streaming only.
+// The prompt stays the last exec argument.
+func codexGatewayArgs(args, resume []string, baseURL string) ([]string, []string) {
+	if baseURL == "" || len(args) == 0 {
+		return args, resume
+	}
+	endpoint, _ := json.Marshal(baseURL + "/openai/v1")
+	config := []string{"--config", `model_provider="blaxsmith-gateway"`, "--config",
+		`model_providers.blaxsmith-gateway={name="Blaxsmith model gateway",base_url=` + string(endpoint) +
+			`,env_key="OPENAI_API_KEY",wire_api="responses",supports_websockets=false}`}
+	prompt := args[len(args)-1]
+	args = append(append(append([]string(nil), args[:len(args)-1]...), config...), prompt)
+	return args, append(append([]string(nil), resume...), config...)
 }
 
 // openCodeGatewayProvider adds provider.<id>.options to OpenCode's scoped
