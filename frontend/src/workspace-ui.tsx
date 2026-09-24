@@ -65,7 +65,7 @@ export function useRunColumns(opts: { showProject: boolean }): GridColumn<Worksp
     ];
     if (opts.showProject) cols.push({ id: "project", accessorKey: "projectName", header: "Project", cell: ({ row }) => <Link className="text-link" to="/projects/$projectId" params={{ projectId: row.original.projectId }}>{row.original.projectName}</Link> });
     cols.push(
-      { id: "status", accessorKey: "status", header: "Status", enableSorting: false, filterFn: inSet, cell: ({ row }) => <StatusPill status={asStatus(row.original.status)} /> },
+      { id: "status", accessorKey: "status", header: "Status", enableSorting: false, filterFn: inSet, cell: ({ row }) => <StatusPill status={asStatus(row.original.status)} title={`State: ${row.original.state.replaceAll("_", " ")}`} /> },
       { id: "state", accessorKey: "state", header: "State", filterFn: inSet, cell: ({ row }) => <RunStateBadge state={row.original.state} /> },
       { id: "stages", header: "Stages", enableSorting: false, cell: ({ row }) => row.original.stageCount ? <span className="progress-cell"><meter min={0} max={row.original.stageCount} value={row.original.stagesSucceeded} aria-label={`${row.original.stagesSucceeded} of ${row.original.stageCount} stages succeeded`} />
         <span>{row.original.stagesSucceeded}/{row.original.stageCount}</span></span> : <span className="muted">—</span> },

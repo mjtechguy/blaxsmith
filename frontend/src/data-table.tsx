@@ -10,7 +10,7 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Columns3, Rows3, Search, X } from "lucide-react";
 import { currentSession, sessionQueryKey } from "./auth";
 import { usePrefs } from "./preferences";
-import { decodeView, encodeView, pageSizes, readPrefs, withCriteria, writePrefs, type TablePrefs, type TableView, type ViewDefaults } from "./table-state";
+import { columnVisibility, decodeView, encodeView, pageSizes, readPrefs, withCriteria, withVisibility, writePrefs, type TablePrefs, type TableView, type ViewDefaults } from "./table-state";
 
 type Props<TFeatures extends TableFeatures, TData extends RowData> = {
   table: ReactTable<TFeatures, TData>;
@@ -111,6 +111,7 @@ export type CollectionProps<T extends RowData> = {
   searchLabel?: string; // Omit to hide search.
   searchNote?: string; // Scope of the search, e.g. "Searches every run in the organization".
   pinFirst?: boolean;
+  defaultHidden?: string[]; // Column ids hidden until the viewer turns them on in Columns.
   canSelect?: (row: T) => boolean;
   bulk?: (rows: T[], clear: () => void) => ReactNode;
   renderExpanded?: (row: T) => ReactNode;
@@ -130,7 +131,7 @@ export type CollectionProps<T extends RowData> = {
 const UTIL = 36;
 
 export function CollectionTable<T extends RowData>(props: CollectionProps<T>) {
-  const { id, label, columns: dataColumns, data, getRowId, view, onView, total, facets = [], searchLabel, searchNote, pinFirst, canSelect, bulk,
+  const { id, label, columns: dataColumns, data, getRowId, view, onView, total, facets = [], searchLabel, searchNote, pinFirst, defaultHidden, canSelect, bulk,
     renderExpanded, canExpand, expandLabel, loading, refreshing, error, empty, noun = "rows", toolbar, paged = true, sortable = true, moreAvailable = false } = props;
   const server = total !== undefined;
   const [prefs, setPrefs] = useTablePrefs(id);
@@ -152,7 +153,7 @@ export function CollectionTable<T extends RowData>(props: CollectionProps<T>) {
 
   const leading = columns.slice(0, (canSelect ? 1 : 0) + (renderExpanded ? 1 : 0) + (pinFirst ? 1 : 0)).map((c) => c.id as string);
   const pinned = pinFirst ? leading : leading.filter((c) => c.startsWith("_"));
-  const visibility = Object.fromEntries(prefs.hidden.map((h) => [h, false]));
+  const visibility = columnVisibility(prefs, defaultHidden);
   const pageCount = server ? Math.max(1, Math.ceil((total ?? 0) / view.size)) : undefined;
 
   const table = useTable({
@@ -176,7 +177,7 @@ export function CollectionTable<T extends RowData>(props: CollectionProps<T>) {
     },
     onColumnVisibilityChange: (u) => {
       const next = resolve(u, visibility);
-      setPrefs({ ...prefs, hidden: Object.entries(next).filter(([, shown]) => !shown).map(([h]) => h) });
+      setPrefs(withVisibility(prefs, next, defaultHidden));
     },
     onColumnSizingChange: (u) => setPrefs({ ...prefs, widths: resolve(u, prefs.widths) }),
     onRowSelectionChange: (u) => setRowSelection((old) => resolve(u, old)),
@@ -211,7 +212,7 @@ export function CollectionTable<T extends RowData>(props: CollectionProps<T>) {
         {hideable.length > 1 ? <Menu label="Columns" icon={<Columns3 size={16} aria-hidden="true" />}>
           {hideable.map((column) => <label key={column.id} className="menu-check"><input type="checkbox" checked={column.getIsVisible()}
             disabled={column.getIsVisible() && hideable.filter((c) => c.getIsVisible()).length === 1} onChange={column.getToggleVisibilityHandler()} /> {headerText(column)}</label>)}
-          {prefs.hidden.length || Object.keys(prefs.widths).length ? <button type="button" className="text-action" onClick={() => setPrefs({ ...prefs, hidden: [], widths: {} })}>Reset columns</button> : null}
+          {prefs.hidden.length || prefs.shown.length || Object.keys(prefs.widths).length ? <button type="button" className="text-action" onClick={() => setPrefs({ ...prefs, hidden: [], shown: [], widths: {} })}>Reset columns</button> : null}
         </Menu> : null}
       </div>
     </div>

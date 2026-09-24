@@ -8,7 +8,7 @@ test("table view state round-trips through the URL and preferences stay per user
   globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
   const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
   try {
-    const { decodeView, encodeView, withCriteria, readPrefs, writePrefs, prefsKey } = await server.ssrLoadModule("/src/table-state.ts");
+    const { decodeView, encodeView, withCriteria, readPrefs, writePrefs, prefsKey, columnVisibility, withVisibility } = await server.ssrLoadModule("/src/table-state.ts");
     const defaults = { sort: [{ id: "created", desc: true }], size: 20 };
     const view = { q: "invoice", sort: [{ id: "run", desc: false }], page: 3, size: 50, filters: { state: ["active", "failed"], kind: [] } };
     const encoded = encodeView(view, { tab: "stages", q: "old", f_state: "queued" }, defaults);
@@ -26,10 +26,23 @@ test("table view state round-trips through the URL and preferences stay per user
     assert.equal(withCriteria(view, { q: "x" }).page, 1);
 
     writePrefs("user-a", "runs", { hidden: ["commit"], widths: { run: 240, bad: 5 }, density: "compact" });
-    assert.deepEqual(readPrefs("user-a", "runs"), { hidden: ["commit"], widths: { run: 240 }, density: "compact" });
-    assert.deepEqual(readPrefs("user-b", "runs", "comfortable"), { hidden: [], widths: {}, density: "comfortable" }, "another user never sees these settings");
+    assert.deepEqual(readPrefs("user-a", "runs"), { hidden: ["commit"], shown: [], widths: { run: 240 }, density: "compact" });
+    assert.deepEqual(readPrefs("user-b", "runs", "comfortable"), { hidden: [], shown: [], widths: {}, density: "comfortable" }, "another user never sees these settings");
     assert.deepEqual(readPrefs("user-b", "runs", "compact").density, "compact", "the account default applies to untouched tables");
     assert.equal(prefsKey("user-a", "runs"), "blaxsmith:table:v1:user-a:runs");
+
+    // Default-hidden columns (Runs › State) stay off until the viewer turns them on;
+    // existing prefs without "shown" still read, and the choice persists per user.
+    const fresh = readPrefs("user-c", "runs");
+    assert.deepEqual(columnVisibility(fresh, ["state"]), { state: false });
+    const on = withVisibility(fresh, { ...columnVisibility(fresh, ["state"]), state: true }, ["state"]);
+    assert.deepEqual([on.hidden, on.shown], [[], ["state"]]);
+    assert.deepEqual(columnVisibility(on, ["state"]), {});
+    const off = withVisibility(on, { commit: false, state: true }, ["state"]);
+    assert.deepEqual([off.hidden, off.shown], [["commit"], ["state"]]);
+    writePrefs("user-c", "runs", off);
+    assert.deepEqual(columnVisibility(readPrefs("user-c", "runs"), ["state"]), { commit: false });
+    assert.deepEqual(columnVisibility(readPrefs("user-d", "runs"), ["state"]), { state: false }, "another user keeps the default");
   } finally {
     await server.close();
     globalThis.localStorage = saved;

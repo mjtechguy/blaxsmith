@@ -5,9 +5,10 @@ import {
   type AgentStatus, type PlanItem, type Progress, type ToolRow, type WorkEntry,
 } from "./agent-view";
 
-export function StatusPill({ status }: { status: AgentStatus | null }) {
-  if (!status) return <span className="status-pill status-none">—</span>;
-  return <span className={`status-pill status-${status}`}>{statusLabels[status]}</span>;
+// title adds detail on hover, e.g. the raw run state behind a rollup status.
+export function StatusPill({ status, title }: { status: AgentStatus | null; title?: string }) {
+  if (!status) return <span className="status-pill status-none" title={title}>—</span>;
+  return <span className={`status-pill status-${status}`} title={title}>{statusLabels[status]}{title ? <span className="sr-only"> ({title})</span> : null}</span>;
 }
 
 // Prefixes the tab title with the number of things waiting on the viewer and

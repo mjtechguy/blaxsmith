@@ -61,8 +61,23 @@ export function withCriteria(view: TableView, change: Partial<Pick<TableView, "q
 }
 
 export type Density = "comfortable" | "compact";
-export type TablePrefs = { hidden: string[]; widths: Record<string, number>; density: Density };
-export const defaultPrefs: TablePrefs = { hidden: [], widths: {}, density: "comfortable" };
+// hidden: columns the viewer turned off; shown: default-hidden columns they turned on.
+export type TablePrefs = { hidden: string[]; shown: string[]; widths: Record<string, number>; density: Density };
+export const defaultPrefs: TablePrefs = { hidden: [], shown: [], widths: {}, density: "comfortable" };
+
+// A table may hide some columns by default (still offered in the Columns menu);
+// the viewer's own choice, either way, wins and is remembered per user.
+export function columnVisibility(prefs: TablePrefs, defaultHidden: string[] = []): Record<string, boolean> {
+  return Object.fromEntries([
+    ...defaultHidden.filter((id) => !prefs.shown.includes(id)).map((id) => [id, false] as const),
+    ...prefs.hidden.map((id) => [id, false] as const),
+  ]);
+}
+
+export function withVisibility(prefs: TablePrefs, next: Record<string, boolean>, defaultHidden: string[] = []): TablePrefs {
+  const off = Object.entries(next).filter(([, shown]) => !shown).map(([id]) => id);
+  return { ...prefs, hidden: off.filter((id) => !defaultHidden.includes(id)), shown: defaultHidden.filter((id) => next[id] === true) };
+}
 
 // Namespaced by product, version, user, and table so another account never sees these settings.
 export const prefsKey = (principalId: string, tableId: string) => `blaxsmith:table:v1:${principalId || "anonymous"}:${tableId}`;
@@ -74,6 +89,7 @@ export function readPrefs(principalId: string, tableId: string, fallbackDensity:
     if (!raw || typeof raw !== "object") return { ...defaultPrefs, density: fallbackDensity };
     return {
       hidden: Array.isArray(raw.hidden) ? raw.hidden.filter((id): id is string => typeof id === "string") : [],
+      shown: Array.isArray(raw.shown) ? raw.shown.filter((id): id is string => typeof id === "string") : [],
       widths: raw.widths && typeof raw.widths === "object" ? Object.fromEntries(Object.entries(raw.widths).filter(([, w]) => typeof w === "number" && w >= 40 && w <= 1200)) : {},
       density: raw.density === "compact" || raw.density === "comfortable" ? raw.density : fallbackDensity,
     };

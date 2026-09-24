@@ -14,6 +14,9 @@ import { RunStagesDetail, useRunColumns, useScope } from "./workspace-ui";
 import { listWorkspaceRuns, runStates, workspaceRunsKey } from "./workspace";
 
 const defaults = { sort: [{ id: "created", desc: true }], size: 20 };
+// Status (the rollup pill) is the primary column; its tooltip carries the raw
+// state, and the State column stays available in the Columns menu.
+const hiddenByDefault = ["state"];
 const openRun = (run: WorkspaceRun) => run.state === "queued" || run.state === "active";
 
 export function RunsCollection({ projectId = "", empty }: { projectId?: string; empty: React.ReactNode }) {
@@ -43,7 +46,7 @@ export function RunsCollection({ projectId = "", empty }: { projectId?: string; 
   return <>
     {outcome ? <p className="notice" role="status">{outcome} <button type="button" className="text-action" onClick={() => setOutcome("")}>Dismiss</button></p> : null}
     <CollectionTable id={projectId ? "project-runs" : "runs"} label={projectId ? "Project runs" : "Runs"} noun="runs" columns={columns} data={runs.data?.runs ?? []} getRowId={(run) => run.id}
-      view={view} onView={setView} total={runs.data?.totalCount ?? 0} pinFirst
+      view={view} onView={setView} total={runs.data?.totalCount ?? 0} pinFirst defaultHidden={hiddenByDefault}
       searchLabel={projectId ? "Search run keys or commits" : "Search runs, commits, or projects"} searchNote="Search, filters, and sorting apply to every run on the server."
       facets={[{ id: "state", label: "State", options: runStates }]}
       renderExpanded={(run) => <RunStagesDetail run={run} scope={scope} />} expandLabel={(run) => run.launchKey}
