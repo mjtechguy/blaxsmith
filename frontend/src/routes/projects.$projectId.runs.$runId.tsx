@@ -13,6 +13,30 @@ import { appendRunEvent, decideReview, eventsAfter, getCurrentReview, getRun, li
 export const Route = createFileRoute("/projects/$projectId/runs/$runId")({ component: RunDetail });
 
 const taskFeatures = tableFeatures({});
+const activityLabels: Record<string, string> = {
+  "run.created": "Run created",
+  "run.graph_sealed": "Execution plan frozen",
+  "run.cancel_requested": "Cancellation requested",
+  "run.cancelled": "Run cancelled",
+  "task.created": "Stage created",
+  "attempt.reserved": "Worker attempt reserved",
+  "attempt.starting": "Worker starting",
+  "attempt.started": "Worker started",
+  "attempt.runtime_bound": "Coding runtime connected",
+  "attempt.unknown": "Worker state is uncertain",
+  "attempt.result": "Worker result recorded",
+  "attempt.stopped": "Worker attempt stopped",
+  "attempt.command_exited": "Tool command exited",
+  "review.presented": "Evidence presented for human review",
+  "review.superseded": "Review package superseded",
+  "review.approved": "Review approved",
+  "review.changes_requested": "Changes requested",
+};
+
+function activityLabel(kind: string) {
+  return activityLabels[kind] ?? kind.split(".").map((part) => part.replaceAll("_", " ")).join(" · ");
+}
+
 const taskColumns: ColumnDef<typeof taskFeatures, RunTask>[] = [
   { id: "stage", accessorKey: "key", header: "Stage", cell: ({ row }) => <span className="task-stage"><strong>{row.original.key}</strong><small title={row.original.id}>Task {row.original.id.slice(0, 8)}</small></span> },
   { id: "profile", header: "Selected runtime", cell: ({ row }) => row.original.harness
@@ -61,8 +85,10 @@ function RunDetail() {
   });
   const observations = useMemo(() => commandExits.data?.pages.flatMap((page) => page.observations) || [], [commandExits.data]);
   const events = useMemo(() => activity.data?.pages.flatMap((page) => page.events) || [], [activity.data]);
+  const taskNames = useMemo(() => new Map((tasks.data?.tasks || []).map((task) => [task.id, task.key])), [tasks.data]);
   const latestDelivered = useRef(0n);
   const recoverRef = useRef<(() => Promise<void>) | null>(null);
+  const [eventStream, setEventStream] = useState<"connecting" | "connected" | "reconnecting">("connecting");
 
   useEffect(() => {
     if (!scope || run.data?.run?.projectId !== projectId || !activity.isSuccess) return;
@@ -73,6 +99,7 @@ function RunDetail() {
     let recovering = false;
     let checkedSession = false;
     let retryRecovery: number | undefined;
+    setEventStream("connecting");
     const recover = async () => {
       if (closed || recovering) return;
       window.clearTimeout(retryRecovery);
@@ -95,7 +122,7 @@ function RunDetail() {
     };
     recoverRef.current = recover;
     const source = new EventSource(liveEventsUrl(runId, cursor()));
-    source.onopen = () => { checkedSession = false; void recover(); };
+    source.onopen = () => { setEventStream("connected"); checkedSession = false; void recover(); };
     source.onmessage = ({ data }) => {
       try {
         const event = parseLiveEvent(data, runId);
@@ -114,6 +141,7 @@ function RunDetail() {
       } catch { void recover(); }
     };
     source.onerror = () => {
+      setEventStream("reconnecting");
       if (!checkedSession) { checkedSession = true; void queryClient.invalidateQueries({ queryKey: sessionQueryKey }); }
     };
     return () => { closed = true; window.clearTimeout(retryRecovery); recoverRef.current = null; source.close(); };
@@ -136,12 +164,12 @@ function RunDetail() {
     {run.isPending ? <div className="state-panel" role="status"><RefreshCw className="spin" size={22} aria-hidden="true" /><h2>Loading run</h2></div> : null}
     {run.isError ? <div className="state-panel" role="alert"><h2>Run unavailable</h2><p>This run could not be loaded.</p><button type="button" className="secondary-button" onClick={() => void run.refetch()}>Try again</button></div> : null}
     {run.data?.run ? <div className="summary-grid">
-      <section className="summary-card"><span className="summary-label">State</span><strong className="summary-value"><span className={`state-badge state-${run.data.run.state}`}>{run.data.run.state.replaceAll("_", " ")}</span></strong><span className="summary-meta">Engineering execution</span></section>
+      <section className="summary-card"><span className="summary-label">State</span><strong className="summary-value"><span className={`state-badge state-${run.data.run.state}`}>{run.data.run.state.replaceAll("_", " ")}</span></strong><span className="summary-meta">Persisted workflow state</span></section>
       <section className="summary-card"><span className="summary-label">Source commit</span><strong className="summary-value mono" title={run.data.run.sourceCommit}>{run.data.run.sourceCommit.slice(0, 12)}</strong><span className="summary-meta">Pinned at launch</span></section>
       <section className="summary-card"><span className="summary-label">Created</span><strong className="summary-value"><time dateTime={run.data.run.createdAt}>{new Date(run.data.run.createdAt).toLocaleDateString()}</time></strong><span className="summary-meta">{new Date(run.data.run.createdAt).toLocaleTimeString()}</span></section>
     </div> : null}
     {run.data?.run ? <section className="table-section" aria-labelledby="run-tasks-heading">
-      <div className="table-heading"><div><h2 id="run-tasks-heading">Execution plan</h2><p>Frozen stages run after their dependencies. Attempts count reservations, not verified results.</p></div><span className="fetched-time">{tasks.data?.tasks.length ?? 0} stages</span></div>
+      <div className="table-heading"><div><h2 id="run-tasks-heading">Execution plan</h2><p>Frozen stages run after their dependencies. Attempts count reservations, not verified results. AX pod and interactive session status are not exposed here.</p></div><span className="fetched-time">{tasks.data?.tasks.length ?? 0} stages</span></div>
       {tasks.isPending ? <div className="table-empty" role="status">Loading stages…</div> : null}
       {tasks.isError ? <div className="table-empty" role="alert">Execution plan is unavailable. <button type="button" className="text-action" onClick={() => void tasks.refetch()}>Try again</button></div> : null}
       {tasks.data ? <DataTable table={taskTable} label="Run execution plan" empty="No stages have been frozen for this run." /> : null}
@@ -155,7 +183,7 @@ function RunDetail() {
       {observations.length > 0 ? <ol className="event-list">{observations.map((observation) => <li key={observation.eventId.toString()}>
         <span className="event-mark"><Terminal size={15} aria-hidden="true" /></span>
         <div><strong>{observation.interrupted ? "Interrupted" : `Exited ${observation.exitCode}`}</strong>
-          <small>Task {observation.taskId.slice(0, 8)} · Attempt {observation.attemptId.slice(0, 8)} · Unverified</small>
+          <small>{taskNames.has(observation.taskId) ? `Stage ${taskNames.get(observation.taskId)}` : `Task ${observation.taskId.slice(0, 8)}`} · Attempt {observation.attemptId.slice(0, 8)} · Unverified</small>
           <details className="observation-provenance"><summary>Receipt provenance</summary><dl>
             <div><dt>Signer</dt><dd>{observation.signerId}</dd></div>
             <div><dt>Actor UID</dt><dd><code>{observation.actorUid}</code></dd></div>
@@ -168,11 +196,11 @@ function RunDetail() {
       {commandExits.hasNextPage ? <div className="table-footer"><span>More observations may be available</span><button type="button" className="secondary-button" disabled={commandExits.isFetchingNextPage} onClick={() => void commandExits.fetchNextPage()}>{commandExits.isFetchingNextPage ? "Loading…" : "Load more"}</button></div> : null}
     </section> : null}
     <section className="table-section" aria-labelledby="activity-heading">
-      <div className="table-heading"><div><h2 id="activity-heading">Activity</h2><p>Committed events update live and replay after reconnecting.</p></div><span className="fetched-time">{events.length} events</span></div>
+      <div className="table-heading"><div><h2 id="activity-heading">Activity</h2><p>Recorded workflow events, newest first. The live stream reflects server events, not AX pod health.</p></div><span className="fetched-time" role="status" aria-live="polite">{eventStream === "connected" ? "Live stream connected" : eventStream === "reconnecting" ? "Reconnecting" : "Connecting"} · {events.length} events</span></div>
       {run.data?.run && activity.isPending ? <div className="table-empty" role="status">Loading activity…</div> : null}
       {activity.isError ? <div className="table-empty" role="alert">Activity is unavailable. <button type="button" className="text-action" onClick={() => void activity.refetch()}>Try again</button></div> : null}
       {activity.data && events.length === 0 ? <div className="table-empty">No activity has been recorded yet.</div> : null}
-      {events.length > 0 ? <ol className="event-list">{events.map((event) => <li key={event.id.toString()}><span className="event-mark"><GitCommitHorizontal size={15} aria-hidden="true" /></span><div><strong>{event.kind.replaceAll(".", " · ").replaceAll("_", " ")}</strong><small>{event.taskId ? `Task ${event.taskId.slice(0, 8)} · ` : ""}{event.attemptId ? `Attempt ${event.attemptId.slice(0, 8)}` : ""}</small></div><time dateTime={event.occurredAt}>{new Date(event.occurredAt).toLocaleString()}</time></li>)}</ol> : null}
+      {events.length > 0 ? <ol className="event-list">{events.slice().reverse().map((event) => <li key={event.id.toString()}><span className="event-mark"><GitCommitHorizontal size={15} aria-hidden="true" /></span><div><strong>{activityLabel(event.kind)}</strong><small>{[event.taskId ? (taskNames.has(event.taskId) ? `Stage ${taskNames.get(event.taskId)}` : `Task ${event.taskId.slice(0, 8)}`) : "", event.attemptId ? `Attempt ${event.attemptId.slice(0, 8)}` : ""].filter(Boolean).join(" · ")}</small></div><time dateTime={event.occurredAt}>{new Date(event.occurredAt).toLocaleString()}</time></li>)}</ol> : null}
       {activity.hasNextPage ? <div className="table-footer"><span>More activity may be available</span><button type="button" className="secondary-button" disabled={activity.isFetchingNextPage} onClick={() => void activity.fetchNextPage()}>{activity.isFetchingNextPage ? "Loading…" : "Load more"}</button></div> : null}
     </section>
   </PageShell>;

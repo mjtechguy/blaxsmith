@@ -59,37 +59,49 @@ function ProjectRuns() {
   if (childPage) return <Outlet />;
 
   return <PageShell>
-    <PageHeader eyebrow="Workspace / Project" title={project.data?.project?.name || "Project runs"} description={project.data?.project ? `Project URL: ${project.data.project.slug}` : "Runs and evidence for this project."}
-      actions={mayLaunch && launchAvailability.data?.enabled && source.data && verification.data ? <Link className="primary-button" to="/projects/$projectId/runs/new" params={{ projectId }}><Plus size={15} aria-hidden="true" /> New run</Link> : undefined} />
-    <Link to="/" className="text-action"><ArrowLeft size={15} aria-hidden="true" /> All projects</Link>
-    {project.isError ? <div className="state-panel" role="alert"><h2>Project unavailable</h2><p>This project could not be loaded.</p><button className="secondary-button" type="button" onClick={() => void project.refetch()}>Try again</button></div> : null}
+    <PageHeader eyebrow="Workspace" title={project.data?.project?.name || "Workspace"} description={project.data?.project ? `Workspace URL: ${project.data.project.slug}` : "Configure a repository, model access, and run checks."} />
+    <Link to="/" className="text-action"><ArrowLeft size={15} aria-hidden="true" /> All workspaces</Link>
+    {project.isError ? <div className="state-panel" role="alert"><h2>Workspace unavailable</h2><p>This workspace could not be loaded.</p><button className="secondary-button" type="button" onClick={() => void project.refetch()}>Try again</button></div> : null}
     {mayLaunch && launchAvailability.data && !launchAvailability.data.enabled ? <div className="notice" role="note"><strong>New runs are unavailable.</strong> {launchAvailability.data.reason}</div> : null}
     {mayLaunch && launchAvailability.isError ? <div className="notice" role="alert"><strong>Run availability could not be checked.</strong> <button type="button" className="text-action" onClick={() => void launchAvailability.refetch()}>Try again</button></div> : null}
     {project.data?.project ? <section className="table-section" aria-labelledby="source-heading">
-      <div className="table-heading"><div><h2 id="source-heading">Git source</h2><p>The repository and ref used to prepare future runs.</p></div>
-        {mayEditSource && source.isSuccess ? <Link className="secondary-button" to="/projects/$projectId/source" params={{ projectId }}>{source.data ? "Edit source" : <><Plus size={15} aria-hidden="true" /> Add source</>}</Link> : null}</div>
+      <div className="table-heading"><div><h2 id="source-heading">1. Connect Git</h2><p>Choose the repository and ref used to prepare runs. Private repository credentials are not available yet.</p></div>
+        {mayEditSource && source.isSuccess ? <Link className="secondary-button" to="/projects/$projectId/source" params={{ projectId }}>{source.data ? "Edit repository" : <><Plus size={15} aria-hidden="true" /> Add Git source</>}</Link> : null}</div>
       {source.isPending ? <div className="source-summary" role="status">Loading source…</div> : null}
       {source.isError ? <div className="source-summary" role="alert">Source could not be loaded. <button type="button" className="text-action" onClick={() => void source.refetch()}>Try again</button></div> : null}
-      {source.isSuccess ? <div className="source-summary">{source.data ? <><strong>{source.data.repositoryUrl}</strong><span>Ref: {source.data.ref || "Remote default branch"} · Updated {new Date(source.data.updatedAt).toLocaleString()}</span></> : <span>No Git source configured. Add a public GitHub or GitLab repository before starting a run.</span>}</div> : null}
+      {source.isSuccess ? <div className="source-summary">{source.data ? <><strong>Source configured</strong><span>{source.data.repositoryUrl}</span><span>Ref: {source.data.ref || "Remote default branch"} · Updated {new Date(source.data.updatedAt).toLocaleString()}</span></> : <><strong>Setup needed</strong><span>An owner or admin must add a public GitHub or GitLab HTTPS repository before creating a run.</span></>}</div> : null}
+    </section> : null}
+    {project.data?.project ? <section className="table-section" aria-labelledby="model-access-heading">
+      <div className="table-heading"><div><h2 id="model-access-heading">2. Grant model access</h2><p>Grant an organization provider key and exact model to this workspace when your recipe needs one.</p></div>
+        {mayEditSource && modelAccess.isSuccess ? modelAccess.data.access.length === 0
+          ? <Link className="secondary-button" to="/projects/$projectId/model-access/new" params={{ projectId }}><Plus size={15} aria-hidden="true" /> Add model access</Link>
+          : <Link className="secondary-button" to="/projects/$projectId/model-access" params={{ projectId }}>Manage access <ArrowRight size={15} aria-hidden="true" /></Link>
+          : modelAccess.isSuccess ? <Link className="secondary-button" to="/projects/$projectId/model-access" params={{ projectId }}>View access <ArrowRight size={15} aria-hidden="true" /></Link> : null}</div>
+      {modelAccess.isPending ? <div className="source-summary" role="status">Loading model access…</div> : null}
+      {modelAccess.isError ? <div className="source-summary" role="alert">Model access could not be loaded. <button type="button" className="text-action" onClick={() => void modelAccess.refetch()}>Try again</button></div> : null}
+      {modelAccess.isSuccess ? <div className="source-summary">{modelAccess.data.access.length ? <><strong>{modelAccess.data.access.length} model {modelAccess.data.access.length === 1 ? "grant" : "grants"}</strong><span>{modelAccess.data.access.slice(0, 3).map((entry) => `${entry.provider} / ${entry.model}`).join(" · ")}{modelAccess.data.access.length > 3 ? ` · +${modelAccess.data.access.length - 3} more` : ""}</span></> : <><strong>No model access granted</strong><span>An owner or admin can add an organization API key. The key is write-only; the UI does not display it after saving.</span></>}</div> : null}
     </section> : null}
     {project.data?.project ? <section className="table-section" aria-labelledby="verification-heading">
-      <div className="table-heading"><div><h2 id="verification-heading">Verification</h2><p>Project checks required to validate run output.</p></div>
+      <div className="table-heading"><div><h2 id="verification-heading">3. Set verification checks</h2><p>At least one project check is required before run creation.</p></div>
         {mayEditSource && verification.isSuccess ? <Link className="secondary-button" to="/projects/$projectId/verification" params={{ projectId }}>{verification.data ? "Edit checks" : <><Plus size={15} aria-hidden="true" /> Add checks</>}</Link> : null}</div>
       {verification.isPending ? <div className="source-summary" role="status">Loading checks…</div> : null}
       {verification.isError ? <div className="source-summary" role="alert">Verification could not be loaded. <button type="button" className="text-action" onClick={() => void verification.refetch()}>Try again</button></div> : null}
-      {verification.isSuccess ? <div className="source-summary">{verification.data ? <><strong>{verification.data.checks.length} checks · Version {verification.data.version.toString()}</strong>{verification.data.checks.map((check) => <span key={check.id}><strong>{check.id}</strong> <code>{JSON.stringify(check.command)}</code></span>)}</> : <span>No verification checks configured. An owner or admin must add at least one before starting a run.</span>}</div> : null}
+      {verification.isSuccess ? <div className="source-summary">{verification.data ? <><strong>{verification.data.checks.length} checks · Version {verification.data.version.toString()}</strong>{verification.data.checks.map((check) => <span key={check.id}><strong>{check.id}</strong> <code>{JSON.stringify(check.command)}</code></span>)}</> : <><strong>Setup needed</strong><span>An owner or admin must add at least one verification check before creating a run.</span></>}</div> : null}
     </section> : null}
-    {project.data?.project ? <section className="table-section" aria-labelledby="model-access-heading">
-      <div className="table-heading"><div><h2 id="model-access-heading">Model access</h2><p>Organization connections granted to this project.</p></div>
-        {mayEditSource && modelAccess.data?.access.length === 0 ? <Link className="secondary-button" to="/projects/$projectId/model-access/new" params={{ projectId }}><Plus size={15} aria-hidden="true" /> Add model access</Link>
-          : <Link className="secondary-button" to="/projects/$projectId/model-access" params={{ projectId }}>View model access <ArrowRight size={15} aria-hidden="true" /></Link>}</div>
-      {modelAccess.isPending ? <div className="source-summary" role="status">Loading model access…</div> : null}
-      {modelAccess.isError ? <div className="source-summary" role="alert">Model access could not be loaded. <button type="button" className="text-action" onClick={() => void modelAccess.refetch()}>Try again</button></div> : null}
-      {modelAccess.isSuccess ? <div className="source-summary">{modelAccess.data.access.length ? <><strong>{modelAccess.data.access.length} model {modelAccess.data.access.length === 1 ? "grant" : "grants"}</strong><span>{modelAccess.data.access.slice(0, 3).map((entry) => `${entry.provider} / ${entry.model}`).join(" · ")}{modelAccess.data.access.length > 3 ? ` · +${modelAccess.data.access.length - 3} more` : ""}</span></> : <span>No model access configured. An owner or admin can add an organization API key for this project.</span>}</div> : null}
+    {project.data?.project ? <section className="table-section" aria-labelledby="run-setup-heading">
+      <div className="table-heading"><div><h2 id="run-setup-heading">4. Start a run</h2><p>Runs use recipe, spec, transcript, and code already committed to the selected repository.</p></div>
+        {mayLaunch && launchAvailability.data?.enabled && source.data && verification.data ? <Link className="primary-button" to="/projects/$projectId/runs/new" params={{ projectId }}><Plus size={15} aria-hidden="true" /> New run</Link> : null}</div>
+      <div className="source-summary">
+        {launchAvailability.isPending ? <span role="status">Checking run availability…</span> : null}
+        {launchAvailability.isError ? <span role="alert">Run availability could not be checked. <button type="button" className="text-action" onClick={() => void launchAvailability.refetch()}>Try again</button></span> : null}
+        {launchAvailability.data?.enabled ? <strong>{mayLaunch ? "Run creation is enabled" : "Run creation is available to workspace members"}</strong> : null}
+        {launchAvailability.data && !launchAvailability.data.enabled ? <><strong>Run creation is not ready</strong><span>{launchAvailability.data.reason}</span></> : null}
+        <span>Interactive terminal sessions and manual attachment to an AX pod are not available in this UI.</span>
+      </div>
     </section> : null}
     {project.data?.project && runs.isPending ? <div className="state-panel" role="status"><RefreshCw size={22} className="spin" aria-hidden="true" /><h2>Loading runs</h2></div> : null}
     {runs.isError ? <div className="state-panel" role="alert"><h2>Runs unavailable</h2><p>Could not load runs for this project.</p><button className="secondary-button" type="button" onClick={() => void runs.refetch()}>Try again</button></div> : null}
-    {runs.data && rows.length === 0 && !submittedSearch ? <section className="empty-card"><div className="empty-icon"><GitBranch size={22} aria-hidden="true" /></div><h2>No runs yet</h2><p>Configure a Git source and verification checks, then create the first run.</p></section> : null}
+    {runs.data && rows.length === 0 && !submittedSearch ? <section className="empty-card"><div className="empty-icon"><GitBranch size={22} aria-hidden="true" /></div><h2>No runs yet</h2><p>Once Git and verification are configured, start a run from input files already committed to the repository.</p>{mayLaunch && launchAvailability.data?.enabled && source.data && verification.data ? <Link className="secondary-button" to="/projects/$projectId/runs/new" params={{ projectId }}><Plus size={15} aria-hidden="true" /> Create first run</Link> : null}</section> : null}
     {rows.length > 0 || search || submittedSearch ? <section className="table-section" aria-labelledby="runs-heading"><div className="table-heading"><div><h2 id="runs-heading">Runs</h2><p>Open a run to inspect its recorded activity.</p></div><span className="fetched-time">{rows.length} loaded</span></div>
       <div className="table-toolbar"><label className="search-field"><Search size={16} aria-hidden="true" /><span className="sr-only">Search runs</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search run keys or commits" maxLength={120} /></label></div>
       <DataTable table={table} label="Project runs" empty={runs.isPending || runs.isError ? undefined : "No runs match this search."} />

@@ -44,7 +44,7 @@ function RunEditor({ projectId, org, source, verification }: { projectId: string
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
   const form = useForm({
-    defaultValues: { launchKey: "", recipePath: "", specPath: "", transcriptPath: "", scope: "." },
+    defaultValues: { launchKey: `run-${new Date().toISOString().slice(0, 19).replaceAll(":", "-")}-${crypto.randomUUID().slice(0, 8)}`, recipePath: "", specPath: "", transcriptPath: "", scope: "." },
     onSubmit: async ({ value }) => {
       setError("");
       const fields = { launchKey: value.launchKey.trim(), recipePath: value.recipePath.trim(), specPath: value.specPath.trim(), transcriptPath: value.transcriptPath.trim(), scope: value.scope.trim() };
@@ -70,7 +70,7 @@ function RunEditor({ projectId, org, source, verification }: { projectId: string
 
   return <div className="editor-layout">
     <section className="editor-card" aria-labelledby="run-inputs-heading">
-      <div className="editor-card-heading"><span className="project-symbol"><GitBranch size={18} aria-hidden="true" /></span><div><h2 id="run-inputs-heading">Committed inputs</h2><p>All paths are relative to the selected Git repository.</p></div></div>
+      <div className="editor-card-heading"><span className="project-symbol"><GitBranch size={18} aria-hidden="true" /></span><div><h2 id="run-inputs-heading">Committed inputs</h2><p>Use paths from the configured repository and ref. Each must exist in the commit selected when this run starts.</p></div></div>
       <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
         <form.Field name="launchKey" validators={{ onBlur: ({ value }) => value.trim().length >= 1 && value.trim().length <= 128 ? undefined : "Use 1–128 characters." }}>
           {(field) => <TextField autoFocus label="Run key" name={field.name} autoComplete="off" placeholder="customer-portal-iteration-1" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} />}
@@ -88,7 +88,8 @@ function RunEditor({ projectId, org, source, verification }: { projectId: string
     <aside className="editor-note"><h2>Run prerequisites</h2>
       <dl className="launch-prerequisites"><div><dt>Git source</dt><dd>{source.repositoryUrl}<br /><span>{source.ref || "Remote default branch"}</span></dd></div>
         <div><dt>Verification · Version {verification.version.toString()}</dt><dd><ol>{verification.checks.map((check) => <li key={check.id}><strong>{check.id}</strong><code>{JSON.stringify(check.command)}</code></li>)}</ol></dd></div></dl>
-      <p>The server resolves the ref, checks the committed inputs, and freezes the recipe and verification policy when you create the run.</p>
+      <p>Enter repository-relative paths; this workspace does not yet have a repository file browser. The server validates the paths against the resolved commit and freezes the recipe and verification policy at launch.</p>
+      <p>The run key makes duplicate launch requests idempotent. Use a new key for a distinct run.</p>
     </aside>
   </div>;
 }
