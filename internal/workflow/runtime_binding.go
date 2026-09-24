@@ -88,3 +88,27 @@ func (s *Store) BindRuntime(ctx context.Context, a Attempt, b RuntimeBinding) er
 	}
 	return tx.Commit(ctx)
 }
+
+// GetRuntimeBinding returns the actor identity already read back and pinned
+// for this exact attempt. Callers still recheck current ownership before use.
+func (s *Store) GetRuntimeBinding(ctx context.Context, a Attempt) (RuntimeBinding, error) {
+	if !validAttempt(a) {
+		return RuntimeBinding{}, ErrInvalid
+	}
+	var b RuntimeBinding
+	err := s.pool.QueryRow(ctx, `SELECT ax_atespace,ax_task,actor_uid,template_uid,image,worker_pool,command_sha256
+		FROM workflow_attempt_runtime WHERE organization_id=$1 AND run_id=$2 AND task_id=$3 AND attempt_id=$4`,
+		a.OrganizationID, a.RunID, a.TaskID, a.ID).Scan(&b.AXAtespace, &b.AXTask, &b.ActorUID,
+		&b.TemplateUID, &b.Image, &b.WorkerPool, &b.CommandSHA256)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RuntimeBinding{}, ErrNotFound
+	}
+	if err != nil {
+		return RuntimeBinding{}, err
+	}
+	if b.AXAtespace == "" || b.AXTask == "" || b.ActorUID == "" || b.TemplateUID == "" ||
+		!imageDigestPattern.MatchString(b.Image) || b.WorkerPool == "" || !hashPattern.MatchString(b.CommandSHA256) {
+		return RuntimeBinding{}, ErrConflict
+	}
+	return b, nil
+}

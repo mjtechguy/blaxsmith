@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/netip"
 	"os"
 	"strings"
@@ -203,7 +204,20 @@ func TestDispatchBatchPostgres(t *testing.T) {
 				t.Fatal("unexpected worker route preflight input")
 			}
 			return nil
+		},
+		Activate: func(_ context.Context, attempt workflow.Attempt, runtime bootstrap.Runtime, binding workflow.RuntimeBinding, invoke access.ModelInvoke) error {
+			if attempt.ID == "" || runtime.Actor.UID != "actor-uid" || invoke.AttemptID != attempt.ID ||
+				binding.ActorUID != runtime.Actor.UID || binding.CommandSHA256 == "" || invoke.BindingID == "" ||
+				invoke.Provider != "openai" || invoke.Model != "gpt-6-luna" || invoke.PolicyVersion < 1 {
+				t.Fatal("unexpected model lease activation input")
+			}
+			return nil
 		}}
+	withoutActivation := dispatcher
+	withoutActivation.Activate = nil
+	if _, err := withoutActivation.DispatchBatch(ctx, "", 1, 1); err != ErrNotReady {
+		t.Fatalf("missing bootstrap activator must block dispatch: %v", err)
+	}
 	blocked, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
 	if err != nil || len(blocked.Outcomes) != 1 || blocked.Outcomes[0].State != "blocked" ||
 		blocked.Outcomes[0].Err != axbridge.ErrInputs {
@@ -230,6 +244,37 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		WHERE t.organization_id=$1 AND t.run_id=$2`, orgID, run.ID).Scan(&taskState, &attemptState); err != nil ||
 		taskState != "running" || attemptState != "running" {
 		t.Fatalf("tool exit inferred task success: %s/%s, %v", taskState, attemptState, err)
+	}
+	secondRun, err := store.CreateRun(ctx, workflow.RunInput{OrganizationID: orgID, ProjectID: projectID,
+		LaunchKey: "activation-fails", SourceCommit: bundle.Source.Commit,
+		BundleSHA256: bundle.Digest, VerificationSHA256: policySHA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workflow_run_bundles
+		(organization_id,run_id,bundle_json,verification_json,repository_url,git_ref)
+		VALUES ($1,$2,$3,$4,'https://github.com/owner/repo','main')`, orgID, secondRun.ID, bundleJSON, policyJSON); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddTask(ctx, orgID, secondRun.ID, "plan", inputSHA, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, orgID, secondRun.ID); err != nil {
+		t.Fatal(err)
+	}
+	ax.task = nil
+	dispatcher.Activate = func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error {
+		return errors.New("bootstrap release outcome uncertain")
+	}
+	unresolved, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
+	if err != nil || len(unresolved.Outcomes) != 1 || unresolved.Outcomes[0].State != "unresolved" {
+		t.Fatalf("activation failure was reported as started: %+v, %v", unresolved, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT t.state,a.state FROM workflow_tasks t
+		JOIN workflow_attempts a ON a.organization_id=t.organization_id AND a.id=t.active_attempt_id
+		WHERE t.organization_id=$1 AND t.run_id=$2`, orgID, secondRun.ID).Scan(&taskState, &attemptState); err != nil ||
+		taskState != "reconciling" || attemptState != "reconciling" {
+		t.Fatalf("activation failure did not fence the actor: %s/%s, %v", taskState, attemptState, err)
 	}
 }
 

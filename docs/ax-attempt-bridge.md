@@ -33,6 +33,13 @@ kernel is PostgreSQL/fake-AX tested, but no long-running connector invokes it
 yet. A missing task remains an operator-resolution case because AX cannot prove
 that an uncertain upsert will never arrive.
 
+The dispatcher now requires an activator before it will reserve work. After
+AX/Substrate readback, it passes the persisted runtime binding and exact model
+grant to that callback; it reports `started` only after the bootstrap gate and
+model lease have been opened. An activation error fences the already-launched
+attempt as unresolved. The callback is still not composed in the application or
+a connector process, so product launch remains disabled.
+
 The dedicated node proof on 2026-09-23 used the existing dev PostgreSQL
 database with a temporary schema and the authorized k3s node. The first run
 exposed a missing `KUBECONFIG` in the probe environment; its deferred cleanup

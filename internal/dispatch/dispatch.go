@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/axbridge"
+	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
@@ -28,6 +29,9 @@ type Dispatcher struct {
 	// provider egress routes required by the frozen task. AX's default
 	// deny-all gateway makes an absent preflight a hard admission failure.
 	PreflightWorker func(context.Context, workflow.ApprovedToolRuntime, string, string) error
+	// Activate opens the AX bootstrap gate and releases the bound model lease.
+	// A launched but unreleased tool task is not a started dispatch outcome.
+	Activate func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error
 }
 
 type Outcome struct {
@@ -49,7 +53,7 @@ type Batch struct {
 func (d *Dispatcher) DispatchBatch(ctx context.Context, afterOrganizationID string, organizationLimit, taskLimit int) (Batch, error) {
 	if d == nil || d.Workflow == nil || d.DB == nil || d.Secrets == nil || d.Bridge == nil ||
 		d.Bridge.AX == nil || d.Bridge.Actor == nil || d.Bridge.Signer == "" || d.Bridge.Storage == "" ||
-		d.PreflightWorker == nil {
+		d.PreflightWorker == nil || d.Activate == nil {
 		return Batch{}, ErrNotReady
 	}
 	organizations, err := d.Workflow.ListReadyOrganizationIDs(ctx, afterOrganizationID, organizationLimit)
@@ -150,13 +154,36 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 	request.AttemptID = attempt.ID
 	bridge := *d.Bridge // the per-attempt tool selection is never shared across launches.
 	bridge.Workflow, bridge.Tool, bridge.Image, bridge.Pool = d.Workflow, &request, approved.Runtime.Image, approved.WorkerPool
-	_, err = bridge.Launch(ctx, attempt)
+	runtime, err := bridge.Launch(ctx, attempt)
 	if err != nil {
 		outcome.State, outcome.Err = "unresolved", err
 		return outcome
 	}
+	runtimeBinding, err := d.Workflow.GetRuntimeBinding(ctx, attempt)
+	if err != nil || runtimeBinding.AXAtespace != runtime.Actor.Atespace || runtimeBinding.AXTask != runtime.Actor.Name ||
+		runtimeBinding.ActorUID != runtime.Actor.UID || runtimeBinding.TemplateUID != runtime.TemplateUID ||
+		runtimeBinding.Image != runtime.Image || runtimeBinding.WorkerPool != runtime.WorkerPool {
+		if err == nil {
+			err = axbridge.ErrMismatch
+		}
+		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
+		return outcome
+	}
+	invoke := access.ModelInvoke{OrganizationID: candidate.OrganizationID, ProjectID: candidate.ProjectID,
+		AttemptID: attempt.ID, BindingID: bindingID, GranteeKind: "workload", GranteeID: selection.GranteeID,
+		Provider: provider, Model: model, PolicyVersion: authority.PolicyVersion}
+	if err := d.Activate(ctx, attempt, runtime, runtimeBinding, invoke); err != nil {
+		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
+		return outcome
+	}
 	outcome.State = "started"
 	return outcome
+}
+
+func (d *Dispatcher) markActivationUnknown(ctx context.Context, attempt workflow.Attempt, cause error) error {
+	markCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return errors.Join(cause, d.Workflow.MarkUnknown(markCtx, attempt))
 }
 
 func (d *Dispatcher) preflightAuthority(ctx context.Context, grant access.ModelGrant) (access.ModelApproval, error) {
