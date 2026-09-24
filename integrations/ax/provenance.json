@@ -14,13 +14,14 @@
   "provider_credential_patch_sha256": "f1f04eaedfa3369632dfe5f67de552a8462011b17f8b58d3542bfcb60688aeb6",
   "post_ready_model_patch_sha256": "0706b0b292f70ca79f693cd162a86f49225dc814c4b7800bb76d01125d7dabcf",
   "task_resources_patch_sha256": "35d3c19a36ef35193a449fbf68872cef238e59527d85466d1c528b22f3435332",
+  "opencode_provider_patch_sha256": "32147fd1ff7ef54a1c6bce13d574e1471c42881afd2c4380a0e855ea6daa3773",
   "askpass_sha256": "3c5b14494a6a80147507a3d802ca3a4c29714b4b330e63ae27350cda32f2237e",
-  "go_version": "go version go1.27.1 darwin/arm64",
+  "go_version": "go version go1.27.1 linux/amd64",
   "platform": "linux/amd64",
   "binaries": {
     "ax": "91435374643d5b3a294c7b02bef04ce05d706087b13bd8ed4e5ffa15d5fd1992",
     "ax-server": "aaf275c13eceba91d0a4423947db6237558cd80d828d68aa16112326e1d6a9b7",
     "ax-controller": "4a8aab7fc421f4c9385b0c839c2f9d0215ee40cec068021ae237575b70651764",
-    "ax-task-runner": "1c42284e103efb968690702eb24e6e6b18e446aaa8d6fc575425b5126df3ab92"
+    "ax-task-runner": "6e66005e2bbfde17aad55406b77b17d4b0c5b9fdd8d5a0a1552b512808e2aa88"
   }
 }
