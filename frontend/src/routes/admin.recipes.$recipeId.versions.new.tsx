@@ -1,13 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { RecipeEditorPage } from "../recipe-pages";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+// Moved to Library › Recipes; the old URL (and its ?from=) still works.
 export const Route = createFileRoute("/admin/recipes/$recipeId/versions/new")({
   validateSearch: (search: Record<string, unknown>): { from?: string } => (typeof search.from === "string" ? { from: search.from } : {}),
-  component: NewVersion,
+  beforeLoad: ({ params, search }) => {
+    throw redirect({ to: "/recipes/$recipeId/versions/new", params: { recipeId: params.recipeId }, search, replace: true });
+  },
 });
-
-function NewVersion() {
-  const { recipeId } = Route.useParams();
-  const { from } = Route.useSearch();
-  return <RecipeEditorPage key={`${recipeId}:${from || ""}`} recipeId={recipeId} from={from} />;
-}

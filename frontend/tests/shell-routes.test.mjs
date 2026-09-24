@@ -26,7 +26,7 @@ test("moved pages redirect from their old URLs", async () => {
     const redirectOf = async (file, params) => {
       const { Route } = await server.ssrLoadModule(`/src/routes/${file}`);
       try { await Route.options.beforeLoad({ params, location: { pathname: "" } }); } catch (thrown) {
-        return thrown.options.to.replace("$projectId", thrown.options.params?.projectId ?? "");
+        return thrown.options.to.replace("$projectId", thrown.options.params?.projectId ?? "").replace("$recipeId", thrown.options.params?.recipeId ?? "");
       }
       return null;
     };
@@ -35,12 +35,17 @@ test("moved pages redirect from their old URLs", async () => {
       ["projects.$projectId.verification.tsx", { projectId: "p1" }, "/projects/p1/settings/verification"],
       ["projects.$projectId.model-access.new.tsx", { projectId: "p1" }, "/projects/p1/connections"],
       ["admin.connections.github-app.tsx", {}, "/admin/settings/github-app"],
+      // Admin › Recipes folded into Library › Recipes, which keeps the admin actions.
+      ["admin.recipes.index.tsx", {}, "/recipes"],
+      ["admin.recipes.new.tsx", {}, "/recipes/new"],
+      ["admin.recipes.$recipeId.index.tsx", { recipeId: "rc1" }, "/recipes/rc1"],
+      ["admin.recipes.$recipeId.versions.new.tsx", { recipeId: "rc1" }, "/recipes/rc1/versions/new"],
       ["admin.settings.index.tsx", {}, "/admin/settings/github-app"],
       ["me.settings.index.tsx", {}, "/me/settings/profile"],
     ]) assert.equal(await redirectOf(file, params), to, file);
     // Routes that did not move still render inside the shell.
     const owner = session("owner");
-    for (const path of ["/", "/inbox", "/runs", "/projects", "/projects/new", "/projects/p1", "/projects/p1/runs", "/recipes", "/tools", "/admin/users/u1", "/admin/settings/policies"]) {
+    for (const path of ["/", "/inbox", "/runs", "/projects", "/projects/new", "/projects/p1", "/projects/p1/runs", "/recipes", "/recipes/rc1", "/recipes/new", "/recipes/rc1/versions/new", "/tools", "/admin/users/u1", "/admin/settings/policies"]) {
       assert.doesNotMatch(await renderApp(path, owner), /Page not found/, path);
     }
   });

@@ -62,9 +62,8 @@ export function paletteItems(role: string, data: PaletteData, context: { project
     out.push({ id: `run:${r.id}`, group: "Runs", label: r.launchKey, detail: `${context.projectName ?? "Run"} · ${r.state.replaceAll("_", " ")}`, to: `/projects/${r.projectId}/runs/${r.id}` });
   }
   for (const r of data.recipes ?? []) {
-    const to = context.projectId ? `/projects/${context.projectId}/recipes/${r.id}` : `/admin/recipes/${r.id}`;
-    // Organization recipe pages live under /admin; members read them from a project.
-    if (!context.projectId && !isAdmin(role)) continue;
+    // Outside a project, recipes open in Library › Recipes, which every member can read.
+    const to = context.projectId ? `/projects/${context.projectId}/recipes/${r.id}` : `/recipes/${r.id}`;
     out.push({ id: `recipe:${r.id}`, group: "Recipes", label: r.name, detail: r.projectId ? "Project recipe" : "Organization recipe", to });
   }
   for (const c of data.connections ?? []) {

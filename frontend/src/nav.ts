@@ -3,7 +3,7 @@
 // Visibility only mirrors server RBAC: admin pages are also guarded by the
 // /admin layout and every admin RPC is enforced on the server.
 import {
-  Activity, BookCopy, Boxes, FolderKanban, GitBranch, GitPullRequest, House, Inbox, KeyRound, LayoutDashboard,
+  Activity, BookCopy, FolderKanban, GitBranch, GitPullRequest, House, Inbox, KeyRound, LayoutDashboard,
   ListChecks, ScrollText, Settings, ShieldCheck, Timer, Users, Wrench, type LucideIcon,
 } from "lucide-react";
 
@@ -50,8 +50,8 @@ export function navigation({ role, projectId, projectName }: NavContext): NavGro
     groups.push({ id: "project", label: projectName || "Project", collapsible: true, items: [
       { id: "project-overview", label: "Overview", href: base, icon: LayoutDashboard, exact: true, also: [`${base}/setup`] },
       { id: "project-runs", label: "Runs", href: `${base}/runs`, icon: GitBranch },
-      { id: "project-recipes", label: "Recipes", href: `${base}/recipes`, icon: BookCopy },
-      { id: "project-connections", label: "Connections", href: `${base}/connections`, icon: KeyRound, also: [`${base}/model-access`] },
+      { id: "project-recipes", label: "Project recipes", href: `${base}/recipes`, icon: BookCopy },
+      { id: "project-connections", label: "Project connections", href: `${base}/connections`, icon: KeyRound, also: [`${base}/model-access`] },
       { id: "project-source", label: "Source & verification", href: `${base}/settings/source`, icon: ListChecks, also: [`${base}/settings/verification`] },
       { id: "project-settings", label: "Settings", href: `${base}/settings`, icon: Settings, exact: true },
     ] });
@@ -66,7 +66,6 @@ export function navigation({ role, projectId, projectName }: NavContext): NavGro
     { id: "admin-operations", label: "Operations", href: "/admin", icon: ShieldCheck, exact: true },
     { id: "admin-users", label: "Users", href: "/admin/users", icon: Users },
     { id: "admin-connections", label: "Connections", href: "/admin/connections", icon: KeyRound },
-    { id: "admin-recipes", label: "Recipes", href: "/admin/recipes", icon: Boxes },
     { id: "admin-audit", label: "Audit", href: "/admin/audit", icon: ScrollText },
     { id: "admin-settings", label: "Settings", href: "/admin/settings", icon: Settings, children: [
       { id: "admin-github-app", label: "GitHub app", href: "/admin/settings/github-app", icon: GitPullRequest },

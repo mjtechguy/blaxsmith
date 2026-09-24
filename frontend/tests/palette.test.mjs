@@ -39,6 +39,9 @@ test("members get no users, org connections, or admin actions", () => {
   for (const id of ["connection:c-me", "project:p1", "run:r1", "action:new-project", "action:run-recipe:rc1", "action:inbox", "action:runs", "action:project-runs", "inbox:ix1"]) assert.ok(got.includes(id), `member missing ${id}`);
   assert.ok(!got.includes("action:run-recipe:rc2"), "recipe without a current version offered for launch");
   assert.ok(items.every((i) => !i.to.startsWith("/admin")), "member offered an admin route");
+  // Outside a project, every member opens organization recipes in Library › Recipes.
+  const orgWide = Object.fromEntries(m.paletteItems("member", data, {}).map((i) => [i.id, i.to]));
+  assert.equal(orgWide["recipe:rc1"], "/recipes/rc1");
 });
 
 test("Inbox and Runs routes are searchable, and inbox items open where they are acted on", () => {

@@ -18,7 +18,7 @@ function ProjectConnections() {
   const available = useConnections("project_available", projectId, Boolean(project.data?.project));
   const href = (c: { id: string }) => `/projects/${projectId}/connections/${c.id}`;
   return <PageShell>
-    <PageHeader title="Connections" description={project.data?.project ? `Model and Git access for ${project.data.project.name}.` : "Model and Git access for this project."}
+    <PageHeader title="Project connections" description={project.data?.project ? `Model and Git access for ${project.data.project.name}.` : "Model and Git access for this project."}
       actions={<>
         <Link className="primary-button" to="/projects/$projectId/connections/new/api-key" params={{ projectId }}><KeyRound size={15} aria-hidden="true" /> Add API key</Link>
         <Link className="secondary-button" to="/projects/$projectId/connections/new/git" params={{ projectId }}><GitBranch size={15} aria-hidden="true" /> Add Git</Link>

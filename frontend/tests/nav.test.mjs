@@ -13,7 +13,8 @@ test("navigation IA per role: groups, items, the project group, and Admin", asyn
       ["work", ["Inbox", "Runs", "Projects"]],
       ["library", ["Recipes", "Tools & runtimes"]],
     ];
-    const admin = ["admin", ["Operations", "Users", "Connections", "Recipes", "Audit", ["Settings", ["GitHub app", "Policies", "Retention"]]]];
+    // Organization recipes live once, in Library; Admin has no Recipes item.
+    const admin = ["admin", ["Operations", "Users", "Connections", "Audit", ["Settings", ["GitHub app", "Policies", "Retention"]]]];
     assert.deepEqual(shape(navigation({ role: "member" })), common);
     assert.deepEqual(shape(navigation({ role: "viewer" })), common);
     assert.deepEqual(shape(navigation({ role: "admin" })), [...common, admin]);
@@ -25,7 +26,7 @@ test("navigation IA per role: groups, items, the project group, and Admin", asyn
 
     // The project group appears only with a project in the URL, after Work.
     const withProject = navigation({ role: "member", projectId: "p1", projectName: "Billing" });
-    assert.deepEqual(shape(withProject)[2], ["project", ["Overview", "Runs", "Recipes", "Connections", "Source & verification", "Settings"]]);
+    assert.deepEqual(shape(withProject)[2], ["project", ["Overview", "Runs", "Project recipes", "Project connections", "Source & verification", "Settings"]]);
     assert.equal(withProject[2].label, "Billing");
     assert.equal(projectIdFrom("/projects/p1/runs/r1"), "p1");
     assert.equal(projectIdFrom("/projects/new"), undefined);
@@ -43,9 +44,17 @@ test("navigation IA per role: groups, items, the project group, and Admin", asyn
     assert.deepEqual(at("/projects/p1/runs/r9"), ["project", "Runs", null]);
     assert.deepEqual(at("/projects/p1/settings"), ["project", "Settings", null]);
     assert.deepEqual(at("/projects/p1/settings/verification"), ["project", "Source & verification", null]);
-    assert.deepEqual(at("/projects/p1/model-access"), ["project", "Connections", null]);
+    assert.deepEqual(at("/projects/p1/model-access"), ["project", "Project connections", null]);
     assert.deepEqual(at("/projects/new"), ["work", "Projects", null]);
     assert.deepEqual(at("/recipes/r1"), ["library", "Recipes", null]);
+    assert.deepEqual(at("/recipes/new"), ["library", "Recipes", null]);
+    assert.deepEqual(at("/recipes/r1/versions/new"), ["library", "Recipes", null]);
+    // "Recipes" and "Connections" each read distinctly across the sidebar.
+    const labelsOf = (groups) => groups.flatMap((g) => g.items.map((i) => i.label));
+    const all = labelsOf(owner);
+    assert.equal(all.filter((l) => l === "Recipes").length, 1);
+    assert.equal(all.filter((l) => /Connections$/i.test(l)).length, 2);
+    assert.ok(all.includes("Project connections") && !all.includes("My connections"));
     assert.equal(at("/me/settings"), null);
 
     // Breadcrumbs follow the hierarchy.

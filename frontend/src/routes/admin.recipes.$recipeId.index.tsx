@@ -1,9 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { RecipeDetailPage } from "../recipe-pages";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/admin/recipes/$recipeId/")({ component: Detail });
-
-function Detail() {
-  const { recipeId } = Route.useParams();
-  return <RecipeDetailPage key={recipeId} recipeId={recipeId} />;
-}
+// Moved to Library › Recipes, which carries the same admin actions; the old URL still works.
+export const Route = createFileRoute("/admin/recipes/$recipeId/")({
+  beforeLoad: ({ params, location }) => {
+    throw redirect({ to: "/recipes/$recipeId", params: { recipeId: params.recipeId }, search: (location.search ?? {}) as never, replace: true });
+  },
+});

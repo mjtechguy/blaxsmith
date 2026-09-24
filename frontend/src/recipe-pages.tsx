@@ -25,24 +25,22 @@ import { listTools } from "./tools-page";
 
 type Page = "list" | "new" | "detail" | "version";
 
-// One link vocabulary for the organization and project recipe routes.
-export function RecipeLink({ projectId, recipeId = "", page, from, className = "text-action", children, library }: {
-  projectId?: string; recipeId?: string; page: Page; from?: string; className?: string; children: ReactNode; library?: boolean;
+// One link vocabulary for the organization (Library) and project recipe routes.
+export function RecipeLink({ projectId, recipeId = "", page, from, className = "text-action", children }: {
+  projectId?: string; recipeId?: string; page: Page; from?: string; className?: string; children: ReactNode;
 }) {
   const search = from ? { from } : {};
-  // The Library views are read-only; editing still happens on the admin routes.
-  if (library && page === "list") return <Link className={className} to="/recipes">{children}</Link>;
-  if (library && page === "detail") return <Link className={className} to="/recipes/$recipeId" params={{ recipeId }}>{children}</Link>;
   if (projectId) {
     if (page === "list") return <Link className={className} to="/projects/$projectId/recipes" params={{ projectId }}>{children}</Link>;
     if (page === "new") return <Link className={className} to="/projects/$projectId/recipes/new" params={{ projectId }} search={search}>{children}</Link>;
     if (page === "detail") return <Link className={className} to="/projects/$projectId/recipes/$recipeId" params={{ projectId, recipeId }}>{children}</Link>;
     return <Link className={className} to="/projects/$projectId/recipes/$recipeId/versions/new" params={{ projectId, recipeId }} search={search}>{children}</Link>;
   }
-  if (page === "list") return <Link className={className} to="/admin/recipes">{children}</Link>;
-  if (page === "new") return <Link className={className} to="/admin/recipes/new" search={search}>{children}</Link>;
-  if (page === "detail") return <Link className={className} to="/admin/recipes/$recipeId" params={{ recipeId }}>{children}</Link>;
-  return <Link className={className} to="/admin/recipes/$recipeId/versions/new" params={{ recipeId }} search={search}>{children}</Link>;
+  // Organization recipes: one set of Library pages; manage actions show by role.
+  if (page === "list") return <Link className={className} to="/recipes">{children}</Link>;
+  if (page === "new") return <Link className={className} to="/recipes/new" search={search}>{children}</Link>;
+  if (page === "detail") return <Link className={className} to="/recipes/$recipeId" params={{ recipeId }}>{children}</Link>;
+  return <Link className={className} to="/recipes/$recipeId/versions/new" params={{ recipeId }} search={search}>{children}</Link>;
 }
 
 function useSession() {
@@ -52,12 +50,12 @@ function useSession() {
 
 const listFeatures = tableFeatures({});
 
-export function RecipeLibraryPage({ projectId, library }: { projectId?: string; library?: boolean }) {
+export function RecipeLibraryPage({ projectId }: { projectId?: string }) {
   const { org, mayEdit } = useSession();
   const recipes = useQuery({ queryKey: recipesKey(org, projectId), enabled: Boolean(org), queryFn: ({ signal }) => listRecipes(projectId, signal) });
   const [view, setView] = useUrlView({ sort: [{ id: "name", desc: false }], size: 20 });
   const columns = useMemo<GridColumn<LibraryRecipe>[]>(() => [
-    { id: "name", accessorKey: "name", header: "Recipe", enableHiding: false, cell: ({ row }) => <RecipeLink projectId={projectId} library={library} recipeId={row.original.id} page="detail" className="run-link">
+    { id: "name", accessorKey: "name", header: "Recipe", enableHiding: false, cell: ({ row }) => <RecipeLink projectId={projectId} recipeId={row.original.id} page="detail" className="run-link">
       <span className="project-symbol"><BookCopy size={15} aria-hidden="true" /></span>
       <span><strong>{row.original.name}</strong><small>{row.original.description || "No description"}</small></span></RecipeLink> },
     { id: "scope", accessorFn: (r) => r.projectId ? "project" : "organization", header: "Scope", filterFn: inSet, cell: ({ row }) => <span className="state-badge">{row.original.projectId ? "Project" : projectId ? "Organization · granted" : "Organization"}</span> },
@@ -65,12 +63,12 @@ export function RecipeLibraryPage({ projectId, library }: { projectId?: string; 
     { id: "updated", accessorKey: "updatedAt", header: "Updated", cell: ({ row }) => <Timestamp value={row.original.updatedAt} /> },
     { id: "actions", header: "Actions", enableSorting: false, enableHiding: false, cell: ({ row }) => mayEdit && row.original.currentVersionId
       ? <RecipeLink projectId={projectId} page="new" from={row.original.currentVersionId}><GitFork size={14} aria-hidden="true" /> {projectId && !row.original.projectId ? "Clone to project" : "Clone"}</RecipeLink> : null },
-  ], [projectId, mayEdit, library]);
+  ], [projectId, mayEdit]);
   const create = mayEdit ? <RecipeLink projectId={projectId} page="new" className="primary-button"><Plus size={15} aria-hidden="true" /> New recipe</RecipeLink> : null;
 
   return <PageShell>
-    <PageHeader title="Recipes"
-      description={projectId ? "This project's recipes plus organization recipes granted to it. Runs freeze an exact version." : library ? "Organization recipes: versioned stage graphs, role profiles, checks, and limits. Projects use the ones granted to them." : "Organization recipes: versioned stage graphs, role profiles, checks, and limits."}
+    <PageHeader title={projectId ? "Project recipes" : "Recipes"}
+      description={projectId ? "This project's recipes plus organization recipes granted to it. Runs freeze an exact version." : "Organization recipes: versioned stage graphs, role profiles, checks, and limits. Projects use the ones granted to them."}
       actions={create} />
     <section className="table-section" aria-label="Recipes">
       <CollectionTable id={projectId ? "project-recipes" : "recipes"} label="Recipes" noun="recipes" columns={columns} data={recipes.data?.recipes ?? []} getRowId={(r) => r.id}
@@ -85,7 +83,7 @@ export function RecipeLibraryPage({ projectId, library }: { projectId?: string; 
 
 const versionFeatures = tableFeatures({});
 
-export function RecipeDetailPage({ projectId, recipeId, library }: { projectId?: string; recipeId: string; library?: boolean }) {
+export function RecipeDetailPage({ projectId, recipeId }: { projectId?: string; recipeId: string }) {
   const { org, mayEdit } = useSession();
   const queryClient = useQueryClient();
   const search = useLocation({ select: (l) => l.search as Record<string, unknown> });
@@ -141,7 +139,7 @@ export function RecipeDetailPage({ projectId, recipeId, library }: { projectId?:
   if (recipe.isPending) return <StatePanel kind="loading" title="Loading recipe" />;
   if (recipe.isError || !current) return <StatePanel kind="error" title="Recipe unavailable" retry={() => void recipe.refetch()}>This recipe could not be loaded.</StatePanel>;
   const currentVersion = recipe.data.versions.find((v) => v.id === current.currentVersionId);
-  const listHref = projectId ? `/projects/${projectId}/recipes` : library ? "/recipes" : "/admin/recipes";
+  const listHref = projectId ? `/projects/${projectId}/recipes` : "/recipes";
 
   return <DetailLayout back={{ href: listHref, label: "All recipes" }} title={current.name}
     status={<span className="state-badge">{current.projectId ? "Project recipe" : "Organization recipe"}</span>}
@@ -150,8 +148,7 @@ export function RecipeDetailPage({ projectId, recipeId, library }: { projectId?:
       { label: "Updated", value: <Timestamp value={current.updatedAt} /> },
       { label: "Stages", value: doc ? doc.stages.length : "—" },
     ]}
-    actions={editable ? <RecipeLink projectId={projectId} recipeId={recipeId} page="version" from={versionId} className="primary-button"><Plus size={15} aria-hidden="true" /> New version</RecipeLink>
-      : !editable && mayEdit && library ? <RecipeLink recipeId={recipeId} page="detail" className="secondary-button">Manage in Admin</RecipeLink> : null}
+    actions={editable ? <RecipeLink projectId={projectId} recipeId={recipeId} page="version" from={versionId} className="primary-button"><Plus size={15} aria-hidden="true" /> New version</RecipeLink> : null}
     tabs={tabs} current={tab} tabsLabel="Recipe sections">
     {error ? <p className="auth-alert" role="alert">{error}</p> : null}
     {tab === "overview" ? <>
@@ -280,7 +277,7 @@ function RecipeEditor({ org, projectId, recipeId, source, baseName }: { org: str
       await queryClient.invalidateQueries({ queryKey: ["recipes", org] });
       await queryClient.invalidateQueries({ queryKey: recipeKey(org, saved.recipeId) });
       if (projectId) await navigate({ to: "/projects/$projectId/recipes/$recipeId", params: { projectId, recipeId: saved.recipeId } });
-      else await navigate({ to: "/admin/recipes/$recipeId", params: { recipeId: saved.recipeId } });
+      else await navigate({ to: "/recipes/$recipeId", params: { recipeId: saved.recipeId } });
     } catch (cause) {
       const code = ConnectError.from(cause).code;
       setError(code === Code.AlreadyExists ? "A recipe with this name already exists in this scope."
