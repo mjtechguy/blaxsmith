@@ -30,6 +30,7 @@ func TestToolTaskPinsPublicCommandWithoutCredential(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(task.Spec["command"], []any{command[0], command[1]}) ||
 		!reflect.DeepEqual(task.Spec["workspaces"], []any{map[string]any{"name": "source", "path": "/workspace"}}) ||
 		!reflect.DeepEqual(task.Spec["gateway"], map[string]any{"name": "public-egress"}) ||
+		task.Spec["debug"] != false ||
 		strings.Contains(command[1], "api_key") || strings.Contains(command[1], "credential") {
 		t.Fatalf("task contains unexpected command: %+v: %v", task, err)
 	}
