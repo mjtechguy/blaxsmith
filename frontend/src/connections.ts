@@ -37,6 +37,24 @@ export function modelsSummary(c: Pick<Connection, "kind" | "modelCount" | "model
   return `valid, ${c.modelCount} ${c.modelCount === 1 ? "model" : "models"}`;
 }
 
+// The one-click fix for a health reason: where to replace a rejected key,
+// sign in again, or compare runtime versions. Null when nothing helps.
+export function healthFix(c: Pick<Connection, "scope" | "ownerId" | "health">): { to: string; label: string } | null {
+  switch (c.health?.reason) {
+    case "key_rejected":
+      return { label: "Replace key", to: c.scope === "organization" ? "/admin/connections/new/api-key"
+        : c.scope === "project" ? `/projects/${c.ownerId}/connections/new/api-key` : "/me/connections/new/api-key" };
+    case "needs_sign_in":
+    case "token_expiring":
+      return { label: "Sign in again", to: "/me/connections/new/subscription" };
+    case "harness_behind":
+      return { label: "Compare runtimes", to: "/tools" };
+  }
+  return null;
+}
+
+export const authLabel = (auth: string) => auth === "authenticated" ? "Signed in" : auth === "unauthenticated" ? "Not signed in" : "Sign-in not verified";
+
 // Efforts the chosen model accepts (the server already limited them to the
 // harness); an unknown model falls back to the harness's own list.
 export function effortChoices(model: Pick<ConnectionModel, "efforts"> | undefined, harnessEfforts: readonly string[]): string[] {

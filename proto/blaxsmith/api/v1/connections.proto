@@ -48,6 +48,22 @@ message Connection {
   string models_checked_at = 15; // RFC 3339; empty before the first check.
   string models_error = 16; // Last provider error; empty when valid.
   bool can_manage = 17; // The caller may grant, refresh, or revoke it.
+  ConnectionHealth health = 18;
+}
+
+// The health line on every connection card and detail page.
+message ConnectionHealth {
+  string state = 1; // ready, warning, error, or disabled.
+  string auth = 2; // authenticated, unauthenticated, or unknown.
+  string identity = 3; // Non-secret account or key label; the UI blurs it until clicked.
+  string checked_at = 4; // RFC 3339; empty when never checked.
+  // key_rejected, needs_sign_in, token_expiring, provider_error, not_checked,
+  // harness_behind, revoked, or empty when ready.
+  string reason = 5;
+  string message = 6;
+  string harness = 7; // The pinned harness this connection mainly serves.
+  string pinned_version = 8; // Newest approved runtime version; empty if none.
+  string latest_version = 9; // Tools catalog latest stable, when the catalog knows.
 }
 
 message ListConnectionsRequest {

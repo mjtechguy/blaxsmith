@@ -59,6 +59,11 @@ test("effort choices follow the chosen model and preselect its default", async (
     assert.equal(m.effortForModel({ efforts: ["low", "max"], defaultEffort: "" }, harness, "max"), "max");
     assert.equal(m.effortForModel({ efforts: ["low", "max"], defaultEffort: "" }, harness, "xhigh"), "low");
     assert.equal(m.effortForModel(undefined, harness, "high"), "high");
+    const health = (reason) => ({ reason });
+    assert.deepEqual(m.healthFix({ scope: "project", ownerId: "p1", health: health("key_rejected") }), { label: "Replace key", to: "/projects/p1/connections/new/api-key" });
+    assert.equal(m.healthFix({ scope: "organization", ownerId: "o", health: health("key_rejected") }).to, "/admin/connections/new/api-key");
+    assert.equal(m.healthFix({ scope: "personal", ownerId: "u", health: health("needs_sign_in") }).to, "/me/connections/new/subscription");
+    assert.equal(m.healthFix({ scope: "personal", ownerId: "u", health: health("") }), null);
   } finally {
     await server.close();
     globalThis.window = previousWindow;

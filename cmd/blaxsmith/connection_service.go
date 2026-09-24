@@ -30,6 +30,7 @@ type connectionService struct {
 	catalog access.ModelCatalog
 	device  access.CodexDevice
 	git     access.GitAPI
+	tools   *catalogService // Cached tool versions for the health line; may be nil.
 
 	mu      sync.Mutex
 	logins  map[string]*deviceLogin
@@ -76,8 +77,27 @@ func optionalTime(t *time.Time) string {
 	return adminTime(*t)
 }
 
-func connectionMessage(c workflow.Connection) *api.Connection {
-	out := &api.Connection{Id: c.ID, Scope: c.Scope, OwnerId: c.OwnerID, OwnerName: c.OwnerName, Kind: c.Kind,
+// latestHarnessVersions reads the tools catalog's cached latest stable
+// versions without ever fetching; an empty map when the catalog is cold.
+func (s *connectionService) latestHarnessVersions() map[string]string {
+	out := map[string]string{}
+	if s.tools == nil {
+		return out
+	}
+	if snapshot, _ := s.tools.snapshot(time.Now()); snapshot != nil {
+		for _, tool := range snapshot.Tools {
+			out[tool.Tool] = tool.LatestStable
+		}
+	}
+	return out
+}
+
+func (s *connectionService) connectionMessage(c workflow.Connection) *api.Connection {
+	h := workflow.DeriveHealth(c, s.latestHarnessVersions(), time.Now())
+	out := &api.Connection{Health: &api.ConnectionHealth{State: h.State, Auth: h.Auth, Identity: h.Identity,
+		CheckedAt: optionalTime(h.CheckedAt), Reason: h.Reason, Message: h.Message, Harness: h.Harness,
+		PinnedVersion: h.PinnedVersion, LatestVersion: h.LatestVersion},
+		Id: c.ID, Scope: c.Scope, OwnerId: c.OwnerID, OwnerName: c.OwnerName, Kind: c.Kind,
 		Provider: c.Provider, Account: c.Account, Label: c.Label, State: c.State, LastUsedAt: optionalTime(c.LastUsed),
 		CreatedAt: adminTime(c.CreatedAt), ModelCount: c.ModelCount, ModelsCheckedAt: optionalTime(c.ModelsCheckedAt),
 		ModelsError: c.ModelsError, CanManage: c.CanManage}
@@ -111,7 +131,7 @@ func (s *connectionService) ListConnections(ctx context.Context, req *connect.Re
 	}
 	out := &api.ListConnectionsResponse{}
 	for _, c := range items {
-		out.Connections = append(out.Connections, connectionMessage(c))
+		out.Connections = append(out.Connections, s.connectionMessage(c))
 	}
 	return connect.NewResponse(out), nil
 }
@@ -150,7 +170,7 @@ func (s *connectionService) CreateApiKeyConnection(ctx context.Context, req *con
 	if err != nil {
 		return nil, connectionError(err)
 	}
-	return connect.NewResponse(&api.CreateApiKeyConnectionResponse{Connection: connectionMessage(c)}), nil
+	return connect.NewResponse(&api.CreateApiKeyConnectionResponse{Connection: s.connectionMessage(c)}), nil
 }
 
 func (s *connectionService) CreateGitTokenConnection(ctx context.Context, req *connect.Request[api.CreateGitTokenConnectionRequest]) (*connect.Response[api.CreateGitTokenConnectionResponse], error) {
@@ -165,7 +185,7 @@ func (s *connectionService) CreateGitTokenConnection(ctx context.Context, req *c
 	if err != nil {
 		return nil, connectionError(err)
 	}
-	return connect.NewResponse(&api.CreateGitTokenConnectionResponse{Connection: connectionMessage(c)}), nil
+	return connect.NewResponse(&api.CreateGitTokenConnectionResponse{Connection: s.connectionMessage(c)}), nil
 }
 
 func (s *connectionService) CreateCodexSubscription(ctx context.Context, req *connect.Request[api.CreateCodexSubscriptionRequest]) (*connect.Response[api.CreateCodexSubscriptionResponse], error) {
@@ -179,7 +199,7 @@ func (s *connectionService) CreateCodexSubscription(ctx context.Context, req *co
 	if err != nil {
 		return nil, connectionError(err)
 	}
-	return connect.NewResponse(&api.CreateCodexSubscriptionResponse{Connection: connectionMessage(c)}), nil
+	return connect.NewResponse(&api.CreateCodexSubscriptionResponse{Connection: s.connectionMessage(c)}), nil
 }
 
 func randomID() (string, error) {
@@ -271,7 +291,7 @@ func (s *connectionService) PollCodexDeviceLogin(ctx context.Context, req *conne
 		return connect.NewResponse(&api.PollCodexDeviceLoginResponse{State: "failed",
 			Error: "sign-in succeeded but the login could not be stored: " + connectionError(err).Error()}), nil
 	}
-	return connect.NewResponse(&api.PollCodexDeviceLoginResponse{State: "connected", Connection: connectionMessage(c)}), nil
+	return connect.NewResponse(&api.PollCodexDeviceLoginResponse{State: "connected", Connection: s.connectionMessage(c)}), nil
 }
 
 func (s *connectionService) ListConnectionModels(ctx context.Context, req *connect.Request[api.ListConnectionModelsRequest]) (*connect.Response[api.ListConnectionModelsResponse], error) {

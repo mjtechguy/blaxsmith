@@ -162,9 +162,24 @@ let deviceStarted = 0;
 let gitHubApp = { clientId: "", configured: false };
 function hubAdd(fields) {
   const connection = { id: `conn-${hub.length + 1}`, ownerName: "", label: "", state: "active", grants: [], uses: [], lastUsedAt: "", createdAt: now(), modelCount: 0, modelsCheckedAt: "", modelsError: "", canManage: true, ...fields };
+  connection.health = { state: "ready", auth: fields.kind === "git" ? "unknown" : "authenticated", identity: connection.kind === "api_key" ? connection.label : connection.account,
+    checkedAt: connection.kind === "git" ? "" : now(), reason: "", message: "", harness: "", pinnedVersion: "", latestVersion: "", ...fields.health };
   hub.push(connection);
   return { connection };
 }
+// Seeded hub: one healthy granted key, one rejected key, a stale-runtime key, Git, and a personal login that needs sign-in.
+hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "demo", kind: "api_key", provider: "anthropic", label: "Anthropic prod", modelCount: 7, modelsCheckedAt: minutesAgo(42),
+  grants: [{ id: "grant-seed-project", projectId, projectName: "Demo project", granteeKind: "project", granteeId: "", granteeName: "", createdAt: minutesAgo(600) }],
+  uses: [{ id: "use-seed", projectId, projectName: "Demo project", model: "claude-opus-5", granteeKind: "workload", createdAt: minutesAgo(500) }],
+  health: { checkedAt: minutesAgo(42), harness: "claude-code", pinnedVersion: "2.1.10", latestVersion: "2.1.10" } });
+hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "demo", kind: "api_key", provider: "openai", label: "OpenAI sandbox", modelsCheckedAt: minutesAgo(5), modelsError: "the provider rejected this API key",
+  grants: [{ id: "grant-seed-role", projectId: "", projectName: "", granteeKind: "role", granteeId: "member", granteeName: "", createdAt: minutesAgo(900) }],
+  health: { state: "error", auth: "unauthenticated", reason: "key_rejected", message: "The provider rejected this API key; replace it.", checkedAt: minutesAgo(5), harness: "codex" } });
+hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "demo", kind: "api_key", provider: "opencode", label: "Zen team", modelCount: 12, modelsCheckedAt: minutesAgo(180),
+  health: { state: "warning", reason: "harness_behind", message: "Pinned opencode 0.9.2 is behind the catalog's latest 1.0.0.", checkedAt: minutesAgo(180), harness: "opencode", pinnedVersion: "0.9.2", latestVersion: "1.0.0" } });
+hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "demo", kind: "git", provider: "github", account: "blaxsmith-bot" });
+hubAdd({ scope: "personal", ownerId: principalId, ownerName: "you", kind: "subscription", provider: "codex", account: "acct-7f3c2e", state: "reconnect_required", modelCount: 3,
+  health: { state: "error", auth: "unauthenticated", reason: "needs_sign_in", message: "The saved sign-in stopped working; sign in again.", checkedAt: minutesAgo(60 * 26), harness: "codex" } });
 const rpc = {
   GetCsrf: () => ({ token: "A".repeat(43) }),
   CurrentSession: () => ({ session: { organizationId: "org-demo", principalId, role: "owner", accessExpiresAt: new Date(Date.now() + 3_600_000).toISOString() } }),

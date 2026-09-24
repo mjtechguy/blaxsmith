@@ -58,6 +58,11 @@ type Connection struct {
 	ModelCount                                                           int32
 	ModelsError                                                          string
 	CanManage                                                            bool
+	// Health inputs: the subscription refresh state and the organization's
+	// pinned (approved) harness versions, newest per harness.
+	ReconnectReason string
+	RefreshedAt     *time.Time
+	PinnedVersions  map[string]string
 }
 
 type ConnectionModel struct {
@@ -500,7 +505,8 @@ const connectionColumns = `c.id,c.owner_kind,c.owner_id,
 	CASE WHEN c.state<>'active' THEN c.state WHEN os.reconnect_reason IS NOT NULL THEN 'reconnect_required' ELSE 'active' END,
 	(SELECT max(l.reserved_at) FROM access_leases l WHERE l.organization_id=c.organization_id AND l.connection_id=c.id),
 	c.created_at,c.models_checked_at,COALESCE(c.models_error,''),
-	(SELECT count(*)::integer FROM access_connection_models m WHERE m.organization_id=c.organization_id AND m.connection_id=c.id)
+	(SELECT count(*)::integer FROM access_connection_models m WHERE m.organization_id=c.organization_id AND m.connection_id=c.id),
+	COALESCE(os.reconnect_reason,''),os.refreshed_at
 	FROM access_connections c
 	JOIN access_provider_registrations p ON p.organization_id=c.organization_id AND p.id=c.provider_registration_id
 	LEFT JOIN access_oauth_sessions os ON os.organization_id=c.organization_id AND os.connection_id=c.id
@@ -512,7 +518,7 @@ func scanConnection(row pgx.Row) (Connection, error) {
 	var c Connection
 	var ownerKind, authMethod, provider, origin string
 	err := row.Scan(&c.ID, &ownerKind, &c.OwnerID, &c.OwnerName, &authMethod, &provider, &origin, &c.Account, &c.Label,
-		&c.State, &c.LastUsed, &c.CreatedAt, &c.ModelsCheckedAt, &c.ModelsError, &c.ModelCount)
+		&c.State, &c.LastUsed, &c.CreatedAt, &c.ModelsCheckedAt, &c.ModelsError, &c.ModelCount, &c.ReconnectReason, &c.RefreshedAt)
 	if err != nil {
 		return c, err
 	}
@@ -578,8 +584,13 @@ func (s *Store) ListConnectionsAs(ctx context.Context, caller identity.Caller, s
 	if err != nil {
 		return nil, err
 	}
+	pinned, err := pinnedHarnessVersions(ctx, tx, org)
+	if err != nil {
+		return nil, err
+	}
 	out := items[:0]
 	for _, c := range items {
+		c.PinnedVersions = pinned
 		if scope == ScopeProjectAvailable {
 			ok, err := s.authz.CanUse(ctx, tx, caller, projectID, access.ResourceConnection, c.ID)
 			if err != nil {
@@ -593,6 +604,24 @@ func (s *Store) ListConnectionsAs(ctx context.Context, caller identity.Caller, s
 		out = append(out, c)
 	}
 	return out, s.attachGrantsAndUses(ctx, tx, org, scope, projectID, out)
+}
+
+// pinnedHarnessVersions is the newest approved runtime version per harness.
+func pinnedHarnessVersions(ctx context.Context, tx pgx.Tx, org string) (map[string]string, error) {
+	rows, err := tx.Query(ctx, `SELECT DISTINCT harness,version FROM workflow_tool_runtime_approvals
+		WHERE organization_id::text=$1 AND revoked_at IS NULL LIMIT 500`, org)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	var harness, version string
+	_, err = pgx.ForEachRow(rows, []any{&harness, &version}, func() error {
+		if out[harness] == "" || versionLess(out[harness], version) {
+			out[harness] = version
+		}
+		return nil
+	})
+	return out, err
 }
 
 func (s *Store) attachGrantsAndUses(ctx context.Context, tx pgx.Tx, org, scope, projectID string, items []Connection) error {

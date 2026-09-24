@@ -306,7 +306,9 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	adminPath, adminHandler := apiv1connect.NewAdminServiceHandler(newAdminService(guard, store, dispatchConfig.workerPool),
 		connect.WithReadMaxBytes(1<<16))
 	mux.Handle("/api"+adminPath, http.StripPrefix("/api", guard.Wrap(adminHandler)))
+	tools := &catalogService{client: &http.Client{Timeout: 30 * time.Second}}
 	connections := newConnectionService(guard, store, secrets, origin)
+	connections.tools = tools
 	// ponytail: ctx is the startup context; the refresh loop lives for the process.
 	go connections.refreshModelsDaily(context.WithoutCancel(ctx))
 	connectionPath, connectionHandler := apiv1connect.NewConnectionServiceHandler(connections, connect.WithReadMaxBytes(1<<16))
@@ -324,7 +326,7 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	mux.Handle("/api"+recipePath, http.StripPrefix("/api", guard.Wrap(recipeHandler)))
 	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity}))
 	mux.Handle("/api/terminal/attempts/{attemptID}", guard.Wrap(newTerminalHandler(guard, origin, store, guests, terminals)))
-	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(&catalogService{client: &http.Client{Timeout: 30 * time.Second}})
+	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(tools)
 	mux.Handle("/api"+catalogPath, http.StripPrefix("/api", catalogHandler))
 	mux.HandleFunc("/api", http.NotFound)
 	mux.HandleFunc("/api/", http.NotFound)

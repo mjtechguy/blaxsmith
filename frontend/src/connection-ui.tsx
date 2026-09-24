@@ -3,12 +3,13 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { GitBranch, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ArrowRight, GitBranch, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { ago } from "./admin";
 import { currentSession, sessionQueryKey } from "./auth";
 import {
-  addConnectionUse, apiKeyProviders, connectionModelsKey, connectionsKey, createApiKeyConnection, createGitTokenConnection,
-  getGitHubApp, gitHubAppKey, grantConnection, kindLabel, listConnectionModels, listConnections, modelsSummary, providerLabel,
+  addConnectionUse, apiKeyProviders, authLabel, connectionModelsKey, connectionsKey, createApiKeyConnection, createGitTokenConnection,
+  getGitHubApp, gitHubAppKey, grantConnection, healthFix, kindLabel, listConnectionModels, listConnections, modelsSummary, providerLabel,
   refreshConnectionModels, removeConnectionUse, revokeConnection, revokeConnectionGrant, scopeLabel, startGitHubConnect,
   type ListScope, type Scope,
 } from "./connections";
@@ -33,6 +34,32 @@ export function failure(cause: unknown, fallback: string): string {
 export function StateBadge({ state }: { state: string }) {
   const tone = state === "active" ? "state-succeeded" : state === "reconnect_required" ? "state-waiting" : "state-failed";
   return <span className={`state-badge ${tone}`}>{state.replaceAll("_", " ")}</span>;
+}
+
+// A non-secret identity (account id, username, key label) stays blurred
+// until clicked, so a shared screen does not show it by default.
+export function RedactedText({ text, label }: { text: string; label: string }) {
+  const [shown, setShown] = useState(false);
+  if (!text) return null;
+  return <button type="button" className={shown ? "redacted is-shown" : "redacted"} aria-pressed={shown}
+    aria-label={shown ? `${label}: ${text}. Hide` : `Reveal ${label}`} onClick={() => setShown(!shown)}>
+    <span aria-hidden="true">{text}</span></button>;
+}
+
+const healthTone: Record<string, string> = { ready: "state-succeeded", warning: "state-waiting", error: "state-failed", disabled: "state-blocked" };
+
+// State, sign-in and identity, last check, and the reason with its fix.
+export function HealthLine({ connection, compact = false }: { connection: Connection; compact?: boolean }) {
+  const h = connection.health;
+  if (!h) return <StateBadge state={connection.state} />;
+  const fix = healthFix(connection);
+  return <span className={compact ? "health-line health-compact" : "health-line"}>
+    <span className={`state-badge ${healthTone[h.state] ?? ""}`}>{h.state}</span>
+    {!compact || h.state === "ready" ? <span>{authLabel(h.auth)}{h.identity ? <> as <RedactedText text={h.identity} label="identity" /></> : null}</span> : null}
+    {!compact ? <span>{h.checkedAt ? <>Checked <time dateTime={h.checkedAt}>{ago(h.checkedAt)}</time></> : "Never checked"}</span> : null}
+    {h.message ? <span className={h.state === "error" ? "form-field-error" : undefined}>{h.message}</span> : null}
+    {fix ? <Link className="text-action" to={fix.to as "/"}>{fix.label} <ArrowRight size={13} aria-hidden="true" /></Link> : null}
+  </span>;
 }
 
 export function Loading({ label }: { label: string }) {
@@ -69,8 +96,8 @@ export function ConnectionTable({ connections, label, empty, manage }: {
   const columns = useMemo<ColumnDef<typeof features, Connection>[]>(() => [
     { id: "provider", header: "Provider", cell: ({ row }) => <span className="task-stage"><strong>{providerLabel(row.original.provider)}</strong><small>{kindLabel(row.original.kind)}{row.original.label ? ` · ${row.original.label}` : ""}</small></span> },
     { id: "scope", header: "Scope / owner", cell: ({ row }) => <span className="task-stage"><strong>{scopeLabel(row.original.scope)}</strong><small>{row.original.ownerName || row.original.ownerId.slice(0, 8)}</small></span> },
-    { id: "account", header: "Account", cell: ({ row }) => <span className="mono admin-wrap">{row.original.account || "—"}</span> },
-    { id: "state", header: "State", cell: ({ row }) => <StateBadge state={row.original.state} /> },
+    { id: "account", header: "Account", cell: ({ row }) => row.original.account ? <span className="mono admin-wrap"><RedactedText text={row.original.account} label="account" /></span> : "—" },
+    { id: "state", header: "Health", cell: ({ row }) => <HealthLine connection={row.original} compact /> },
     { id: "models", header: "Models", cell: ({ row }) => <span className={row.original.modelsError ? "form-field-error" : undefined}>{modelsSummary(row.original)}</span> },
     { id: "grants", header: "Grants / uses", cell: ({ row }) => `${row.original.grants.length} / ${row.original.uses.length}` },
     { id: "used", header: "Last used", cell: ({ row }) => row.original.lastUsedAt ? <time dateTime={row.original.lastUsedAt}>{ago(row.original.lastUsedAt)}</time> : "Never" },
@@ -297,12 +324,12 @@ export function ConnectionDetail({ connection, scope, projectId = "", onRevoked 
   return <>
     <section className="table-section" aria-labelledby="connection-summary-heading">
       <div className="table-heading"><div><h2 id="connection-summary-heading">{providerLabel(connection.provider)} · {kindLabel(connection.kind)}</h2>
-        <p>{scopeLabel(connection.scope)} connection{connection.ownerName ? ` owned by ${connection.ownerName}` : ""}. Account <span className="mono">{connection.account || "—"}</span>. Credentials are never shown.</p></div>
+        <p>{scopeLabel(connection.scope)} connection{connection.ownerName ? ` owned by ${connection.ownerName}` : ""}. Account {connection.account ? <RedactedText text={connection.account} label="account" /> : "—"}. Credentials are never shown.</p></div>
         <span className="admin-actions">
           {connection.kind !== "git" && connection.canManage ? <button type="button" className="secondary-button" disabled={refresh.isPending} onClick={() => refresh.mutate()}><RefreshCw size={15} className={refresh.isPending ? "spin" : undefined} aria-hidden="true" /> Refresh models</button> : null}
           {connection.canManage && connection.state !== "revoked" ? <button type="button" className="secondary-button" onClick={() => { setError(""); setPending({ kind: "connection" }); }}><Trash2 size={15} aria-hidden="true" /> Revoke</button> : null}
         </span></div>
-      <div className="source-summary"><strong><StateBadge state={connection.state} /></strong>
+      <div className="source-summary"><HealthLine connection={connection} />
         <span className={connection.modelsError ? "form-field-error" : undefined}>Models: {refreshNote || modelsSummary(connection)}{connection.modelsCheckedAt ? ` · checked ${ago(connection.modelsCheckedAt)}` : ""}</span>
         <span>Last used: {connection.lastUsedAt ? ago(connection.lastUsedAt) : "never"}</span></div>
     </section>
