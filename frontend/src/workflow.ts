@@ -75,6 +75,22 @@ export async function revokeProjectModelAccess(accessId: string) {
   return client.revokeProjectModelAccess({ accessId }, { headers: { "X-Blaxsmith-CSRF": token } });
 }
 
+export const subscriptionQueryKey = (organizationId: string, projectId: string) => ["subscriptions", organizationId, projectId] as const;
+
+export async function listSubscriptionConnections(projectId: string, signal?: AbortSignal) {
+  return client.listSubscriptionConnections({ projectId }, { signal });
+}
+
+export async function createSubscriptionConnection(projectId: string, provider: string, model: string, credential: string) {
+  const token = await csrfToken();
+  return client.createSubscriptionConnection({ projectId, provider, model, credential }, { headers: { "X-Blaxsmith-CSRF": token } });
+}
+
+export async function revokeSubscriptionConnection(connectionId: string) {
+  const token = await csrfToken();
+  return client.revokeSubscriptionConnection({ connectionId }, { headers: { "X-Blaxsmith-CSRF": token } });
+}
+
 export async function launchRun(projectId: string, launchKey: string, recipePath: string, specPath: string, transcriptPath: string, scope: string) {
   const token = await csrfToken();
   return client.launchRun({ projectId, launchKey, recipePath, specPath, transcriptPath, scope }, { headers: { "X-Blaxsmith-CSRF": token } });

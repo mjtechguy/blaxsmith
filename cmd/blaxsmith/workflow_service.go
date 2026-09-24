@@ -185,6 +185,57 @@ func (s *workflowService) RevokeProjectModelAccess(ctx context.Context, req *con
 	return connect.NewResponse(&api.RevokeProjectModelAccessResponse{AccessId: req.Msg.AccessId}), nil
 }
 
+func (s *workflowService) ListSubscriptionConnections(ctx context.Context, req *connect.Request[api.ListSubscriptionConnectionsRequest]) (*connect.Response[api.ListSubscriptionConnectionsResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.store.ListSubscriptionConnections(ctx, caller, req.Msg.ProjectId)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	response := &api.ListSubscriptionConnectionsResponse{}
+	for _, item := range items {
+		response.Connections = append(response.Connections, subscriptionMessage(item))
+	}
+	return connect.NewResponse(response), nil
+}
+
+func (s *workflowService) CreateSubscriptionConnection(ctx context.Context, req *connect.Request[api.CreateSubscriptionConnectionRequest]) (*connect.Response[api.CreateSubscriptionConnectionResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	if s.secrets == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("credential custody is not configured"))
+	}
+	credential := []byte(req.Msg.Credential)
+	req.Msg.Credential = ""
+	defer clear(credential)
+	item, err := s.store.CreateSubscriptionConnectionAs(ctx, caller, req.Msg.ProjectId, req.Msg.Provider, req.Msg.Model, credential, s.secrets)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.CreateSubscriptionConnectionResponse{Connection: subscriptionMessage(item)}), nil
+}
+
+func (s *workflowService) RevokeSubscriptionConnection(ctx context.Context, req *connect.Request[api.RevokeSubscriptionConnectionRequest]) (*connect.Response[api.RevokeSubscriptionConnectionResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.store.RevokeSubscriptionConnectionAs(ctx, caller, req.Msg.ConnectionId); err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.RevokeSubscriptionConnectionResponse{ConnectionId: req.Msg.ConnectionId}), nil
+}
+
+func subscriptionMessage(item workflow.SubscriptionConnection) *api.SubscriptionConnection {
+	return &api.SubscriptionConnection{ConnectionId: item.ConnectionID, ProjectId: item.ProjectID,
+		Provider: item.Provider, Model: item.Model, AccountId: item.AccountID, State: item.State,
+		CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339Nano)}
+}
+
 func projectModelAccessMessage(item workflow.ProjectModelAccess) *api.ProjectModelAccess {
 	return &api.ProjectModelAccess{Id: item.ID, ProjectId: item.ProjectID, Provider: item.Provider,
 		Model: item.Model, ConnectionId: item.ConnectionID, GrantId: item.GrantID,
@@ -668,6 +719,8 @@ func workflowError(err error) error {
 		return connect.NewError(connect.CodePermissionDenied, errors.New("project verification change denied"))
 	case errors.Is(err, workflow.ErrProjectModelAccessDenied):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("project model access denied"))
+	case errors.Is(err, access.ErrClaudeSubscriptionDisabled), errors.Is(err, workflow.ErrSubscriptionPolicy):
+		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, workflow.ErrFenced):
 		return connect.NewError(connect.CodeUnauthenticated, errors.New("session changed during launch"))
 	case errors.Is(err, workflow.ErrGitConnection):

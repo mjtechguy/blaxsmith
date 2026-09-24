@@ -22,6 +22,9 @@ type ModelAttempt struct {
 	Invoke  access.ModelInvoke
 	Git     *GitAttempt
 	TTL     time.Duration
+	// OAuth serves oauth_access bindings (personal Codex login). Nil denies
+	// them; the refresh token itself never enters the envelope.
+	OAuth *access.OAuthRefresher
 }
 
 // GitAttempt adds one frozen private-repository input to the setup release.
@@ -145,6 +148,25 @@ func NewModelAttemptConnector(base Connector, db *pgxpool.Pool, secrets *access.
 		decision, err := access.AuthorizeModelInvoke(ctx, tx, model.Invoke)
 		if err != nil {
 			return ModelCredential{}, err
+		}
+		if decision.DeliveryMode == "oauth_access" {
+			if model.OAuth == nil {
+				return ModelCredential{}, ErrDenied
+			}
+			delivery, err := model.OAuth.Deliver(ctx, model.Invoke.OrganizationID, decision.ConnectionID, expiry)
+			if err != nil {
+				return ModelCredential{}, err
+			}
+			clear(delivery.AccessToken)
+			if err := access.MarkLeaseAttempt(ctx, tx, model.Invoke.OrganizationID, id, decision.ConnectionID, delivery.SecretVersion); err != nil {
+				delivery.Clear()
+				return ModelCredential{}, err
+			}
+			return ModelCredential{AttemptID: model.Attempt.ID, Provider: model.Invoke.Provider,
+				ExpiresAt: expiry, CodexAuthJSON: delivery.File}, nil
+		}
+		if decision.DeliveryMode != "native_raw" {
+			return ModelCredential{}, ErrDenied
 		}
 		secret, err := secrets.ReadCurrent(ctx, tx, model.Invoke.OrganizationID, decision.ConnectionID)
 		if err != nil {

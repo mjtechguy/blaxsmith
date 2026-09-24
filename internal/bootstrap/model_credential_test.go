@@ -74,3 +74,37 @@ func TestModelCredentialSealedForCurrentAttempt(t *testing.T) {
 		t.Fatalf("unbounded credential accepted: %v", err)
 	}
 }
+
+func TestCodexAuthSealedWithoutRefreshToken(t *testing.T) {
+	guest, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
+		t.Fatal(err)
+	}
+	challenge := Challenge{Nonce: base64.RawURLEncoding.EncodeToString(nonce), ExpiresAt: time.Now().Add(time.Minute).Unix(), Phase: PhaseModel,
+		Atespace: "space", Task: "task", RecipientKey: base64.RawURLEncoding.EncodeToString(guest.PublicKey().Bytes())}
+	credential := ModelCredential{AttemptID: "attempt-a", Provider: "openai", ExpiresAt: time.Now().Add(10 * time.Minute),
+		CodexAuthJSON: []byte(`{"OPENAI_API_KEY":null,"tokens":{"id_token":"i","access_token":"a","refresh_token":""}}`)}
+	sealed, err := sealCredentials(challenge, "attempt-a", nil, &credential)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, err := Open(challenge, guest, sealed)
+	if err != nil || !bytes.Contains(opened, []byte(`"kind":"model_codex_auth"`)) || bytes.Contains(opened, []byte(`"api_key"`)) {
+		t.Fatalf("codex payload: %s %v", opened, err)
+	}
+	for _, bad := range []ModelCredential{
+		{AttemptID: "attempt-a", Provider: "openai", ExpiresAt: credential.ExpiresAt,
+			CodexAuthJSON: []byte(`{"tokens":{"access_token":"a","refresh_token":"rt"}}`)},
+		{AttemptID: "attempt-a", Provider: "openai", ExpiresAt: credential.ExpiresAt, CodexAuthJSON: []byte(`{"tokens":{}}`)},
+		{AttemptID: "attempt-a", Provider: "anthropic", ExpiresAt: credential.ExpiresAt, CodexAuthJSON: credential.CodexAuthJSON},
+		{AttemptID: "attempt-a", Provider: "openai", ExpiresAt: credential.ExpiresAt, CodexAuthJSON: credential.CodexAuthJSON, APIKey: []byte("k")},
+	} {
+		if _, err := sealCredentials(challenge, "attempt-a", nil, &bad); !errors.Is(err, ErrDenied) {
+			t.Fatalf("unsafe codex payload sealed: %+v %v", bad, err)
+		}
+	}
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": "blaxsmith.claude-subscription-probe/v1",
+  "claude_code": "2.1.281 (Claude Code)",
+  "provider": "loopback mock; fake OAuth token",
+  "reports": [
+    {
+      "launch": 1,
+      "exit": 0,
+      "model_requests": 1,
+      "oauth_bearer": true,
+      "api_key_header": false,
+      "scoped_skill_loaded": true,
+      "ancestor_project_skill_loaded": true,
+      "ambient_leaks": [],
+      "hook_ran": false,
+      "ask_user_question_offered": false,
+      "mcp_tools": []
+    },
+    {
+      "launch": 2,
+      "exit": 0,
+      "model_requests": 1,
+      "oauth_bearer": true,
+      "api_key_header": false,
+      "scoped_skill_loaded": true,
+      "ancestor_project_skill_loaded": true,
+      "ambient_leaks": [],
+      "hook_ran": false,
+      "ask_user_question_offered": false,
+      "mcp_tools": []
+    }
+  ]
+}

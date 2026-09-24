@@ -80,6 +80,9 @@ type ModelCredential struct {
 	Provider  string
 	ExpiresAt time.Time
 	APIKey    []byte
+	// CodexAuthJSON replaces APIKey for a personal Codex login: a native
+	// auth.json holding an access token and an empty refresh token.
+	CodexAuthJSON []byte
 }
 
 func validGitCommit(commit string) bool {
@@ -171,6 +174,7 @@ func (c *Connector) OpenPhase(ctx context.Context, scope Scope, expected Runtime
 				return err
 			}
 			defer clear(credential.APIKey)
+			defer clear(credential.CodexAuthJSON)
 			model = &credential
 		}
 		if git != nil || model != nil {
@@ -224,7 +228,10 @@ type modelCredentialPayload struct {
 	AttemptID string `json:"attempt_id"`
 	Provider  string `json:"provider"`
 	ExpiresAt int64  `json:"expires_at"`
-	APIKey    string `json:"api_key"`
+	APIKey    string `json:"api_key,omitempty"`
+	// Kind model_codex_auth only. Guest materialization is not implemented
+	// yet; the pinned runner rejects this kind, so it fails closed.
+	CodexAuthJSON string `json:"codex_auth_json,omitempty"`
 }
 
 func sealCredentials(challenge Challenge, attemptID string, git *GitSetup, model *ModelCredential) (Envelope, error) {
@@ -252,10 +259,29 @@ func sealCredentials(challenge Challenge, attemptID string, git *GitSetup, model
 		now := time.Now()
 		if model.AttemptID != attemptID || (model.Provider != "openai" && model.Provider != "anthropic") ||
 			!model.ExpiresAt.After(now) || model.ExpiresAt.After(now.Add(time.Hour)) ||
-			len(model.APIKey) == 0 || len(model.APIKey) > 8192 || strings.ContainsAny(string(model.APIKey), "\r\n\x00") {
+			(len(model.APIKey) == 0) == (len(model.CodexAuthJSON) == 0) {
 			return Envelope{}, ErrDenied
 		}
-		modelPayload = &modelCredentialPayload{"model_api_key", model.AttemptID, model.Provider, model.ExpiresAt.Unix(), string(model.APIKey)}
+		if len(model.CodexAuthJSON) > 0 {
+			var file struct {
+				Tokens struct {
+					RefreshToken *string `json:"refresh_token"`
+				} `json:"tokens"`
+			}
+			if model.Provider != "openai" || len(model.CodexAuthJSON) > 16384 ||
+				json.Unmarshal(model.CodexAuthJSON, &file) != nil ||
+				file.Tokens.RefreshToken == nil || *file.Tokens.RefreshToken != "" {
+				return Envelope{}, ErrDenied
+			}
+			modelPayload = &modelCredentialPayload{Kind: "model_codex_auth", AttemptID: model.AttemptID,
+				Provider: model.Provider, ExpiresAt: model.ExpiresAt.Unix(), CodexAuthJSON: string(model.CodexAuthJSON)}
+		} else {
+			if len(model.APIKey) > 8192 || strings.ContainsAny(string(model.APIKey), "\r\n\x00") {
+				return Envelope{}, ErrDenied
+			}
+			modelPayload = &modelCredentialPayload{Kind: "model_api_key", AttemptID: model.AttemptID,
+				Provider: model.Provider, ExpiresAt: model.ExpiresAt.Unix(), APIKey: string(model.APIKey)}
+		}
 	}
 	payload, err := json.Marshal(struct {
 		Schema    string                  `json:"schema"`

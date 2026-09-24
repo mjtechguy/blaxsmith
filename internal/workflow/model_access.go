@@ -223,19 +223,25 @@ func (s *Store) RevokeProjectModelAccessAs(ctx context.Context, caller identity.
 }
 
 func lockProjectModelAccessAdmin(ctx context.Context, tx pgx.Tx, caller identity.Caller) error {
+	return lockCallerSession(ctx, tx, caller, false)
+}
+
+// lockCallerSession holds the live session and membership; anyRole admits
+// every active member rather than only owners and admins.
+func lockCallerSession(ctx context.Context, tx pgx.Tx, caller identity.Caller, anyRole bool) error {
 	var role string
 	err := tx.QueryRow(ctx, `SELECT m.role FROM identity_sessions s
 		JOIN identity_memberships m ON m.organization_id=s.organization_id AND m.principal_id=s.principal_id
 		JOIN identity_principals p ON p.id=s.principal_id
 		JOIN identity_organizations o ON o.id=s.organization_id
 		WHERE s.organization_id=$1 AND s.id=$2 AND s.principal_id=$3
-		AND m.role=$4 AND m.role IN ('owner','admin') AND $5::timestamptz>clock_timestamp()
+		AND m.role=$4 AND ($6 OR m.role IN ('owner','admin')) AND $5::timestamptz>clock_timestamp()
 		AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
 		AND m.state='active' AND p.state='active'
 		AND (s.auth_method<>'local' OR o.login_policy IN ('local','mixed'))
 		AND (o.mfa_policy<>'required' OR s.mfa_level='totp')
 		FOR SHARE OF s,m,p,o`, caller.OrganizationID, caller.SessionID, caller.PrincipalID,
-		caller.Role, caller.AccessExpires).Scan(&role)
+		caller.Role, caller.AccessExpires, anyRole).Scan(&role)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrFenced
 	}

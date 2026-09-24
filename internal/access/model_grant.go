@@ -41,13 +41,14 @@ func PreflightModelInvoke(ctx context.Context, tx pgx.Tx, request ModelGrant) (M
 	}
 	var connectionID, projectID, granteeKind, granteeID, capability, resource, deliveryMode string
 	var connectionState, providerID, externalAccountID, providerKind, providerOrigin, providerState string
+	var ownerKind, ownerID, authMethod string
 	var grantVersion, policyVersion, secretVersion int64
 	var policyModes, providerModes []string
 	var grantExpiry, secretExpiry, revokedAt *time.Time
 	err := tx.QueryRow(ctx, `SELECT g.connection_id,g.project_id,g.grantee_kind,g.grantee_id,g.capability,g.resource,
 		g.delivery_mode,g.version,g.expires_at,g.revoked_at,
 		p.version,p.delivery_modes,c.state,c.provider_registration_id,c.external_account_id,c.active_secret_version,
-		s.expires_at,r.provider_kind,r.origin,r.delivery_modes,r.state
+		c.owner_kind,c.owner_id,c.auth_method,s.expires_at,r.provider_kind,r.origin,r.delivery_modes,r.state
 		FROM access_grants g
 		JOIN access_project_policies p ON p.organization_id=g.organization_id AND p.project_id=g.project_id
 		JOIN access_connections c ON c.organization_id=g.organization_id AND c.id=g.connection_id
@@ -59,13 +60,14 @@ func PreflightModelInvoke(ctx context.Context, tx pgx.Tx, request ModelGrant) (M
 		&connectionID, &projectID, &granteeKind, &granteeID, &capability, &resource,
 		&deliveryMode, &grantVersion, &grantExpiry, &revokedAt,
 		&policyVersion, &policyModes, &connectionState, &providerID, &externalAccountID, &secretVersion,
-		&secretExpiry, &providerKind, &providerOrigin, &providerModes, &providerState)
+		&ownerKind, &ownerID, &authMethod, &secretExpiry, &providerKind, &providerOrigin, &providerModes, &providerState)
 	if err != nil {
 		return ModelApproval{}, deniedOrError("model grant", err)
 	}
 	if projectID != request.ProjectID || granteeKind != request.GranteeKind || granteeID != request.GranteeID ||
 		capability != "model.invoke" || resource != request.Provider+"/"+request.Model ||
-		deliveryMode != "native_raw" || !slices.Contains(policyModes, deliveryMode) ||
+		!deliveryAllowed(deliveryMode, authMethod, request.Provider, ownerKind, ownerID, granteeKind, granteeID) ||
+		!slices.Contains(policyModes, deliveryMode) ||
 		!slices.Contains(providerModes, deliveryMode) || revokedAt != nil || connectionState != "active" ||
 		providerState != "active" || providerKind != request.Provider || providerOrigin != modelOrigin(request.Provider) {
 		return ModelApproval{}, ErrDenied
