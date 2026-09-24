@@ -123,6 +123,10 @@ func (c *CommandExitConnector) Collect(ctx context.Context, a workflow.Attempt) 
 	if err != nil {
 		return err
 	}
+	command, err := b.command(a)
+	if err != nil {
+		return err
+	}
 	check := func() (bootstrap.Runtime, error) {
 		run, state, sealed, err := b.Workflow.CurrentAttempt(ctx, a)
 		if err != nil || run != "active" || state != "running" || !sealed {
@@ -147,7 +151,7 @@ func (c *CommandExitConnector) Collect(ctx context.Context, a workflow.Attempt) 
 		return err
 	}
 	if observation.Schema != exitReadbackSchema || observation.AXAtespace != want.Metadata.Atespace ||
-		observation.AXTask != want.Metadata.Name || observation.CommandSHA256 != runnerexit.CommandSHA256(syntheticCommand) ||
+		observation.AXTask != want.Metadata.Name || observation.CommandSHA256 != runnerexit.CommandSHA256(command) ||
 		observation.Sequence != 1 || observation.ExitCode < -1 || observation.ExitCode > 255 ||
 		observation.Signal < 0 || observation.Signal > 64 || observation.ObservedAt < 1 ||
 		(observation.ExitCode == -1) != (observation.Signal != 0) {

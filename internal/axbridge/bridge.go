@@ -1,6 +1,5 @@
 // Package axbridge dispatches a fenced workflow attempt to the pinned AX API.
-// This first bridge deliberately runs synthetic commands only. A runner exit
-// observation does not independently verify the task result.
+// A runner exit observation does not independently verify the task result.
 package axbridge
 
 import (
@@ -13,6 +12,7 @@ import (
 
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
+	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -25,7 +25,7 @@ const syntheticShellCommand = "printf 'blaxsmith-ax-smoke-ok\\n' > /workspace/re
 
 var syntheticCommand = []string{"/bin/sh", "-c", syntheticShellCommand}
 
-// Task contains only fields used for deterministic synthetic dispatch.
+// Task contains only fields used for deterministic dispatch.
 type Task struct {
 	APIVersion string         `yaml:"apiVersion"`
 	Kind       string         `yaml:"kind"`
@@ -61,8 +61,9 @@ type Bridge struct {
 	Actor    Inspector
 	Image    string // exact digest-pinned AX runner image
 	Pool     string
-	Signer   string // enrolled bootstrap public key, base64
-	Storage  string // approved data-only snapshot location
+	Signer   string               // enrolled bootstrap public key, base64
+	Storage  string               // approved data-only snapshot location
+	Tool     *tooladapter.Request // frozen, public CLI selection; nil runs the synthetic probe
 	// RevokeOwner must fence the bootstrap owner and any access lease before
 	// deletion. A nil revoker fails closed.
 	RevokeOwner func(context.Context, workflow.Attempt) error
@@ -80,15 +81,33 @@ func (b *Bridge) task(a workflow.Attempt) (Task, error) {
 		!strings.Contains(b.Image, "@sha256:") || b.Pool == "" || b.Signer == "" || b.Storage == "" {
 		return Task{}, workflow.ErrInvalid
 	}
+	command, err := b.command(a)
+	if err != nil {
+		return Task{}, err
+	}
 	space, name := Name(a)
+	argv := make([]any, len(command))
+	for i, arg := range command {
+		argv[i] = arg
+	}
 	return Task{APIVersion: "ax.io/v1alpha1", Kind: "Task",
 		Metadata: TaskMetadata{Name: name, Atespace: space},
 		Spec: map[string]any{
 			"image":   b.Image,
-			"command": []any{syntheticCommand[0], syntheticCommand[1], syntheticCommand[2]},
+			"command": argv,
 			"debug":   true,
 		},
 	}, nil
+}
+
+func (b *Bridge) command(a workflow.Attempt) ([]string, error) {
+	if b.Tool == nil {
+		return syntheticCommand, nil
+	}
+	if b.Tool.AttemptID != a.ID || b.Tool.Runtime.Image != b.Image {
+		return nil, workflow.ErrInvalid
+	}
+	return tooladapter.Command(*b.Tool)
 }
 
 // Launch requires a committed ReserveAttempt before the first network call.
@@ -191,10 +210,14 @@ func (b *Bridge) confirm(ctx context.Context, a workflow.Attempt, want Task, rec
 				if fenceErr != nil || !sealed || run != "active" || (recovered && state != "reconciling") || (!recovered && state != "reserved") {
 					return bootstrap.Runtime{}, workflow.ErrFenced
 				}
+				command, err := b.command(a)
+				if err != nil {
+					return bootstrap.Runtime{}, err
+				}
 				binding := workflow.RuntimeBinding{AXAtespace: want.Metadata.Atespace,
 					AXTask: want.Metadata.Name, ActorUID: runtime.Actor.UID,
 					TemplateUID: runtime.TemplateUID, Image: runtime.Image,
-					WorkerPool: runtime.WorkerPool, CommandSHA256: runnerexit.CommandSHA256(syntheticCommand)}
+					WorkerPool: runtime.WorkerPool, CommandSHA256: runnerexit.CommandSHA256(command)}
 				if err := b.Workflow.BindRuntime(ctx, a, binding); err != nil {
 					if errors.Is(err, workflow.ErrFenced) || recovered {
 						return bootstrap.Runtime{}, err

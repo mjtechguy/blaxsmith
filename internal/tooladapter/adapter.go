@@ -122,6 +122,7 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 		}
 	}
 	env := []string{"HOME=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, ".config"), "PATH=/usr/local/bin:/usr/bin:/bin", "DISABLE_UPDATES=1"}
+	toolEnv := append([]string(nil), env...)
 	seen := map[string]bool{}
 	for _, entry := range credentialEnv {
 		key, _, ok := strings.Cut(entry, "=")
@@ -129,7 +130,7 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 			return nil, fmt.Errorf("%w: forbidden environment key", ErrBlocked)
 		}
 		seen[key] = true
-		env = append(env, entry)
+		toolEnv = append(toolEnv, entry)
 	}
 	binary, err := os.Open(in.runtime.Binary)
 	if err != nil {
@@ -156,7 +157,7 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 	runCtx, cancelRun := context.WithTimeout(ctx, in.timeout)
 	defer cancelRun()
 	cmd := exec.CommandContext(runCtx, in.runtime.Binary, in.args...) // #nosec G204 -- verified absolute executable, separate argv
-	cmd.Env, cmd.Dir = env, workdir
+	cmd.Env, cmd.Dir = toolEnv, workdir
 	cmd.WaitDelay = time.Second
 	output := &boundedOutput{buffer: limit.Buffer{Max: in.maxOutputBytes}}
 	cmd.Stdout, cmd.Stderr = output, output
