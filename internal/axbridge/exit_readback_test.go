@@ -123,6 +123,9 @@ func TestCommandExitConnectorRecordsOnlyBoundObservation(t *testing.T) {
 			CommandSHA256: runnerexit.CommandSHA256(syntheticCommand)}); err != nil {
 			t.Fatal(err)
 		}
+		if err := store.ConfirmStarting(t.Context(), attempt); err != nil {
+			t.Fatal(err)
+		}
 		if err := store.ConfirmStarted(t.Context(), attempt); err != nil {
 			t.Fatal(err)
 		}

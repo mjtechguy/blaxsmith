@@ -137,6 +137,9 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 		t.Fatalf("runtime identity changed: %v", err)
 	}
 	binding.ActorUID = "actor-one"
+	if err := store.ConfirmStarting(t.Context(), attempt); err != nil {
+		t.Fatal(err)
+	}
 	if err := store.ConfirmStarted(t.Context(), attempt); err != nil {
 		t.Fatal(err)
 	}

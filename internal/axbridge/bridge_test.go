@@ -138,8 +138,16 @@ func TestAttemptDispatchAndUncertainReadBack(t *testing.T) {
 	if _, err := bridge.Launch(ctx, first); err != nil {
 		t.Fatal(err)
 	}
+	if _, state, _, err := store.CurrentAttempt(ctx, first); err != nil || state != "starting" {
+		t.Fatalf("AX actor launch skipped Workspace initialization: %q %v", state, err)
+	}
+	ax.task.Status.Phase, ax.task.Status.Actor = "Running", ax.task.Metadata.Name
+	ax.task.Status.Conditions = []TaskCondition{{Type: "WorkspaceReady", Status: "True", Reason: "SetupComplete"}}
+	if err := bridge.WaitWorkspaceReady(ctx, first); err != nil {
+		t.Fatal(err)
+	}
 	if _, state, _, err := store.CurrentAttempt(ctx, first); err != nil || state != "running" {
-		t.Fatalf("normal launch: %q %v", state, err)
+		t.Fatalf("ready AX workspace was not published as running: %q %v", state, err)
 	}
 	var actorUID, commandSHA string
 	if err := pool.QueryRow(ctx, `SELECT actor_uid,command_sha256 FROM workflow_attempt_runtime
@@ -199,8 +207,16 @@ func TestAttemptDispatchAndUncertainReadBack(t *testing.T) {
 	if _, err := bridge.ReconcileUnknown(ctx, uncertain); err != nil {
 		t.Fatal(err)
 	}
+	if _, state, _, err := store.CurrentAttempt(ctx, uncertain); err != nil || state != "starting" {
+		t.Fatalf("read-back published an attempt before Workspace readiness: %q %v", state, err)
+	}
+	ax.task.Status.Phase, ax.task.Status.Actor = "Running", ax.task.Metadata.Name
+	ax.task.Status.Conditions = []TaskCondition{{Type: "WorkspaceReady", Status: "True", Reason: "SetupComplete"}}
+	if err := bridge.WaitWorkspaceReady(ctx, uncertain); err != nil {
+		t.Fatal(err)
+	}
 	if _, state, _, err := store.CurrentAttempt(ctx, uncertain); err != nil || state != "running" {
-		t.Fatalf("read-back did not recover owner: %q %v", state, err)
+		t.Fatalf("ready recovered workspace was not published as running: %q %v", state, err)
 	}
 
 	missing := reserve("uncertain-missing")

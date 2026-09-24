@@ -420,15 +420,20 @@ func (s *Store) reserveAttempt(ctx context.Context, orgID, runID, taskID string,
 	return a, nil
 }
 
-// ConfirmStarted records a confirmed AX launch. Duplicate confirmation is safe.
+// ConfirmStarting records a confirmed actor whose Workspace is still initializing.
+func (s *Store) ConfirmStarting(ctx context.Context, a Attempt) error {
+	return s.transition(ctx, a, "reserved", "starting", "attempt.starting")
+}
+
+// ConfirmStarted publishes a usable attempt only after AX reports WorkspaceReady.
 func (s *Store) ConfirmStarted(ctx context.Context, a Attempt) error {
-	return s.transition(ctx, a, "reserved", "running", "attempt.started")
+	return s.transition(ctx, a, "starting", "running", "attempt.started")
 }
 
 // MarkUnknown blocks replacement and publication until the external workload
 // is reconciled. It does not infer termination from a timeout.
 func (s *Store) MarkUnknown(ctx context.Context, a Attempt) error {
-	return s.transition(ctx, a, "reserved,running", "reconciling", "attempt.unknown")
+	return s.transition(ctx, a, "reserved,starting,running", "reconciling", "attempt.unknown")
 }
 
 func (s *Store) transition(ctx context.Context, a Attempt, from, to, kind string) error {
@@ -448,7 +453,7 @@ func (s *Store) transition(ctx context.Context, a Attempt, from, to, kind string
 		}
 		return err
 	}
-	if to == "running" && runState != "active" {
+	if (to == "starting" || to == "running") && runState != "active" {
 		return ErrFenced
 	}
 	var taskState, attemptState string
@@ -622,7 +627,7 @@ func (s *Store) ConfirmStopped(ctx context.Context, a Attempt) error {
 	if activeID == nil || *activeID != a.ID || token != a.FenceToken || generation != a.OwnerGeneration {
 		return ErrFenced
 	}
-	if taskState != attemptState || (taskState != "reserved" && taskState != "running" && taskState != "reconciling") {
+	if taskState != attemptState || (taskState != "reserved" && taskState != "starting" && taskState != "running" && taskState != "reconciling") {
 		return ErrConflict
 	}
 	taskFinal := "pending"

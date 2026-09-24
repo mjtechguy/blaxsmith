@@ -310,7 +310,16 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		Hosts: []axbridge.GatewayHostRule{{Host: "140.82.114.3/32"}, {Host: "104.18.33.45/32"}}}}
 	ax.delayWorkspaceReady = true
 	activationSawWorkspacePending := false
-	dispatcher.Activate = func(_ context.Context, attempt workflow.Attempt, runtime bootstrap.Runtime, binding workflow.RuntimeBinding, invoke access.ModelInvoke) error {
+	dispatcher.Activate = func(ctx context.Context, attempt workflow.Attempt, runtime bootstrap.Runtime, binding workflow.RuntimeBinding, invoke access.ModelInvoke) error {
+		_, state, _, stateErr := store.CurrentAttempt(ctx, attempt)
+		var startedEvents int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM workflow_events WHERE organization_id=$1 AND run_id=$2 AND attempt_id=$3 AND kind='attempt.started'`,
+			orgID, attempt.RunID, attempt.ID).Scan(&startedEvents); err != nil {
+			return err
+		}
+		if stateErr != nil || state != "starting" || startedEvents != 0 {
+			return errors.New("workflow published started before AX Workspace readiness")
+		}
 		if ax.task == nil || ax.task.Status.Phase != "Running" || ax.task.Status.Actor != ax.task.Metadata.Name ||
 			ax.task.Status.Conditions[0].Status != "False" || ax.task.Status.Conditions[0].Reason != "Initializing" {
 			return errors.New("activation ran before checking the expected pending workspace")
@@ -356,6 +365,11 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		WHERE t.organization_id=$1 AND t.run_id=$2`, orgID, run.ID).Scan(&taskState, &attemptState); err != nil ||
 		taskState != "running" || attemptState != "running" {
 		t.Fatalf("tool exit inferred task success: %s/%s, %v", taskState, attemptState, err)
+	}
+	var startedEvents int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM workflow_events WHERE organization_id=$1 AND run_id=$2 AND attempt_id=$3 AND kind='attempt.started'`,
+		orgID, run.ID, batch.Outcomes[0].AttemptID).Scan(&startedEvents); err != nil || startedEvents != 1 {
+		t.Fatalf("Workspace readiness did not publish exactly one started event: %d %v", startedEvents, err)
 	}
 	secondRun, err := store.CreateRun(ctx, workflow.RunInput{OrganizationID: orgID, ProjectID: projectID,
 		LaunchKey: "activation-fails", SourceCommit: bundle.Source.Commit,

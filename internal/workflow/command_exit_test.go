@@ -69,6 +69,9 @@ func TestRuntimeBoundSuccessRequiresCleanExitPostgres(t *testing.T) {
 			if err := store.BindRuntime(ctx, attempt, binding); err != nil {
 				t.Fatal(err)
 			}
+			if err := store.ConfirmStarting(ctx, attempt); err != nil {
+				t.Fatal(err)
+			}
 			if err := store.ConfirmStarted(ctx, attempt); err != nil {
 				t.Fatal(err)
 			}

@@ -663,6 +663,9 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if err := store.BindRuntime(ctx, attempt, binding); err != nil {
 		t.Fatal(err)
 	}
+	if err := store.ConfirmStarting(ctx, attempt); err != nil {
+		t.Fatal(err)
+	}
 	if err := store.ConfirmStarted(ctx, attempt); err != nil {
 		t.Fatal(err)
 	}

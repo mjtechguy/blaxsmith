@@ -327,10 +327,9 @@ func TestLedgerPostgres(t *testing.T) {
 	}
 	currentProof, currentRoots := signedProof(t, current)
 	if _, err := pool.Exec(ctx, `UPDATE bootstrap_owners SET actor_uid='uid-c'
-		WHERE cluster_id=$1 AND attempt_id=$2`, owner.ClusterID, owner.AttemptID); err != nil {
-		t.Fatal(err)
+		WHERE cluster_id=$1 AND attempt_id=$2`, owner.ClusterID, owner.AttemptID); err == nil {
+		t.Fatal("actor identity changed without advancing bootstrap owner generation")
 	}
-	denied(newOwner, current, currentProof, currentRoots)
 	current = issue(newOwner)
 	currentProof, currentRoots = signedProof(t, current)
 	inactive, err := ledger.Deactivate(ctx, newOwner)

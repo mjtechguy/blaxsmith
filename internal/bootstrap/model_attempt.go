@@ -224,7 +224,7 @@ func checkModelWorkflow(ctx context.Context, tx pgx.Tx, model ModelAttempt) erro
 	if err != nil {
 		return err
 	}
-	if runState != "active" || !sealed || taskState != "running" || attemptState != "running" ||
+	if runState != "active" || !sealed || (taskState != "starting" && taskState != "running") || taskState != attemptState ||
 		activeID == nil || *activeID != model.Attempt.ID || token != model.Attempt.FenceToken ||
 		generation != model.Attempt.OwnerGeneration || runtime != model.Runtime {
 		return ErrDenied

@@ -374,7 +374,7 @@ func (b *Bridge) confirm(ctx context.Context, a workflow.Attempt, want Task, rec
 				if recovered {
 					err = b.Workflow.ConfirmRecovered(ctx, a)
 				} else {
-					err = b.Workflow.ConfirmStarted(ctx, a)
+					err = b.Workflow.ConfirmStarting(ctx, a)
 				}
 				return runtime, err
 			}
@@ -414,7 +414,7 @@ func (b *Bridge) WaitWorkspaceReady(ctx context.Context, a workflow.Attempt) err
 		if err != nil {
 			return err
 		}
-		if run != "active" || state != "running" || !sealed {
+		if run != "active" || (state != "starting" && state != "running") || !sealed {
 			return workflow.ErrFenced
 		}
 		got, err := b.AX.Get(ctx, want.Metadata.Atespace, want.Metadata.Name)
@@ -449,10 +449,10 @@ func (b *Bridge) WaitWorkspaceReady(ctx context.Context, a workflow.Attempt) err
 					if err != nil {
 						return err
 					}
-					if run != "active" || state != "running" || !sealed {
+					if run != "active" || (state != "starting" && state != "running") || !sealed {
 						return workflow.ErrFenced
 					}
-					return nil
+					return b.Workflow.ConfirmStarted(ctx, a)
 				}
 			}
 		}
@@ -506,7 +506,7 @@ func (b *Bridge) stopKnown(ctx context.Context, a workflow.Attempt) error {
 	if err != nil {
 		return err
 	}
-	if (run != "active" && run != "cancel_requested") || state != "running" {
+	if (run != "active" && run != "cancel_requested") || (state != "starting" && state != "running") {
 		return workflow.ErrFenced
 	}
 	if b.RevokeOwner == nil {

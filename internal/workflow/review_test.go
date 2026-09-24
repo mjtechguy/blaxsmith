@@ -66,6 +66,9 @@ func TestReviewPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := store.ConfirmStarting(ctx, attempt); err != nil {
+		t.Fatal(err)
+	}
 	if err := store.ConfirmStarted(ctx, attempt); err != nil {
 		t.Fatal(err)
 	}

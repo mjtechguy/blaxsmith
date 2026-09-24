@@ -58,7 +58,7 @@ func (s *Store) ListUnresolvedAttempts(ctx context.Context, afterOrgID, afterAtt
 		JOIN workflow_runs r ON r.organization_id=a.organization_id AND r.id=a.run_id
 		JOIN workflow_tasks t ON t.organization_id=a.organization_id AND t.id=a.task_id
 		WHERE (a.organization_id,a.id)>($1::uuid,$2::uuid)
-		AND a.state IN ('reserved','reconciling') AND t.state=a.state AND t.active_attempt_id=a.id
+		AND a.state IN ('reserved','starting','reconciling') AND t.state=a.state AND t.active_attempt_id=a.id
 		AND r.state IN ('active','cancel_requested') AND r.graph_sealed
 		ORDER BY a.organization_id,a.id LIMIT $3`, afterOrgID, afterAttemptID, limit)
 	if err != nil {

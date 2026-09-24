@@ -109,6 +109,9 @@ func TestProjectModelAccessRevocationIsScopedAndRepeatable(t *testing.T) {
 	if !errors.Is(err, access.ErrDenied) {
 		t.Fatalf("revoked grant remained authorized: %v", err)
 	}
+	if err := decisionTx.Rollback(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	var auditEvents int
 	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM identity_audit_events
 		WHERE organization_id=$1 AND action='access.project_model.revoked' AND subject_id=$2`, org, item.ID).Scan(&auditEvents); err != nil || auditEvents != 1 {

@@ -34,8 +34,8 @@ func (s *Store) CurrentAttempt(ctx context.Context, a Attempt) (runState, attemp
 	return runState, attemptState, graphSealed, nil
 }
 
-// ConfirmRecovered is separate from normal acknowledgement: only an AX task
-// whose exact spec and live actor have been checked may leave reconciliation.
+// ConfirmRecovered returns a reconciled AX actor to initialization. It remains
+// unresolved until WaitWorkspaceReady confirms WorkspaceReady=SetupComplete.
 func (s *Store) ConfirmRecovered(ctx context.Context, a Attempt) error {
-	return s.transition(ctx, a, "reconciling", "running", "attempt.started")
+	return s.transition(ctx, a, "reconciling", "starting", "attempt.starting")
 }

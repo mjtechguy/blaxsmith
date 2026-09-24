@@ -134,6 +134,16 @@ func TestWorkflowPostgres(t *testing.T) {
 	if _, err := store.AddTask(ctx, org, run.ID, "late", in.BundleSHA256, 1); !errors.Is(err, ErrConflict) {
 		t.Fatalf("changed active graph accepted: %v", err)
 	}
+	if err := store.ConfirmStarted(ctx, first); !errors.Is(err, ErrConflict) {
+		t.Fatalf("attempt started directly from reservation: %v", err)
+	}
+	if err := store.ConfirmStarting(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	starting, err := store.ListUnresolvedAttempts(ctx, "", "", 100)
+	if err != nil || len(starting) != 1 || starting[0].ID != first.ID || starting[0].State != "starting" {
+		t.Fatalf("initializing owner missing from recovery scan: %+v, %v", starting, err)
+	}
 	if err := store.ConfirmStarted(ctx, first); err != nil {
 		t.Fatal(err)
 	}
@@ -164,6 +174,9 @@ func TestWorkflowPostgres(t *testing.T) {
 	second, err := store.ReserveAttempt(ctx, org, run.ID, task)
 	if err != nil || second.OwnerGeneration != 2 || second.ID == first.ID || second.FenceToken == first.FenceToken {
 		t.Fatalf("replacement fence: %+v, %v", second, err)
+	}
+	if err := store.ConfirmStarting(ctx, second); err != nil {
+		t.Fatal(err)
 	}
 	if err := store.ConfirmStarted(ctx, second); err != nil {
 		t.Fatal(err)
@@ -206,7 +219,7 @@ func TestWorkflowPostgres(t *testing.T) {
 		t.Fatalf("active graph mutation: %q, %v", oneShot, err)
 	}
 	events, err := store.EventsAfter(ctx, org, run.ID, 0, 100)
-	if err != nil || len(events) != 10 {
+	if err != nil || len(events) != 12 {
 		t.Fatalf("events: %d, %v", len(events), err)
 	}
 	for i, e := range events {
@@ -254,6 +267,9 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := store.ConfirmStarting(ctx, a); err != nil {
+		t.Fatal(err)
+	}
 	if err := store.ConfirmStarted(ctx, a); err != nil {
 		t.Fatal(err)
 	}
@@ -268,6 +284,9 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	}
 	remainingAttempt, err := store.ReserveAttempt(ctx, org, run.ID, remaining)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ConfirmStarting(ctx, remainingAttempt); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ConfirmStarted(ctx, remainingAttempt); err != nil {
@@ -300,6 +319,9 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	}
 	owner, err := store.ReserveAttempt(ctx, org, activeRun.ID, activeTask)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ConfirmStarting(ctx, owner); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ConfirmStarted(ctx, owner); err != nil {
@@ -338,6 +360,9 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	}
 	raceOwner, err := store.ReserveAttempt(ctx, org, raceRun.ID, raceTask)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ConfirmStarting(ctx, raceOwner); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ConfirmStarted(ctx, raceOwner); err != nil {
@@ -413,6 +438,9 @@ func TestDependencyReservationGatePostgres(t *testing.T) {
 	}
 	a, err := store.ReserveAttempt(ctx, org, run.ID, plan)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ConfirmStarting(ctx, a); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ConfirmStarted(ctx, a); err != nil {

@@ -58,7 +58,7 @@ func (s *Store) BindRuntime(ctx context.Context, a Attempt, b RuntimeBinding) er
 		return err
 	}
 	if activeID != a.ID || token != a.FenceToken || generation != a.OwnerGeneration || taskState != attemptState ||
-		(taskState != "reserved" && taskState != "reconciling" && taskState != "running") {
+		(taskState != "reserved" && taskState != "starting" && taskState != "reconciling" && taskState != "running") {
 		return ErrFenced
 	}
 	var createdID string

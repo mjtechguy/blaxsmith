@@ -41,7 +41,7 @@ func (s *RecoverySweep) Sweep(ctx context.Context, afterOrgID, afterAttemptID st
 		if err := ctx.Err(); err != nil {
 			return batch, errors.Join(append(failures, err)...)
 		}
-		if attempt.State == "reserved" {
+		if attempt.State == "reserved" || attempt.State == "starting" {
 			if err := s.Workflow.MarkUnknown(ctx, attempt); err != nil {
 				if errors.Is(err, workflow.ErrFenced) {
 					batch.Stale++
@@ -61,6 +61,9 @@ func (s *RecoverySweep) Sweep(ctx context.Context, afterOrgID, afterAttemptID st
 		}
 		if err == nil {
 			_, err = bridge.ReconcileUnknown(ctx, attempt)
+		}
+		if err == nil {
+			err = bridge.WaitWorkspaceReady(ctx, attempt)
 		}
 		switch {
 		case err == nil:

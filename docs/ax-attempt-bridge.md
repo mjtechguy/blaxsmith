@@ -11,7 +11,12 @@ ReconcileUnknown and StopKnown for the same attempt across scheduler processes.
 The bridge reads the exact task spec back, then checks the live Substrate
 actor, template UID, image, gVisor class, worker pod/pool, bootstrap signer and
 data-only snapshot settings. It pins that runtime and command digest in the
-workflow ledger before marking the attempt started.
+workflow ledger while the attempt is `starting`. Only after AX reports
+`WorkspaceReady=True/SetupComplete` and the same actor/runtime is read back does
+the ledger emit `attempt.started` and expose the task as `running`.
+Bootstrap owner rows also reject actor-identity changes unless the owner
+generation advances, so stale credentials and runtime receipts cannot be
+reattributed to a replacement actor under the same generation.
 
 An uncertain AX upsert moves the attempt to `reconciling`. Recovery makes no
 new AX write: it requires exact task read-back and a matching live actor.
@@ -25,9 +30,10 @@ The [pinned task-tombstone patch](ax-task-tombstones.md) is a tested proposal
 for that contract; it is not deployed, and the current ephemeral AX Redis
 would lose its tombstones on restart.
 
-`RecoverySweep` now pages current `reserved` and `reconciling` owners after a
-connector restart. It fences interrupted reservations, then performs one
-bounded, read-only reconciliation per attempt. Missing or not-yet-running
+`RecoverySweep` now pages current `reserved`, `starting`, and `reconciling`
+owners after a connector restart. It fences interrupted reservations and
+initializations, performs read-only AX reconciliation, and only publishes a
+recovered attempt after Workspace setup is complete. Missing or not-yet-ready
 actors remain visible as waiting and cannot stall the rest of the page. This
 kernel is PostgreSQL/fake-AX tested, but no long-running connector invokes it
 yet. A missing task remains an operator-resolution case because AX cannot prove
@@ -44,10 +50,11 @@ shared-name dependency for a running attempt, but AX still permits privileged
 writers to mutate those attempt resources and the readback does not prove the
 Substrate dataplane. The signed release opens AX workspace setup; the runner
 creates the model credential file only after local setup completes, though the
-model payload is currently plaintext in runner memory during setup. Dispatch
-then waits for AX `WorkspaceReady=True/SetupComplete` and rechecks the same
-actor/runtime before returning `started`. A setup failure or timeout triggers
-owner revocation and Task/actor-gone proof before retry. Stop removes the
+model payload is currently plaintext in runner memory during setup. The
+workflow remains `starting` while that happens. Dispatch waits for AX
+`WorkspaceReady=True/SetupComplete`, rechecks the same actor/runtime, and only
+then commits `attempt.started`. A setup failure or timeout triggers owner
+revocation and Task/actor-gone proof before retry. Stop removes the
 Workspace and Gateway only after AX Task absence and Substrate actor absence
 are proved. An uncertain activation remains fenced for reconciliation. The
 callback is still not composed in the application or a connector process, so

@@ -231,7 +231,7 @@ a { color: inherit; text-decoration: none; }
 .state-succeeded { background: var(--success-soft); color: var(--success-text); }
 .state-failed, .state-cancelled { background: var(--danger-soft); color: var(--danger-text); }
 .state-blocked { background: var(--danger-soft); color: var(--danger-text); }
-.state-active, .state-reserved, .state-running, .state-reconciling { background: var(--primary-soft); color: var(--primary); }
+.state-active, .state-reserved, .state-starting, .state-running, .state-reconciling { background: var(--primary-soft); color: var(--primary); }
 .summary-value { font-size: 17px !important; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .editor-layout { display: grid; grid-template-columns: minmax(0, 700px) minmax(240px, 340px); gap: 20px; align-items: start; }

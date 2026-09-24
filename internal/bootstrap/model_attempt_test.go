@@ -99,7 +99,7 @@ func modelAttemptFixture(t *testing.T) (*pgxpool.Pool, *Ledger, *access.SecretSt
 	if err := store.BindRuntime(ctx, attempt, runtimeBinding); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ConfirmStarted(ctx, attempt); err != nil {
+	if err := store.ConfirmStarting(ctx, attempt); err != nil {
 		t.Fatal(err)
 	}
 	for _, statement := range []string{

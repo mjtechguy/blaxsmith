@@ -15,6 +15,11 @@ that cluster and attempt; `Scope` is an input, not authentication. The trusted
 caller supplies the enrolled cluster CA to `Redeem`; neither the worker nor
 request body selects it.
 
+PostgreSQL also enforces the owner transition: each update advances the
+generation, reactivation may bind a new actor, and deactivation preserves the
+current actor identity. A stale actor UID cannot be edited in place and then
+presented as the same owner generation.
+
 `Issue` locks the active owner row, cancels any pending challenge for that
 attempt, and stores a random challenge ID and SHA-256 nonce verifier. The raw
 nonce is returned once to the caller and is never stored. The offer expires
