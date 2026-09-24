@@ -49,8 +49,8 @@ func modelOrigin(provider string) string {
 
 // AuthorizeModelInvoke holds share locks on every revocable authority row
 // through the caller's bootstrap send transaction. Raw API-key delivery and
-// owner-only Codex subscription access (oauth_access) are implemented;
-// brokered and short-lived modes fail closed.
+// owner-only Codex subscription access (oauth_access) and gateway brokering
+// (brokered_gateway) are implemented; other modes fail closed.
 func AuthorizeModelInvoke(ctx context.Context, tx pgx.Tx, request ModelInvoke) (Decision, error) {
 	if tx == nil || request.OrganizationID == "" || request.ProjectID == "" || request.AttemptID == "" ||
 		request.BindingID == "" || request.GranteeKind == "" || request.GranteeID == "" ||
@@ -114,6 +114,11 @@ func AuthorizeModelInvoke(ctx context.Context, tx pgx.Tx, request ModelInvoke) (
 func deliveryAllowed(mode, authMethod, provider, ownerKind, ownerID, granteeKind, granteeID string) bool {
 	switch mode {
 	case "native_raw":
+		return authMethod != CodexSubscriptionAuth
+	case "brokered_gateway":
+		// The same credential shapes as native_raw, but the key stays on the
+		// platform and the gateway injects it (docs/model-gateway-plan.md §3).
+		// Personal subscription routes are a later phase (§6).
 		return authMethod != CodexSubscriptionAuth
 	case "oauth_access":
 		return authMethod == CodexSubscriptionAuth && provider == "openai" &&
