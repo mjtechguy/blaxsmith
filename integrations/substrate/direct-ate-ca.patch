@@ -1,0 +1,157 @@
+diff --git a/cmd/kubectl-ate/README.md b/cmd/kubectl-ate/README.md
+index 09ee1c5..df99961 100644
+--- a/cmd/kubectl-ate/README.md
++++ b/cmd/kubectl-ate/README.md
+@@ -70,6 +70,12 @@ These flags can be appended to any command:
+ | `--output` | `-o` | Output format (`table`, `json`, `yaml`) | `table` |
+ | `--trace` | | Enable on-demand tracing for the request | `false` |
+ 
++In a locked-down in-cluster connector, set `KUBECTL_ATE_CA_FILE` to a mounted
++PEM trust bundle, pass `--endpoint` and `--token-file`, and grant the pod no
++Kubernetes API permissions. The CA-file mode is used only with a direct
++endpoint and an explicit token file; it bypasses kubeconfig, port-forwarding,
++ClusterTrustBundle discovery, and implicit ServiceAccount token creation.
++
+ ---
+ 
+ ## Command Reference & Examples
+diff --git a/internal/ateclient/builder.go b/internal/ateclient/builder.go
+index 31763cc..bdfbf0f 100644
+--- a/internal/ateclient/builder.go
++++ b/internal/ateclient/builder.go
+@@ -109,27 +109,40 @@ func NewClient(ctx context.Context, kubeconfigPath, k8sContext, endpoint, tokenF
+ }
+ 
+ func dialDirect(ctx context.Context, kubeconfigPath, k8sContext, endpoint, tokenFile string, traceEnabled bool) (*Client, error) {
+-	config, err := LoadKubeConfig(kubeconfigPath, k8sContext)
+-	if err != nil {
+-		return nil, fmt.Errorf("failed to load kubeconfig: %w", err)
+-	}
++	var clientset *kubernetes.Clientset
++	var tlsCfg *tls.Config
++	if caFile := os.Getenv("KUBECTL_ATE_CA_FILE"); caFile != "" {
++		if tokenFile == "" || tokenFile == "-" {
++			return nil, fmt.Errorf("KUBECTL_ATE_CA_FILE requires an explicit token file")
++		}
++		var err error
++		tlsCfg, err = serverTLSConfigFromCAFile(caFile)
++		if err != nil {
++			return nil, err
++		}
++	} else {
++		config, err := LoadKubeConfig(kubeconfigPath, k8sContext)
++		if err != nil {
++			return nil, fmt.Errorf("failed to load kubeconfig: %w", err)
++		}
+ 
+-	// We fetch a ClusterTrustBundle via the certificates.k8s.io/v1beta1 API in
+-	// serverTLSConfig().  Until we migrate to certificates.k8s.io/v1
+-	// ClusterTrustBundle (which locks us into supporting only k8s 1.37+
+-	// clusters), client-go will print out a warning every time it initializes.
+-	config.WarningHandlerWithContext = &rest.NoWarnings{}
++		// We fetch a ClusterTrustBundle via the certificates.k8s.io/v1beta1 API in
++		// serverTLSConfig(). Until we migrate to certificates.k8s.io/v1
++		// ClusterTrustBundle (which locks us into supporting only k8s 1.37+
++		// clusters), client-go will print out a warning every time it initializes.
++		config.WarningHandlerWithContext = &rest.NoWarnings{}
+ 
+-	clientset, err := kubernetes.NewForConfig(config)
+-	if err != nil {
+-		return nil, fmt.Errorf("failed to create k8s client: %w", err)
+-	}
++		clientset, err = kubernetes.NewForConfig(config)
++		if err != nil {
++			return nil, fmt.Errorf("failed to create k8s client: %w", err)
++		}
+ 
+-	// Verify the server before attaching the bearer token below: the token
+-	// must never be sent over an unauthenticated channel.
+-	tlsCfg, err := serverTLSConfig(ctx, clientset)
+-	if err != nil {
+-		return nil, err
++		// Verify the server before attaching the bearer token below: the token
++		// must never be sent over an unauthenticated channel.
++		tlsCfg, err = serverTLSConfig(ctx, clientset)
++		if err != nil {
++			return nil, err
++		}
+ 	}
+ 
+ 	var opts []grpc.DialOption
+@@ -246,11 +259,33 @@ func serverTLSConfig(ctx context.Context, clientset kubernetes.Interface) (*tls.
+ 		return nil, fmt.Errorf("no live ClusterTrustBundle found for signer %q", serviceDNSSignerName)
+ 	}
+ 
+-	return &tls.Config{
+-		MinVersion: tls.VersionTLS13,
+-		RootCAs:    pool,
+-		ServerName: apiServerName,
+-	}, nil
++	return serverTLSConfigFromPool(pool)
++}
++
++// serverTLSConfigFromCAFile supports in-cluster clients that receive the
++// pinned ate-api trust bundle as configuration and have no Kubernetes API
++// permissions. The explicit bearer token is still sent only after TLS
++// hostname and CA validation.
++func serverTLSConfigFromCAFile(path string) (*tls.Config, error) {
++	if path == "" {
++		return nil, fmt.Errorf("CA file is required")
++	}
++	caPEM, err := os.ReadFile(path)
++	if err != nil {
++		return nil, fmt.Errorf("reading ate-api CA file: %w", err)
++	}
++	pool := x509.NewCertPool()
++	if !pool.AppendCertsFromPEM(caPEM) {
++		return nil, fmt.Errorf("ate-api CA file %q contains no valid certificates", path)
++	}
++	return serverTLSConfigFromPool(pool)
++}
++
++func serverTLSConfigFromPool(pool *x509.CertPool) (*tls.Config, error) {
++	if pool == nil {
++		return nil, fmt.Errorf("ate-api trust pool is required")
++	}
++	return &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: pool, ServerName: apiServerName}, nil
+ }
+ 
+ // bearerTokenDialOption attaches the configured token, or mints an ate-client
+diff --git a/internal/ateclient/builder_test.go b/internal/ateclient/builder_test.go
+index a11528b..13f1290 100644
+--- a/internal/ateclient/builder_test.go
++++ b/internal/ateclient/builder_test.go
+@@ -195,3 +195,33 @@ func TestServerTLSConfigErrors(t *testing.T) {
+ 		})
+ 	}
+ }
++
++func TestServerTLSConfigFromCAFileAvoidsKubeconfig(t *testing.T) {
++	caFile := filepath.Join(t.TempDir(), "ate-api-ca.pem")
++	if err := os.WriteFile(caFile, testCAPEM(t, "ate-api-ca"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("KUBECTL_ATE_CA_FILE", caFile)
++	tokenFile := filepath.Join(t.TempDir(), "token")
++	if err := os.WriteFile(tokenFile, []byte("synthetic-token\n"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++
++	client, err := NewClient(context.Background(), filepath.Join(t.TempDir(), "missing-kubeconfig"), "",
++		"127.0.0.1:443", tokenFile, false)
++	if err != nil {
++		t.Fatalf("NewClient with explicit CA/token and absent kubeconfig: %v", err)
++	}
++	client.Close()
++}
++
++func TestServerTLSConfigFromCAFileRequiresExplicitToken(t *testing.T) {
++	caFile := filepath.Join(t.TempDir(), "ate-api-ca.pem")
++	if err := os.WriteFile(caFile, testCAPEM(t, "ate-api-ca"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("KUBECTL_ATE_CA_FILE", caFile)
++	if _, err := NewClient(context.Background(), "", "", "127.0.0.1:443", "", false); err == nil {
++		t.Fatal("NewClient with explicit CA and implicit token succeeded")
++	}
++}

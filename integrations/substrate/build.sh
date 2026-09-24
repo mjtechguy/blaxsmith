@@ -26,13 +26,16 @@ git apply --check --whitespace=error-all "$integration/bootstrap-actor-fence.pat
 git apply "$integration/bootstrap-actor-fence.patch"
 git apply --check --whitespace=error-all "$integration/command-exit-router-auth.patch"
 git apply "$integration/command-exit-router-auth.patch"
-go test ./cmd/atenet/... ./internal/atunnel ./cmd/ateom-gvisor
-go vet ./cmd/atenet/... ./internal/atunnel ./cmd/ateom-gvisor
+git apply --check --whitespace=error-all "$integration/direct-ate-ca.patch"
+git apply "$integration/direct-ate-ca.patch"
+go test ./cmd/atenet/... ./internal/atunnel ./cmd/ateom-gvisor ./internal/ateclient ./cmd/kubectl-ate/...
+go vet ./cmd/atenet/... ./internal/atunnel ./cmd/ateom-gvisor ./internal/ateclient ./cmd/kubectl-ate/...
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o "$output/atenet" ./cmd/atenet
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o "$output/ateom-gvisor" ./cmd/ateom-gvisor
-python3 - "$output" "$integration/egress-policy.patch" "$integration/actor-attestation.patch" "$integration/bootstrap-router-auth.patch" "$integration/bootstrap-actor-fence.patch" "$integration/command-exit-router-auth.patch" "$expected" <<'PY'
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o "$output/kubectl-ate" ./cmd/kubectl-ate
+python3 - "$output" "$integration/egress-policy.patch" "$integration/actor-attestation.patch" "$integration/bootstrap-router-auth.patch" "$integration/bootstrap-actor-fence.patch" "$integration/command-exit-router-auth.patch" "$integration/direct-ate-ca.patch" "$expected" <<'PY'
 import hashlib, json, pathlib, subprocess, sys
-output, patch, attestation_patch, router_patch, fence_patch, exit_patch, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5]), pathlib.Path(sys.argv[6]), sys.argv[7]
+output, patch, attestation_patch, router_patch, fence_patch, exit_patch, direct_ca_patch, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5]), pathlib.Path(sys.argv[6]), pathlib.Path(sys.argv[7]), sys.argv[8]
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 record = {
     'upstream_commit': revision,
@@ -41,10 +44,12 @@ record = {
     'router_auth_patch_sha256': sha(router_patch),
     'actor_fence_patch_sha256': sha(fence_patch),
     'command_exit_router_auth_patch_sha256': sha(exit_patch),
+    'direct_ate_ca_patch_sha256': sha(direct_ca_patch),
     'go_version': subprocess.check_output(['go', 'version'], text=True).strip(),
     'platform': 'linux/amd64',
     'binary_sha256': sha(output / 'atenet'),
     'ateom_gvisor_sha256': sha(output / 'ateom-gvisor'),
+    'kubectl_ate_sha256': sha(output / 'kubectl-ate'),
 }
 (output / 'provenance.json').write_text(json.dumps(record, indent=2) + '\n')
 PY

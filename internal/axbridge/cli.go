@@ -8,7 +8,10 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
@@ -19,9 +22,12 @@ import (
 // gRPC client uses plaintext even for an https URL, so a non-loopback endpoint
 // is rejected instead of implying transport security it does not provide.
 type CLI struct {
-	AXPath  string
-	Server  string
-	AtePath string
+	AXPath       string
+	Server       string
+	AtePath      string
+	AteEndpoint  string
+	AteTokenFile string
+	AteCAFile    string
 }
 
 func (c CLI) ax(ctx context.Context, input []byte, args ...string) ([]byte, error) {
@@ -101,20 +107,60 @@ func (c CLI) Delete(ctx context.Context, space, name string) error {
 	return err
 }
 
+func (c CLI) ateCommand(ctx context.Context, args ...string) (*exec.Cmd, error) {
+	if c.AtePath == "" {
+		return nil, errors.New("Substrate CLI is not configured")
+	}
+	cmdArgs := make([]string, 0, len(args)+4)
+	cmdEnv := os.Environ()
+	if c.AteEndpoint != "" || c.AteTokenFile != "" || c.AteCAFile != "" {
+		host, port, err := net.SplitHostPort(c.AteEndpoint)
+		portNumber, portErr := strconv.Atoi(port)
+		if err != nil || host == "" || strings.ContainsAny(host, "/?#@\\ \t\r\n") ||
+			portErr != nil || portNumber < 1 || portNumber > 65535 ||
+			!filepath.IsAbs(c.AteTokenFile) || !filepath.IsAbs(c.AteCAFile) {
+			return nil, errors.New("direct Substrate access requires a host:port endpoint and absolute token/CA files")
+		}
+		cmdArgs = append(cmdArgs, "--endpoint", c.AteEndpoint, "--token-file", c.AteTokenFile)
+		cmdEnv = replaceEnv(cmdEnv, "KUBECTL_ATE_CA_FILE", c.AteCAFile)
+	}
+	cmdArgs = append(cmdArgs, args...)
+	cmd := exec.CommandContext(ctx, c.AtePath, cmdArgs...) // #nosec G204 -- pinned Substrate executable with separate argv; no shell
+	cmd.Env = cmdEnv
+	return cmd, nil
+}
+
+func replaceEnv(env []string, key, value string) []string {
+	result := env[:0]
+	for _, entry := range env {
+		name, _, _ := strings.Cut(entry, "=")
+		if name != key {
+			result = append(result, entry)
+		}
+	}
+	return append(result, key+"="+value)
+}
+
+func (c CLI) ate(ctx context.Context, args ...string) ([]byte, error) {
+	cmd, err := c.ateCommand(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	out, err := cmd.Output()
+	if err == nil {
+		return out, nil
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && strings.Contains(string(exit.Stderr), "code = NotFound") {
+		return nil, ErrNotFound
+	}
+	return nil, fmt.Errorf("Substrate read: %w", err)
+}
+
 // Current reads AX's underlying actor, template, and pool from Substrate.
 // Neither the task manifest nor the guest selects these observed values.
 func (c CLI) Current(ctx context.Context, space, name string) (bootstrap.Runtime, error) {
-	read := func(args ...string) ([]byte, error) {
-		if c.AtePath == "" {
-			return nil, errors.New("Substrate CLI is not configured")
-		}
-		out, err := exec.CommandContext(ctx, c.AtePath, args...).Output() // #nosec G204 -- pinned Substrate executable with separate argv; no shell
-		if err != nil {
-			return nil, fmt.Errorf("Substrate read: %w", err)
-		}
-		return out, nil
-	}
-	data, err := read("get", "actor", name, "-a", space, "-o", "json")
+	data, err := c.ate(ctx, "get", "actor", name, "-a", space, "-o", "json")
 	if err != nil {
 		return bootstrap.Runtime{}, err
 	}
@@ -136,7 +182,7 @@ func (c CLI) Current(ctx context.Context, space, name string) (bootstrap.Runtime
 		a.ActorTemplate.Atespace == "" || a.ActorTemplate.Name == "" {
 		return bootstrap.Runtime{}, ErrPending
 	}
-	data, err = read("get", "actor-template", a.ActorTemplate.Name, "-a", a.ActorTemplate.Atespace, "-o", "json")
+	data, err = c.ate(ctx, "get", "actor-template", a.ActorTemplate.Name, "-a", a.ActorTemplate.Atespace, "-o", "json")
 	if err != nil {
 		return bootstrap.Runtime{}, err
 	}
@@ -184,13 +230,9 @@ func (c CLI) Current(ctx context.Context, space, name string) (bootstrap.Runtime
 // Gone confirms that the exact Substrate actor identity is absent after AX's
 // two-phase delete. A failed control-plane read never counts as absence.
 func (c CLI) Gone(ctx context.Context, space, name string) (bool, error) {
-	if c.AtePath == "" {
-		return false, errors.New("Substrate CLI is not configured")
-	}
-	out, err := exec.CommandContext(ctx, c.AtePath, "get", "actor", name, "-a", space, "-o", "json").Output() // #nosec G204 -- pinned Substrate executable with separate argv; no shell
+	out, err := c.ate(ctx, "get", "actor", name, "-a", space, "-o", "json")
 	if err != nil {
-		var exit *exec.ExitError
-		if errors.As(err, &exit) && strings.Contains(string(exit.Stderr), "code = NotFound") {
+		if errors.Is(err, ErrNotFound) {
 			return true, nil
 		}
 		return false, err

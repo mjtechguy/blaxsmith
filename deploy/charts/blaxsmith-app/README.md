@@ -7,6 +7,8 @@ and applies/verifies migrations before binding. In `ha.enabled` mode, app pods
 only verify that every embedded migration has already been applied; a missing,
 unknown, or edited migration blocks readiness. No AX connector or agent
 workers are installed by this chart.
+Run creation is deliberately unavailable; no chart value can enable it before
+the separate connector and durable dispatch/reconciliation loops are wired.
 
 Supply an immutable `repository@sha256:<manifest digest>` app image and three
 existing namespace Secrets: a `kubernetes.io/tls` Secret with `tls.crt` and

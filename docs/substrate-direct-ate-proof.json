@@ -1,0 +1,24 @@
+{
+  "check": "direct-kubectl-ate-without-kubeconfig",
+  "result": "passed",
+  "tested_at": "2026-09-24T02:10:00Z",
+  "substrate_commit": "672533541dbfcd29084e4de2475267088bda3651",
+  "direct_ate_ca_patch_sha256": "f3cd62760754a5b0a919b90a09d49dde71d4bf1d8295fbc3bd17d8a63f41b3a9",
+  "binary_sha256": "8b63542a649c4dc0de06c3c05560dead7a83fc2cc5e93221224d07b1be322e44",
+  "credential": {
+    "service_account": "ate-system/blaxsmith-connector",
+    "audience": "api.ate-system.svc",
+    "source": "Kubernetes TokenRequest with 10-minute TTL; temporary token file removed after probe"
+  },
+  "trust": "live Substrate service-DNS ClusterTrustBundle",
+  "kubeconfig": "explicitly nonexistent path",
+  "operation": "get atespaces",
+  "response_validated": true,
+  "persistent_resources_created": false,
+  "ax_tasks_or_actors_changed": false,
+  "not_proven": [
+    "product connector pod and projected-token rotation",
+    "product enrollment, dispatch, or lifecycle reconciliation",
+    "fine-grained ate-api authorization; this pin grants authenticated providers whole-control-plane RPC access"
+  ]
+}

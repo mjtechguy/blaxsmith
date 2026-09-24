@@ -36,3 +36,19 @@ server identity, endpoint/command policy, egress, secret binding, native CLI
 configuration, and revocation proof. Hooks remain unsupported until they have
 an explicit lifecycle and execution policy. The adapter stays pinned and
 noninteractive, and launch stays disabled until end-to-end AX verification.
+
+## Substrate connector authority
+
+At the pinned Substrate revision, `kubectl-ate --endpoint` still loads
+kubeconfig to read the ate-api ClusterTrustBundle. The reviewed
+[`direct-ate-ca.patch`](../integrations/substrate/direct-ate-ca.patch) adds a
+direct mode that uses a mounted CA file and explicit token file without
+Kubernetes API permissions. The token authenticates the connector, but the
+pinned ate-api actor methods do not enforce fine-grained caller authorization;
+the connector therefore remains trusted for the whole registered AX control
+plane. Blaxsmith must authorize every assignment, keep the AX API private to
+the connector, and preserve that cluster as a trust boundary until the AX API
+provides enforced scoping. This connector identity does not replace a user or
+provider Connection, Grant, Binding, or Access Lease. The [pinned Substrate
+authentication contract](https://github.com/agent-substrate/substrate/blob/672533541dbfcd29084e4de2475267088bda3651/docs/authentication.md)
+states the current whole-control-plane authorization limit.

@@ -25,6 +25,10 @@ grep -F -q 'type: ClusterIP' "$rendered"
 grep -F -q 'automountServiceAccountToken: false' "$rendered"
 grep -F -q 'readOnlyRootFilesystem: true' "$rendered"
 grep -F -q 'scheme: HTTPS' "$rendered"
+if grep -F -q 'BLAXSMITH_RUN_LAUNCH_ENABLED' "$rendered"; then
+  echo 'application chart unexpectedly exposes an unbacked run-launch switch' >&2
+  exit 1
+fi
 grep -F -q 'name: BLAXSMITH_DATABASE_URL' "$rendered"
 grep -F -q 'defaultMode: 288' "$rendered"
 if grep -F -q 'name: database-ca' "$rendered"; then

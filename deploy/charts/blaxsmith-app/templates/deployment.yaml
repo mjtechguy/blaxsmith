@@ -90,8 +90,6 @@ spec:
             - --static-dir
             - /srv
           env:
-            - name: BLAXSMITH_RUN_LAUNCH_ENABLED
-              value: {{ ternary "1" "0" .Values.runLaunchEnabled | quote }}
             - name: BLAXSMITH_DATABASE_URL
               valueFrom:
                 secretKeyRef:
