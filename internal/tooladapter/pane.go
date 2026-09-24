@@ -232,7 +232,7 @@ type redactor struct{ w io.Writer }
 
 func (r redactor) Write(p []byte) (int, error) {
 	out := p
-	for _, name := range []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY"} {
+	for _, name := range []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY"} {
 		if key := os.Getenv(name); len(key) >= 8 {
 			out = bytes.ReplaceAll(out, []byte(key), []byte("[redacted]"))
 		}

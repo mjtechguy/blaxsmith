@@ -332,7 +332,7 @@ func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[ap
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			errors.New("implement stages push a run branch; select a Git connection with write access on the project source"))
 	}
-	if err := s.preflightFrozenRun(ctx, caller.OrganizationID, req.Msg.ProjectId, repositoryURL, bundle); err != nil {
+	if err := s.preflightFrozenRun(ctx, caller.OrganizationID, req.Msg.ProjectId, caller.PrincipalID, repositoryURL, bundle); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("run recipe, model access, worker image, or AX egress is not ready"))
 	}
 	run, err := s.store.CreateFrozenRun(ctx, workflow.FrozenRunInput{
@@ -385,7 +385,7 @@ func (s *workflowService) requireDispatch(ctx context.Context) error {
 	return s.dispatchReady(checkCtx)
 }
 
-func (s *workflowService) preflightFrozenRun(ctx context.Context, orgID, projectID, repositoryURL string, bundle *recipe.Bundle) error {
+func (s *workflowService) preflightFrozenRun(ctx context.Context, orgID, projectID, initiator, repositoryURL string, bundle *recipe.Bundle) error {
 	if s == nil || s.dispatcher == nil || s.dispatcher.Bridge == nil || bundle == nil {
 		return dispatch.ErrNotReady
 	}
@@ -407,12 +407,12 @@ func (s *workflowService) preflightFrozenRun(ctx context.Context, orgID, project
 		if err != nil {
 			return err
 		}
-		selection, err := s.store.GetProjectModelGrant(ctx, orgID, projectID, provider, model)
+		selection, err := s.store.ResolveModelGrant(ctx, orgID, projectID, initiator, provider, model)
 		if err != nil {
 			return err
 		}
 		if err := s.dispatcher.PreflightModel(ctx, access.ModelGrant{OrganizationID: orgID, ProjectID: projectID,
-			GrantID: selection.GrantID, GranteeKind: "workload", GranteeID: selection.GranteeID,
+			GrantID: selection.GrantID, GranteeKind: selection.GranteeKind, GranteeID: selection.GranteeID,
 			Provider: provider, Model: model}); err != nil {
 			return err
 		}
@@ -438,7 +438,7 @@ func launchProviderModel(profile recipe.Profile) (string, string, error) {
 		return "anthropic", profile.Model, nil
 	case "opencode":
 		provider, model, ok := strings.Cut(profile.Model, "/")
-		if ok && (provider == "openai" || provider == "anthropic") && model != "" && !strings.Contains(model, "/") {
+		if ok && access.ModelOrigin(provider) != "" && model != "" && !strings.Contains(model, "/") {
 			return provider, model, nil
 		}
 	}

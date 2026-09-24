@@ -54,8 +54,7 @@ func NewModelAttemptConnector(base Connector, db *pgxpool.Pool, secrets *access.
 	}
 	if model.Git != nil && (model.Git.Read.OrganizationID != model.Attempt.OrganizationID ||
 		model.Git.Read.ProjectID != model.Invoke.ProjectID || model.Git.Read.AttemptID != model.Attempt.ID ||
-		model.Git.Read.BindingID == "" || model.Git.Read.GranteeKind != model.Invoke.GranteeKind ||
-		model.Git.Read.GranteeID != model.Invoke.GranteeID || model.Git.Read.PolicyVersion <= 0 ||
+		model.Git.Read.BindingID == "" || !gitGranteeMatches(model.Git.Read, model.Invoke) || model.Git.Read.PolicyVersion <= 0 ||
 		model.Git.Username == "" || len(model.Git.Username) > 128 ||
 		strings.ContainsAny(model.Git.Username, "\r\n\x00")) {
 		return Connector{}, ErrDenied
@@ -284,4 +283,12 @@ func checkModelWorkflow(ctx context.Context, tx pgx.Tx, model ModelAttempt, phas
 		return ErrDenied
 	}
 	return nil
+}
+
+// gitGranteeMatches: Git is always read by the project's dispatcher workload
+// or the same grantee as the model. A personal model grant (grantee user)
+// still pairs with the organization's dispatcher Git grant (plan V-07).
+func gitGranteeMatches(git access.GitRead, invoke access.ModelInvoke) bool {
+	return (git.GranteeKind == invoke.GranteeKind && git.GranteeID == invoke.GranteeID) ||
+		(invoke.GranteeKind == "user" && git.GranteeKind == "workload" && git.GranteeID == access.DispatcherGrantee)
 }

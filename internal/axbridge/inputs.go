@@ -211,7 +211,7 @@ func (b *Bridge) checkGateway(ctx context.Context, gateway Gateway, name, space,
 	}
 	if b.GatewayEgressMode == "open-dev" {
 		hosts := gateway.Spec.Egress.Allowlist.Hosts
-		if gitfetch.Validate(repositoryURL, "") == nil && (provider == "openai" || provider == "anthropic") &&
+		if gitfetch.Validate(repositoryURL, "") == nil && providerHost(provider) != "" &&
 			len(hosts) == 1 && hosts[0].Host == "*" && hosts[0].Port == 0 && len(hosts[0].Other) == 0 {
 			return nil
 		}
@@ -227,13 +227,8 @@ func (b *Bridge) checkGateway(ctx context.Context, gateway Gateway, name, space,
 	if err != nil {
 		return ErrInputs
 	}
-	providerHost := ""
-	switch provider {
-	case "openai":
-		providerHost = "api.openai.com"
-	case "anthropic":
-		providerHost = "api.anthropic.com"
-	default:
+	providerHost := providerHost(provider)
+	if providerHost == "" {
 		return ErrInputs
 	}
 	lookup := b.LookupIPv4
@@ -293,4 +288,17 @@ func emptyWorkspaceSpec(spec map[string]any) bool {
 		return false
 	}
 	return true
+}
+
+// providerHost is the one model endpoint host an attempt's egress allows.
+func providerHost(provider string) string {
+	switch provider {
+	case "openai":
+		return "api.openai.com"
+	case "anthropic":
+		return "api.anthropic.com"
+	case "opencode", "opencode-go":
+		return "opencode.ai"
+	}
+	return ""
 }

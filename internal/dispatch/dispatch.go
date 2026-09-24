@@ -189,7 +189,12 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		outcome.Err = err
 		return outcome
 	}
-	selection, err := d.Workflow.GetProjectModelGrant(ctx, candidate.OrganizationID, candidate.ProjectID, provider, model)
+	initiator, err := d.Workflow.RunInitiator(ctx, candidate.OrganizationID, candidate.RunID)
+	if err != nil {
+		outcome.Err = err
+		return outcome
+	}
+	selection, err := d.Workflow.ResolveModelGrant(ctx, candidate.OrganizationID, candidate.ProjectID, initiator, provider, model)
 	if err != nil {
 		outcome.Err = err
 		return outcome
@@ -218,7 +223,7 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		return outcome
 	}
 	grant := access.ModelGrant{OrganizationID: candidate.OrganizationID, ProjectID: candidate.ProjectID,
-		GrantID: selection.GrantID, GranteeKind: "workload", GranteeID: selection.GranteeID,
+		GrantID: selection.GrantID, GranteeKind: selection.GranteeKind, GranteeID: selection.GranteeID,
 		Provider: provider, Model: model}
 	authority, err := d.preflightAuthority(ctx, grant)
 	if err != nil {
@@ -285,7 +290,7 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		return outcome
 	}
 	invoke := access.ModelInvoke{OrganizationID: candidate.OrganizationID, ProjectID: candidate.ProjectID,
-		AttemptID: attempt.ID, BindingID: bindingID, GranteeKind: "workload", GranteeID: selection.GranteeID,
+		AttemptID: attempt.ID, BindingID: bindingID, GranteeKind: selection.GranteeKind, GranteeID: selection.GranteeID,
 		Provider: provider, Model: model, PolicyVersion: authority.PolicyVersion}
 	if err := d.Activate(ctx, attempt, runtime, runtimeBinding, invoke); err != nil {
 		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
@@ -352,7 +357,7 @@ func providerModel(profile recipe.Profile) (string, string, error) {
 		return "anthropic", profile.Model, nil
 	case "opencode":
 		provider, model, ok := strings.Cut(profile.Model, "/")
-		if ok && (provider == "openai" || provider == "anthropic") && model != "" && !strings.Contains(model, "/") {
+		if ok && access.ModelOrigin(provider) != "" && model != "" && !strings.Contains(model, "/") {
 			return provider, model, nil
 		}
 	}

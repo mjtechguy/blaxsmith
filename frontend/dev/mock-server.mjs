@@ -121,6 +121,14 @@ const agentLines = ["\x1b[36mâº\x1b[0m Read(internal/export/handler.go)", "  âŽ
 
 // Connect unary JSON handlers.
 const connectError = (status, code, message) => ({ status, body: { code, message } });
+const hub = [];
+let deviceStarted = 0;
+let gitHubApp = { clientId: "", configured: false };
+function hubAdd(fields) {
+  const connection = { id: `conn-${hub.length + 1}`, ownerName: "", label: "", state: "active", grants: [], uses: [], lastUsedAt: "", createdAt: now(), modelCount: 0, modelsCheckedAt: "", modelsError: "", canManage: true, ...fields };
+  hub.push(connection);
+  return { connection };
+}
 const rpc = {
   GetCsrf: () => ({ token: "A".repeat(43) }),
   CurrentSession: () => ({ session: { organizationId: "org-demo", principalId, role: "owner", accessExpiresAt: new Date(Date.now() + 3_600_000).toISOString() } }),
@@ -219,6 +227,25 @@ const rpc = {
     auditEvent("access.grant.revoked", grantId);
     return { grantId };
   },
+  // ConnectionService: an in-memory hub. No handler ever echoes a secret.
+  ListConnections: ({ scope = "", projectId: pid = "" }) => ({ connections: hub.filter((c) => scope === "project_available" ? c.scope === "organization" && c.grants.some((g) => g.projectId === pid) : c.scope === scope && (scope !== "project" || c.ownerId === pid)) }),
+  CreateApiKeyConnection: ({ scope, projectId: pid = "", provider, label = "" }) => hubAdd({ scope, ownerId: scope === "project" ? pid : scope === "personal" ? principalId : "org-demo", kind: "api_key", provider, label, account: `${provider} key`, modelCount: 3, modelsCheckedAt: now() }),
+  CreateGitTokenConnection: ({ scope, projectId: pid = "", host, username }) => hubAdd({ scope, ownerId: scope === "project" ? pid : "org-demo", kind: "git", provider: host === "gitlab.com" ? "gitlab" : "github", account: username }),
+  CreateCodexSubscription: () => hubAdd({ scope: "personal", ownerId: principalId, kind: "subscription", provider: "codex", account: "acct-demo", modelCount: 2, modelsCheckedAt: now() }),
+  StartCodexDeviceLogin: () => { deviceStarted = Date.now(); return { loginId: "login-1", verificationUrl: "https://auth.openai.com/codex/device", userCode: "ABCD-1234", intervalSeconds: 2, expiresAt: new Date(Date.now() + 900_000).toISOString() }; },
+  PollCodexDeviceLogin: () => Date.now() - deviceStarted < 6_000 ? { state: "pending" } : { state: "connected", connection: rpc.CreateCodexSubscription().connection },
+  ListConnectionModels: ({ harness = "" }) => ({ checkedAt: now(), models: [{ id: "gpt-5.6-luna", displayName: "GPT 5.6 Luna", contextTokens: 400000, harnesses: ["codex", "opencode"] }, { id: "claude-opus-5-5", displayName: "Claude Opus 5.5", contextTokens: 200000, harnesses: ["claude-code", "opencode"] }].filter((m) => !harness || m.harnesses.includes(harness)) }),
+  RefreshConnectionModels: () => ({ valid: true, modelCount: 2, checkedAt: now() }),
+  GrantConnection: ({ connectionId, projectId: pid = "", granteeKind, granteeId = "" }) => { const grant = { id: `grant-${hub.length}-${Date.now()}`, projectId: pid, projectName: pid ? "Demo project" : "", granteeKind, granteeId, createdAt: now() }; hub.find((c) => c.id === connectionId)?.grants.push(grant); return { grant }; },
+  RevokeConnectionGrant: ({ grantId }) => { for (const c of hub) c.grants = c.grants.filter((g) => g.id !== grantId); return {}; },
+  AddConnectionUse: ({ connectionId, projectId: pid, model }) => { const c = hub.find((x) => x.id === connectionId); const use = { id: `use-${Date.now()}`, projectId: pid, projectName: "Demo project", model, granteeKind: c?.scope === "personal" ? "user" : "workload", createdAt: now() }; c?.uses.push(use); return { use }; },
+  RemoveConnectionUse: ({ useId }) => { for (const c of hub) c.uses = c.uses.filter((u) => u.id !== useId); return {}; },
+  RevokeConnection: ({ connectionId }) => { const c = hub.find((x) => x.id === connectionId); if (c) c.state = "revoked"; return {}; },
+  ListGitRepositories: ({ query = "" }) => ({ repositories: [{ fullName: "example/blaxsmith-demo", cloneUrl: "https://github.com/example/blaxsmith-demo.git", defaultBranch: "main", private: true }, { fullName: "example/billing", cloneUrl: "https://github.com/example/billing.git", defaultBranch: "trunk" }].filter((r) => r.fullName.includes(query)) }),
+  ListGitBranches: () => ({ branches: ["main", "develop", "release/1.0"] }),
+  GetGitHubApp: () => ({ clientId: gitHubApp.clientId, configured: gitHubApp.configured, callbackUrl: "http://localhost:5173/oauth/github/callback" }),
+  SetGitHubApp: ({ clientId, clientSecret = "" }) => { gitHubApp = { clientId, configured: gitHubApp.configured || Boolean(clientSecret) }; return gitHubApp; },
+  StartGitHubConnect: ({ returnTo = "/admin/connections" }) => { hubAdd({ scope: "organization", ownerId: "org-demo", kind: "git", provider: "github", account: "octocat" }); return { authorizeUrl: `${returnTo}?github=connected` }; },
 };
 
 function minutesAgo(n) { return new Date(Date.now() - n * 60_000).toISOString(); }

@@ -54,6 +54,7 @@ type Invocation struct {
 	skills         []string
 	skillNames     []string
 	skillArtifacts []ArtifactDigest
+	model          string        // explicit provider/model, pinned in OpenCode's config too
 	timeout        time.Duration // idle timeout
 	maxRuntime     time.Duration // total cap; zero is unlimited
 	maxOutputBytes int
@@ -123,7 +124,7 @@ func Prepare(runtime Runtime, profile recipe.Profile, prompt string, timeout tim
 	default:
 		return Invocation{}, fmt.Errorf("%w: harness %q", ErrBlocked, profile.Harness)
 	}
-	return Invocation{runtime: runtime, args: args, resume: resume, skills: append([]string(nil), profile.Skills...), skillNames: skillNames, timeout: timeout, maxOutputBytes: maxOutputBytes}, nil
+	return Invocation{runtime: runtime, args: args, resume: resume, skills: append([]string(nil), profile.Skills...), skillNames: skillNames, model: profile.Model, timeout: timeout, maxOutputBytes: maxOutputBytes}, nil
 }
 
 // Run checks the executable bytes and version in the pod, then bounds elapsed
@@ -176,7 +177,9 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 			map[string]string{"action": "read", "resource": "*.env.*", "effect": "deny"},
 			map[string]string{"action": "read", "resource": "*.env.example", "effect": "allow"},
 		)
-		data, err := json.Marshal(map[string]any{"update": "disable", "permissions": permissions})
+		// The model stays explicit (provider/model) in config and argv, so no
+		// ambient default provider is ever picked.
+		data, err := json.Marshal(map[string]any{"update": "disable", "model": in.model, "permissions": permissions})
 		if err != nil {
 			return nil, err
 		}
@@ -199,7 +202,7 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 	seen := map[string]bool{}
 	for _, entry := range credentialEnv {
 		key, _, ok := strings.Cut(entry, "=")
-		if !ok || (key != "OPENAI_API_KEY" && key != "ANTHROPIC_API_KEY") || seen[key] || strings.ContainsRune(entry, 0) {
+		if !ok || (key != "OPENAI_API_KEY" && key != "ANTHROPIC_API_KEY" && key != "OPENCODE_API_KEY") || seen[key] || strings.ContainsRune(entry, 0) {
 			return nil, fmt.Errorf("%w: forbidden environment key", ErrBlocked)
 		}
 		seen[key] = true

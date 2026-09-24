@@ -27,7 +27,7 @@ func (s *Store) ListGitConnections(ctx context.Context, orgID string) ([]GitConn
 	rows, err := s.pool.Query(ctx, `SELECT c.id,substr(p.origin,9),c.external_account_id,c.created_at
 		FROM access_connections c JOIN access_provider_registrations p
 			ON p.organization_id=c.organization_id AND p.id=c.provider_registration_id
-		WHERE c.organization_id=$1 AND c.state='active' AND p.state='active' AND p.provider_kind='git'
+		WHERE c.organization_id=$1 AND c.owner_kind='organization' AND c.state='active' AND p.state='active' AND p.provider_kind='git'
 		ORDER BY c.created_at,c.id`, orgID)
 	if err != nil {
 		return nil, err
@@ -67,27 +67,13 @@ func (s *Store) CreateGitConnectionAs(ctx context.Context, caller identity.Calle
 	if err := lockProjectModelAccessAdmin(ctx, tx, caller); err != nil {
 		return GitConnection{}, err
 	}
-	var providerID string
-	if err := tx.QueryRow(ctx, `INSERT INTO access_provider_registrations
-		(organization_id,id,provider_kind,origin,delivery_modes,state)
-		VALUES ($1,gen_random_uuid()::text,'git',$2,ARRAY['native_raw'],'active') RETURNING id`,
-		caller.OrganizationID, "https://"+host).Scan(&providerID); err != nil {
+	id, err := insertGitConnection(ctx, tx, caller, "organization", caller.OrganizationID, host, username, "token", token, secrets)
+	if err != nil {
 		return GitConnection{}, err
 	}
-	c := GitConnection{Host: host, Username: username}
-	if err := tx.QueryRow(ctx, `INSERT INTO access_connections
-		(organization_id,id,owner_kind,owner_id,provider_registration_id,external_account_id,auth_method,state)
-		VALUES ($1,gen_random_uuid()::text,'organization',$1,$2,$3,'token','active') RETURNING id,created_at`,
-		caller.OrganizationID, providerID, username).Scan(&c.ID, &c.CreatedAt); err != nil {
-		return GitConnection{}, err
-	}
-	if _, err := secrets.RotateTx(ctx, tx, caller.OrganizationID, c.ID, 0, token, nil); err != nil {
-		return GitConnection{}, err
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO identity_audit_events
-		(organization_id,actor_kind,actor_id,action,subject_id)
-		VALUES ($1,'principal',$2,'access.git_connection.created',$3)`,
-		caller.OrganizationID, caller.PrincipalID, c.ID); err != nil {
+	c := GitConnection{ID: id, Host: host, Username: username}
+	if err := tx.QueryRow(ctx, `SELECT created_at FROM access_connections WHERE organization_id=$1 AND id=$2`,
+		caller.OrganizationID, id).Scan(&c.CreatedAt); err != nil {
 		return GitConnection{}, err
 	}
 	return c, tx.Commit(ctx)

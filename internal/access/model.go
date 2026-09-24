@@ -29,12 +29,19 @@ type ModelInvoke struct {
 
 func (r ModelInvoke) resource() string { return r.Provider + "/" + r.Model }
 
+// ModelOrigin is the approved endpoint for a model provider, or empty.
+func ModelOrigin(provider string) string { return modelOrigin(provider) }
+
 func modelOrigin(provider string) string {
 	switch provider {
 	case "openai":
 		return "https://api.openai.com"
 	case "anthropic":
 		return "https://api.anthropic.com"
+	case "opencode": // OpenCode Zen, pay-as-you-go.
+		return "https://opencode.ai/zen/v1"
+	case "opencode-go": // OpenCode Go subscription, also an API key.
+		return "https://opencode.ai/zen/go/v1"
 	default:
 		return ""
 	}

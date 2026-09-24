@@ -47,6 +47,11 @@ func (s *Store) CreateProjectAs(ctx context.Context, caller identity.Caller, slu
 		VALUES ($1,$2,$3) RETURNING id`, caller.OrganizationID, slug, name).Scan(&id); err != nil {
 		return "", err
 	}
+	// The creator administers the project's connections until project roles exist.
+	if _, err := tx.Exec(ctx, `INSERT INTO workflow_project_admins (organization_id,project_id,principal_id,role)
+		VALUES ($1,$2,$3,'owner')`, caller.OrganizationID, id, caller.PrincipalID); err != nil {
+		return "", err
+	}
 	if _, err := tx.Exec(ctx, `INSERT INTO identity_audit_events
 		(organization_id,actor_kind,actor_id,action,subject_id)
 		VALUES ($1,'principal',$2,'workflow.project.created',$3)`, caller.OrganizationID, caller.PrincipalID, id); err != nil {

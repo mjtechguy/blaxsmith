@@ -56,8 +56,9 @@ func SetProjectGit(ctx context.Context, tx pgx.Tx, organizationID, projectID, co
 	err = tx.QueryRow(ctx, `SELECT true FROM access_connections c
 		JOIN access_provider_registrations p ON p.organization_id=c.organization_id AND p.id=c.provider_registration_id
 		WHERE c.organization_id=$1 AND c.id=$2 AND c.state='active' AND c.active_secret_version IS NOT NULL
+		AND (c.owner_kind='organization' OR (c.owner_kind='project' AND c.owner_id=$4))
 		AND p.state='active' AND p.provider_kind='git' AND p.origin=$3 FOR SHARE OF c,p`,
-		organizationID, connectionID, origin).Scan(&ok)
+		organizationID, connectionID, origin, projectID).Scan(&ok)
 	if err != nil {
 		return deniedOrError("git connection", err)
 	}

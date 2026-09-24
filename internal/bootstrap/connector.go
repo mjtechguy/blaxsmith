@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -257,7 +258,7 @@ func sealCredentials(challenge Challenge, attemptID string, git *GitSetup, model
 	var modelPayload *modelCredentialPayload
 	if model != nil {
 		now := time.Now()
-		if model.AttemptID != attemptID || (model.Provider != "openai" && model.Provider != "anthropic") ||
+		if model.AttemptID != attemptID || !slices.Contains([]string{"openai", "anthropic", "opencode", "opencode-go"}, model.Provider) ||
 			!model.ExpiresAt.After(now) || model.ExpiresAt.After(now.Add(time.Hour)) ||
 			(len(model.APIKey) == 0) == (len(model.CodexAuthJSON) == 0) {
 			return Envelope{}, ErrDenied

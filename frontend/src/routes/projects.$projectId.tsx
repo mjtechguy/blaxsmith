@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useMatchRoute } from "@tanstack/react-router";
 import { rowSortingFeature, tableFeatures, useTable, type ColumnDef, type SortingState } from "@tanstack/react-table";
-import { ArrowLeft, ArrowRight, GitBranch, Plus, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, GitBranch, KeyRound, Plus, RefreshCw, Search } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
 import type { Run } from "../gen/blaxsmith/api/v1/workflow_pb";
@@ -28,10 +28,10 @@ function ProjectRuns() {
   const runDetail = useMatchRoute()({ to: "/projects/$projectId/runs/$runId" });
   const sourceSettings = useMatchRoute()({ to: "/projects/$projectId/source" });
   const verificationSettings = useMatchRoute()({ to: "/projects/$projectId/verification" });
-  const modelAccessSettings = useMatchRoute()({ to: "/projects/$projectId/model-access" });
-  const newModelAccess = useMatchRoute()({ to: "/projects/$projectId/model-access/new" });
+  const modelAccessSettings = useMatchRoute()({ to: "/projects/$projectId/model-access", fuzzy: true });
+  const connections = useMatchRoute()({ to: "/projects/$projectId/connections", fuzzy: true });
   const newRun = useMatchRoute()({ to: "/projects/$projectId/runs/new" });
-  const childPage = Boolean(runDetail || sourceSettings || verificationSettings || modelAccessSettings || newModelAccess || newRun);
+  const childPage = Boolean(runDetail || sourceSettings || verificationSettings || modelAccessSettings || connections || newRun);
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const org = session.data?.organizationId || "";
   const project = useQuery({ queryKey: ["project", org, projectId], enabled: Boolean(org && !childPage), queryFn: ({ signal }) => getProject(projectId, signal) });
@@ -72,14 +72,11 @@ function ProjectRuns() {
       {source.isSuccess ? <div className="source-summary">{source.data ? <><strong>Source configured</strong><span>{source.data.repositoryUrl}</span><span>Ref: {source.data.ref || "Remote default branch"} · Updated {new Date(source.data.updatedAt).toLocaleString()}</span></> : <><strong>Setup needed</strong><span>An owner or admin must add a public GitHub or GitLab HTTPS repository before creating a run.</span></>}</div> : null}
     </section> : null}
     {project.data?.project ? <section className="table-section" aria-labelledby="model-access-heading">
-      <div className="table-heading"><div><h2 id="model-access-heading">2. Grant model access</h2><p>Grant an organization provider key and exact model to this workspace when your recipe needs one.</p></div>
-        {mayEditSource && modelAccess.isSuccess ? modelAccess.data.access.length === 0
-          ? <Link className="secondary-button" to="/projects/$projectId/model-access/new" params={{ projectId }}><Plus size={15} aria-hidden="true" /> Add model access</Link>
-          : <Link className="secondary-button" to="/projects/$projectId/model-access" params={{ projectId }}>Manage access <ArrowRight size={15} aria-hidden="true" /></Link>
-          : modelAccess.isSuccess ? <Link className="secondary-button" to="/projects/$projectId/model-access" params={{ projectId }}>View access <ArrowRight size={15} aria-hidden="true" /></Link> : null}</div>
+      <div className="table-heading"><div><h2 id="model-access-heading">2. Grant model access</h2><p>Attach models from a project, granted organization, or personal connection.</p></div>
+        <Link className="secondary-button" to="/projects/$projectId/connections" params={{ projectId }}><KeyRound size={15} aria-hidden="true" /> Connections <ArrowRight size={15} aria-hidden="true" /></Link></div>
       {modelAccess.isPending ? <div className="source-summary" role="status">Loading model access…</div> : null}
       {modelAccess.isError ? <div className="source-summary" role="alert">Model access could not be loaded. <button type="button" className="text-action" onClick={() => void modelAccess.refetch()}>Try again</button></div> : null}
-      {modelAccess.isSuccess ? <div className="source-summary">{modelAccess.data.access.length ? <><strong>{modelAccess.data.access.length} model {modelAccess.data.access.length === 1 ? "grant" : "grants"}</strong><span>{modelAccess.data.access.slice(0, 3).map((entry) => `${entry.provider} / ${entry.model}`).join(" · ")}{modelAccess.data.access.length > 3 ? ` · +${modelAccess.data.access.length - 3} more` : ""}</span></> : <><strong>No model access granted</strong><span>An owner or admin can add an organization API key. The key is write-only; the UI does not display it after saving.</span></>}</div> : null}
+      {modelAccess.isSuccess ? <div className="source-summary">{modelAccess.data.access.length ? <><strong>{modelAccess.data.access.length} model {modelAccess.data.access.length === 1 ? "grant" : "grants"}</strong><span>{modelAccess.data.access.slice(0, 3).map((entry) => `${entry.provider} / ${entry.model}`).join(" · ")}{modelAccess.data.access.length > 3 ? ` · +${modelAccess.data.access.length - 3} more` : ""}</span></> : <><strong>No model access granted</strong><span>Open Connections to add a key or use a granted organization connection. Keys are write-only.</span></>}</div> : null}
     </section> : null}
     {project.data?.project ? <section className="table-section" aria-labelledby="verification-heading">
       <div className="table-heading"><div><h2 id="verification-heading">3. Set verification checks</h2><p>At least one project check is required before run creation.</p></div>

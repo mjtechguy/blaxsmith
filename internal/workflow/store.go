@@ -30,13 +30,16 @@ var (
 	keyPattern    = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 )
 
-type Store struct{ pool *pgxpool.Pool }
+type Store struct {
+	pool  *pgxpool.Pool
+	authz ConnectionAuthorizer
+}
 
 func New(pool *pgxpool.Pool) (*Store, error) {
 	if pool == nil {
 		return nil, ErrInvalid
 	}
-	return &Store{pool: pool}, nil
+	return &Store{pool: pool, authz: grantAuthorizer{}}, nil
 }
 
 type RunInput struct {

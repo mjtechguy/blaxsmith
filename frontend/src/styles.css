@@ -265,6 +265,12 @@ a { color: inherit; text-decoration: none; }
 .editor-form { display: flex; flex-direction: column; gap: 20px; padding-top: 23px; }
 .editor-actions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 15px; border-top: 1px solid var(--line); }
 .editor-note { padding: 22px; }
+.advanced-disclosure { margin-top: 14px; font-size: 12px; }
+.advanced-disclosure > summary { cursor: pointer; color: var(--muted); font-weight: 650; }
+.advanced-disclosure[open] > summary { margin-bottom: 12px; }
+.device-login { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.device-login p { margin: 0; }
+.device-code { align-self: flex-start; padding: 10px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 24px; font-weight: 700; letter-spacing: .18em; }
 .verification-check { display: flex; flex-direction: column; gap: 16px; padding: 18px; border: 1px solid var(--line); border-radius: 8px; }
 .verification-check-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .verification-check-heading strong, .verification-arguments > span { font-size: 12px; font-weight: 650; }

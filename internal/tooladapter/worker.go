@@ -149,10 +149,7 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 	in.skillArtifacts = selectedSkillArtifacts(profile.Skills, request.FrozenArtifacts)
 	in.base = request.SourceCommit
 	in.maxRuntime = time.Duration(request.MaxRuntimeSeconds) * time.Second
-	variable := "OPENAI_API_KEY="
-	if provider == "anthropic" {
-		variable = "ANTHROPIC_API_KEY="
-	}
+	variable := CredentialEnv(provider) + "="
 	leaseContext, cancel := watchLease(ctx, expiry)
 	defer cancel()
 	output, err := Run(leaseContext, in, sourcePath, []string{variable + string(key)})
@@ -530,7 +527,7 @@ func credentialProvider(profile recipe.Profile) (string, error) {
 		return "anthropic", nil
 	case "opencode":
 		provider, _, _ := strings.Cut(profile.Model, "/")
-		if provider == "openai" || provider == "anthropic" {
+		if CredentialEnv(provider) != "" {
 			return provider, nil
 		}
 	}
@@ -617,4 +614,19 @@ func watchLease(ctx context.Context, expiry time.Time) (context.Context, context
 		}
 	}()
 	return ctx, func() { cancel(nil) }
+}
+
+// CredentialEnv is the one environment variable a provider's leased key is
+// delivered in. OpenCode Zen and OpenCode Go both read OPENCODE_API_KEY
+// (models.dev provider "opencode"/"opencode-go", checked 2026-09-24).
+func CredentialEnv(provider string) string {
+	switch provider {
+	case "openai":
+		return "OPENAI_API_KEY"
+	case "anthropic":
+		return "ANTHROPIC_API_KEY"
+	case "opencode", "opencode-go":
+		return "OPENCODE_API_KEY"
+	}
+	return ""
 }

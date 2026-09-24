@@ -81,7 +81,7 @@ Refreshing, if needed, commits in the refresher's own transaction first. The loo
 ## Not done
 
 - **Guest.** The pinned AX runner patch accepts only `model_api_key`. A `model_codex_auth` envelope is therefore rejected in the guest, which fails closed. Writing `auth.json` into the worker's temporary HOME is not implemented yet.
-- **Dispatch.** Dispatch always binds the `workload` grantee, so personal grants are denied until a run carries its initiating user as grantee.
-- **Device code.** Blaxsmith does not start device-code flows. Users paste `auth.json`.
+- **Dispatch.** Runs record `initiator_principal_id` at launch. A personal (user-owned) grant is bound only when the run's initiator owns that connection and is its grantee; otherwise the project's workload selection applies. Delivery of a personal Codex login still stops at the guest (above).
+- **Device code.** The connections hub runs the Codex device-code sign-in server-side (`access.CodexDevice`, from `codex-rs/login/src/device_code_auth.rs`): `POST /api/accounts/deviceauth/usercode`, the user approves at `/codex/device`, `POST /api/accounts/deviceauth/token` polls, and `/oauth/token` exchanges the code once. Pasting `auth.json` stays as the Advanced fallback. Pending sign-ins live in app memory (single replica or session affinity). Not yet tried against the live endpoint.
 - **Reconnect and cleanup.** Reconnect creates a new connection. `SecretStore.Rotate` on a refreshed connection fails on a version conflict, which fails closed. Superseded secret versions are not pruned.
 - **Live endpoint.** Nothing has been tested against the live `auth.openai.com` endpoint or a real Codex CLI.

@@ -17,15 +17,28 @@ import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsNewRouteImport } from './routes/projects.new'
 import { Route as SetupTokenRouteImport } from './routes/setup.$token'
+import { Route as AdminConnectionsIndexRouteImport } from './routes/admin.connections.index'
+import { Route as AdminConnectionsConnectionIdRouteImport } from './routes/admin.connections.$connectionId'
+import { Route as AdminConnectionsGithubAppRouteImport } from './routes/admin.connections.github-app'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin.users.index'
 import { Route as AdminUsersNewRouteImport } from './routes/admin.users.new'
+import { Route as MeConnectionsIndexRouteImport } from './routes/me.connections.index'
+import { Route as MeConnectionsConnectionIdRouteImport } from './routes/me.connections.$connectionId'
 import { Route as ProjectsProjectIdModelAccessRouteImport } from './routes/projects.$projectId.model-access'
 import { Route as ProjectsProjectIdSourceRouteImport } from './routes/projects.$projectId.source'
 import { Route as ProjectsProjectIdVerificationRouteImport } from './routes/projects.$projectId.verification'
+import { Route as AdminConnectionsNewApiKeyRouteImport } from './routes/admin.connections.new.api-key'
+import { Route as AdminConnectionsNewGitRouteImport } from './routes/admin.connections.new.git'
+import { Route as MeConnectionsNewApiKeyRouteImport } from './routes/me.connections.new.api-key'
+import { Route as MeConnectionsNewSubscriptionRouteImport } from './routes/me.connections.new.subscription'
+import { Route as ProjectsProjectIdConnectionsIndexRouteImport } from './routes/projects.$projectId.connections.index'
+import { Route as ProjectsProjectIdConnectionsConnectionIdRouteImport } from './routes/projects.$projectId.connections.$connectionId'
 import { Route as ProjectsProjectIdModelAccessNewRouteImport } from './routes/projects.$projectId.model-access.new'
 import { Route as ProjectsProjectIdModelAccessSubscriptionRouteImport } from './routes/projects.$projectId.model-access.subscription'
 import { Route as ProjectsProjectIdRunsRunIdRouteImport } from './routes/projects.$projectId.runs.$runId'
 import { Route as ProjectsProjectIdRunsNewRouteImport } from './routes/projects.$projectId.runs.new'
+import { Route as ProjectsProjectIdConnectionsNewApiKeyRouteImport } from './routes/projects.$projectId.connections.new.api-key'
+import { Route as ProjectsProjectIdConnectionsNewGitRouteImport } from './routes/projects.$projectId.connections.new.git'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -67,6 +80,23 @@ const SetupTokenRoute = SetupTokenRouteImport.update({
   path: '/setup/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminConnectionsIndexRoute = AdminConnectionsIndexRouteImport.update({
+  id: '/admin/connections/',
+  path: '/admin/connections/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminConnectionsConnectionIdRoute =
+  AdminConnectionsConnectionIdRouteImport.update({
+    id: '/admin/connections/$connectionId',
+    path: '/admin/connections/$connectionId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminConnectionsGithubAppRoute =
+  AdminConnectionsGithubAppRouteImport.update({
+    id: '/admin/connections/github-app',
+    path: '/admin/connections/github-app',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
   id: '/admin/users/',
   path: '/admin/users/',
@@ -77,6 +107,17 @@ const AdminUsersNewRoute = AdminUsersNewRouteImport.update({
   path: '/admin/users/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MeConnectionsIndexRoute = MeConnectionsIndexRouteImport.update({
+  id: '/me/connections/',
+  path: '/me/connections/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeConnectionsConnectionIdRoute =
+  MeConnectionsConnectionIdRouteImport.update({
+    id: '/me/connections/$connectionId',
+    path: '/me/connections/$connectionId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ProjectsProjectIdModelAccessRoute =
   ProjectsProjectIdModelAccessRouteImport.update({
     id: '/model-access',
@@ -92,6 +133,40 @@ const ProjectsProjectIdVerificationRoute =
   ProjectsProjectIdVerificationRouteImport.update({
     id: '/verification',
     path: '/verification',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const AdminConnectionsNewApiKeyRoute =
+  AdminConnectionsNewApiKeyRouteImport.update({
+    id: '/admin/connections/new/api-key',
+    path: '/admin/connections/new/api-key',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminConnectionsNewGitRoute = AdminConnectionsNewGitRouteImport.update({
+  id: '/admin/connections/new/git',
+  path: '/admin/connections/new/git',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeConnectionsNewApiKeyRoute = MeConnectionsNewApiKeyRouteImport.update({
+  id: '/me/connections/new/api-key',
+  path: '/me/connections/new/api-key',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeConnectionsNewSubscriptionRoute =
+  MeConnectionsNewSubscriptionRouteImport.update({
+    id: '/me/connections/new/subscription',
+    path: '/me/connections/new/subscription',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ProjectsProjectIdConnectionsIndexRoute =
+  ProjectsProjectIdConnectionsIndexRouteImport.update({
+    id: '/connections/',
+    path: '/connections/',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdConnectionsConnectionIdRoute =
+  ProjectsProjectIdConnectionsConnectionIdRouteImport.update({
+    id: '/connections/$connectionId',
+    path: '/connections/$connectionId',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
 const ProjectsProjectIdModelAccessNewRoute =
@@ -118,6 +193,18 @@ const ProjectsProjectIdRunsNewRoute =
     path: '/runs/new',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProjectsProjectIdConnectionsNewApiKeyRoute =
+  ProjectsProjectIdConnectionsNewApiKeyRouteImport.update({
+    id: '/connections/new/api-key',
+    path: '/connections/new/api-key',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdConnectionsNewGitRoute =
+  ProjectsProjectIdConnectionsNewGitRouteImport.update({
+    id: '/connections/new/git',
+    path: '/connections/new/git',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -128,15 +215,28 @@ export interface FileRoutesByFullPath {
   '/projects/new': typeof ProjectsNewRoute
   '/setup/$token': typeof SetupTokenRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/connections/$connectionId': typeof AdminConnectionsConnectionIdRoute
+  '/admin/connections/github-app': typeof AdminConnectionsGithubAppRoute
   '/admin/users/new': typeof AdminUsersNewRoute
+  '/me/connections/$connectionId': typeof MeConnectionsConnectionIdRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
+  '/admin/connections/': typeof AdminConnectionsIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
+  '/me/connections/': typeof MeConnectionsIndexRoute
+  '/admin/connections/new/api-key': typeof AdminConnectionsNewApiKeyRoute
+  '/admin/connections/new/git': typeof AdminConnectionsNewGitRoute
+  '/me/connections/new/api-key': typeof MeConnectionsNewApiKeyRoute
+  '/me/connections/new/subscription': typeof MeConnectionsNewSubscriptionRoute
+  '/projects/$projectId/connections/$connectionId': typeof ProjectsProjectIdConnectionsConnectionIdRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/model-access/subscription': typeof ProjectsProjectIdModelAccessSubscriptionRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/projects/$projectId/connections/': typeof ProjectsProjectIdConnectionsIndexRoute
+  '/projects/$projectId/connections/new/api-key': typeof ProjectsProjectIdConnectionsNewApiKeyRoute
+  '/projects/$projectId/connections/new/git': typeof ProjectsProjectIdConnectionsNewGitRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -147,15 +247,28 @@ export interface FileRoutesByTo {
   '/projects/new': typeof ProjectsNewRoute
   '/setup/$token': typeof SetupTokenRoute
   '/admin': typeof AdminIndexRoute
+  '/admin/connections/$connectionId': typeof AdminConnectionsConnectionIdRoute
+  '/admin/connections/github-app': typeof AdminConnectionsGithubAppRoute
   '/admin/users/new': typeof AdminUsersNewRoute
+  '/me/connections/$connectionId': typeof MeConnectionsConnectionIdRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
+  '/admin/connections': typeof AdminConnectionsIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
+  '/me/connections': typeof MeConnectionsIndexRoute
+  '/admin/connections/new/api-key': typeof AdminConnectionsNewApiKeyRoute
+  '/admin/connections/new/git': typeof AdminConnectionsNewGitRoute
+  '/me/connections/new/api-key': typeof MeConnectionsNewApiKeyRoute
+  '/me/connections/new/subscription': typeof MeConnectionsNewSubscriptionRoute
+  '/projects/$projectId/connections/$connectionId': typeof ProjectsProjectIdConnectionsConnectionIdRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/model-access/subscription': typeof ProjectsProjectIdModelAccessSubscriptionRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/projects/$projectId/connections': typeof ProjectsProjectIdConnectionsIndexRoute
+  '/projects/$projectId/connections/new/api-key': typeof ProjectsProjectIdConnectionsNewApiKeyRoute
+  '/projects/$projectId/connections/new/git': typeof ProjectsProjectIdConnectionsNewGitRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -167,15 +280,28 @@ export interface FileRoutesById {
   '/projects/new': typeof ProjectsNewRoute
   '/setup/$token': typeof SetupTokenRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/connections/$connectionId': typeof AdminConnectionsConnectionIdRoute
+  '/admin/connections/github-app': typeof AdminConnectionsGithubAppRoute
   '/admin/users/new': typeof AdminUsersNewRoute
+  '/me/connections/$connectionId': typeof MeConnectionsConnectionIdRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
+  '/admin/connections/': typeof AdminConnectionsIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
+  '/me/connections/': typeof MeConnectionsIndexRoute
+  '/admin/connections/new/api-key': typeof AdminConnectionsNewApiKeyRoute
+  '/admin/connections/new/git': typeof AdminConnectionsNewGitRoute
+  '/me/connections/new/api-key': typeof MeConnectionsNewApiKeyRoute
+  '/me/connections/new/subscription': typeof MeConnectionsNewSubscriptionRoute
+  '/projects/$projectId/connections/$connectionId': typeof ProjectsProjectIdConnectionsConnectionIdRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/model-access/subscription': typeof ProjectsProjectIdModelAccessSubscriptionRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/projects/$projectId/connections/': typeof ProjectsProjectIdConnectionsIndexRoute
+  '/projects/$projectId/connections/new/api-key': typeof ProjectsProjectIdConnectionsNewApiKeyRoute
+  '/projects/$projectId/connections/new/git': typeof ProjectsProjectIdConnectionsNewGitRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -188,15 +314,28 @@ export interface FileRouteTypes {
     | '/projects/new'
     | '/setup/$token'
     | '/admin/'
+    | '/admin/connections/$connectionId'
+    | '/admin/connections/github-app'
     | '/admin/users/new'
+    | '/me/connections/$connectionId'
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
+    | '/admin/connections/'
     | '/admin/users/'
+    | '/me/connections/'
+    | '/admin/connections/new/api-key'
+    | '/admin/connections/new/git'
+    | '/me/connections/new/api-key'
+    | '/me/connections/new/subscription'
+    | '/projects/$projectId/connections/$connectionId'
     | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/model-access/subscription'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/projects/$projectId/connections/'
+    | '/projects/$projectId/connections/new/api-key'
+    | '/projects/$projectId/connections/new/git'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -207,15 +346,28 @@ export interface FileRouteTypes {
     | '/projects/new'
     | '/setup/$token'
     | '/admin'
+    | '/admin/connections/$connectionId'
+    | '/admin/connections/github-app'
     | '/admin/users/new'
+    | '/me/connections/$connectionId'
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
+    | '/admin/connections'
     | '/admin/users'
+    | '/me/connections'
+    | '/admin/connections/new/api-key'
+    | '/admin/connections/new/git'
+    | '/me/connections/new/api-key'
+    | '/me/connections/new/subscription'
+    | '/projects/$projectId/connections/$connectionId'
     | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/model-access/subscription'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/projects/$projectId/connections'
+    | '/projects/$projectId/connections/new/api-key'
+    | '/projects/$projectId/connections/new/git'
   id:
     | '__root__'
     | '/'
@@ -226,15 +378,28 @@ export interface FileRouteTypes {
     | '/projects/new'
     | '/setup/$token'
     | '/admin/'
+    | '/admin/connections/$connectionId'
+    | '/admin/connections/github-app'
     | '/admin/users/new'
+    | '/me/connections/$connectionId'
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
+    | '/admin/connections/'
     | '/admin/users/'
+    | '/me/connections/'
+    | '/admin/connections/new/api-key'
+    | '/admin/connections/new/git'
+    | '/me/connections/new/api-key'
+    | '/me/connections/new/subscription'
+    | '/projects/$projectId/connections/$connectionId'
     | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/model-access/subscription'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/projects/$projectId/connections/'
+    | '/projects/$projectId/connections/new/api-key'
+    | '/projects/$projectId/connections/new/git'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -246,8 +411,17 @@ export interface RootRouteChildren {
   ProjectsNewRoute: typeof ProjectsNewRoute
   SetupTokenRoute: typeof SetupTokenRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  AdminConnectionsConnectionIdRoute: typeof AdminConnectionsConnectionIdRoute
+  AdminConnectionsGithubAppRoute: typeof AdminConnectionsGithubAppRoute
   AdminUsersNewRoute: typeof AdminUsersNewRoute
+  MeConnectionsConnectionIdRoute: typeof MeConnectionsConnectionIdRoute
+  AdminConnectionsIndexRoute: typeof AdminConnectionsIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
+  MeConnectionsIndexRoute: typeof MeConnectionsIndexRoute
+  AdminConnectionsNewApiKeyRoute: typeof AdminConnectionsNewApiKeyRoute
+  AdminConnectionsNewGitRoute: typeof AdminConnectionsNewGitRoute
+  MeConnectionsNewApiKeyRoute: typeof MeConnectionsNewApiKeyRoute
+  MeConnectionsNewSubscriptionRoute: typeof MeConnectionsNewSubscriptionRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -308,6 +482,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/connections/': {
+      id: '/admin/connections/'
+      path: '/admin/connections'
+      fullPath: '/admin/connections/'
+      preLoaderRoute: typeof AdminConnectionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/connections/$connectionId': {
+      id: '/admin/connections/$connectionId'
+      path: '/admin/connections/$connectionId'
+      fullPath: '/admin/connections/$connectionId'
+      preLoaderRoute: typeof AdminConnectionsConnectionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/connections/github-app': {
+      id: '/admin/connections/github-app'
+      path: '/admin/connections/github-app'
+      fullPath: '/admin/connections/github-app'
+      preLoaderRoute: typeof AdminConnectionsGithubAppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/users/': {
       id: '/admin/users/'
       path: '/admin/users'
@@ -320,6 +515,20 @@ declare module '@tanstack/react-router' {
       path: '/admin/users/new'
       fullPath: '/admin/users/new'
       preLoaderRoute: typeof AdminUsersNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/me/connections/': {
+      id: '/me/connections/'
+      path: '/me/connections'
+      fullPath: '/me/connections/'
+      preLoaderRoute: typeof MeConnectionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/me/connections/$connectionId': {
+      id: '/me/connections/$connectionId'
+      path: '/me/connections/$connectionId'
+      fullPath: '/me/connections/$connectionId'
+      preLoaderRoute: typeof MeConnectionsConnectionIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectId/model-access': {
@@ -341,6 +550,48 @@ declare module '@tanstack/react-router' {
       path: '/verification'
       fullPath: '/projects/$projectId/verification'
       preLoaderRoute: typeof ProjectsProjectIdVerificationRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/admin/connections/new/api-key': {
+      id: '/admin/connections/new/api-key'
+      path: '/admin/connections/new/api-key'
+      fullPath: '/admin/connections/new/api-key'
+      preLoaderRoute: typeof AdminConnectionsNewApiKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/connections/new/git': {
+      id: '/admin/connections/new/git'
+      path: '/admin/connections/new/git'
+      fullPath: '/admin/connections/new/git'
+      preLoaderRoute: typeof AdminConnectionsNewGitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/me/connections/new/api-key': {
+      id: '/me/connections/new/api-key'
+      path: '/me/connections/new/api-key'
+      fullPath: '/me/connections/new/api-key'
+      preLoaderRoute: typeof MeConnectionsNewApiKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/me/connections/new/subscription': {
+      id: '/me/connections/new/subscription'
+      path: '/me/connections/new/subscription'
+      fullPath: '/me/connections/new/subscription'
+      preLoaderRoute: typeof MeConnectionsNewSubscriptionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$projectId/connections/': {
+      id: '/projects/$projectId/connections/'
+      path: '/connections'
+      fullPath: '/projects/$projectId/connections/'
+      preLoaderRoute: typeof ProjectsProjectIdConnectionsIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/connections/$connectionId': {
+      id: '/projects/$projectId/connections/$connectionId'
+      path: '/connections/$connectionId'
+      fullPath: '/projects/$projectId/connections/$connectionId'
+      preLoaderRoute: typeof ProjectsProjectIdConnectionsConnectionIdRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
     '/projects/$projectId/model-access/new': {
@@ -371,6 +622,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRunsNewRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/connections/new/api-key': {
+      id: '/projects/$projectId/connections/new/api-key'
+      path: '/connections/new/api-key'
+      fullPath: '/projects/$projectId/connections/new/api-key'
+      preLoaderRoute: typeof ProjectsProjectIdConnectionsNewApiKeyRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/connections/new/git': {
+      id: '/projects/$projectId/connections/new/git'
+      path: '/connections/new/git'
+      fullPath: '/projects/$projectId/connections/new/git'
+      preLoaderRoute: typeof ProjectsProjectIdConnectionsNewGitRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
   }
 }
 
@@ -395,8 +660,12 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdModelAccessRoute: typeof ProjectsProjectIdModelAccessRouteWithChildren
   ProjectsProjectIdSourceRoute: typeof ProjectsProjectIdSourceRoute
   ProjectsProjectIdVerificationRoute: typeof ProjectsProjectIdVerificationRoute
+  ProjectsProjectIdConnectionsConnectionIdRoute: typeof ProjectsProjectIdConnectionsConnectionIdRoute
   ProjectsProjectIdRunsRunIdRoute: typeof ProjectsProjectIdRunsRunIdRoute
   ProjectsProjectIdRunsNewRoute: typeof ProjectsProjectIdRunsNewRoute
+  ProjectsProjectIdConnectionsIndexRoute: typeof ProjectsProjectIdConnectionsIndexRoute
+  ProjectsProjectIdConnectionsNewApiKeyRoute: typeof ProjectsProjectIdConnectionsNewApiKeyRoute
+  ProjectsProjectIdConnectionsNewGitRoute: typeof ProjectsProjectIdConnectionsNewGitRoute
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
@@ -404,8 +673,16 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
     ProjectsProjectIdModelAccessRouteWithChildren,
   ProjectsProjectIdSourceRoute: ProjectsProjectIdSourceRoute,
   ProjectsProjectIdVerificationRoute: ProjectsProjectIdVerificationRoute,
+  ProjectsProjectIdConnectionsConnectionIdRoute:
+    ProjectsProjectIdConnectionsConnectionIdRoute,
   ProjectsProjectIdRunsRunIdRoute: ProjectsProjectIdRunsRunIdRoute,
   ProjectsProjectIdRunsNewRoute: ProjectsProjectIdRunsNewRoute,
+  ProjectsProjectIdConnectionsIndexRoute:
+    ProjectsProjectIdConnectionsIndexRoute,
+  ProjectsProjectIdConnectionsNewApiKeyRoute:
+    ProjectsProjectIdConnectionsNewApiKeyRoute,
+  ProjectsProjectIdConnectionsNewGitRoute:
+    ProjectsProjectIdConnectionsNewGitRoute,
 }
 
 const ProjectsProjectIdRouteWithChildren =
@@ -420,8 +697,17 @@ const rootRouteChildren: RootRouteChildren = {
   ProjectsNewRoute: ProjectsNewRoute,
   SetupTokenRoute: SetupTokenRoute,
   AdminIndexRoute: AdminIndexRoute,
+  AdminConnectionsConnectionIdRoute: AdminConnectionsConnectionIdRoute,
+  AdminConnectionsGithubAppRoute: AdminConnectionsGithubAppRoute,
   AdminUsersNewRoute: AdminUsersNewRoute,
+  MeConnectionsConnectionIdRoute: MeConnectionsConnectionIdRoute,
+  AdminConnectionsIndexRoute: AdminConnectionsIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
+  MeConnectionsIndexRoute: MeConnectionsIndexRoute,
+  AdminConnectionsNewApiKeyRoute: AdminConnectionsNewApiKeyRoute,
+  AdminConnectionsNewGitRoute: AdminConnectionsNewGitRoute,
+  MeConnectionsNewApiKeyRoute: MeConnectionsNewApiKeyRoute,
+  MeConnectionsNewSubscriptionRoute: MeConnectionsNewSubscriptionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -306,6 +306,12 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	adminPath, adminHandler := apiv1connect.NewAdminServiceHandler(newAdminService(guard, store, dispatchConfig.workerPool),
 		connect.WithReadMaxBytes(1<<16))
 	mux.Handle("/api"+adminPath, http.StripPrefix("/api", guard.Wrap(adminHandler)))
+	connections := newConnectionService(guard, store, secrets, origin)
+	// ponytail: ctx is the startup context; the refresh loop lives for the process.
+	go connections.refreshModelsDaily(context.WithoutCancel(ctx))
+	connectionPath, connectionHandler := apiv1connect.NewConnectionServiceHandler(connections, connect.WithReadMaxBytes(1<<16))
+	mux.Handle("/api"+connectionPath, http.StripPrefix("/api", guard.Wrap(connectionHandler)))
+	mux.Handle(githubCallbackPath, guard.Wrap(connections))
 	users, err := identity.NewUserAdmin(pool)
 	if err != nil {
 		return nil, nil, err

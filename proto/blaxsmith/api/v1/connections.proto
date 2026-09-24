@@ -1,0 +1,211 @@
+syntax = "proto3";
+
+package blaxsmith.api.v1;
+
+// One connections hub at three scopes: organization (owner/admin), project
+// (project owner/admin), and personal (any member, owner-only use). No
+// message in this service carries secret material: API keys, tokens,
+// auth.json bundles, OAuth client secrets, and device codes are write-only.
+
+// A standing grant on an organization connection. grantee_kind is project
+// (the project's runs may use it), user (a principal id), or role (owner,
+// admin, member, viewer).
+message ConnectionGrant {
+  string id = 1;
+  string project_id = 2;
+  string project_name = 3;
+  string grantee_kind = 4;
+  string grantee_id = 5;
+  string grantee_name = 6; // Username for a user grant; empty otherwise.
+  string created_at = 7; // RFC 3339.
+}
+
+// A model a project uses through this connection (a model.invoke grant).
+message ConnectionUse {
+  string id = 1; // Grant id.
+  string project_id = 2;
+  string project_name = 3;
+  string model = 4;
+  string grantee_kind = 5; // workload (project runs) or user (owner-only).
+  string created_at = 6; // RFC 3339.
+}
+
+message Connection {
+  string id = 1;
+  string scope = 2; // organization, project, or personal.
+  string owner_id = 3; // Organization, project, or principal id.
+  string owner_name = 4;
+  string kind = 5; // api_key, git, or subscription.
+  string provider = 6; // anthropic, openai, opencode, opencode-go, github, gitlab, codex.
+  string account = 7; // Git username, subscription account id, or a key label.
+  string label = 8;
+  string state = 9; // active, disabled, revoked, or reconnect_required.
+  repeated ConnectionGrant grants = 10;
+  repeated ConnectionUse uses = 11;
+  string last_used_at = 12; // RFC 3339; empty if never leased.
+  string created_at = 13; // RFC 3339.
+  int32 model_count = 14;
+  string models_checked_at = 15; // RFC 3339; empty before the first check.
+  string models_error = 16; // Last provider error; empty when valid.
+  bool can_manage = 17; // The caller may grant, refresh, or revoke it.
+}
+
+message ListConnectionsRequest {
+  string scope = 1; // organization, project, personal, or project_available.
+  string project_id = 2; // Required for project and project_available.
+}
+message ListConnectionsResponse { repeated Connection connections = 1; }
+
+message CreateApiKeyConnectionRequest {
+  string scope = 1; // organization, project, or personal.
+  string project_id = 2; // Required for project scope.
+  string provider = 3; // anthropic, openai, opencode (Zen), or opencode-go.
+  string api_key = 4; // Write-only.
+  string label = 5;
+}
+message CreateApiKeyConnectionResponse { Connection connection = 1; }
+
+message CreateGitTokenConnectionRequest {
+  string scope = 1; // organization or project.
+  string project_id = 2;
+  string host = 3; // github.com or gitlab.com.
+  string username = 4;
+  string token = 5; // Write-only.
+}
+message CreateGitTokenConnectionResponse { Connection connection = 1; }
+
+// Pasted ~/.codex/auth.json (the Advanced fallback). Subscriptions are always
+// personal: the connection belongs to the caller whatever page started it.
+message CreateCodexSubscriptionRequest {
+  string auth_json = 1; // Write-only.
+}
+message CreateCodexSubscriptionResponse { Connection connection = 1; }
+
+// Codex ChatGPT sign-in through the device-code flow. The platform requests
+// the code; the user approves it at verification_url; the client polls.
+message StartCodexDeviceLoginRequest {}
+message StartCodexDeviceLoginResponse {
+  string login_id = 1; // Opaque handle bound to the caller's session.
+  string verification_url = 2;
+  string user_code = 3;
+  int32 interval_seconds = 4;
+  string expires_at = 5; // RFC 3339.
+}
+message PollCodexDeviceLoginRequest { string login_id = 1; }
+message PollCodexDeviceLoginResponse {
+  string state = 1; // pending, connected, expired, or failed.
+  string error = 2;
+  Connection connection = 3; // Set once connected.
+}
+
+message ConnectionModel {
+  string id = 1;
+  string display_name = 2;
+  string created_at = 3; // RFC 3339; empty if unknown.
+  int32 context_tokens = 4; // 0 if unknown.
+  string capabilities_json = 5; // Provider capability object, when returned.
+  repeated string harnesses = 6; // Pinned harnesses that accept this model.
+}
+message ListConnectionModelsRequest {
+  string connection_id = 1;
+  string harness = 2; // Optional filter: codex, claude-code, or opencode.
+}
+message ListConnectionModelsResponse {
+  repeated ConnectionModel models = 1;
+  string checked_at = 2;
+  string error = 3;
+}
+message RefreshConnectionModelsRequest { string connection_id = 1; }
+message RefreshConnectionModelsResponse {
+  bool valid = 1;
+  int32 model_count = 2;
+  string error = 3;
+  string checked_at = 4;
+}
+
+message GrantConnectionRequest {
+  string connection_id = 1;
+  string project_id = 2;
+  string grantee_kind = 3; // project, user, or role.
+  string grantee_id = 4; // Principal id or role; empty for project.
+}
+message GrantConnectionResponse { ConnectionGrant grant = 1; }
+message RevokeConnectionGrantRequest { string grant_id = 1; }
+message RevokeConnectionGrantResponse {}
+
+// Use a connection for one model in a project. Organization and project
+// connections serve the project's runs; a personal connection serves only runs
+// its owner launches.
+message AddConnectionUseRequest {
+  string connection_id = 1;
+  string project_id = 2;
+  string model = 3;
+}
+message AddConnectionUseResponse { ConnectionUse use = 1; }
+message RemoveConnectionUseRequest { string use_id = 1; }
+message RemoveConnectionUseResponse {}
+
+message RevokeConnectionRequest { string connection_id = 1; }
+message RevokeConnectionResponse {}
+
+// Git discovery for the project source page.
+message GitRepository {
+  string full_name = 1; // owner/name.
+  string clone_url = 2; // https://host/owner/name.git
+  string default_branch = 3;
+  bool private = 4;
+}
+message ListGitRepositoriesRequest {
+  string connection_id = 1;
+  string query = 2;
+}
+message ListGitRepositoriesResponse { repeated GitRepository repositories = 1; }
+message ListGitBranchesRequest {
+  string connection_id = 1;
+  string full_name = 2;
+}
+message ListGitBranchesResponse { repeated string branches = 1; }
+
+// GitHub OAuth App registration for "Connect GitHub". client_secret is
+// write-only; configured reports whether a secret is stored.
+message GetGitHubAppRequest {}
+message GetGitHubAppResponse {
+  string client_id = 1;
+  bool configured = 2;
+  string callback_url = 3;
+}
+message SetGitHubAppRequest {
+  string client_id = 1;
+  string client_secret = 2; // Write-only; empty keeps the stored secret.
+}
+message SetGitHubAppResponse {
+  string client_id = 1;
+  bool configured = 2;
+}
+message StartGitHubConnectRequest {
+  string scope = 1; // organization or project.
+  string project_id = 2;
+  string return_to = 3; // Same-origin path to return to after the callback.
+}
+message StartGitHubConnectResponse { string authorize_url = 1; }
+
+service ConnectionService {
+  rpc ListConnections(ListConnectionsRequest) returns (ListConnectionsResponse);
+  rpc CreateApiKeyConnection(CreateApiKeyConnectionRequest) returns (CreateApiKeyConnectionResponse);
+  rpc CreateGitTokenConnection(CreateGitTokenConnectionRequest) returns (CreateGitTokenConnectionResponse);
+  rpc CreateCodexSubscription(CreateCodexSubscriptionRequest) returns (CreateCodexSubscriptionResponse);
+  rpc StartCodexDeviceLogin(StartCodexDeviceLoginRequest) returns (StartCodexDeviceLoginResponse);
+  rpc PollCodexDeviceLogin(PollCodexDeviceLoginRequest) returns (PollCodexDeviceLoginResponse);
+  rpc ListConnectionModels(ListConnectionModelsRequest) returns (ListConnectionModelsResponse);
+  rpc RefreshConnectionModels(RefreshConnectionModelsRequest) returns (RefreshConnectionModelsResponse);
+  rpc GrantConnection(GrantConnectionRequest) returns (GrantConnectionResponse);
+  rpc RevokeConnectionGrant(RevokeConnectionGrantRequest) returns (RevokeConnectionGrantResponse);
+  rpc AddConnectionUse(AddConnectionUseRequest) returns (AddConnectionUseResponse);
+  rpc RemoveConnectionUse(RemoveConnectionUseRequest) returns (RemoveConnectionUseResponse);
+  rpc RevokeConnection(RevokeConnectionRequest) returns (RevokeConnectionResponse);
+  rpc ListGitRepositories(ListGitRepositoriesRequest) returns (ListGitRepositoriesResponse);
+  rpc ListGitBranches(ListGitBranchesRequest) returns (ListGitBranchesResponse);
+  rpc GetGitHubApp(GetGitHubAppRequest) returns (GetGitHubAppResponse);
+  rpc SetGitHubApp(SetGitHubAppRequest) returns (SetGitHubAppResponse);
+  rpc StartGitHubConnect(StartGitHubConnectRequest) returns (StartGitHubConnectResponse);
+}

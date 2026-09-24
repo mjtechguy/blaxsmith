@@ -281,7 +281,7 @@ func toolProvider(request tooladapter.Request) string {
 		return "anthropic"
 	case "opencode":
 		provider, _, ok := strings.Cut(request.Profile.Model, "/")
-		if ok && (provider == "openai" || provider == "anthropic") {
+		if ok && tooladapter.CredentialEnv(provider) != "" {
 			return provider
 		}
 	}

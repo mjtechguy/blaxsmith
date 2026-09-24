@@ -123,12 +123,15 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 			return Run{}, ErrConflict
 		}
 	}
-	var runID string
+	var runID, initiator string
+	if in.Caller != nil {
+		initiator = in.Caller.PrincipalID
+	}
 	err = tx.QueryRow(ctx, `INSERT INTO workflow_runs
-		(organization_id,project_id,launch_key,source_commit,bundle_sha256,verification_sha256)
-		VALUES ($1,$2,$3,$4,$5,$6)
+		(organization_id,project_id,launch_key,source_commit,bundle_sha256,verification_sha256,initiator_principal_id)
+		VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''))
 		ON CONFLICT (organization_id,project_id,launch_key) DO NOTHING RETURNING id`,
-		in.OrganizationID, in.ProjectID, in.LaunchKey, bundle.Source.Commit, bundle.Digest, policySHA).Scan(&runID)
+		in.OrganizationID, in.ProjectID, in.LaunchKey, bundle.Source.Commit, bundle.Digest, policySHA, initiator).Scan(&runID)
 	created := err == nil
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Run{}, fmt.Errorf("create frozen run: %w", err)
