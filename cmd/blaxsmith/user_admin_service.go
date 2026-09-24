@@ -25,11 +25,11 @@ func userAdminError(err error) error {
 		return connect.NewError(connect.CodePermissionDenied, err)
 	case errors.Is(err, identity.ErrLastOwner), errors.Is(err, identity.ErrSelfDisable):
 		return connect.NewError(connect.CodeFailedPrecondition, err)
-	case errors.Is(err, identity.ErrUserExists):
+	case errors.Is(err, identity.ErrUserExists), errors.Is(err, identity.ErrEmailTaken):
 		return connect.NewError(connect.CodeAlreadyExists, err)
 	case errors.Is(err, identity.ErrUserNotFound), errors.Is(err, identity.ErrLinkInvalid):
 		return connect.NewError(connect.CodeNotFound, err)
-	case errors.Is(err, identity.ErrUserInvalid), errors.Is(err, identity.ErrPassword):
+	case errors.Is(err, identity.ErrUserInvalid), errors.Is(err, identity.ErrPassword), errors.Is(err, identity.ErrEmailInvalid):
 		return connect.NewError(connect.CodeInvalidArgument, err)
 	case errors.Is(err, identity.ErrUnauthenticated):
 		return connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
@@ -53,9 +53,7 @@ func (s *userAdminService) ListOrgMembers(ctx context.Context, req *connect.Requ
 	}
 	response := &api.ListOrgMembersResponse{}
 	for _, m := range members {
-		response.Members = append(response.Members, &api.OrgMember{PrincipalId: m.PrincipalID, Username: m.Username,
-			DisplayName: m.DisplayName, Role: m.Role, Status: m.Status, ActiveSessions: m.ActiveSessions,
-			LastLoginAt: adminOptionalTime(m.LastLogin), CreatedAt: adminTime(m.CreatedAt)})
+		response.Members = append(response.Members, orgMember(m))
 	}
 	return connect.NewResponse(response), nil
 }
@@ -65,7 +63,7 @@ func (s *userAdminService) InviteUser(ctx context.Context, req *connect.Request[
 	if err != nil {
 		return nil, err
 	}
-	link, err := s.users.Invite(ctx, caller, req.Msg.Username, req.Msg.DisplayName, req.Msg.Role)
+	link, err := s.users.Invite(ctx, caller, req.Msg.Email, req.Msg.DisplayName, req.Msg.Role)
 	if err != nil {
 		return nil, userAdminError(err)
 	}
@@ -118,6 +116,17 @@ func (s *userAdminService) RevokeUserSessions(ctx context.Context, req *connect.
 	return connect.NewResponse(&api.RevokeUserSessionsResponse{Revoked: count}), nil
 }
 
+func (s *userAdminService) SetUserEmail(ctx context.Context, req *connect.Request[api.SetUserEmailRequest]) (*connect.Response[api.SetUserEmailResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.users.SetEmail(ctx, caller, req.Msg.PrincipalId, req.Msg.Email); err != nil {
+		return nil, userAdminError(err)
+	}
+	return connect.NewResponse(&api.SetUserEmailResponse{}), nil
+}
+
 func (s *userAdminService) GetAccountLink(ctx context.Context, req *connect.Request[api.GetAccountLinkRequest]) (*connect.Response[api.GetAccountLinkResponse], error) {
 	if err := s.guard.CheckRequest(req.Header(), false); err != nil {
 		return nil, err
@@ -128,7 +137,7 @@ func (s *userAdminService) GetAccountLink(ctx context.Context, req *connect.Requ
 	}
 	return connect.NewResponse(&api.GetAccountLinkResponse{Purpose: info.Purpose, Username: info.Username,
 		DisplayName: info.DisplayName, OrganizationSlug: info.OrganizationSlug, OrganizationName: info.OrganizationName,
-		ExpiresAt: adminTime(info.ExpiresAt)}), nil
+		ExpiresAt: adminTime(info.ExpiresAt), Email: info.Email}), nil
 }
 
 func (s *userAdminService) CompleteAccountLink(ctx context.Context, req *connect.Request[api.CompleteAccountLinkRequest]) (*connect.Response[api.CompleteAccountLinkResponse], error) {
@@ -137,9 +146,15 @@ func (s *userAdminService) CompleteAccountLink(ctx context.Context, req *connect
 	}
 	password := []byte(req.Msg.Password)
 	defer clear(password)
-	info, err := s.users.CompleteLink(ctx, req.Msg.Token, password)
+	info, err := s.users.CompleteLink(ctx, req.Msg.Token, password, req.Msg.DisplayName, req.Msg.Email)
 	if err != nil {
 		return nil, userAdminError(err)
 	}
-	return connect.NewResponse(&api.CompleteAccountLinkResponse{OrganizationSlug: info.OrganizationSlug, Username: info.Username}), nil
+	return connect.NewResponse(&api.CompleteAccountLinkResponse{OrganizationSlug: info.OrganizationSlug, Email: info.Email}), nil
+}
+
+func orgMember(m identity.Member) *api.OrgMember {
+	return &api.OrgMember{PrincipalId: m.PrincipalID, Username: m.Username, Email: m.Email, EmailVerified: m.EmailVerified,
+		DisplayName: m.DisplayName, Role: m.Role, Status: m.Status, ActiveSessions: m.ActiveSessions,
+		LastLoginAt: adminOptionalTime(m.LastLogin), CreatedAt: adminTime(m.CreatedAt)}
 }

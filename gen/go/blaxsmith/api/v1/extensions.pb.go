@@ -328,7 +328,7 @@ type ExtensionVersion struct {
 	ApprovedPermissions []string               `protobuf:"bytes,11,rep,name=approved_permissions,json=approvedPermissions,proto3" json:"approved_permissions,omitempty"`
 	PermissionsSha256   string                 `protobuf:"bytes,12,opt,name=permissions_sha256,json=permissionsSha256,proto3" json:"permissions_sha256,omitempty"`
 	InstalledBy         string                 `protobuf:"bytes,13,opt,name=installed_by,json=installedBy,proto3" json:"installed_by,omitempty"`
-	InstalledByUsername string                 `protobuf:"bytes,14,opt,name=installed_by_username,json=installedByUsername,proto3" json:"installed_by_username,omitempty"`
+	InstalledByUsername string                 `protobuf:"bytes,14,opt,name=installed_by_username,json=installedByUsername,proto3" json:"installed_by_username,omitempty"` // Display label: name, else email, else handle.
 	CreatedAt           string                 `protobuf:"bytes,15,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	Permissions         []*ExtensionPermission `protobuf:"bytes,16,rep,name=permissions,proto3" json:"permissions,omitempty"` // Declared permissions.
 	Templates           []*ExtensionTemplate   `protobuf:"bytes,17,rep,name=templates,proto3" json:"templates,omitempty"`

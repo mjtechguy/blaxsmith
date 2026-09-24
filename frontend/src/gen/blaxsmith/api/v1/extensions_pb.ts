@@ -261,6 +261,8 @@ export type ExtensionVersion = Message<"blaxsmith.api.v1.ExtensionVersion"> & {
   installedBy: string;
 
   /**
+   * Display label: name, else email, else handle.
+   *
    * @generated from field: string installed_by_username = 14;
    */
   installedByUsername: string;

@@ -147,7 +147,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	password := []byte("correct horse battery staple")
-	owner, err := identity.BootstrapOwner(ctx, pool, "alice", "engineering", "Engineering", password)
+	owner, err := identity.BootstrapOwner(ctx, pool, "alice@example.com", "engineering", "Engineering", password)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +304,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	previousTokens, err := previousManager.LoginLocal(ctx, "engineering", "alice", password, netip.MustParseAddr("192.0.2.77"))
+	previousTokens, err := previousManager.LoginLocal(ctx, "engineering", "alice@example.com", password, netip.MustParseAddr("192.0.2.77"), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +322,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	login := connect.NewRequest(&api.LoginLocalRequest{OrganizationSlug: "engineering", Username: "alice", Password: string(password)})
+	login := connect.NewRequest(&api.LoginLocalRequest{OrganizationSlug: "engineering", Email: "alice@example.com", Password: string(password)})
 	login.Header().Set("Origin", origin)
 	login.Header().Set("X-Blaxsmith-CSRF", csrf.Msg.Token)
 	login.Header().Set("X-Forwarded-For", "198.51.100.1")
@@ -343,6 +343,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 		t.Fatalf("forwarded IP affected login limits: real=%d spoofed=%d", real, spoofed)
 	}
 	testWorkflowBrowserAPI(t, ctx, pool, client, origin, secondOrigin, csrf.Msg.Token, owner, password, seed)
+	testAccountBrowserAPI(t, ctx, pool, client.Transport, origin, password)
 	for path, want := range map[string]int{"/": http.StatusOK, "/tools": http.StatusOK,
 		"/assets/app.js": http.StatusOK, "/assets/missing.js": http.StatusNotFound,
 		"/api/missing": http.StatusNotFound} {
@@ -781,7 +782,7 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherTokens, err := manager.LoginLocal(ctx, "another-org", "alice", password, netip.MustParseAddr("192.0.2.55"))
+	otherTokens, err := manager.LoginLocal(ctx, "another-org", "alice@example.com", password, netip.MustParseAddr("192.0.2.55"), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -940,7 +941,7 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	}
 	// Revoke exactly after the first 100 replayed records. A stream must
 	// recheck its session before reading and sending the next batch.
-	fresh, err := manager.LoginLocal(ctx, "engineering", "alice", password, netip.MustParseAddr("192.0.2.88"))
+	fresh, err := manager.LoginLocal(ctx, "engineering", "alice@example.com", password, netip.MustParseAddr("192.0.2.88"), "")
 	if err != nil {
 		t.Fatal(err)
 	}

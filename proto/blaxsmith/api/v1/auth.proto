@@ -5,10 +5,15 @@ package blaxsmith.api.v1;
 message GetCsrfRequest {}
 message GetCsrfResponse { string token = 1; }
 
+// Local sign-in is by email. An account created before emails existed may use
+// its username once (sent as email); that session must set an email first.
+// organization_slug may be empty when the account has one organization;
+// FAILED_PRECONDITION after a correct password means "name the organization".
 message LoginLocalRequest {
   string organization_slug = 1;
-  string username = 2;
+  string username = 2 [deprecated = true]; // Read only when email is empty.
   string password = 3;
+  string email = 4;
 }
 
 message SessionIdentity {
@@ -16,6 +21,9 @@ message SessionIdentity {
   string principal_id = 2;
   string role = 3;
   string access_expires_at = 4; // RFC 3339.
+  // Until an email is set, every guarded RPC except AccountService's
+  // GetMyProfile and UpdateMyProfile returns FAILED_PRECONDITION.
+  bool email_required = 5;
 }
 
 message LoginLocalResponse { SessionIdentity session = 1; }

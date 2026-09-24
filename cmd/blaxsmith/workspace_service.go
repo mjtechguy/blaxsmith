@@ -44,7 +44,7 @@ func (s *workspaceService) GetWorkspaceHome(ctx context.Context, req *connect.Re
 	response := &api.GetWorkspaceHomeResponse{WaitingOnYou: home.WaitingOnYou, OpenItems: home.OpenItems,
 		RunningAgents: home.RunningAgents, ActiveRuns: home.ActiveRuns, RunsLast_24H: home.RunsLast24h,
 		FailedLast_24H: home.FailedLast24h, GeneratedAt: adminTime(time.Now()), OrganizationName: home.OrganizationName,
-		OrganizationSlug: home.OrganizationSlug, Username: home.Username, DisplayName: home.DisplayName}
+		OrganizationSlug: home.OrganizationSlug, Username: home.Username, DisplayName: home.DisplayName, Email: home.Email}
 	for _, i := range home.Waiting {
 		response.Waiting = append(response.Waiting, inboxItem(i))
 	}
@@ -110,9 +110,7 @@ func (s *workspaceService) ListMembersPage(ctx context.Context, req *connect.Req
 	}
 	response := &api.ListMembersPageResponse{TotalCount: total}
 	for _, m := range members {
-		response.Members = append(response.Members, &api.OrgMember{PrincipalId: m.PrincipalID, Username: m.Username,
-			DisplayName: m.DisplayName, Role: m.Role, Status: m.Status, ActiveSessions: m.ActiveSessions,
-			LastLoginAt: adminOptionalTime(m.LastLogin), CreatedAt: adminTime(m.CreatedAt)})
+		response.Members = append(response.Members, orgMember(m))
 	}
 	return connect.NewResponse(response), nil
 }

@@ -15,7 +15,7 @@ import (
 
 const recipeGrantColumns = `SELECT g.id::text,COALESCE(g.grantee_project_id::text,''),COALESCE(pr.name,''),
 	CASE WHEN g.grantee_project_id IS NOT NULL THEN 'project' WHEN g.grantee_principal_id IS NOT NULL THEN 'user' ELSE 'role' END,
-	COALESCE(g.grantee_principal_id::text,g.grantee_role,''),COALESCE(u.username,''),g.created_at
+	COALESCE(g.grantee_principal_id::text,g.grantee_role,''),COALESCE(identity_principal_label(u.display_name,u.email,u.username),''),g.created_at
 	FROM access_resource_grants g
 	LEFT JOIN workflow_projects pr ON pr.organization_id=g.organization_id AND pr.id=g.grantee_project_id
 	LEFT JOIN identity_principals u ON u.id=g.grantee_principal_id

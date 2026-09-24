@@ -57,8 +57,33 @@ func (g *BrowserGuard) Wrap(handler http.Handler) http.Handler {
 	})
 }
 
-// Caller requires a live membership at the time of each browser request.
+// Caller requires a live membership at the time of each browser request, and
+// refuses a session that must set an email first.
 func (g *BrowserGuard) Caller(ctx context.Context, header http.Header, mutation bool) (Caller, error) {
+	caller, err := g.AccountCaller(ctx, header, mutation)
+	if err != nil {
+		return Caller{}, err
+	}
+	return g.guarded(caller, nil)
+}
+
+// ErrEmailRequired refuses a one-time legacy session until it sets an email.
+var ErrEmailRequired = errors.New("set your email to continue")
+
+// guarded maps authentication errors and refuses email_required sessions.
+func (g *BrowserGuard) guarded(caller Caller, err error) (Caller, error) {
+	if err != nil {
+		return Caller{}, browserAuthError(err)
+	}
+	if caller.EmailRequired {
+		return Caller{}, connect.NewError(connect.CodeFailedPrecondition, ErrEmailRequired)
+	}
+	return caller, nil
+}
+
+// AccountCaller is Caller for the account-setup RPCs a session may use while
+// it is still email_required. Everything else must use Caller.
+func (g *BrowserGuard) AccountCaller(ctx context.Context, header http.Header, mutation bool) (Caller, error) {
 	s := browserService{manager: g.manager, origin: g.origin}
 	var err error
 	if mutation {
@@ -94,11 +119,7 @@ func (g *BrowserGuard) StreamCaller(ctx context.Context, header http.Header) (Ca
 		(site != "" && site != "same-origin") {
 		return Caller{}, connect.NewError(connect.CodePermissionDenied, errors.New("request origin denied"))
 	}
-	caller, err := g.manager.ValidateAccess(ctx, cookieValue(header, accessCookie))
-	if err != nil {
-		return Caller{}, browserAuthError(err)
-	}
-	return caller, nil
+	return g.guarded(g.manager.ValidateAccess(ctx, cookieValue(header, accessCookie)))
 }
 
 func NewBrowserHandler(manager *SessionManager, origin string) (string, http.Handler, error) {
@@ -140,7 +161,11 @@ func (s *browserService) LoginLocal(ctx context.Context, req *connect.Request[ap
 	}
 	password := []byte(req.Msg.Password)
 	defer clear(password)
-	tokens, err := s.manager.LoginLocal(ctx, req.Msg.OrganizationSlug, req.Msg.Username, password, source)
+	login := req.Msg.Email
+	if login == "" {
+		login = req.Msg.Username //nolint:staticcheck // Older clients send the login here.
+	}
+	tokens, err := s.manager.LoginLocal(ctx, req.Msg.OrganizationSlug, login, password, source, req.Header().Get("User-Agent"))
 	if err != nil {
 		return nil, browserAuthError(err)
 	}
@@ -176,7 +201,7 @@ func (s *browserService) CurrentSession(ctx context.Context, req *connect.Reques
 	}
 	response := connect.NewResponse(&api.CurrentSessionResponse{Session: &api.SessionIdentity{
 		OrganizationId: caller.OrganizationID, PrincipalId: caller.PrincipalID,
-		Role: caller.Role, AccessExpiresAt: caller.AccessExpires.Format(time.RFC3339)}})
+		Role: caller.Role, AccessExpiresAt: caller.AccessExpires.Format(time.RFC3339), EmailRequired: caller.EmailRequired}})
 	response.Header().Set("Cache-Control", "no-store")
 	return response, nil
 }
@@ -258,7 +283,7 @@ func clearSessionCookies(header http.Header) {
 
 func tokenIdentity(tokens Tokens) *api.SessionIdentity {
 	return &api.SessionIdentity{OrganizationId: tokens.Organization, PrincipalId: tokens.Principal,
-		Role: tokens.Role, AccessExpiresAt: tokens.AccessExpires.Format(time.RFC3339)}
+		Role: tokens.Role, AccessExpiresAt: tokens.AccessExpires.Format(time.RFC3339), EmailRequired: tokens.EmailRequired}
 }
 
 func peerAddress(addr string) (netip.Addr, error) {
@@ -273,6 +298,8 @@ func browserAuthError(err error) *connect.Error {
 	switch {
 	case errors.Is(err, ErrRateLimited):
 		return connect.NewError(connect.CodeResourceExhausted, errors.New("too many attempts; try again soon"))
+	case errors.Is(err, ErrOrganizationRequired):
+		return connect.NewError(connect.CodeFailedPrecondition, ErrOrganizationRequired)
 	case errors.Is(err, ErrUnauthenticated), errors.Is(err, ErrRefreshReuse):
 		return connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
 	default:

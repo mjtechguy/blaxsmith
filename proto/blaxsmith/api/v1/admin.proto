@@ -19,7 +19,7 @@ message AdminLiveAttempt {
   string model = 9;
   string state = 10;
   string controller_principal_id = 11; // Set while a human holds the terminal.
-  string controller_username = 12;
+  string controller_username = 12; // Display label: name, else email, else handle.
   string started_at = 13; // RFC 3339.
   string last_activity_at = 14; // RFC 3339; latest attempt event.
 }
@@ -96,7 +96,7 @@ message AdminAuditEvent {
   string action = 2;
   string actor_kind = 3;
   string actor_id = 4;
-  string actor_username = 5;
+  string actor_username = 5; // Display label: name, else email, else handle.
   string subject_id = 6;
   string project_id = 7;
   string project_name = 8;
@@ -106,7 +106,7 @@ message ListAuditEventsRequest {
   int32 page_size = 1; // 1-100, default 50.
   string page_token = 2;
   string action = 3; // Exact action; empty for all.
-  string actor = 4; // Principal id or username; empty for all.
+  string actor = 4; // Principal id, email, or handle; empty for all.
   string project_id = 5;
 }
 message ListAuditEventsResponse {

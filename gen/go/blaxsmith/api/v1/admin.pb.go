@@ -35,9 +35,9 @@ type AdminLiveAttempt struct {
 	Model                 string                 `protobuf:"bytes,9,opt,name=model,proto3" json:"model,omitempty"`
 	State                 string                 `protobuf:"bytes,10,opt,name=state,proto3" json:"state,omitempty"`
 	ControllerPrincipalId string                 `protobuf:"bytes,11,opt,name=controller_principal_id,json=controllerPrincipalId,proto3" json:"controller_principal_id,omitempty"` // Set while a human holds the terminal.
-	ControllerUsername    string                 `protobuf:"bytes,12,opt,name=controller_username,json=controllerUsername,proto3" json:"controller_username,omitempty"`
-	StartedAt             string                 `protobuf:"bytes,13,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`                  // RFC 3339.
-	LastActivityAt        string                 `protobuf:"bytes,14,opt,name=last_activity_at,json=lastActivityAt,proto3" json:"last_activity_at,omitempty"` // RFC 3339; latest attempt event.
+	ControllerUsername    string                 `protobuf:"bytes,12,opt,name=controller_username,json=controllerUsername,proto3" json:"controller_username,omitempty"`            // Display label: name, else email, else handle.
+	StartedAt             string                 `protobuf:"bytes,13,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`                                       // RFC 3339.
+	LastActivityAt        string                 `protobuf:"bytes,14,opt,name=last_activity_at,json=lastActivityAt,proto3" json:"last_activity_at,omitempty"`                      // RFC 3339; latest attempt event.
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -777,7 +777,7 @@ type AdminAuditEvent struct {
 	Action        string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
 	ActorKind     string                 `protobuf:"bytes,3,opt,name=actor_kind,json=actorKind,proto3" json:"actor_kind,omitempty"`
 	ActorId       string                 `protobuf:"bytes,4,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
-	ActorUsername string                 `protobuf:"bytes,5,opt,name=actor_username,json=actorUsername,proto3" json:"actor_username,omitempty"`
+	ActorUsername string                 `protobuf:"bytes,5,opt,name=actor_username,json=actorUsername,proto3" json:"actor_username,omitempty"` // Display label: name, else email, else handle.
 	SubjectId     string                 `protobuf:"bytes,6,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
 	ProjectId     string                 `protobuf:"bytes,7,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	ProjectName   string                 `protobuf:"bytes,8,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
@@ -884,7 +884,7 @@ type ListAuditEventsRequest struct {
 	PageSize      int32                  `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"` // 1-100, default 50.
 	PageToken     string                 `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
 	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"` // Exact action; empty for all.
-	Actor         string                 `protobuf:"bytes,4,opt,name=actor,proto3" json:"actor,omitempty"`   // Principal id or username; empty for all.
+	Actor         string                 `protobuf:"bytes,4,opt,name=actor,proto3" json:"actor,omitempty"`   // Principal id, email, or handle; empty for all.
 	ProjectId     string                 `protobuf:"bytes,5,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

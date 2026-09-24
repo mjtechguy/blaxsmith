@@ -14,7 +14,7 @@ func TestUserAdministrationPostgres(t *testing.T) {
 	pool := identityTestPool(t)
 	ctx := context.Background()
 	ownerPassword := []byte("correct horse battery staple")
-	if _, err := BootstrapOwner(ctx, pool, "alice", "engineering", "Engineering", ownerPassword); err != nil {
+	if _, err := BootstrapOwner(ctx, pool, "alice@example.com", "engineering", "Engineering", ownerPassword); err != nil {
 		t.Fatal(err)
 	}
 	_, signer, err := ed25519.GenerateKey(rand.Reader)
@@ -32,7 +32,7 @@ func TestUserAdministrationPostgres(t *testing.T) {
 	source := netip.MustParseAddr("192.0.2.10")
 	login := func(username string, password []byte) (Caller, Tokens, error) {
 		t.Helper()
-		tokens, err := manager.LoginLocal(ctx, "engineering", username, password, source)
+		tokens, err := manager.LoginLocal(ctx, "engineering", username+"@example.com", password, source, "")
 		if err != nil {
 			return Caller{}, Tokens{}, err
 		}
@@ -57,21 +57,26 @@ func TestUserAdministrationPostgres(t *testing.T) {
 	}
 	setup := func(link AccountLink, password string) {
 		t.Helper()
-		if _, err := users.CompleteLink(ctx, link.Token, []byte(password)); err != nil {
+		if _, err := users.CompleteLink(ctx, link.Token, []byte(password), "", ""); err != nil {
 			t.Fatalf("complete %s link: %v", link.Purpose, err)
 		}
 	}
 	owner, _ := mustLogin("alice", ownerPassword)
 
 	// Invitation creates an invited member with a single-use setup link.
-	bobLink, err := users.Invite(ctx, owner, "Bob", "Bob Builder", "admin")
+	bobLink, err := users.Invite(ctx, owner, "Bob@example.com", "Bob Builder", "admin")
 	if err != nil || bobLink.Purpose != "setup" || len(bobLink.Token) != 43 {
 		t.Fatalf("invite: %+v %v", bobLink, err)
 	}
-	if _, err := users.Invite(ctx, owner, "bob", "", "member"); !errors.Is(err, ErrUserExists) {
-		t.Fatalf("duplicate username: %v", err)
+	if _, err := users.Invite(ctx, owner, "  BOB@Example.COM ", "", "member"); !errors.Is(err, ErrEmailTaken) {
+		t.Fatalf("case-insensitive duplicate email: %v", err)
 	}
-	for _, bad := range [][3]string{{"x", "", "member"}, {"valid-name", "", "superuser"}, {"valid-name", "bad\x00name", "member"}} {
+	for _, bad := range []string{"x", "bob", "bob@localhost", "Bob <bob@example.com>", "a b@example.com", "bob@@example.com"} {
+		if _, err := users.Invite(ctx, owner, bad, "", "member"); !errors.Is(err, ErrEmailInvalid) {
+			t.Fatalf("invalid email %q: %v", bad, err)
+		}
+	}
+	for _, bad := range [][3]string{{"valid@example.com", "", "superuser"}, {"valid@example.com", "bad\x00name", "member"}} {
 		if _, err := users.Invite(ctx, owner, bad[0], bad[1], bad[2]); !errors.Is(err, ErrUserInvalid) {
 			t.Fatalf("invalid invite %q: %v", bad, err)
 		}
@@ -83,11 +88,11 @@ func TestUserAdministrationPostgres(t *testing.T) {
 	if _, _, err := login("bob", []byte("bob password 123")); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("invited user signed in before setup: %v", err)
 	}
-	if _, err := users.CompleteLink(ctx, bobLink.Token, []byte("short")); !errors.Is(err, ErrPassword) {
+	if _, err := users.CompleteLink(ctx, bobLink.Token, []byte("short"), "", ""); !errors.Is(err, ErrPassword) {
 		t.Fatalf("short password: %v", err)
 	}
 	setup(bobLink, "bob password 123")
-	if _, err := users.CompleteLink(ctx, bobLink.Token, []byte("bob password 456")); !errors.Is(err, ErrLinkInvalid) {
+	if _, err := users.CompleteLink(ctx, bobLink.Token, []byte("bob password 456"), "", ""); !errors.Is(err, ErrLinkInvalid) {
 		t.Fatalf("setup link reused: %v", err)
 	}
 	if _, err := users.InspectLink(ctx, "not-a-token"); !errors.Is(err, ErrLinkInvalid) {
@@ -96,15 +101,15 @@ func TestUserAdministrationPostgres(t *testing.T) {
 	admin, adminTokens := mustLogin("bob", []byte("bob password 123"))
 
 	// Admins cannot create, grant, or touch owners.
-	if _, err := users.Invite(ctx, admin, "mallory", "", "owner"); !errors.Is(err, ErrOwnerOnly) {
+	if _, err := users.Invite(ctx, admin, "mallory@example.com", "", "owner"); !errors.Is(err, ErrOwnerOnly) {
 		t.Fatalf("admin invited owner: %v", err)
 	}
-	carolLink, err := users.Invite(ctx, admin, "carol", "", "member")
+	carolLink, err := users.Invite(ctx, admin, "carol@example.com", "", "member")
 	if err != nil {
 		t.Fatal(err)
 	}
 	setup(carolLink, "carol password 1")
-	daveLink, err := users.Invite(ctx, admin, "dave", "", "viewer")
+	daveLink, err := users.Invite(ctx, admin, "dave@example.com", "", "viewer")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +137,7 @@ func TestUserAdministrationPostgres(t *testing.T) {
 		if _, err := users.ListMembers(ctx, caller); !errors.Is(err, ErrUserAdminDenied) {
 			t.Fatalf("%s listed members: %v", caller.Role, err)
 		}
-		if _, err := users.Invite(ctx, caller, "eve", "", "viewer"); !errors.Is(err, ErrUserAdminDenied) {
+		if _, err := users.Invite(ctx, caller, "eve@example.com", "", "viewer"); !errors.Is(err, ErrUserAdminDenied) {
 			t.Fatalf("%s invited: %v", caller.Role, err)
 		}
 		if err := users.SetRole(ctx, caller, caller.PrincipalID, "admin"); !errors.Is(err, ErrUserAdminDenied) {
@@ -151,7 +156,7 @@ func TestUserAdministrationPostgres(t *testing.T) {
 	// A token that claims a role it no longer has is fenced.
 	forged := member
 	forged.Role = "admin"
-	if _, err := users.Invite(ctx, forged, "eve", "", "viewer"); !errors.Is(err, ErrUnauthenticated) {
+	if _, err := users.Invite(ctx, forged, "eve@example.com", "", "viewer"); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("forged role accepted: %v", err)
 	}
 
@@ -163,7 +168,7 @@ func TestUserAdministrationPostgres(t *testing.T) {
 	if err := users.SetEnabled(ctx, owner, owner.PrincipalID, false); !errors.Is(err, ErrSelfDisable) {
 		t.Fatalf("self disable: %v", err)
 	}
-	erinLink, err := users.Invite(ctx, owner, "erin", "Erin", "owner")
+	erinLink, err := users.Invite(ctx, owner, "erin@example.com", "Erin", "owner")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +208,7 @@ func TestUserAdministrationPostgres(t *testing.T) {
 	if err != nil || count != 1 || !revoked(adminTokens) {
 		t.Fatalf("revoke sessions: %d %v", count, err)
 	}
-	if _, err := users.Invite(ctx, admin, "eve", "", "viewer"); !errors.Is(err, ErrUnauthenticated) {
+	if _, err := users.Invite(ctx, admin, "eve@example.com", "", "viewer"); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("revoked admin session still mutates: %v", err)
 	}
 
@@ -225,7 +230,7 @@ func TestUserAdministrationPostgres(t *testing.T) {
 		member.PrincipalID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := users.CompleteLink(ctx, second.Token, []byte("carol password 2")); !errors.Is(err, ErrLinkInvalid) {
+	if _, err := users.CompleteLink(ctx, second.Token, []byte("carol password 2"), "", ""); !errors.Is(err, ErrLinkInvalid) {
 		t.Fatalf("expired link used: %v", err)
 	}
 	third, err := users.IssueReset(ctx, owner, member.PrincipalID)

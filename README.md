@@ -101,18 +101,32 @@ the password applies when the volume is first initialized.
 The operator can create the installation's first local owner after migration:
 
 ```sh
-go run ./cmd/blaxsmith bootstrap-owner --username alice \
+go run ./cmd/blaxsmith bootstrap-owner --email alice@example.com \
   --organization-slug example --organization-name "Example"
 ```
 
 It reads and confirms the password from the terminal and atomically creates
-one principal, organization, owner membership, and audit event. The internal
+one principal, organization, owner membership, and audit event. Everyone signs
+in with an email and password. Emails are stored lowercased and trimmed and are
+unique across the installation regardless of case; they start unverified
+because no mail is sent. The username is only an internal handle, derived from
+the email's local part (with a numeric suffix when taken), and the UI shows the
+display name or email instead. An account created before emails were required
+may sign in with its username exactly once; that session can only set an email
+(every other guarded RPC returns `FAILED_PRECONDITION`) until it does. If that
+single use is spent, an owner or admin sets the email from Admin › Users, or the
+operator runs `blaxsmith admin set-email --login <current email or handle>
+--email <new email>` against `BLAXSMITH_DATABASE_URL`; both revoke the account's
+sessions and are audited. When OIDC is added it links accounts by the
+provider's verified email claim, confirmed by the signed-in user; an unverified
+local or IdP email never links on its own. The internal
 session service now verifies local credentials, issues ten-minute signed access
 tokens, rotates hashed refresh tokens, checks current membership/policy on each
 request, and revokes on refresh replay. Login attempts are counted in PostgreSQL
 across replicas by source, account/source, and account across all source IPs
 before bounded password hashing. The account cap is 30 attempts per minute per
-organization and username, including unknown names and successful attempts;
+email (or legacy username), across organizations, including unknown names and
+successful attempts;
 the same generic throttle response avoids an account-existence check. An
 attacker can still temporarily deny a known user's login by spending that
 minute's allowance, so support and alerting must treat throttling as a signal.

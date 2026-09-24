@@ -21,7 +21,7 @@ func TestBrowserSessionPostgres(t *testing.T) {
 	pool := identityTestPool(t)
 	ctx := context.Background()
 	password := []byte("correct horse battery staple")
-	owner, err := BootstrapOwner(ctx, pool, "alice", "engineering", "Engineering", password)
+	owner, err := BootstrapOwner(ctx, pool, "alice@example.com", "engineering", "Engineering", password)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestBrowserSessionPostgres(t *testing.T) {
 		t.Fatalf("csrf bootstrap failed: %v", err)
 	}
 	assertSecureCookies(t, csrf.Header(), csrfCookie)
-	login := connect.NewRequest(&api.LoginLocalRequest{OrganizationSlug: "engineering", Username: "alice", Password: string(password)})
+	login := connect.NewRequest(&api.LoginLocalRequest{OrganizationSlug: "engineering", Email: "alice@example.com", Password: string(password)})
 	login.Header().Set("Origin", origin)
 	login.Header().Set("Sec-Fetch-Site", "cross-site")
 	login.Header().Set("X-Blaxsmith-CSRF", csrf.Msg.Token)
@@ -87,7 +87,7 @@ func TestBrowserSessionPostgres(t *testing.T) {
 	if _, err := apiClient.LoginLocal(ctx, login); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("missing csrf accepted: %v", err)
 	}
-	oversized := connect.NewRequest(&api.LoginLocalRequest{OrganizationSlug: "engineering", Username: "alice", Password: strings.Repeat("x", 5000)})
+	oversized := connect.NewRequest(&api.LoginLocalRequest{OrganizationSlug: "engineering", Email: "alice@example.com", Password: strings.Repeat("x", 5000)})
 	oversized.Header().Set("Origin", origin)
 	oversized.Header().Set("X-Blaxsmith-CSRF", csrf.Msg.Token)
 	if _, err := apiClient.LoginLocal(ctx, oversized); connect.CodeOf(err) != connect.CodeResourceExhausted {

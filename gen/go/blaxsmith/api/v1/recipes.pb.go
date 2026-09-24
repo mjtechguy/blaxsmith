@@ -138,7 +138,7 @@ type RecipeVersion struct {
 	Sha256            string                 `protobuf:"bytes,5,opt,name=sha256,proto3" json:"sha256,omitempty"`
 	FrozenPath        string                 `protobuf:"bytes,6,opt,name=frozen_path,json=frozenPath,proto3" json:"frozen_path,omitempty"`                        // Repository-relative label recorded in the run bundle.
 	AuthorPrincipalId string                 `protobuf:"bytes,7,opt,name=author_principal_id,json=authorPrincipalId,proto3" json:"author_principal_id,omitempty"` // Empty for the installation seed.
-	AuthorUsername    string                 `protobuf:"bytes,8,opt,name=author_username,json=authorUsername,proto3" json:"author_username,omitempty"`
+	AuthorUsername    string                 `protobuf:"bytes,8,opt,name=author_username,json=authorUsername,proto3" json:"author_username,omitempty"`            // Display label: name, else email, else handle.
 	CreatedAt         string                 `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache

@@ -24,13 +24,15 @@ const (
 type OrgMember struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	PrincipalId    string                 `protobuf:"bytes,1,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"`
-	Username       string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	Username       string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"` // Internal handle; members sign in with email.
 	DisplayName    string                 `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	Role           string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`     // owner, admin, member, or viewer.
 	Status         string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"` // invited (no password yet), active, or disabled.
 	ActiveSessions int32                  `protobuf:"varint,6,opt,name=active_sessions,json=activeSessions,proto3" json:"active_sessions,omitempty"`
 	LastLoginAt    string                 `protobuf:"bytes,7,opt,name=last_login_at,json=lastLoginAt,proto3" json:"last_login_at,omitempty"` // RFC 3339 of the latest session; empty if never.
 	CreatedAt      string                 `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	Email          string                 `protobuf:"bytes,9,opt,name=email,proto3" json:"email,omitempty"` // Empty for an account that has not set one yet.
+	EmailVerified  bool                   `protobuf:"varint,10,opt,name=email_verified,json=emailVerified,proto3" json:"email_verified,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -119,6 +121,20 @@ func (x *OrgMember) GetCreatedAt() string {
 		return x.CreatedAt
 	}
 	return ""
+}
+
+func (x *OrgMember) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *OrgMember) GetEmailVerified() bool {
+	if x != nil {
+		return x.EmailVerified
+	}
+	return false
 }
 
 // A single-use setup or reset link, shown once to the issuing admin. The
@@ -263,11 +279,15 @@ func (x *ListOrgMembersResponse) GetMembers() []*OrgMember {
 	return nil
 }
 
+// Invites by email; the internal handle is derived from it. The admin copies
+// the returned setup link to the person (no mail is sent).
 type InviteUserRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
-	DisplayName   string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	Role          string                 `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"` // Only an owner can invite an owner.
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in blaxsmith/api/v1/users.proto.
+	Username      string `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"` // Ignored.
+	DisplayName   string `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Role          string `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"` // Only an owner can invite an owner.
+	Email         string `protobuf:"bytes,4,opt,name=email,proto3" json:"email,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -302,6 +322,7 @@ func (*InviteUserRequest) Descriptor() ([]byte, []int) {
 	return file_blaxsmith_api_v1_users_proto_rawDescGZIP(), []int{4}
 }
 
+// Deprecated: Marked as deprecated in blaxsmith/api/v1/users.proto.
 func (x *InviteUserRequest) GetUsername() string {
 	if x != nil {
 		return x.Username
@@ -319,6 +340,13 @@ func (x *InviteUserRequest) GetDisplayName() string {
 func (x *InviteUserRequest) GetRole() string {
 	if x != nil {
 		return x.Role
+	}
+	return ""
+}
+
+func (x *InviteUserRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
 	}
 	return ""
 }
@@ -731,6 +759,98 @@ func (x *RevokeUserSessionsResponse) GetRevoked() int64 {
 	return 0
 }
 
+// Owner/admin repair of a member's sign-in email. It must be unused across the
+// installation, is stored unverified, revokes the member's sessions, and is
+// audited. Like reset links, an account shared with another organization
+// cannot be changed from here; only an owner changes an owner.
+type SetUserEmailRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PrincipalId   string                 `protobuf:"bytes,1,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"`
+	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetUserEmailRequest) Reset() {
+	*x = SetUserEmailRequest{}
+	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetUserEmailRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetUserEmailRequest) ProtoMessage() {}
+
+func (x *SetUserEmailRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetUserEmailRequest.ProtoReflect.Descriptor instead.
+func (*SetUserEmailRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_users_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *SetUserEmailRequest) GetPrincipalId() string {
+	if x != nil {
+		return x.PrincipalId
+	}
+	return ""
+}
+
+func (x *SetUserEmailRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+type SetUserEmailResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetUserEmailResponse) Reset() {
+	*x = SetUserEmailResponse{}
+	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetUserEmailResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetUserEmailResponse) ProtoMessage() {}
+
+func (x *SetUserEmailResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetUserEmailResponse.ProtoReflect.Descriptor instead.
+func (*SetUserEmailResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_users_proto_rawDescGZIP(), []int{15}
+}
+
 // Public: no session required. Unknown, used, revoked, and expired links all
 // return NOT_FOUND.
 type GetAccountLinkRequest struct {
@@ -742,7 +862,7 @@ type GetAccountLinkRequest struct {
 
 func (x *GetAccountLinkRequest) Reset() {
 	*x = GetAccountLinkRequest{}
-	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[14]
+	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -754,7 +874,7 @@ func (x *GetAccountLinkRequest) String() string {
 func (*GetAccountLinkRequest) ProtoMessage() {}
 
 func (x *GetAccountLinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[14]
+	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -767,7 +887,7 @@ func (x *GetAccountLinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAccountLinkRequest.ProtoReflect.Descriptor instead.
 func (*GetAccountLinkRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_users_proto_rawDescGZIP(), []int{14}
+	return file_blaxsmith_api_v1_users_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetAccountLinkRequest) GetToken() string {
@@ -785,13 +905,14 @@ type GetAccountLinkResponse struct {
 	OrganizationSlug string                 `protobuf:"bytes,4,opt,name=organization_slug,json=organizationSlug,proto3" json:"organization_slug,omitempty"`
 	OrganizationName string                 `protobuf:"bytes,5,opt,name=organization_name,json=organizationName,proto3" json:"organization_name,omitempty"`
 	ExpiresAt        string                 `protobuf:"bytes,6,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	Email            string                 `protobuf:"bytes,7,opt,name=email,proto3" json:"email,omitempty"` // Empty for an older account without one; setup then asks.
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
 func (x *GetAccountLinkResponse) Reset() {
 	*x = GetAccountLinkResponse{}
-	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[15]
+	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -803,7 +924,7 @@ func (x *GetAccountLinkResponse) String() string {
 func (*GetAccountLinkResponse) ProtoMessage() {}
 
 func (x *GetAccountLinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[15]
+	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -816,7 +937,7 @@ func (x *GetAccountLinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAccountLinkResponse.ProtoReflect.Descriptor instead.
 func (*GetAccountLinkResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_users_proto_rawDescGZIP(), []int{15}
+	return file_blaxsmith_api_v1_users_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetAccountLinkResponse) GetPurpose() string {
@@ -861,19 +982,30 @@ func (x *GetAccountLinkResponse) GetExpiresAt() string {
 	return ""
 }
 
+func (x *GetAccountLinkResponse) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
 // Public, CSRF-protected. Sets the password, consumes the link, and revokes
 // every existing session of the account.
+// display_name is optional (empty keeps the current one). email is read only
+// when the account has none yet.
 type CompleteAccountLinkRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
 	Password      string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	DisplayName   string                 `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Email         string                 `protobuf:"bytes,4,opt,name=email,proto3" json:"email,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CompleteAccountLinkRequest) Reset() {
 	*x = CompleteAccountLinkRequest{}
-	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[16]
+	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -885,7 +1017,7 @@ func (x *CompleteAccountLinkRequest) String() string {
 func (*CompleteAccountLinkRequest) ProtoMessage() {}
 
 func (x *CompleteAccountLinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[16]
+	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -898,7 +1030,7 @@ func (x *CompleteAccountLinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteAccountLinkRequest.ProtoReflect.Descriptor instead.
 func (*CompleteAccountLinkRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_users_proto_rawDescGZIP(), []int{16}
+	return file_blaxsmith_api_v1_users_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CompleteAccountLinkRequest) GetToken() string {
@@ -915,17 +1047,33 @@ func (x *CompleteAccountLinkRequest) GetPassword() string {
 	return ""
 }
 
+func (x *CompleteAccountLinkRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *CompleteAccountLinkRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
 type CompleteAccountLinkResponse struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationSlug string                 `protobuf:"bytes,1,opt,name=organization_slug,json=organizationSlug,proto3" json:"organization_slug,omitempty"`
-	Username         string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Deprecated: Marked as deprecated in blaxsmith/api/v1/users.proto.
+	Username      string `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	Email         string `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CompleteAccountLinkResponse) Reset() {
 	*x = CompleteAccountLinkResponse{}
-	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[17]
+	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -937,7 +1085,7 @@ func (x *CompleteAccountLinkResponse) String() string {
 func (*CompleteAccountLinkResponse) ProtoMessage() {}
 
 func (x *CompleteAccountLinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[17]
+	mi := &file_blaxsmith_api_v1_users_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -950,7 +1098,7 @@ func (x *CompleteAccountLinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteAccountLinkResponse.ProtoReflect.Descriptor instead.
 func (*CompleteAccountLinkResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_users_proto_rawDescGZIP(), []int{17}
+	return file_blaxsmith_api_v1_users_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CompleteAccountLinkResponse) GetOrganizationSlug() string {
@@ -960,9 +1108,17 @@ func (x *CompleteAccountLinkResponse) GetOrganizationSlug() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in blaxsmith/api/v1/users.proto.
 func (x *CompleteAccountLinkResponse) GetUsername() string {
 	if x != nil {
 		return x.Username
+	}
+	return ""
+}
+
+func (x *CompleteAccountLinkResponse) GetEmail() string {
+	if x != nil {
+		return x.Email
 	}
 	return ""
 }
@@ -971,7 +1127,7 @@ var File_blaxsmith_api_v1_users_proto protoreflect.FileDescriptor
 
 const file_blaxsmith_api_v1_users_proto_rawDesc = "" +
 	"\n" +
-	"\x1cblaxsmith/api/v1/users.proto\x12\x10blaxsmith.api.v1\"\x85\x02\n" +
+	"\x1cblaxsmith/api/v1/users.proto\x12\x10blaxsmith.api.v1\"\xc2\x02\n" +
 	"\tOrgMember\x12!\n" +
 	"\fprincipal_id\x18\x01 \x01(\tR\vprincipalId\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12!\n" +
@@ -981,7 +1137,10 @@ const file_blaxsmith_api_v1_users_proto_rawDesc = "" +
 	"\x0factive_sessions\x18\x06 \x01(\x05R\x0eactiveSessions\x12\"\n" +
 	"\rlast_login_at\x18\a \x01(\tR\vlastLoginAt\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\b \x01(\tR\tcreatedAt\"\\\n" +
+	"created_at\x18\b \x01(\tR\tcreatedAt\x12\x14\n" +
+	"\x05email\x18\t \x01(\tR\x05email\x12%\n" +
+	"\x0eemail_verified\x18\n" +
+	" \x01(\bR\remailVerified\"\\\n" +
 	"\vAccountLink\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x18\n" +
 	"\apurpose\x18\x02 \x01(\tR\apurpose\x12\x1d\n" +
@@ -989,11 +1148,12 @@ const file_blaxsmith_api_v1_users_proto_rawDesc = "" +
 	"expires_at\x18\x03 \x01(\tR\texpiresAt\"\x17\n" +
 	"\x15ListOrgMembersRequest\"O\n" +
 	"\x16ListOrgMembersResponse\x125\n" +
-	"\amembers\x18\x01 \x03(\v2\x1b.blaxsmith.api.v1.OrgMemberR\amembers\"f\n" +
-	"\x11InviteUserRequest\x12\x1a\n" +
-	"\busername\x18\x01 \x01(\tR\busername\x12!\n" +
+	"\amembers\x18\x01 \x03(\v2\x1b.blaxsmith.api.v1.OrgMemberR\amembers\"\x80\x01\n" +
+	"\x11InviteUserRequest\x12\x1e\n" +
+	"\busername\x18\x01 \x01(\tB\x02\x18\x01R\busername\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x12\n" +
-	"\x04role\x18\x03 \x01(\tR\x04role\"j\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\x12\x14\n" +
+	"\x05email\x18\x04 \x01(\tR\x05email\"j\n" +
 	"\x12InviteUserResponse\x12!\n" +
 	"\fprincipal_id\x18\x01 \x01(\tR\vprincipalId\x121\n" +
 	"\x04link\x18\x02 \x01(\v2\x1d.blaxsmith.api.v1.AccountLinkR\x04link\"K\n" +
@@ -1012,9 +1172,13 @@ const file_blaxsmith_api_v1_users_proto_rawDesc = "" +
 	"\x19RevokeUserSessionsRequest\x12!\n" +
 	"\fprincipal_id\x18\x01 \x01(\tR\vprincipalId\"6\n" +
 	"\x1aRevokeUserSessionsResponse\x12\x18\n" +
-	"\arevoked\x18\x01 \x01(\x03R\arevoked\"-\n" +
+	"\arevoked\x18\x01 \x01(\x03R\arevoked\"N\n" +
+	"\x13SetUserEmailRequest\x12!\n" +
+	"\fprincipal_id\x18\x01 \x01(\tR\vprincipalId\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\"\x16\n" +
+	"\x14SetUserEmailResponse\"-\n" +
 	"\x15GetAccountLinkRequest\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\"\xea\x01\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\"\x80\x02\n" +
 	"\x16GetAccountLinkResponse\x12\x18\n" +
 	"\apurpose\x18\x01 \x01(\tR\apurpose\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12!\n" +
@@ -1022,13 +1186,17 @@ const file_blaxsmith_api_v1_users_proto_rawDesc = "" +
 	"\x11organization_slug\x18\x04 \x01(\tR\x10organizationSlug\x12+\n" +
 	"\x11organization_name\x18\x05 \x01(\tR\x10organizationName\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\x06 \x01(\tR\texpiresAt\"N\n" +
+	"expires_at\x18\x06 \x01(\tR\texpiresAt\x12\x14\n" +
+	"\x05email\x18\a \x01(\tR\x05email\"\x87\x01\n" +
 	"\x1aCompleteAccountLinkRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x1a\n" +
-	"\bpassword\x18\x02 \x01(\tR\bpassword\"f\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12\x14\n" +
+	"\x05email\x18\x04 \x01(\tR\x05email\"\x80\x01\n" +
 	"\x1bCompleteAccountLinkResponse\x12+\n" +
-	"\x11organization_slug\x18\x01 \x01(\tR\x10organizationSlug\x12\x1a\n" +
-	"\busername\x18\x02 \x01(\tR\busername2\xc0\x06\n" +
+	"\x11organization_slug\x18\x01 \x01(\tR\x10organizationSlug\x12\x1e\n" +
+	"\busername\x18\x02 \x01(\tB\x02\x18\x01R\busername\x12\x14\n" +
+	"\x05email\x18\x03 \x01(\tR\x05email2\x9f\a\n" +
 	"\x10UserAdminService\x12c\n" +
 	"\x0eListOrgMembers\x12'.blaxsmith.api.v1.ListOrgMembersRequest\x1a(.blaxsmith.api.v1.ListOrgMembersResponse\x12W\n" +
 	"\n" +
@@ -1036,7 +1204,8 @@ const file_blaxsmith_api_v1_users_proto_rawDesc = "" +
 	"\vSetUserRole\x12$.blaxsmith.api.v1.SetUserRoleRequest\x1a%.blaxsmith.api.v1.SetUserRoleResponse\x12c\n" +
 	"\x0eSetUserEnabled\x12'.blaxsmith.api.v1.SetUserEnabledRequest\x1a(.blaxsmith.api.v1.SetUserEnabledResponse\x12c\n" +
 	"\x0eIssueResetLink\x12'.blaxsmith.api.v1.IssueResetLinkRequest\x1a(.blaxsmith.api.v1.IssueResetLinkResponse\x12o\n" +
-	"\x12RevokeUserSessions\x12+.blaxsmith.api.v1.RevokeUserSessionsRequest\x1a,.blaxsmith.api.v1.RevokeUserSessionsResponse\x12c\n" +
+	"\x12RevokeUserSessions\x12+.blaxsmith.api.v1.RevokeUserSessionsRequest\x1a,.blaxsmith.api.v1.RevokeUserSessionsResponse\x12]\n" +
+	"\fSetUserEmail\x12%.blaxsmith.api.v1.SetUserEmailRequest\x1a&.blaxsmith.api.v1.SetUserEmailResponse\x12c\n" +
 	"\x0eGetAccountLink\x12'.blaxsmith.api.v1.GetAccountLinkRequest\x1a(.blaxsmith.api.v1.GetAccountLinkResponse\x12r\n" +
 	"\x13CompleteAccountLink\x12,.blaxsmith.api.v1.CompleteAccountLinkRequest\x1a-.blaxsmith.api.v1.CompleteAccountLinkResponseB\xc2\x01\n" +
 	"\x14com.blaxsmith.api.v1B\n" +
@@ -1054,7 +1223,7 @@ func file_blaxsmith_api_v1_users_proto_rawDescGZIP() []byte {
 	return file_blaxsmith_api_v1_users_proto_rawDescData
 }
 
-var file_blaxsmith_api_v1_users_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_blaxsmith_api_v1_users_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_blaxsmith_api_v1_users_proto_goTypes = []any{
 	(*OrgMember)(nil),                   // 0: blaxsmith.api.v1.OrgMember
 	(*AccountLink)(nil),                 // 1: blaxsmith.api.v1.AccountLink
@@ -1070,10 +1239,12 @@ var file_blaxsmith_api_v1_users_proto_goTypes = []any{
 	(*IssueResetLinkResponse)(nil),      // 11: blaxsmith.api.v1.IssueResetLinkResponse
 	(*RevokeUserSessionsRequest)(nil),   // 12: blaxsmith.api.v1.RevokeUserSessionsRequest
 	(*RevokeUserSessionsResponse)(nil),  // 13: blaxsmith.api.v1.RevokeUserSessionsResponse
-	(*GetAccountLinkRequest)(nil),       // 14: blaxsmith.api.v1.GetAccountLinkRequest
-	(*GetAccountLinkResponse)(nil),      // 15: blaxsmith.api.v1.GetAccountLinkResponse
-	(*CompleteAccountLinkRequest)(nil),  // 16: blaxsmith.api.v1.CompleteAccountLinkRequest
-	(*CompleteAccountLinkResponse)(nil), // 17: blaxsmith.api.v1.CompleteAccountLinkResponse
+	(*SetUserEmailRequest)(nil),         // 14: blaxsmith.api.v1.SetUserEmailRequest
+	(*SetUserEmailResponse)(nil),        // 15: blaxsmith.api.v1.SetUserEmailResponse
+	(*GetAccountLinkRequest)(nil),       // 16: blaxsmith.api.v1.GetAccountLinkRequest
+	(*GetAccountLinkResponse)(nil),      // 17: blaxsmith.api.v1.GetAccountLinkResponse
+	(*CompleteAccountLinkRequest)(nil),  // 18: blaxsmith.api.v1.CompleteAccountLinkRequest
+	(*CompleteAccountLinkResponse)(nil), // 19: blaxsmith.api.v1.CompleteAccountLinkResponse
 }
 var file_blaxsmith_api_v1_users_proto_depIdxs = []int32{
 	0,  // 0: blaxsmith.api.v1.ListOrgMembersResponse.members:type_name -> blaxsmith.api.v1.OrgMember
@@ -1085,18 +1256,20 @@ var file_blaxsmith_api_v1_users_proto_depIdxs = []int32{
 	8,  // 6: blaxsmith.api.v1.UserAdminService.SetUserEnabled:input_type -> blaxsmith.api.v1.SetUserEnabledRequest
 	10, // 7: blaxsmith.api.v1.UserAdminService.IssueResetLink:input_type -> blaxsmith.api.v1.IssueResetLinkRequest
 	12, // 8: blaxsmith.api.v1.UserAdminService.RevokeUserSessions:input_type -> blaxsmith.api.v1.RevokeUserSessionsRequest
-	14, // 9: blaxsmith.api.v1.UserAdminService.GetAccountLink:input_type -> blaxsmith.api.v1.GetAccountLinkRequest
-	16, // 10: blaxsmith.api.v1.UserAdminService.CompleteAccountLink:input_type -> blaxsmith.api.v1.CompleteAccountLinkRequest
-	3,  // 11: blaxsmith.api.v1.UserAdminService.ListOrgMembers:output_type -> blaxsmith.api.v1.ListOrgMembersResponse
-	5,  // 12: blaxsmith.api.v1.UserAdminService.InviteUser:output_type -> blaxsmith.api.v1.InviteUserResponse
-	7,  // 13: blaxsmith.api.v1.UserAdminService.SetUserRole:output_type -> blaxsmith.api.v1.SetUserRoleResponse
-	9,  // 14: blaxsmith.api.v1.UserAdminService.SetUserEnabled:output_type -> blaxsmith.api.v1.SetUserEnabledResponse
-	11, // 15: blaxsmith.api.v1.UserAdminService.IssueResetLink:output_type -> blaxsmith.api.v1.IssueResetLinkResponse
-	13, // 16: blaxsmith.api.v1.UserAdminService.RevokeUserSessions:output_type -> blaxsmith.api.v1.RevokeUserSessionsResponse
-	15, // 17: blaxsmith.api.v1.UserAdminService.GetAccountLink:output_type -> blaxsmith.api.v1.GetAccountLinkResponse
-	17, // 18: blaxsmith.api.v1.UserAdminService.CompleteAccountLink:output_type -> blaxsmith.api.v1.CompleteAccountLinkResponse
-	11, // [11:19] is the sub-list for method output_type
-	3,  // [3:11] is the sub-list for method input_type
+	14, // 9: blaxsmith.api.v1.UserAdminService.SetUserEmail:input_type -> blaxsmith.api.v1.SetUserEmailRequest
+	16, // 10: blaxsmith.api.v1.UserAdminService.GetAccountLink:input_type -> blaxsmith.api.v1.GetAccountLinkRequest
+	18, // 11: blaxsmith.api.v1.UserAdminService.CompleteAccountLink:input_type -> blaxsmith.api.v1.CompleteAccountLinkRequest
+	3,  // 12: blaxsmith.api.v1.UserAdminService.ListOrgMembers:output_type -> blaxsmith.api.v1.ListOrgMembersResponse
+	5,  // 13: blaxsmith.api.v1.UserAdminService.InviteUser:output_type -> blaxsmith.api.v1.InviteUserResponse
+	7,  // 14: blaxsmith.api.v1.UserAdminService.SetUserRole:output_type -> blaxsmith.api.v1.SetUserRoleResponse
+	9,  // 15: blaxsmith.api.v1.UserAdminService.SetUserEnabled:output_type -> blaxsmith.api.v1.SetUserEnabledResponse
+	11, // 16: blaxsmith.api.v1.UserAdminService.IssueResetLink:output_type -> blaxsmith.api.v1.IssueResetLinkResponse
+	13, // 17: blaxsmith.api.v1.UserAdminService.RevokeUserSessions:output_type -> blaxsmith.api.v1.RevokeUserSessionsResponse
+	15, // 18: blaxsmith.api.v1.UserAdminService.SetUserEmail:output_type -> blaxsmith.api.v1.SetUserEmailResponse
+	17, // 19: blaxsmith.api.v1.UserAdminService.GetAccountLink:output_type -> blaxsmith.api.v1.GetAccountLinkResponse
+	19, // 20: blaxsmith.api.v1.UserAdminService.CompleteAccountLink:output_type -> blaxsmith.api.v1.CompleteAccountLinkResponse
+	12, // [12:21] is the sub-list for method output_type
+	3,  // [3:12] is the sub-list for method input_type
 	3,  // [3:3] is the sub-list for extension type_name
 	3,  // [3:3] is the sub-list for extension extendee
 	0,  // [0:3] is the sub-list for field type_name
@@ -1113,7 +1286,7 @@ func file_blaxsmith_api_v1_users_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blaxsmith_api_v1_users_proto_rawDesc), len(file_blaxsmith_api_v1_users_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

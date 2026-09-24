@@ -50,6 +50,8 @@ func NewUserAdmin(db *pgxpool.Pool) (*UserAdmin, error) {
 // invited (no password yet), active, or disabled.
 type Member struct {
 	PrincipalID, Username, DisplayName, Role, Status string
+	Email                                            string
+	EmailVerified                                    bool
 	ActiveSessions                                   int32
 	LastLogin                                        *time.Time
 	CreatedAt                                        time.Time
@@ -65,6 +67,7 @@ type AccountLink struct {
 // LinkInfo describes an open link to the person redeeming it.
 type LinkInfo struct {
 	Purpose, Username, DisplayName, OrganizationSlug, OrganizationName string
+	Email                                                              string
 	ExpiresAt                                                          time.Time
 }
 
@@ -147,7 +150,7 @@ func (u *UserAdmin) ListMembers(ctx context.Context, caller Caller) ([]Member, e
 	if err := userAdminRole(caller); err != nil {
 		return nil, err
 	}
-	rows, err := u.db.Query(ctx, `SELECT p.id,p.username,p.display_name,m.role,
+	rows, err := u.db.Query(ctx, `SELECT p.id,p.username,p.display_name,COALESCE(p.email,''),p.email_verified,m.role,
 		CASE WHEN m.state='disabled' OR p.state='disabled' THEN 'disabled'
 			WHEN p.password_hash IS NULL THEN 'invited' ELSE 'active' END,
 		(SELECT count(*)::integer FROM identity_sessions s WHERE s.organization_id=m.organization_id
@@ -157,15 +160,15 @@ func (u *UserAdmin) ListMembers(ctx context.Context, caller Caller) ([]Member, e
 		m.created_at
 		FROM identity_memberships m JOIN identity_principals p ON p.id=m.principal_id
 		WHERE m.organization_id=$1
-		ORDER BY array_position(ARRAY['owner','admin','member','viewer'],m.role),p.username LIMIT 1000`,
+		ORDER BY array_position(ARRAY['owner','admin','member','viewer'],m.role),COALESCE(p.email,p.username) LIMIT 1000`,
 		caller.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Member, error) {
 		var m Member
-		err := row.Scan(&m.PrincipalID, &m.Username, &m.DisplayName, &m.Role, &m.Status, &m.ActiveSessions,
-			&m.LastLogin, &m.CreatedAt)
+		err := row.Scan(&m.PrincipalID, &m.Username, &m.DisplayName, &m.Email, &m.EmailVerified, &m.Role, &m.Status,
+			&m.ActiveSessions, &m.LastLogin, &m.CreatedAt)
 		return m, err
 	})
 }
@@ -182,6 +185,7 @@ type MemberFilter struct {
 var memberSorts = map[string]string{
 	"role":       "array_position(ARRAY['owner','admin','member','viewer'],role)",
 	"username":   "username",
+	"email":      "email",
 	"last_login": "last_login",
 	"created_at": "created_at",
 }
@@ -224,11 +228,11 @@ func (u *UserAdmin) ListMembersPage(ctx context.Context, caller Caller, f Member
 	roles, statuses := append([]string{}, f.Roles...), append([]string{}, f.Statuses...)
 	order += " " + f.SortDirection
 	if f.SortBy == "role" {
-		order += ",username " + f.SortDirection
+		order += ",email " + f.SortDirection
 	} else if f.SortBy == "last_login" {
 		order += " NULLS LAST"
 	}
-	const filtered = `WITH members AS (SELECT p.id,p.username,p.display_name,m.role,
+	const filtered = `WITH members AS (SELECT p.id,p.username,p.display_name,COALESCE(p.email,'') AS email,p.email_verified,m.role,
 		CASE WHEN m.state='disabled' OR p.state='disabled' THEN 'disabled'
 			WHEN p.password_hash IS NULL THEN 'invited' ELSE 'active' END AS status,
 		(SELECT count(*)::integer FROM identity_sessions s WHERE s.organization_id=m.organization_id
@@ -238,14 +242,14 @@ func (u *UserAdmin) ListMembersPage(ctx context.Context, caller Caller, f Member
 		m.created_at
 		FROM identity_memberships m JOIN identity_principals p ON p.id=m.principal_id
 		WHERE m.organization_id=$1 AND (cardinality($2::text[])=0 OR m.role=ANY($2::text[]))
-		AND ($3='' OR position(lower($3) in lower(p.username||' '||p.display_name))>0)),
+		AND ($3='' OR position(lower($3) in lower(COALESCE(p.email,'')||' '||p.username||' '||p.display_name))>0)),
 	filtered AS (SELECT * FROM members WHERE cardinality($4::text[])=0 OR status=ANY($4::text[]))`
 	args := []any{caller.OrganizationID, roles, f.Search, statuses}
 	var total int32
 	if err := u.db.QueryRow(ctx, filtered+` SELECT count(*)::integer FROM filtered`, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := u.db.Query(ctx, filtered+` SELECT id,username,display_name,role,status,sessions,last_login,created_at
+	rows, err := u.db.Query(ctx, filtered+` SELECT id,username,display_name,email,email_verified,role,status,sessions,last_login,created_at
 		FROM filtered ORDER BY `+order+`,id `+f.SortDirection+` LIMIT $5 OFFSET $6`,
 		append(args, f.PageSize, (f.Page-1)*f.PageSize)...)
 	if err != nil {
@@ -253,8 +257,8 @@ func (u *UserAdmin) ListMembersPage(ctx context.Context, caller Caller, f Member
 	}
 	members, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Member, error) {
 		var m Member
-		err := row.Scan(&m.PrincipalID, &m.Username, &m.DisplayName, &m.Role, &m.Status, &m.ActiveSessions,
-			&m.LastLogin, &m.CreatedAt)
+		err := row.Scan(&m.PrincipalID, &m.Username, &m.DisplayName, &m.Email, &m.EmailVerified, &m.Role, &m.Status,
+			&m.ActiveSessions, &m.LastLogin, &m.CreatedAt)
 		return m, err
 	})
 	return members, total, err
@@ -264,11 +268,16 @@ func validDisplayName(name string) bool {
 	return utf8.ValidString(name) && utf8.RuneCountInString(name) <= 160 && !strings.ContainsFunc(name, unicode.IsControl)
 }
 
-// Invite creates a principal with no password, its membership, and a
-// single-use setup link. Only an owner can invite an owner.
-func (u *UserAdmin) Invite(ctx context.Context, caller Caller, username, displayName, role string) (AccountLink, error) {
-	username, displayName = strings.ToLower(strings.TrimSpace(username)), strings.TrimSpace(displayName)
-	if !accountName.MatchString(username) || !validDisplayName(displayName) || !memberRoles[role] {
+// Invite creates a principal with the given email and no password, its
+// membership, and a single-use setup link. Only an owner can invite an owner.
+// The internal handle is derived from the email.
+func (u *UserAdmin) Invite(ctx context.Context, caller Caller, email, displayName, role string) (AccountLink, error) {
+	email, err := NormalizeEmail(email)
+	if err != nil {
+		return AccountLink{}, err
+	}
+	displayName = strings.TrimSpace(displayName)
+	if !validDisplayName(displayName) || !memberRoles[role] {
 		return AccountLink{}, ErrUserInvalid
 	}
 	tx, err := u.db.Begin(ctx)
@@ -282,13 +291,20 @@ func (u *UserAdmin) Invite(ctx context.Context, caller Caller, username, display
 	if role == "owner" && caller.Role != "owner" {
 		return AccountLink{}, ErrOwnerOnly
 	}
-	var principalID string
-	if err := tx.QueryRow(ctx, `INSERT INTO identity_principals (id,username,display_name)
-		VALUES (gen_random_uuid(),$1,$2) ON CONFLICT (username) DO NOTHING RETURNING id`, username, displayName).
-		Scan(&principalID); errors.Is(err, pgx.ErrNoRows) {
-		return AccountLink{}, ErrUserExists
-	} else if err != nil {
+	if used, err := emailInUse(ctx, tx, email, ""); err != nil {
 		return AccountLink{}, err
+	} else if used {
+		return AccountLink{}, ErrEmailTaken
+	}
+	username, err := freeHandle(ctx, tx, email)
+	if err != nil {
+		return AccountLink{}, err
+	}
+	var principalID string
+	if err := tx.QueryRow(ctx, `INSERT INTO identity_principals (id,username,email,display_name)
+		VALUES (gen_random_uuid(),$1,$2,$3) RETURNING id`, username, email, displayName).
+		Scan(&principalID); err != nil {
+		return AccountLink{}, emailWriteError(err)
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO identity_memberships (organization_id,principal_id,role) VALUES ($1,$2,$3)`,
 		caller.OrganizationID, principalID, role); err != nil {
@@ -538,7 +554,7 @@ func hashLink(raw string) ([32]byte, error) {
 	return hash, nil
 }
 
-const openLink = `SELECT l.purpose,p.username,p.display_name,o.slug,o.name,l.expires_at,l.organization_id,l.principal_id
+const openLink = `SELECT l.purpose,p.username,p.display_name,COALESCE(p.email,''),o.slug,o.name,l.expires_at,l.organization_id,l.principal_id
 	FROM identity_account_links l
 	JOIN identity_memberships m ON m.organization_id=l.organization_id AND m.principal_id=l.principal_id
 	JOIN identity_principals p ON p.id=l.principal_id
@@ -554,7 +570,7 @@ func (u *UserAdmin) InspectLink(ctx context.Context, token string) (LinkInfo, er
 	}
 	var info LinkInfo
 	var org, principal string
-	err = u.db.QueryRow(ctx, openLink, hash[:]).Scan(&info.Purpose, &info.Username, &info.DisplayName,
+	err = u.db.QueryRow(ctx, openLink, hash[:]).Scan(&info.Purpose, &info.Username, &info.DisplayName, &info.Email,
 		&info.OrganizationSlug, &info.OrganizationName, &info.ExpiresAt, &org, &principal)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return LinkInfo{}, ErrLinkInvalid
@@ -564,10 +580,22 @@ func (u *UserAdmin) InspectLink(ctx context.Context, token string) (LinkInfo, er
 
 // CompleteLink sets the member's password, consumes the link, and revokes
 // every existing session of that principal. The password is hashed only after
-// the link is known to be open, so invalid tokens cost no Argon2 work.
-func (u *UserAdmin) CompleteLink(ctx context.Context, token string, password []byte) (LinkInfo, error) {
-	if _, err := u.InspectLink(ctx, token); err != nil {
+// the link is known to be open, so invalid tokens cost no Argon2 work. A
+// non-empty displayName replaces the current one; email is used only when the
+// account has none yet (an account created before emails were required).
+func (u *UserAdmin) CompleteLink(ctx context.Context, token string, password []byte, displayName, email string) (LinkInfo, error) {
+	opened, err := u.InspectLink(ctx, token)
+	if err != nil {
 		return LinkInfo{}, err
+	}
+	displayName = strings.TrimSpace(displayName)
+	if !validDisplayName(displayName) {
+		return LinkInfo{}, ErrUserInvalid
+	}
+	if opened.Email == "" {
+		if email, err = NormalizeEmail(email); err != nil {
+			return LinkInfo{}, err
+		}
 	}
 	encoded, err := HashPassword(password)
 	if err != nil {
@@ -581,7 +609,7 @@ func (u *UserAdmin) CompleteLink(ctx context.Context, token string, password []b
 	defer tx.Rollback(ctx)
 	var info LinkInfo
 	var org, principal string
-	err = tx.QueryRow(ctx, openLink+` FOR UPDATE OF l,p`, hash[:]).Scan(&info.Purpose, &info.Username, &info.DisplayName,
+	err = tx.QueryRow(ctx, openLink+` FOR UPDATE OF l,p`, hash[:]).Scan(&info.Purpose, &info.Username, &info.DisplayName, &info.Email,
 		&info.OrganizationSlug, &info.OrganizationName, &info.ExpiresAt, &org, &principal)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return LinkInfo{}, ErrLinkInvalid
@@ -589,12 +617,29 @@ func (u *UserAdmin) CompleteLink(ctx context.Context, token string, password []b
 	if err != nil {
 		return LinkInfo{}, err
 	}
+	if info.Email == "" {
+		if email == "" {
+			return LinkInfo{}, ErrEmailInvalid
+		}
+		if used, err := emailInUse(ctx, tx, email, principal); err != nil {
+			return LinkInfo{}, err
+		} else if used {
+			return LinkInfo{}, ErrEmailTaken
+		}
+		if _, err := tx.Exec(ctx, `UPDATE identity_principals SET email=$2,email_verified=false WHERE id=$1`, principal, email); err != nil {
+			return LinkInfo{}, emailWriteError(err)
+		}
+		info.Email = email
+	}
+	if displayName != "" {
+		info.DisplayName = displayName
+	}
 	for _, statement := range []struct {
 		query string
 		args  []any
 	}{
 		{`UPDATE identity_account_links SET consumed_at=clock_timestamp() WHERE token_hash=$1`, []any{hash[:]}},
-		{`UPDATE identity_principals SET password_hash=$2 WHERE id=$1`, []any{principal, encoded}},
+		{`UPDATE identity_principals SET password_hash=$2,display_name=$3 WHERE id=$1`, []any{principal, encoded, info.DisplayName}},
 		{`UPDATE identity_sessions SET revoked_at=clock_timestamp() WHERE principal_id=$1 AND revoked_at IS NULL`, []any{principal}},
 		{`INSERT INTO identity_audit_events (organization_id,actor_kind,actor_id,action,subject_id)
 			VALUES ($1,'principal',$2,$3,$2)`, []any{org, principal, "identity.account." + info.Purpose + "_completed"}},
@@ -604,4 +649,113 @@ func (u *UserAdmin) CompleteLink(ctx context.Context, token string, password []b
 		}
 	}
 	return info, tx.Commit(ctx)
+}
+
+// SetEmail is the owner/admin repair of a member's sign-in email. It follows
+// IssueReset's rules (an owner is changed only by an owner; an account shared
+// with another organization is refused), stores the email unverified, and
+// revokes the member's sessions.
+func (u *UserAdmin) SetEmail(ctx context.Context, caller Caller, principalID, email string) error {
+	email, err := NormalizeEmail(email)
+	if err != nil {
+		return err
+	}
+	tx, err := u.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err := lockUserAdmin(ctx, tx, caller); err != nil {
+		return err
+	}
+	if _, err := lockTarget(ctx, tx, caller, principalID); err != nil {
+		return err
+	}
+	var shared bool
+	var current *string
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM identity_memberships WHERE principal_id=$2 AND organization_id<>$1),
+		email FROM identity_principals WHERE id=$2 FOR UPDATE`, caller.OrganizationID, principalID).Scan(&shared, &current); err != nil {
+		return err
+	}
+	if shared {
+		return ErrSharedAccount
+	}
+	if current != nil && *current == email {
+		return nil
+	}
+	count, err := setEmail(ctx, tx, principalID, email)
+	if err != nil {
+		return err
+	}
+	if err := audit(ctx, tx, caller, "identity.user.email_changed", principalID, emailChange(current, email, count)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func emailChange(from *string, to string, revoked int64) map[string]string {
+	detail := map[string]string{"from": "", "to": to, "revoked_sessions": fmt.Sprint(revoked)}
+	if from != nil {
+		detail["from"] = *from
+	}
+	return detail
+}
+
+// setEmail writes a checked, unused email and revokes every session of the
+// principal, returning how many were revoked.
+func setEmail(ctx context.Context, tx pgx.Tx, principalID, email string) (int64, error) {
+	if used, err := emailInUse(ctx, tx, email, principalID); err != nil {
+		return 0, err
+	} else if used {
+		return 0, ErrEmailTaken
+	}
+	if _, err := tx.Exec(ctx, `UPDATE identity_principals SET email=$2,email_verified=false WHERE id=$1`, principalID, email); err != nil {
+		return 0, emailWriteError(err)
+	}
+	tag, err := tx.Exec(ctx, `UPDATE identity_sessions SET revoked_at=clock_timestamp()
+		WHERE principal_id=$1 AND revoked_at IS NULL`, principalID)
+	return tag.RowsAffected(), err
+}
+
+// OperatorSetEmail is the restricted operator repair behind `blaxsmith admin
+// set-email`: it finds the principal by current email or handle, sets the new
+// email as SetEmail does, revokes its sessions, and audits the change as the
+// operator in every organization the principal belongs to.
+func OperatorSetEmail(ctx context.Context, pool *pgxpool.Pool, login, email string) (string, error) {
+	email, err := NormalizeEmail(email)
+	if err != nil {
+		return "", err
+	}
+	login = strings.ToLower(strings.TrimSpace(login))
+	if pool == nil || login == "" {
+		return "", ErrUserNotFound
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+	var principalID string
+	var current *string
+	err = tx.QueryRow(ctx, `SELECT id,email FROM identity_principals WHERE lower(email)=$1 OR username=$1
+		ORDER BY lower(email)=$1 DESC NULLS LAST LIMIT 1 FOR UPDATE`, login).Scan(&principalID, &current)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrUserNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	if current != nil && *current == email {
+		return principalID, nil
+	}
+	count, err := setEmail(ctx, tx, principalID, email)
+	if err != nil {
+		return "", err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO identity_audit_events (organization_id,actor_kind,action,subject_id,detail)
+		SELECT organization_id,'operator','identity.user.email_changed',principal_id,$2
+		FROM identity_memberships WHERE principal_id=$1`, principalID, emailChange(current, email, count)); err != nil {
+		return "", err
+	}
+	return principalID, tx.Commit(ctx)
 }
