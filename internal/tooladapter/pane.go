@@ -255,10 +255,14 @@ func prepareInteractive(l launch) {
 	home := os.Getenv("HOME")
 	switch l.Harness {
 	case "codex":
-		// The Codex TUI ignores OPENAI_API_KEY until an API-key login exists.
+		// The Codex TUI ignores the key env until an API-key login exists.
+		// A native key is CODEX_API_KEY; a gateway token is OPENAI_API_KEY.
 		// A delivered ChatGPT sign-in is already $CODEX_HOME/auth.json, and
 		// an API-key login would overwrite it.
-		key := os.Getenv("OPENAI_API_KEY")
+		key := os.Getenv("CODEX_API_KEY")
+		if key == "" {
+			key = os.Getenv("OPENAI_API_KEY")
+		}
 		if key == "" {
 			return
 		}

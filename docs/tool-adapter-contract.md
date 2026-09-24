@@ -14,8 +14,10 @@ exact digest. The npm catalog and the credential-free
 
 `Run` is a pod-side primitive: it checks the executable hash and exact
 `--version` output before launch, starts with an isolated home/config and no
-ambient environment, accepts only `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` from
-a future scoped lease, disables Claude updates, writes OpenCode's global
+ambient environment, accepts only the scoped lease's credential variables (`CODEX_API_KEY` for a
+native Codex key, since `codex exec` ignores `OPENAI_API_KEY` for its built-in
+provider; `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENCODE_API_KEY`, and the
+gateway's `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_BASE_URL`), disables Claude updates, writes OpenCode's global
 `update: disable` setting, blocks project-local Codex/OpenCode configuration,
 and bounds elapsed time plus combined stdout/stderr.
 It returns process bytes and an error; it cannot decide that a task passed.

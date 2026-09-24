@@ -239,7 +239,7 @@ func TestPaneActivityWritesWatchLog(t *testing.T) {
 }
 
 func TestActivityRedactsEveryLeasedKey(t *testing.T) {
-	for _, name := range []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY"} {
+	for _, name := range credentialEnvNames {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv(name, "leased-"+name+"-0123456789")
 			if got := redactText("echo leased-" + name + "-0123456789"); strings.Contains(got, "leased-") {

@@ -20,7 +20,7 @@ func TestAXWorkerRequiresScopedCredentialBeforePinnedTool(t *testing.T) {
 	requireTmux(t)
 	root := t.TempDir()
 	binary := filepath.Join(root, "codex")
-	body := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'codex-cli 0.156.1'; exit; fi\nprintf '%s|%s|%s' \"$OPENAI_API_KEY\" \"$7\" \"${SHOULD_NOT_LEAK:-}\"\n")
+	body := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'codex-cli 0.156.1'; exit; fi\nprintf '%s|%s|%s|%s' \"$CODEX_API_KEY\" \"$7\" \"${SHOULD_NOT_LEAK:-}\" \"${OPENAI_API_KEY:-}\"\n")
 	if err := os.WriteFile(binary, body, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,10 @@ func TestAXWorkerRequiresScopedCredentialBeforePinnedTool(t *testing.T) {
 	writeCredential("attempt-1", "openai", time.Now().Add(10*time.Minute).Unix())
 	t.Setenv("SHOULD_NOT_LEAK", "ambient-secret")
 	output, err := execute(context.Background(), command[1], root, credentialPath, checkout)
-	if err != nil || !strings.HasPrefix(string(output), "[redacted]|") || strings.Contains(string(output), "ambient-secret") || strings.Contains(string(output), "leased-secret") {
+	// Codex exec authenticates its built-in openai provider from CODEX_API_KEY
+	// only, so the native key must arrive there and not in OPENAI_API_KEY.
+	if err != nil || !strings.HasPrefix(string(output), "[redacted]|") || !strings.HasSuffix(string(output), "||") ||
+		strings.Contains(string(output), "ambient-secret") || strings.Contains(string(output), "leased-secret") {
 		t.Fatalf("unexpected CLI execution %q: %v", output, err)
 	}
 	slow := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'codex-cli 0.156.1'; exit; fi\nsleep 4\n")

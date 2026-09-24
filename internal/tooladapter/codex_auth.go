@@ -25,7 +25,7 @@ const (
 // redactors hide their values; codexAuthSecrets adds the tokens of a
 // delivered Codex sign-in, which never enter the environment. The gateway's
 // ANTHROPIC_BASE_URL is public configuration (gatewayEnvKey).
-var credentialEnvNames = []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY", "ANTHROPIC_AUTH_TOKEN"}
+var credentialEnvNames = []string{"OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY", "ANTHROPIC_AUTH_TOKEN"}
 
 // ParseCodexAuth checks a delivered Codex ChatGPT sign-in: bounded JSON with
 // an access token and a present, empty refresh token (the platform keeps the

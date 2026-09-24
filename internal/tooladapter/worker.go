@@ -189,7 +189,7 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 		output, err := Run(leaseContext, in.withCodexAuth(codexAuth), sourcePath, nil)
 		return redactSecrets(output, secrets), err
 	}
-	env := []string{CredentialEnv(provider) + "=" + string(key)}
+	env := []string{nativeCredentialEnv(request.Profile.Harness, provider) + "=" + string(key)}
 	if request.Gateway != nil {
 		env, in.gatewayBaseURL = gatewayCredentialEnv(request.Gateway, request.Profile.Harness, provider, key), request.Gateway.BaseURL
 	}
@@ -688,4 +688,16 @@ func CredentialEnv(provider string) string {
 		return "OPENCODE_API_KEY"
 	}
 	return ""
+}
+
+// nativeCredentialEnv is where a native_raw attempt's key goes. Codex 0.156.1
+// `codex exec` never sends OPENAI_API_KEY for its built-in openai provider;
+// it reads CODEX_API_KEY (internal/tooladapter/codex_probe_test.go). A
+// brokered attempt instead names OPENAI_API_KEY as its gateway provider's
+// env_key (codexGatewayArgs).
+func nativeCredentialEnv(harness, provider string) string {
+	if harness == "codex" && provider == "openai" {
+		return "CODEX_API_KEY"
+	}
+	return CredentialEnv(provider)
 }
