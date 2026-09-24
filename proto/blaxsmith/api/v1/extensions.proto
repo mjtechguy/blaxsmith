@@ -1,0 +1,146 @@
+syntax = "proto3";
+
+package blaxsmith.api.v1;
+
+import "blaxsmith/api/v1/connections.proto";
+
+// Extension packs (docs/extensions-and-runtimes.md). An organization owner or
+// admin installs an extension from a public Git repository at one commit;
+// the platform validates its manifest and records the permissions the
+// administrator approved. Versions are immutable. Projects use an extension
+// only through a resource grant. The platform never runs extension content.
+//
+// Any organization role may list and read. Preview, install, update checks,
+// and grants are owner/admin only.
+
+message Extension {
+  string id = 1;
+  string key = 2; // Manifest id, e.g. "guild".
+  string repository_url = 3;
+  string git_ref = 4; // The ref installs and update checks resolve.
+  string current_version_id = 5;
+  string current_version = 6; // Semantic version; empty when none.
+  string current_commit = 7;
+  string latest_ref_commit = 8; // Last resolution of git_ref.
+  bool update_available = 9;
+  int32 version_count = 10;
+  string latest_checked_at = 11; // RFC 3339; empty when never checked.
+  string created_at = 12;
+  string updated_at = 13;
+}
+
+message ExtensionPermission {
+  string id = 1; // e.g. "hook:foundry-serena", "egress:pypi.org".
+  string kind = 2; // subagents, mcp, hook, egress, runtime.
+  string description = 3;
+  bool optional = 4; // May be declined at install.
+}
+
+message ExtensionTemplate {
+  string id = 1;
+  string title = 2;
+  string mode = 3; // embedded or decomposed.
+  string harness = 4;
+  repeated string kinds = 5;
+  string reference = 6; // "extension@version/template" for recipes.
+}
+
+message ExtensionVersion {
+  string id = 1;
+  string extension_id = 2;
+  string version = 3;
+  string repository_url = 4;
+  string git_ref = 5;
+  string commit = 6;
+  string manifest_json = 7; // Exact installed bytes.
+  string manifest_sha256 = 8;
+  string manifest_origin = 9; // repository or overlay.
+  string manifest_path = 10; // Repository path; empty for an overlay.
+  repeated string approved_permissions = 11;
+  string permissions_sha256 = 12;
+  string installed_by = 13;
+  string installed_by_username = 14;
+  string created_at = 15;
+  repeated ExtensionPermission permissions = 16; // Declared permissions.
+  repeated ExtensionTemplate templates = 17;
+}
+
+// A manifest validation failure at a JSON path; "$" is the document.
+message ExtensionValidationError {
+  string path = 1;
+  string message = 2;
+}
+
+message ListExtensionsRequest {}
+message ListExtensionsResponse { repeated Extension extensions = 1; }
+
+message GetExtensionRequest { string extension_id = 1; }
+message GetExtensionResponse {
+  Extension extension = 1;
+  repeated ExtensionVersion versions = 2; // Newest first.
+  repeated ConnectionGrant grants = 3; // Owners/admins only.
+}
+
+// The source to install: a public GitHub/GitLab HTTPS repository and a ref.
+// The manifest is read from manifest_path (default blaxsmith-extension.json)
+// unless overlay_manifest_json supplies one for a repository without it.
+message ExtensionSource {
+  string repository_url = 1;
+  string git_ref = 2;
+  string manifest_path = 3;
+  string overlay_manifest_json = 4;
+}
+
+// Fetches the ref, resolves it to one commit, and validates the manifest
+// there. Nothing is saved; install pins the returned commit.
+message PreviewExtensionInstallRequest { ExtensionSource source = 1; }
+message PreviewExtensionInstallResponse {
+  string commit = 1;
+  string extension_key = 2;
+  string version = 3;
+  string manifest_json = 4;
+  string manifest_sha256 = 5;
+  repeated ExtensionPermission permissions = 6;
+  repeated ExtensionTemplate templates = 7;
+  repeated ExtensionValidationError errors = 8; // Set instead of the rest when invalid.
+  string existing_extension_id = 9; // Set when this key is installed already.
+}
+
+// Installs expected_commit (from the preview) with the approved permission
+// ids. Every non-optional permission must be approved. Re-fetching and
+// finding a different commit fails with FailedPrecondition.
+message InstallExtensionRequest {
+  ExtensionSource source = 1;
+  string expected_commit = 2;
+  repeated string approved_permissions = 3;
+}
+message InstallExtensionResponse {
+  Extension extension = 1;
+  ExtensionVersion version = 2;
+  repeated ExtensionValidationError errors = 3;
+}
+
+// Resolves the extension's ref again and records the commit, which sets
+// update_available when it differs from the current version's commit.
+message CheckExtensionUpdateRequest { string extension_id = 1; }
+message CheckExtensionUpdateResponse { Extension extension = 1; }
+
+message GrantExtensionRequest {
+  string extension_id = 1;
+  string project_id = 2;
+  string grantee_kind = 3; // project, user, or role.
+  string grantee_id = 4; // Principal id or role; empty for project.
+}
+message GrantExtensionResponse { ConnectionGrant grant = 1; }
+message RevokeExtensionGrantRequest { string grant_id = 1; }
+message RevokeExtensionGrantResponse {}
+
+service ExtensionService {
+  rpc ListExtensions(ListExtensionsRequest) returns (ListExtensionsResponse);
+  rpc GetExtension(GetExtensionRequest) returns (GetExtensionResponse);
+  rpc PreviewExtensionInstall(PreviewExtensionInstallRequest) returns (PreviewExtensionInstallResponse);
+  rpc InstallExtension(InstallExtensionRequest) returns (InstallExtensionResponse);
+  rpc CheckExtensionUpdate(CheckExtensionUpdateRequest) returns (CheckExtensionUpdateResponse);
+  rpc GrantExtension(GrantExtensionRequest) returns (GrantExtensionResponse);
+  rpc RevokeExtensionGrant(RevokeExtensionGrantRequest) returns (RevokeExtensionGrantResponse);
+}

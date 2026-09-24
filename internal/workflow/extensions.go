@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -373,4 +374,105 @@ func scanExtensionVersion(row pgx.Row) (ExtensionVersion, error) {
 
 func getExtensionVersion(ctx context.Context, q queryRower, org, id string) (ExtensionVersion, error) {
 	return scanExtensionVersion(q.QueryRow(ctx, `SELECT `+extensionVersionColumns+` WHERE v.organization_id=$1 AND v.id=$2`, org, id))
+}
+
+// Extension grants are the same organization resource grants as recipes
+// (kind "extension"), in the same ConnectionGrant shape.
+var extensionGrantColumns = strings.Replace(recipeGrantColumns, "g.resource_kind='recipe'", "g.resource_kind='extension'", 1)
+
+// ExtensionGrants lists live grants on an extension; owners/admins only.
+func (s *Store) ExtensionGrants(ctx context.Context, caller identity.Caller, extensionID string) ([]ConnectionGrant, error) {
+	if !ids(caller.OrganizationID, extensionID) {
+		return nil, ErrInvalid
+	}
+	if caller.Role != "owner" && caller.Role != "admin" {
+		return nil, nil
+	}
+	rows, err := s.pool.Query(ctx, extensionGrantColumns+` AND g.resource_id=$2 ORDER BY g.created_at,g.id LIMIT 2000`,
+		caller.OrganizationID, extensionID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (ConnectionGrant, error) { return scanRecipeGrant(row) })
+}
+
+// GrantExtensionAs grants an extension to a project, a member, or a minimum
+// role; access.GrantResource audits it.
+func (s *Store) GrantExtensionAs(ctx context.Context, caller identity.Caller, extensionID, projectID, granteeKind, granteeID string) (ConnectionGrant, error) {
+	if err := requireExtensionAdmin(caller); err != nil {
+		return ConnectionGrant{}, err
+	}
+	if !ids(extensionID) {
+		return ConnectionGrant{}, ErrInvalid
+	}
+	var to access.Grantee
+	switch granteeKind {
+	case "project":
+		to.ProjectID = projectID
+	case "user":
+		to.PrincipalID = granteeID
+	case "role":
+		to.Role = granteeID
+	default:
+		return ConnectionGrant{}, ErrInvalid
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return ConnectionGrant{}, err
+	}
+	defer tx.Rollback(ctx)
+	if err := lockCallerSession(ctx, tx, caller, false); err != nil {
+		return ConnectionGrant{}, err
+	}
+	if _, err := getExtension(ctx, tx, caller.OrganizationID, extensionID); err != nil {
+		return ConnectionGrant{}, err
+	}
+	id, err := access.GrantResource(ctx, tx, caller, access.ResourceExtension, extensionID, to)
+	switch {
+	case errors.Is(err, access.ErrResourceGrantInvalid):
+		return ConnectionGrant{}, ErrInvalid
+	case errors.Is(err, access.ErrDenied):
+		return ConnectionGrant{}, ErrExtensionDenied
+	case err != nil:
+		return ConnectionGrant{}, err
+	}
+	grant, err := scanRecipeGrant(tx.QueryRow(ctx, extensionGrantColumns+` AND g.id=$2::uuid`, caller.OrganizationID, id))
+	if err != nil {
+		return ConnectionGrant{}, err
+	}
+	return grant, tx.Commit(ctx)
+}
+
+// RevokeExtensionGrantAs revokes one live extension grant; launched runs
+// keep the versions they froze.
+func (s *Store) RevokeExtensionGrantAs(ctx context.Context, caller identity.Caller, grantID string) error {
+	if err := requireExtensionAdmin(caller); err != nil {
+		return err
+	}
+	if !ids(grantID) {
+		return ErrInvalid
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err := lockCallerSession(ctx, tx, caller, false); err != nil {
+		return err
+	}
+	var found bool
+	err = tx.QueryRow(ctx, `SELECT true FROM access_resource_grants WHERE organization_id=$1::uuid AND id=$2::uuid
+		AND resource_kind='extension' AND revoked_at IS NULL FOR UPDATE`, caller.OrganizationID, grantID).Scan(&found)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if err := access.RevokeResourceGrant(ctx, tx, caller, grantID); errors.Is(err, access.ErrDenied) {
+		return ErrExtensionDenied
+	} else if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
