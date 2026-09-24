@@ -34,11 +34,16 @@ yet. A missing task remains an operator-resolution case because AX cannot prove
 that an uncertain upsert will never arrive.
 
 The dispatcher now requires an activator before it will reserve work. After
-AX/Substrate readback, it passes the persisted runtime binding and exact model
-grant to that callback; it reports `started` only after the bootstrap gate and
-model lease have been opened. An activation error fences the already-launched
-attempt as unresolved. The callback is still not composed in the application or
-a connector process, so product launch remains disabled.
+AX/Substrate readback, it re-reads the bound Workspace and Gateway while the
+runner is still held behind the bootstrap gate, then passes the persisted
+runtime binding and exact model grant to the activation callback. A changed
+input fences the actor without releasing credentials. This catches edits made
+between initial admission and activation; shared AX resource names are still
+mutable and this readback does not prove the Substrate dataplane. It reports
+`started` only after the bootstrap gate and model lease have been opened. An
+activation error fences the already-launched attempt as unresolved. The
+callback is still not composed in the application or a connector process, so
+product launch remains disabled.
 
 `dispatch.ModelActivator` is the concrete model path: it creates a durable
 bootstrap owner for the observed actor, builds the attempt-scoped

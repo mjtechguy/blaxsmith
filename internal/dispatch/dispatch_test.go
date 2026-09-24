@@ -24,9 +24,10 @@ import (
 )
 
 type dispatchAX struct {
-	task      *axbridge.Task
-	workspace axbridge.Workspace
-	gateway   axbridge.Gateway
+	task                       *axbridge.Task
+	workspace                  axbridge.Workspace
+	gateway                    axbridge.Gateway
+	invalidateGatewayAfterTask bool
 }
 
 func (a *dispatchAX) Get(context.Context, string, string) (axbridge.Task, error) {
@@ -45,6 +46,9 @@ func (a *dispatchAX) GetWorkspace(context.Context, string, string) (axbridge.Wor
 	return a.workspace, nil
 }
 func (a *dispatchAX) GetGateway(context.Context, string, string) (axbridge.Gateway, error) {
+	if a.invalidateGatewayAfterTask && a.task != nil {
+		return axbridge.Gateway{}, nil
+	}
 	return a.gateway, nil
 }
 
@@ -277,6 +281,41 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		WHERE t.organization_id=$1 AND t.run_id=$2`, orgID, secondRun.ID).Scan(&taskState, &attemptState); err != nil ||
 		taskState != "reconciling" || attemptState != "reconciling" {
 		t.Fatalf("activation failure did not fence the actor: %s/%s, %v", taskState, attemptState, err)
+	}
+	thirdRun, err := store.CreateRun(ctx, workflow.RunInput{OrganizationID: orgID, ProjectID: projectID,
+		LaunchKey: "gateway-changed", SourceCommit: bundle.Source.Commit,
+		BundleSHA256: bundle.Digest, VerificationSHA256: policySHA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workflow_run_bundles
+		(organization_id,run_id,bundle_json,verification_json,repository_url,git_ref)
+		VALUES ($1,$2,$3,$4,'https://github.com/owner/repo','main')`, orgID, thirdRun.ID, bundleJSON, policyJSON); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddTask(ctx, orgID, thirdRun.ID, "plan", inputSHA, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, orgID, thirdRun.ID); err != nil {
+		t.Fatal(err)
+	}
+	ax.task = nil
+	ax.invalidateGatewayAfterTask = true
+	activationCalls := 0
+	dispatcher.Activate = func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error {
+		activationCalls++
+		return nil
+	}
+	changed, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
+	if err != nil || len(changed.Outcomes) != 1 || changed.Outcomes[0].State != "unresolved" ||
+		!errors.Is(changed.Outcomes[0].Err, axbridge.ErrInputs) || activationCalls != 0 {
+		t.Fatalf("changed Gateway reached credential release: %+v, calls=%d, err=%v", changed, activationCalls, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT t.state,a.state FROM workflow_tasks t
+		JOIN workflow_attempts a ON a.organization_id=t.organization_id AND a.id=t.active_attempt_id
+		WHERE t.organization_id=$1 AND t.run_id=$2`, orgID, thirdRun.ID).Scan(&taskState, &attemptState); err != nil ||
+		taskState != "reconciling" || attemptState != "reconciling" {
+		t.Fatalf("changed Gateway did not fence the blocked actor: %s/%s, %v", taskState, attemptState, err)
 	}
 }
 

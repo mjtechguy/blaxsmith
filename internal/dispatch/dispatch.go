@@ -176,6 +176,13 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
 		return outcome
 	}
+	// The actor is still held behind AX's bootstrap gate here. Re-read its
+	// Workspace/Gateway immediately before release so an edit between admission
+	// and launch cannot receive model credentials under a different policy.
+	if err := bridge.CheckToolInputs(ctx, candidate.OrganizationID, frozen.RepositoryURL, provider); err != nil {
+		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
+		return outcome
+	}
 	invoke := access.ModelInvoke{OrganizationID: candidate.OrganizationID, ProjectID: candidate.ProjectID,
 		AttemptID: attempt.ID, BindingID: bindingID, GranteeKind: "workload", GranteeID: selection.GranteeID,
 		Provider: provider, Model: model, PolicyVersion: authority.PolicyVersion}
