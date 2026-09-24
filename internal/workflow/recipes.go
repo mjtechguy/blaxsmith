@@ -122,7 +122,7 @@ func (s *Store) GetRecipe(ctx context.Context, caller identity.Caller, recipeID 
 		return LibraryRecipe{}, nil, err
 	}
 	rows, err := s.pool.Query(ctx, `SELECT v.id::text,v.recipe_id::text,v.version,v.sha256,v.frozen_path,
-		COALESCE(v.author_principal_id::text,''),COALESCE(p.username,''),v.created_at
+		COALESCE(v.author_principal_id::text,''),COALESCE(identity_principal_label(p.display_name,p.email,p.username),''),v.created_at
 		FROM workflow_recipe_versions v LEFT JOIN identity_principals p ON p.id=v.author_principal_id
 		WHERE v.organization_id=$1 AND v.recipe_id=$2 ORDER BY v.version DESC LIMIT $3`,
 		caller.OrganizationID, recipeID, recipeListLimit)
@@ -152,7 +152,7 @@ type queryRower interface {
 func getRecipeVersion(ctx context.Context, q queryRower, orgID, versionID string) (RecipeVersion, error) {
 	var v RecipeVersion
 	err := q.QueryRow(ctx, `SELECT v.id::text,v.recipe_id::text,v.version,v.recipe_json,v.sha256,v.frozen_path,
-		COALESCE(v.author_principal_id::text,''),COALESCE(p.username,''),v.created_at
+		COALESCE(v.author_principal_id::text,''),COALESCE(identity_principal_label(p.display_name,p.email,p.username),''),v.created_at
 		FROM workflow_recipe_versions v LEFT JOIN identity_principals p ON p.id=v.author_principal_id
 		WHERE v.organization_id=$1 AND v.id=$2`, orgID, versionID).
 		Scan(&v.ID, &v.RecipeID, &v.Version, &v.JSON, &v.SHA256, &v.FrozenPath, &v.AuthorID, &v.AuthorUsername, &v.CreatedAt)

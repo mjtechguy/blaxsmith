@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, Navigate, Outlet, useLocation } from "@tanstack/react-router";
-import { clearWorkspaceCache, currentSession, isAccountLinkRoute, isPublicCatalogRoute, onOtherTabSessionChange, sessionQueryKey } from "../auth";
+import { clearWorkspaceCache, currentSession, emailSetupPath, isAccountLinkRoute, isPublicCatalogRoute, onOtherTabSessionChange, sessionQueryKey } from "../auth";
 import { AuthFrame, AuthUnavailable } from "../auth-frame";
 import { Shell } from "../shell";
 
@@ -54,5 +54,9 @@ function Root() {
     return session.data ? <Navigate to={next} replace /> : <Outlet />;
   }
   if (!session.data) return <Navigate to="/login" search={{ next: location.pathname === "/tools" ? "/tools" : "/" }} replace />;
+  // A one-time legacy-username session can only set its email; the server
+  // refuses everything else, so route there instead of the workspace.
+  if (session.data.emailRequired) return location.pathname === emailSetupPath ? <Outlet /> : <Navigate to={emailSetupPath} replace />;
+  if (location.pathname === emailSetupPath) return <Navigate to="/me/settings/profile" replace />;
   return <Shell session={session.data}><Outlet /></Shell>;
 }

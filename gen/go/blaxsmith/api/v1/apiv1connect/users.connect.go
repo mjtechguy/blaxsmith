@@ -51,6 +51,9 @@ const (
 	// UserAdminServiceRevokeUserSessionsProcedure is the fully-qualified name of the UserAdminService's
 	// RevokeUserSessions RPC.
 	UserAdminServiceRevokeUserSessionsProcedure = "/blaxsmith.api.v1.UserAdminService/RevokeUserSessions"
+	// UserAdminServiceSetUserEmailProcedure is the fully-qualified name of the UserAdminService's
+	// SetUserEmail RPC.
+	UserAdminServiceSetUserEmailProcedure = "/blaxsmith.api.v1.UserAdminService/SetUserEmail"
 	// UserAdminServiceGetAccountLinkProcedure is the fully-qualified name of the UserAdminService's
 	// GetAccountLink RPC.
 	UserAdminServiceGetAccountLinkProcedure = "/blaxsmith.api.v1.UserAdminService/GetAccountLink"
@@ -67,6 +70,7 @@ type UserAdminServiceClient interface {
 	SetUserEnabled(context.Context, *connect.Request[v1.SetUserEnabledRequest]) (*connect.Response[v1.SetUserEnabledResponse], error)
 	IssueResetLink(context.Context, *connect.Request[v1.IssueResetLinkRequest]) (*connect.Response[v1.IssueResetLinkResponse], error)
 	RevokeUserSessions(context.Context, *connect.Request[v1.RevokeUserSessionsRequest]) (*connect.Response[v1.RevokeUserSessionsResponse], error)
+	SetUserEmail(context.Context, *connect.Request[v1.SetUserEmailRequest]) (*connect.Response[v1.SetUserEmailResponse], error)
 	GetAccountLink(context.Context, *connect.Request[v1.GetAccountLinkRequest]) (*connect.Response[v1.GetAccountLinkResponse], error)
 	CompleteAccountLink(context.Context, *connect.Request[v1.CompleteAccountLinkRequest]) (*connect.Response[v1.CompleteAccountLinkResponse], error)
 }
@@ -118,6 +122,12 @@ func NewUserAdminServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(userAdminServiceMethods.ByName("RevokeUserSessions")),
 			connect.WithClientOptions(opts...),
 		),
+		setUserEmail: connect.NewClient[v1.SetUserEmailRequest, v1.SetUserEmailResponse](
+			httpClient,
+			baseURL+UserAdminServiceSetUserEmailProcedure,
+			connect.WithSchema(userAdminServiceMethods.ByName("SetUserEmail")),
+			connect.WithClientOptions(opts...),
+		),
 		getAccountLink: connect.NewClient[v1.GetAccountLinkRequest, v1.GetAccountLinkResponse](
 			httpClient,
 			baseURL+UserAdminServiceGetAccountLinkProcedure,
@@ -141,6 +151,7 @@ type userAdminServiceClient struct {
 	setUserEnabled      *connect.Client[v1.SetUserEnabledRequest, v1.SetUserEnabledResponse]
 	issueResetLink      *connect.Client[v1.IssueResetLinkRequest, v1.IssueResetLinkResponse]
 	revokeUserSessions  *connect.Client[v1.RevokeUserSessionsRequest, v1.RevokeUserSessionsResponse]
+	setUserEmail        *connect.Client[v1.SetUserEmailRequest, v1.SetUserEmailResponse]
 	getAccountLink      *connect.Client[v1.GetAccountLinkRequest, v1.GetAccountLinkResponse]
 	completeAccountLink *connect.Client[v1.CompleteAccountLinkRequest, v1.CompleteAccountLinkResponse]
 }
@@ -175,6 +186,11 @@ func (c *userAdminServiceClient) RevokeUserSessions(ctx context.Context, req *co
 	return c.revokeUserSessions.CallUnary(ctx, req)
 }
 
+// SetUserEmail calls blaxsmith.api.v1.UserAdminService.SetUserEmail.
+func (c *userAdminServiceClient) SetUserEmail(ctx context.Context, req *connect.Request[v1.SetUserEmailRequest]) (*connect.Response[v1.SetUserEmailResponse], error) {
+	return c.setUserEmail.CallUnary(ctx, req)
+}
+
 // GetAccountLink calls blaxsmith.api.v1.UserAdminService.GetAccountLink.
 func (c *userAdminServiceClient) GetAccountLink(ctx context.Context, req *connect.Request[v1.GetAccountLinkRequest]) (*connect.Response[v1.GetAccountLinkResponse], error) {
 	return c.getAccountLink.CallUnary(ctx, req)
@@ -193,6 +209,7 @@ type UserAdminServiceHandler interface {
 	SetUserEnabled(context.Context, *connect.Request[v1.SetUserEnabledRequest]) (*connect.Response[v1.SetUserEnabledResponse], error)
 	IssueResetLink(context.Context, *connect.Request[v1.IssueResetLinkRequest]) (*connect.Response[v1.IssueResetLinkResponse], error)
 	RevokeUserSessions(context.Context, *connect.Request[v1.RevokeUserSessionsRequest]) (*connect.Response[v1.RevokeUserSessionsResponse], error)
+	SetUserEmail(context.Context, *connect.Request[v1.SetUserEmailRequest]) (*connect.Response[v1.SetUserEmailResponse], error)
 	GetAccountLink(context.Context, *connect.Request[v1.GetAccountLinkRequest]) (*connect.Response[v1.GetAccountLinkResponse], error)
 	CompleteAccountLink(context.Context, *connect.Request[v1.CompleteAccountLinkRequest]) (*connect.Response[v1.CompleteAccountLinkResponse], error)
 }
@@ -240,6 +257,12 @@ func NewUserAdminServiceHandler(svc UserAdminServiceHandler, opts ...connect.Han
 		connect.WithSchema(userAdminServiceMethods.ByName("RevokeUserSessions")),
 		connect.WithHandlerOptions(opts...),
 	)
+	userAdminServiceSetUserEmailHandler := connect.NewUnaryHandler(
+		UserAdminServiceSetUserEmailProcedure,
+		svc.SetUserEmail,
+		connect.WithSchema(userAdminServiceMethods.ByName("SetUserEmail")),
+		connect.WithHandlerOptions(opts...),
+	)
 	userAdminServiceGetAccountLinkHandler := connect.NewUnaryHandler(
 		UserAdminServiceGetAccountLinkProcedure,
 		svc.GetAccountLink,
@@ -266,6 +289,8 @@ func NewUserAdminServiceHandler(svc UserAdminServiceHandler, opts ...connect.Han
 			userAdminServiceIssueResetLinkHandler.ServeHTTP(w, r)
 		case UserAdminServiceRevokeUserSessionsProcedure:
 			userAdminServiceRevokeUserSessionsHandler.ServeHTTP(w, r)
+		case UserAdminServiceSetUserEmailProcedure:
+			userAdminServiceSetUserEmailHandler.ServeHTTP(w, r)
 		case UserAdminServiceGetAccountLinkProcedure:
 			userAdminServiceGetAccountLinkHandler.ServeHTTP(w, r)
 		case UserAdminServiceCompleteAccountLinkProcedure:
@@ -301,6 +326,10 @@ func (UnimplementedUserAdminServiceHandler) IssueResetLink(context.Context, *con
 
 func (UnimplementedUserAdminServiceHandler) RevokeUserSessions(context.Context, *connect.Request[v1.RevokeUserSessionsRequest]) (*connect.Response[v1.RevokeUserSessionsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.UserAdminService.RevokeUserSessions is not implemented"))
+}
+
+func (UnimplementedUserAdminServiceHandler) SetUserEmail(context.Context, *connect.Request[v1.SetUserEmailRequest]) (*connect.Response[v1.SetUserEmailResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.UserAdminService.SetUserEmail is not implemented"))
 }
 
 func (UnimplementedUserAdminServiceHandler) GetAccountLink(context.Context, *connect.Request[v1.GetAccountLinkRequest]) (*connect.Response[v1.GetAccountLinkResponse], error) {

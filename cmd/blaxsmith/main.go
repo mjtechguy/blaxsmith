@@ -25,7 +25,7 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve|serve-app|gateway|migrate|bootstrap-owner> [flags]")
+		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve|serve-app|gateway|migrate|bootstrap-owner|admin> [flags]")
 	}
 	if os.Args[1] == "tools" {
 		return listTools(os.Args[2:])
@@ -45,8 +45,11 @@ func run() error {
 	if os.Args[1] == "bootstrap-owner" {
 		return bootstrapOwner(os.Args[2:])
 	}
+	if os.Args[1] == "admin" {
+		return adminCommand(os.Args[2:])
+	}
 	if os.Args[1] != "check" && os.Args[1] != "freeze" {
-		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve|serve-app|gateway|migrate|bootstrap-owner> [flags]")
+		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve|serve-app|gateway|migrate|bootstrap-owner|admin> [flags]")
 	}
 	var in recipe.Input
 	flags := flag.NewFlagSet(os.Args[1], flag.ContinueOnError)

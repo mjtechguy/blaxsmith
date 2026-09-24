@@ -501,7 +501,7 @@ func scopeName(ownerKind string) string {
 
 // connectionColumns reads one row for connectionRow; never a secret column.
 const connectionColumns = `c.id,c.owner_kind,c.owner_id,
-	COALESCE(CASE c.owner_kind WHEN 'organization' THEN o.slug WHEN 'project' THEN pr.name ELSE u.username END,''),
+	COALESCE(CASE c.owner_kind WHEN 'organization' THEN o.slug WHEN 'project' THEN pr.name ELSE identity_principal_label(u.display_name,u.email,u.username) END,''),
 	c.auth_method,p.provider_kind,p.origin,c.external_account_id,COALESCE(c.label,''),
 	CASE WHEN c.state<>'active' THEN c.state WHEN os.reconnect_reason IS NOT NULL THEN 'reconnect_required' ELSE 'active' END,
 	(SELECT max(l.reserved_at) FROM access_leases l WHERE l.organization_id=c.organization_id AND l.connection_id=c.id),
@@ -645,7 +645,7 @@ func (s *Store) attachGrantsAndUses(ctx context.Context, tx pgx.Tx, org, scope, 
 		// of a project, a principal, or a minimum role.
 		rows, err := tx.Query(ctx, `SELECT g.id::text,g.resource_id,COALESCE(g.grantee_project_id::text,''),COALESCE(pr.name,''),
 			CASE WHEN g.grantee_project_id IS NOT NULL THEN 'project' WHEN g.grantee_principal_id IS NOT NULL THEN 'user' ELSE 'role' END,
-			COALESCE(g.grantee_principal_id::text,g.grantee_role,''),COALESCE(u.username,''),g.created_at
+			COALESCE(g.grantee_principal_id::text,g.grantee_role,''),COALESCE(identity_principal_label(u.display_name,u.email,u.username),''),g.created_at
 			FROM access_resource_grants g
 			LEFT JOIN workflow_projects pr ON pr.organization_id=g.organization_id AND pr.id=g.grantee_project_id
 			LEFT JOIN identity_principals u ON u.id=g.grantee_principal_id
@@ -1091,7 +1091,7 @@ func (s *Store) GrantConnectionAs(ctx context.Context, caller identity.Caller, c
 	}
 	grant := ConnectionGrant{ID: id, GranteeKind: granteeKind}
 	err = tx.QueryRow(ctx, `SELECT COALESCE(g.grantee_project_id::text,''),COALESCE(pr.name,''),
-		COALESCE(g.grantee_principal_id::text,g.grantee_role,''),COALESCE(u.username,''),g.created_at
+		COALESCE(g.grantee_principal_id::text,g.grantee_role,''),COALESCE(identity_principal_label(u.display_name,u.email,u.username),''),g.created_at
 		FROM access_resource_grants g
 		LEFT JOIN workflow_projects pr ON pr.organization_id=g.organization_id AND pr.id=g.grantee_project_id
 		LEFT JOIN identity_principals u ON u.id=g.grantee_principal_id

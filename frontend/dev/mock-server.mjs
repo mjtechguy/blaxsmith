@@ -516,7 +516,7 @@ Object.assign(rpc, {
     const actionable = items.filter((i) => i.canAct);
     const runsNow = allRuns();
     const agents = rpc.GetAdminOverview().liveAttempts.map((a) => ({ ...a, takenOver: Boolean(a.controllerPrincipalId) }));
-    return { organizationName: "Acme Engineering", organizationSlug: "acme", username: "you", displayName: "You",
+    return { organizationName: "Acme Engineering", organizationSlug: "acme", username: "you", displayName: members[0].displayName, email: members[0].email,
       waitingOnYou: actionable.length, openItems: items.length, runningAgents: agents.length, activeRuns: runsNow.filter((r) => ["queued", "active", "cancel_requested"].includes(r.state)).length,
       runsLast24h: runsNow.filter((r) => Date.now() - Date.parse(r.createdAt) < 86_400_000).length, failedLast24h: runsNow.filter((r) => r.state === "failed" && Date.now() - Date.parse(r.createdAt) < 86_400_000).length,
       waiting: actionable.slice(0, 5), agents: agents.slice(0, 10), recentRuns: [...runsNow].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8), generatedAt: now() };
@@ -536,9 +536,9 @@ Object.assign(rpc, {
   ListOrgMembers: () => mayDecide() ? { members } : connectError(403, "permission_denied", "organization administration denied"),
   ListMembersPage: ({ page: p = 1, pageSize = 25, search = "", roles = [], statuses = [], sortBy = "role", sortDirection = "asc" }) => {
     if (!mayDecide()) return connectError(403, "permission_denied", "organization administration denied");
-    const cmp = { role: (a, b) => roleOrder.indexOf(a.role) - roleOrder.indexOf(b.role), username: (a, b) => a.username.localeCompare(b.username),
+    const cmp = { role: (a, b) => roleOrder.indexOf(a.role) - roleOrder.indexOf(b.role), email: (a, b) => (a.email || a.username).localeCompare(b.email || b.username),
       last_login: (a, b) => a.lastLoginAt.localeCompare(b.lastLoginAt), created_at: (a, b) => a.createdAt.localeCompare(b.createdAt) }[sortBy] ?? (() => 0);
-    const rows = members.filter((m) => (!search || `${m.username} ${m.displayName}`.toLowerCase().includes(search.toLowerCase())) && (!roles.length || roles.includes(m.role)) && (!statuses.length || statuses.includes(m.status)))
+    const rows = members.filter((m) => (!search || `${m.email} ${m.username} ${m.displayName}`.toLowerCase().includes(search.toLowerCase())) && (!roles.length || roles.includes(m.role)) && (!statuses.length || statuses.includes(m.status)))
       .sort((a, b) => cmp(a, b) * (sortDirection === "desc" ? -1 : 1) || a.username.localeCompare(b.username));
     return { members: page(rows, p, pageSize), totalCount: rows.length };
   },
@@ -546,7 +546,121 @@ Object.assign(rpc, {
   SetUserRole: ({ principalId: id, role }) => { const m = members.find((x) => x.principalId === id); if (m) { m.role = role; m.activeSessions = 0; } auditEvent("identity.user.role_changed", id); return {}; },
   RevokeUserSessions: ({ principalId: id }) => { const m = members.find((x) => x.principalId === id); const revoked = m?.activeSessions ?? 0; if (m) m.activeSessions = 0; auditEvent("identity.user.sessions_revoked", id); return { revoked: String(revoked) }; },
   IssueResetLink: ({ principalId: id }) => { auditEvent("identity.user.reset_link_issued", id); return { link: { token: "mock-reset-token", purpose: "reset", expiresAt: new Date(Date.now() + 86_400_000).toISOString() } }; },
-  InviteUser: ({ username, displayName = "", role = "member" }) => { members.push({ principalId: `p-${username}`, username, displayName, role, status: "invited", activeSessions: 0, lastLoginAt: "", createdAt: now() }); return { principalId: `p-${username}`, link: { token: "mock-setup-token", purpose: "setup", expiresAt: new Date(Date.now() + 86_400_000).toISOString() } }; },
+  InviteUser: ({ email = "", displayName = "", role = "member" }) => {
+    email = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return connectError(400, "invalid_argument", "enter a valid email address");
+    if (members.some((m) => m.email === email)) return connectError(409, "already_exists", "that email is already in use");
+    const username = email.split("@")[0].replace(/[^a-z0-9._-]/g, "-");
+    members.push({ principalId: `p-${username}`, username, email, emailVerified: false, displayName, role, status: "invited", activeSessions: 0, lastLoginAt: "", createdAt: now() });
+    auditEvent("identity.user.invited", `p-${username}`);
+    return { principalId: `p-${username}`, link: { token: "mock-setup-token", purpose: "setup", expiresAt: new Date(Date.now() + 86_400_000).toISOString() } };
+  },
+  SetUserEmail: ({ principalId: id, email = "" }) => {
+    email = email.trim().toLowerCase();
+    const m = members.find((x) => x.principalId === id);
+    if (!m) return connectError(404, "not_found", "member not found");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return connectError(400, "invalid_argument", "enter a valid email address");
+    if (members.some((x) => x.email === email && x !== m)) return connectError(409, "already_exists", "that email is already in use");
+    Object.assign(m, { email, emailVerified: false, activeSessions: 0 });
+    auditEvent("identity.user.email_changed", id);
+    return {};
+  },
+  GetAccountLink: ({ token }) => token.startsWith("mock-") ? { purpose: token.includes("reset") ? "reset" : "setup", username: "priya", email: token.includes("legacy") ? "" : "priya@acme.test",
+    displayName: "Priya Raman", organizationSlug: "acme", organizationName: "Acme Engineering", expiresAt: new Date(Date.now() + 86_400_000).toISOString() } : connectError(404, "not_found", "account link is invalid, used, or expired"),
+  CompleteAccountLink: ({ password = "", email = "" }) => new TextEncoder().encode(password).length < 12 ? connectError(400, "invalid_argument", "password must be valid UTF-8 and 12–1024 bytes")
+    : { organizationSlug: "acme", email: email || "priya@acme.test" },
+});
+members.forEach((m) => Object.assign(m, { email: m.status === "invited" && m.username !== "priya" ? "" : `${m.username}@acme.test`, emailVerified: m.username === "you" }));
+
+// Sign-in and the caller's own account; the mock password is "mock password
+// 123". MOCK_SIGNED_OUT=1 starts at the login page (sign in as you@acme.test).
+// MOCK_LEGACY=1 starts signed out with no email on the account, so the
+// username "you" works once and leads to the set-email page;
+// MOCK_EMAIL_REQUIRED=1 starts in that one-time session.
+const mockPassword = "mock password 123";
+const me = members[0];
+const legacyAccount = process.env.MOCK_LEGACY === "1" || process.env.MOCK_EMAIL_REQUIRED === "1";
+if (legacyAccount) me.email = "";
+let signedIn = process.env.MOCK_SIGNED_OUT !== "1" && process.env.MOCK_LEGACY !== "1";
+let emailRequired = process.env.MOCK_EMAIL_REQUIRED === "1";
+let legacyUsed = emailRequired;
+let myPassword = mockPassword;
+const unauthenticated = () => connectError(401, "unauthenticated", "authentication required");
+const mySessions = [
+  { id: "s-current", current: true, organizationSlug: "acme", createdAt: minutesAgo(90), lastSeenAt: minutesAgo(2), expiresAt: new Date(Date.now() + 6 * 86_400_000).toISOString(), sourceAddress: "127.0.0.1", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15" },
+  { id: "s-laptop", current: false, organizationSlug: "acme", createdAt: minutesAgo(60 * 26), lastSeenAt: minutesAgo(60 * 3), expiresAt: new Date(Date.now() + 5 * 86_400_000).toISOString(), sourceAddress: "203.0.113.24", userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36" },
+  { id: "s-phone", current: false, organizationSlug: "acme", createdAt: minutesAgo(60 * 50), lastSeenAt: "", expiresAt: new Date(Date.now() + 4 * 86_400_000).toISOString(), sourceAddress: "198.51.100.7", userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1" },
+];
+const myProfile = () => ({ principalId, email: me.email, emailVerified: me.emailVerified, displayName: me.displayName, handle: me.username,
+  organizationId: "org-demo", organizationSlug: "acme", organizationName: "Acme Engineering", role: mockRole, createdAt: me.createdAt, emailRequired });
+const baseSession = rpc.CurrentSession;
+// Requests (not the startup seeding below) need a session, and an
+// email_required session reaches only the account-setup calls, as on the server.
+const publicMethods = new Set(["GetCsrf", "CurrentSession", "RefreshSession", "LoginLocal", "Logout", "GetAccountLink", "CompleteAccountLink", "ListTools"]);
+const setupMethods = new Set(["GetMyProfile", "UpdateMyProfile"]);
+const refuse = (method) => publicMethods.has(method) ? null : !signedIn ? unauthenticated()
+  : emailRequired && !setupMethods.has(method) ? connectError(400, "failed_precondition", "set your email to continue") : null;
+Object.assign(rpc, {
+  CurrentSession: () => signedIn ? { session: { ...baseSession().session, emailRequired } } : unauthenticated(),
+  RefreshSession: () => rpc.CurrentSession(),
+  LoginLocal: ({ email = "", username = "", password = "" }) => {
+    const login = (email || username).trim().toLowerCase();
+    const legacy = !login.includes("@");
+    const known = legacy ? !legacyUsed && !me.email && login === me.username : Boolean(me.email) && login === me.email;
+    if (password !== myPassword || !known) return unauthenticated();
+    if (legacy) { legacyUsed = true; emailRequired = true; }
+    signedIn = true;
+    return rpc.CurrentSession();
+  },
+  Logout: () => { signedIn = false; return {}; },
+  GetMyProfile: () => signedIn ? { profile: myProfile() } : unauthenticated(),
+  UpdateMyProfile: ({ displayName, email, currentPassword = "" }) => {
+    if (!signedIn) return unauthenticated();
+    if (emailRequired && email === undefined) return connectError(400, "failed_precondition", "set your email to continue");
+    let revokedSessions = "0";
+    if (email !== undefined && (emailRequired || email.trim().toLowerCase() !== me.email)) {
+      const next = email.trim().toLowerCase();
+      if (currentPassword !== myPassword) return connectError(403, "permission_denied", "current password is incorrect");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) return connectError(400, "invalid_argument", "enter a valid email address");
+      if (members.some((m) => m.email === next && m !== me)) return connectError(409, "already_exists", "that email is already in use");
+      Object.assign(me, { email: next, emailVerified: false });
+      emailRequired = false;
+      revokedSessions = String(mySessions.filter((s) => !s.current).length);
+      mySessions.splice(0, mySessions.length, ...mySessions.filter((s) => s.current));
+      auditEvent("identity.account.email_changed", principalId);
+    }
+    if (displayName !== undefined && displayName.trim() !== me.displayName) {
+      if (displayName.trim().length > 160) return connectError(400, "invalid_argument", "invalid user input");
+      me.displayName = displayName.trim();
+      auditEvent("identity.account.profile_updated", principalId);
+    }
+    return { profile: myProfile(), revokedSessions };
+  },
+  ChangeMyPassword: ({ currentPassword = "", newPassword = "" }) => {
+    if (currentPassword !== myPassword) return connectError(403, "permission_denied", "current password is incorrect");
+    const bytes = new TextEncoder().encode(newPassword).length;
+    if (bytes < 12 || bytes > 1024) return connectError(400, "invalid_argument", "password must be valid UTF-8 and 12–1024 bytes");
+    myPassword = newPassword;
+    const revokedSessions = String(mySessions.filter((s) => !s.current).length);
+    mySessions.splice(0, mySessions.length, ...mySessions.filter((s) => s.current));
+    auditEvent("identity.account.password_changed", principalId);
+    return { revokedSessions };
+  },
+  ListMySessions: () => ({ sessions: mySessions }),
+  RevokeMySession: ({ sessionId }) => {
+    const index = mySessions.findIndex((s) => s.id === sessionId);
+    if (index < 0) return connectError(404, "not_found", "session not found");
+    if (mySessions[index].current) return connectError(400, "failed_precondition", "use sign out to end this session");
+    mySessions.splice(index, 1);
+    auditEvent("identity.account.session_revoked", sessionId);
+    return {};
+  },
+  RevokeMyOtherSessions: () => {
+    const revoked = String(mySessions.filter((s) => !s.current).length);
+    mySessions.splice(0, mySessions.length, ...mySessions.filter((s) => s.current));
+    auditEvent("identity.account.other_sessions_revoked", principalId);
+    return { revoked };
+  },
 });
 // Seed the connections hub so connection lists and detail tabs have content.
 hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "Acme Engineering", kind: "api_key", provider: "anthropic", label: "Platform team", account: "sk-ant-…a41f", modelCount: 6, modelsCheckedAt: minutesAgo(40), lastUsedAt: minutesAgo(3), createdAt: minutesAgo(60 * 24 * 12),
@@ -668,7 +782,8 @@ const server = createHttp(async (req, res) => {
   let body = "";
   for await (const chunk of req) body += chunk;
   const handler = method && rpc[method];
-  const result = handler ? handler(body ? JSON.parse(body) : {}) : connectError(404, "unimplemented", `mock has no ${method ?? url.pathname}`);
+  const refused = handler ? refuse(method) : null;
+  const result = refused ? refused : handler ? handler(body ? JSON.parse(body) : {}) : connectError(404, "unimplemented", `mock has no ${method ?? url.pathname}`);
   const [status, payload] = result?.status ? [result.status, result.body] : [200, result];
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(payload));

@@ -59,7 +59,7 @@ message ExtensionVersion {
   repeated string approved_permissions = 11;
   string permissions_sha256 = 12;
   string installed_by = 13;
-  string installed_by_username = 14;
+  string installed_by_username = 14; // Display label: name, else email, else handle.
   string created_at = 15;
   repeated ExtensionPermission permissions = 16; // Declared permissions.
   repeated ExtensionTemplate templates = 17;

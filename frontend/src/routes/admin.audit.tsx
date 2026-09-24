@@ -62,7 +62,7 @@ function AuditLog() {
         <label className="filter-field"><span className="filter-label">Event</span>
           <select value={action} onChange={(event) => setFilter({ action: event.target.value || undefined })}><option value="">All events</option>{auditActions.map((entry) => <option key={entry} value={entry}>{entry}</option>)}</select></label>
         <label className="search-field"><Search size={16} aria-hidden="true" /><span className="sr-only">Actor</span>
-          <input value={actorInput} onChange={(event) => setActorInput(event.target.value)} placeholder="Actor username or ID" maxLength={64} /></label>
+          <input value={actorInput} onChange={(event) => setActorInput(event.target.value)} placeholder="Actor email or ID" maxLength={254} /></label>
         <label className="filter-field"><span className="filter-label">Project</span>
           <select value={projectId} onChange={(event) => setFilter({ project: event.target.value || undefined })}><option value="">All projects</option>{projects.data?.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
       </div>

@@ -15,7 +15,7 @@ func TestMembersPagePostgres(t *testing.T) {
 	pool := identityTestPool(t)
 	ctx := context.Background()
 	password := []byte("correct horse battery staple")
-	if _, err := BootstrapOwner(ctx, pool, "alice", "engineering", "Engineering", password); err != nil {
+	if _, err := BootstrapOwner(ctx, pool, "alice@example.com", "engineering", "Engineering", password); err != nil {
 		t.Fatal(err)
 	}
 	_, signer, err := ed25519.GenerateKey(rand.Reader)
@@ -30,7 +30,7 @@ func TestMembersPagePostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tokens, err := manager.LoginLocal(ctx, "engineering", "alice", password, netip.MustParseAddr("192.0.2.10"))
+	tokens, err := manager.LoginLocal(ctx, "engineering", "alice@example.com", password, netip.MustParseAddr("192.0.2.10"), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,13 +42,13 @@ func TestMembersPagePostgres(t *testing.T) {
 	ids := map[string]string{}
 	for _, m := range [][3]string{{"bob", "Bob Builder", "admin"}, {"carol", "Carol Jones", "member"},
 		{"dave", "Dave Smith", "viewer"}, {"erin", "Erin Builder", "viewer"}} {
-		link, err := users.Invite(ctx, owner, m[0], m[1], m[2])
+		link, err := users.Invite(ctx, owner, m[0]+"@example.com", m[1], m[2])
 		if err != nil {
 			t.Fatal(err)
 		}
 		ids[m[0]] = link.PrincipalID
 		if m[0] == "bob" || m[0] == "dave" {
-			if _, err := users.CompleteLink(ctx, link.Token, []byte(m[0]+" password 123")); err != nil {
+			if _, err := users.CompleteLink(ctx, link.Token, []byte(m[0]+" password 123"), "", ""); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -116,7 +116,7 @@ func TestMembersPagePostgres(t *testing.T) {
 		t.Fatalf("owner row: %+v", members)
 	}
 	for _, f := range []MemberFilter{{Page: -1}, {PageSize: 101}, {PageSize: -1}, {Page: 10002, PageSize: 1},
-		{SortBy: "email"}, {SortDirection: "up"}, {Roles: []string{"guest"}}, {Statuses: []string{"pending"}},
+		{SortBy: "password"}, {SortDirection: "up"}, {Roles: []string{"guest"}}, {Statuses: []string{"pending"}},
 		{Search: strings.Repeat("x", 121)}} {
 		if _, _, err := users.ListMembersPage(ctx, owner, f); !errors.Is(err, ErrUserInvalid) {
 			t.Fatalf("members %+v accepted: %v", f, err)

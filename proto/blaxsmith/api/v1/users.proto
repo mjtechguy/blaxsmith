@@ -8,13 +8,15 @@ package blaxsmith.api.v1;
 
 message OrgMember {
   string principal_id = 1;
-  string username = 2;
+  string username = 2; // Internal handle; members sign in with email.
   string display_name = 3;
   string role = 4; // owner, admin, member, or viewer.
   string status = 5; // invited (no password yet), active, or disabled.
   int32 active_sessions = 6;
   string last_login_at = 7; // RFC 3339 of the latest session; empty if never.
   string created_at = 8;
+  string email = 9; // Empty for an account that has not set one yet.
+  bool email_verified = 10;
 }
 
 // A single-use setup or reset link, shown once to the issuing admin. The
@@ -28,10 +30,13 @@ message AccountLink {
 message ListOrgMembersRequest {}
 message ListOrgMembersResponse { repeated OrgMember members = 1; }
 
+// Invites by email; the internal handle is derived from it. The admin copies
+// the returned setup link to the person (no mail is sent).
 message InviteUserRequest {
-  string username = 1;
+  string username = 1 [deprecated = true]; // Ignored.
   string display_name = 2;
   string role = 3; // Only an owner can invite an owner.
+  string email = 4;
 }
 message InviteUserResponse {
   string principal_id = 1;
@@ -60,6 +65,16 @@ message IssueResetLinkResponse { AccountLink link = 1; }
 message RevokeUserSessionsRequest { string principal_id = 1; }
 message RevokeUserSessionsResponse { int64 revoked = 1; }
 
+// Owner/admin repair of a member's sign-in email. It must be unused across the
+// installation, is stored unverified, revokes the member's sessions, and is
+// audited. Like reset links, an account shared with another organization
+// cannot be changed from here; only an owner changes an owner.
+message SetUserEmailRequest {
+  string principal_id = 1;
+  string email = 2;
+}
+message SetUserEmailResponse {}
+
 // Public: no session required. Unknown, used, revoked, and expired links all
 // return NOT_FOUND.
 message GetAccountLinkRequest { string token = 1; }
@@ -70,17 +85,23 @@ message GetAccountLinkResponse {
   string organization_slug = 4;
   string organization_name = 5;
   string expires_at = 6;
+  string email = 7; // Empty for an older account without one; setup then asks.
 }
 
 // Public, CSRF-protected. Sets the password, consumes the link, and revokes
 // every existing session of the account.
+// display_name is optional (empty keeps the current one). email is read only
+// when the account has none yet.
 message CompleteAccountLinkRequest {
   string token = 1;
   string password = 2;
+  string display_name = 3;
+  string email = 4;
 }
 message CompleteAccountLinkResponse {
   string organization_slug = 1;
-  string username = 2;
+  string username = 2 [deprecated = true];
+  string email = 3;
 }
 
 service UserAdminService {
@@ -90,6 +111,7 @@ service UserAdminService {
   rpc SetUserEnabled(SetUserEnabledRequest) returns (SetUserEnabledResponse);
   rpc IssueResetLink(IssueResetLinkRequest) returns (IssueResetLinkResponse);
   rpc RevokeUserSessions(RevokeUserSessionsRequest) returns (RevokeUserSessionsResponse);
+  rpc SetUserEmail(SetUserEmailRequest) returns (SetUserEmailResponse);
   rpc GetAccountLink(GetAccountLinkRequest) returns (GetAccountLinkResponse);
   rpc CompleteAccountLink(CompleteAccountLinkRequest) returns (CompleteAccountLinkResponse);
 }

@@ -91,10 +91,12 @@ export async function currentSession(signal?: AbortSignal): Promise<SessionIdent
   }, signal);
 }
 
-export async function loginLocal(organizationSlug: string, username: string, password: string): Promise<SessionIdentity> {
+// Sign-in is by email. An account from before emails may enter its username
+// here once; that session is flagged emailRequired and routed to set one.
+export async function loginLocal(organizationSlug: string, email: string, password: string): Promise<SessionIdentity> {
   return withSessionLock(async (signal) => {
     const token = await csrf(signal);
-    return identity((await client.loginLocal({ organizationSlug, username, password },
+    return identity((await client.loginLocal({ organizationSlug, email, password },
       { signal, headers: { "X-Blaxsmith-CSRF": token } })).session);
   });
 }
@@ -106,9 +108,14 @@ export async function logout(): Promise<void> {
   });
 }
 
+// The routed page a one-time legacy session must finish before anything else.
+export const emailSetupPath = "/me/email";
+export const needsOrganization = (error: unknown) => ConnectError.from(error).code === Code.FailedPrecondition;
+
 export function loginError(error: unknown): string {
   switch (ConnectError.from(error).code) {
-    case Code.Unauthenticated: return "Those sign-in details were not accepted.";
+    case Code.Unauthenticated: return "That email and password were not accepted.";
+    case Code.FailedPrecondition: return "Your account belongs to more than one organization. Enter the one to sign in to.";
     case Code.ResourceExhausted: return "Too many attempts. Please try again later.";
     default: return "Sign-in is unavailable. Please try again.";
   }

@@ -123,6 +123,8 @@ export type RecipeVersion = Message<"blaxsmith.api.v1.RecipeVersion"> & {
   authorPrincipalId: string;
 
   /**
+   * Display label: name, else email, else handle.
+   *
    * @generated from field: string author_username = 8;
    */
   authorUsername: string;

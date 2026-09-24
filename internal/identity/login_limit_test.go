@@ -23,7 +23,7 @@ func TestLoginLimitPostgres(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results <- limit.Allow(ctx, "engineering", "alice", source)
+			results <- limit.Allow(ctx, "alice", source)
 		}()
 	}
 	wg.Wait()
@@ -42,25 +42,25 @@ func TestLoginLimitPostgres(t *testing.T) {
 	if allowed != 10 || denied != 10 {
 		t.Fatalf("shared account limit: %d allowed, %d denied", allowed, denied)
 	}
-	if err := limit.Allow(ctx, "engineering", "alice", netip.MustParseAddr("192.0.2.2")); err != nil {
+	if err := limit.Allow(ctx, "alice", netip.MustParseAddr("192.0.2.2")); err != nil {
 		t.Fatalf("another source was blocked: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE identity_login_limits SET window_start=clock_timestamp()-interval '2 minutes'`); err != nil {
 		t.Fatal(err)
 	}
-	if err := limit.Allow(ctx, "engineering", "alice", source); err != nil {
+	if err := limit.Allow(ctx, "alice", source); err != nil {
 		t.Fatalf("expired window did not reset: %v", err)
 	}
-	if err := limit.Allow(ctx, "engineering", "alice", netip.Addr{}); !errors.Is(err, ErrUnauthenticated) {
+	if err := limit.Allow(ctx, "alice", netip.Addr{}); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("invalid source was accepted: %v", err)
 	}
 	other := netip.MustParseAddr("192.0.2.3")
 	for i := range 60 {
-		if err := limit.Allow(ctx, "engineering", fmt.Sprintf("user%03d", i), other); err != nil {
+		if err := limit.Allow(ctx, fmt.Sprintf("user%03d", i), other); err != nil {
 			t.Fatalf("source blocked early at attempt %d: %v", i, err)
 		}
 	}
-	if err := limit.Allow(ctx, "engineering", "lastuser", other); !errors.Is(err, ErrRateLimited) {
+	if err := limit.Allow(ctx, "lastuser", other); !errors.Is(err, ErrRateLimited) {
 		t.Fatalf("source limit was bypassed: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE identity_login_limits SET window_start=clock_timestamp()-interval '2 days'`); err != nil {
@@ -95,7 +95,7 @@ func TestLoginLimitAcrossSourcesPostgres(t *testing.T) {
 			if i%2 == 1 {
 				limiter = second
 			}
-			results <- limiter.Allow(context.Background(), "engineering", "alice", netip.AddrFrom4([4]byte{192, 0, 2, byte(i + 1)}))
+			results <- limiter.Allow(context.Background(), "alice", netip.AddrFrom4([4]byte{192, 0, 2, byte(i + 1)}))
 		}()
 	}
 	wg.Wait()
@@ -114,10 +114,10 @@ func TestLoginLimitAcrossSourcesPostgres(t *testing.T) {
 	if allowed != 30 || denied != 10 {
 		t.Fatalf("distributed account limit: %d allowed, %d denied", allowed, denied)
 	}
-	if err := first.Allow(context.Background(), "engineering", "bob", netip.MustParseAddr("192.0.2.1")); err != nil {
+	if err := first.Allow(context.Background(), "bob", netip.MustParseAddr("192.0.2.1")); err != nil {
 		t.Fatalf("other account was blocked: %v", err)
 	}
-	if err := first.Allow(context.Background(), "other-org", "alice", netip.MustParseAddr("192.0.2.1")); err != nil {
-		t.Fatalf("same username in another organization was blocked: %v", err)
+	if err := first.Allow(context.Background(), "alice@example.com", netip.MustParseAddr("192.0.2.1")); err != nil {
+		t.Fatalf("an email login was blocked by the username budget: %v", err)
 	}
 }

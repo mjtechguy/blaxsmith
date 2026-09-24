@@ -82,8 +82,9 @@ message GetWorkspaceHomeResponse {
   // The caller's organization and own account; non-secret.
   string organization_name = 11;
   string organization_slug = 12;
-  string username = 13;
+  string username = 13; // Internal handle.
   string display_name = 14;
+  string email = 15;
 }
 
 message ListInboxRequest {
@@ -117,10 +118,10 @@ message ListWorkspaceRunsResponse {
 message ListMembersPageRequest {
   int32 page = 1;
   int32 page_size = 2;
-  string search = 3; // Username or display name.
+  string search = 3; // Email, display name, or handle.
   repeated string roles = 4;
   repeated string statuses = 5; // invited, active, or disabled.
-  string sort_by = 6; // role (default), username, last_login, or created_at.
+  string sort_by = 6; // role (default), email, username, last_login, or created_at.
   string sort_direction = 7; // asc (default) or desc.
 }
 message ListMembersPageResponse {

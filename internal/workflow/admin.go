@@ -194,7 +194,7 @@ func (s *Store) liveAttempts(ctx context.Context, org string, limit int) ([]Admi
 	rows, err := s.pool.Query(ctx, `SELECT a.id,a.run_id,r.project_id,p.name,r.launch_key,t.task_key,
 		COALESCE(st.s->>'kind',''),COALESCE(b.bundle_json->'recipe'->'profiles'->(st.s->>'profile')->>'harness',''),
 		COALESCE(b.bundle_json->'recipe'->'profiles'->(st.s->>'profile')->>'model',''),a.state,
-		COALESCE(a.control_holder_principal_id::text,''),COALESCE(ip.username,''),a.created_at,
+		COALESCE(a.control_holder_principal_id::text,''),COALESCE(identity_principal_label(ip.display_name,ip.email,ip.username),''),a.created_at,
 		(SELECT e.occurred_at FROM workflow_events e WHERE e.organization_id=a.organization_id
 			AND e.attempt_id=a.id ORDER BY e.id DESC LIMIT 1)
 		FROM workflow_attempts a
@@ -224,7 +224,7 @@ func (s *Store) ListAuditEvents(ctx context.Context, caller identity.Caller, f A
 		return nil, err
 	}
 	f.Action, f.Actor = strings.TrimSpace(f.Action), strings.ToLower(strings.TrimSpace(f.Actor))
-	if f.Limit < 1 || f.Limit > 101 || f.BeforeID < 0 || len(f.Action) > 128 || len(f.Actor) > 64 ||
+	if f.Limit < 1 || f.Limit > 101 || f.BeforeID < 0 || len(f.Action) > 128 || len(f.Actor) > 254 ||
 		(f.ProjectID != "" && !ids(f.ProjectID)) {
 		return nil, ErrInvalid
 	}
@@ -233,7 +233,7 @@ func (s *Store) ListAuditEvents(ctx context.Context, caller identity.Caller, f A
 		if ids(f.Actor) {
 			actorID = f.Actor
 		} else if err := s.pool.QueryRow(ctx, `SELECT p.id FROM identity_principals p JOIN identity_memberships m
-			ON m.principal_id=p.id WHERE m.organization_id=$1 AND p.username=$2`, caller.OrganizationID, f.Actor).
+			ON m.principal_id=p.id WHERE m.organization_id=$1 AND (lower(p.email)=$2 OR p.username=$2)`, caller.OrganizationID, f.Actor).
 			Scan(&actorID); errors.Is(err, pgx.ErrNoRows) {
 			return []AdminAuditEvent{}, nil
 		} else if err != nil {
@@ -244,7 +244,7 @@ func (s *Store) ListAuditEvents(ctx context.Context, caller identity.Caller, f A
 	if before == 0 {
 		before = 1<<63 - 1
 	}
-	rows, err := s.pool.Query(ctx, `SELECT e.id,e.action,e.actor_kind,COALESCE(e.actor_id::text,''),COALESCE(ip.username,''),
+	rows, err := s.pool.Query(ctx, `SELECT e.id,e.action,e.actor_kind,COALESCE(e.actor_id::text,''),COALESCE(identity_principal_label(ip.display_name,ip.email,ip.username),''),
 		COALESCE(e.subject_id::text,''),COALESCE(e.project_id::text,''),COALESCE(p.name,''),e.occurred_at
 		FROM identity_audit_events e
 		LEFT JOIN identity_principals ip ON ip.id=e.actor_id

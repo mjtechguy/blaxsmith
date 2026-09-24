@@ -68,7 +68,7 @@ func (s *Store) ExplainAccessAs(ctx context.Context, caller identity.Caller, pro
 		}
 	}
 	out := AccessExplanation{}
-	if err := tx.QueryRow(ctx, `SELECT username FROM identity_principals WHERE id=$1`, target.PrincipalID).Scan(&out.PrincipalLabel); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT identity_principal_label(display_name,email,username) FROM identity_principals WHERE id=$1`, target.PrincipalID).Scan(&out.PrincipalLabel); err != nil {
 		return AccessExplanation{}, err
 	}
 	var projectName string

@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file blaxsmith/api/v1/users.proto.
  */
 export const file_blaxsmith_api_v1_users: GenFile = /*@__PURE__*/
-  fileDesc("ChxibGF4c21pdGgvYXBpL3YxL3VzZXJzLnByb3RvEhBibGF4c21pdGguYXBpLnYxIqsBCglPcmdNZW1iZXISFAoMcHJpbmNpcGFsX2lkGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEhQKDGRpc3BsYXlfbmFtZRgDIAEoCRIMCgRyb2xlGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIXCg9hY3RpdmVfc2Vzc2lvbnMYBiABKAUSFQoNbGFzdF9sb2dpbl9hdBgHIAEoCRISCgpjcmVhdGVkX2F0GAggASgJIkEKC0FjY291bnRMaW5rEg0KBXRva2VuGAEgASgJEg8KB3B1cnBvc2UYAiABKAkSEgoKZXhwaXJlc19hdBgDIAEoCSIXChVMaXN0T3JnTWVtYmVyc1JlcXVlc3QiRgoWTGlzdE9yZ01lbWJlcnNSZXNwb25zZRIsCgdtZW1iZXJzGAEgAygLMhsuYmxheHNtaXRoLmFwaS52MS5PcmdNZW1iZXIiSQoRSW52aXRlVXNlclJlcXVlc3QSEAoIdXNlcm5hbWUYASABKAkSFAoMZGlzcGxheV9uYW1lGAIgASgJEgwKBHJvbGUYAyABKAkiVwoSSW52aXRlVXNlclJlc3BvbnNlEhQKDHByaW5jaXBhbF9pZBgBIAEoCRIrCgRsaW5rGAIgASgLMh0uYmxheHNtaXRoLmFwaS52MS5BY2NvdW50TGluayI4ChJTZXRVc2VyUm9sZVJlcXVlc3QSFAoMcHJpbmNpcGFsX2lkGAEgASgJEgwKBHJvbGUYAiABKAkiFQoTU2V0VXNlclJvbGVSZXNwb25zZSI+ChVTZXRVc2VyRW5hYmxlZFJlcXVlc3QSFAoMcHJpbmNpcGFsX2lkGAEgASgJEg8KB2VuYWJsZWQYAiABKAgiGAoWU2V0VXNlckVuYWJsZWRSZXNwb25zZSItChVJc3N1ZVJlc2V0TGlua1JlcXVlc3QSFAoMcHJpbmNpcGFsX2lkGAEgASgJIkUKFklzc3VlUmVzZXRMaW5rUmVzcG9uc2USKwoEbGluaxgBIAEoCzIdLmJsYXhzbWl0aC5hcGkudjEuQWNjb3VudExpbmsiMQoZUmV2b2tlVXNlclNlc3Npb25zUmVxdWVzdBIUCgxwcmluY2lwYWxfaWQYASABKAkiLQoaUmV2b2tlVXNlclNlc3Npb25zUmVzcG9uc2USDwoHcmV2b2tlZBgBIAEoAyImChVHZXRBY2NvdW50TGlua1JlcXVlc3QSDQoFdG9rZW4YASABKAkimwEKFkdldEFjY291bnRMaW5rUmVzcG9uc2USDwoHcHVycG9zZRgBIAEoCRIQCgh1c2VybmFtZRgCIAEoCRIUCgxkaXNwbGF5X25hbWUYAyABKAkSGQoRb3JnYW5pemF0aW9uX3NsdWcYBCABKAkSGQoRb3JnYW5pemF0aW9uX25hbWUYBSABKAkSEgoKZXhwaXJlc19hdBgGIAEoCSI9ChpDb21wbGV0ZUFjY291bnRMaW5rUmVxdWVzdBINCgV0b2tlbhgBIAEoCRIQCghwYXNzd29yZBgCIAEoCSJKChtDb21wbGV0ZUFjY291bnRMaW5rUmVzcG9uc2USGQoRb3JnYW5pemF0aW9uX3NsdWcYASABKAkSEAoIdXNlcm5hbWUYAiABKAkywAYKEFVzZXJBZG1pblNlcnZpY2USYwoOTGlzdE9yZ01lbWJlcnMSJy5ibGF4c21pdGguYXBpLnYxLkxpc3RPcmdNZW1iZXJzUmVxdWVzdBooLmJsYXhzbWl0aC5hcGkudjEuTGlzdE9yZ01lbWJlcnNSZXNwb25zZRJXCgpJbnZpdGVVc2VyEiMuYmxheHNtaXRoLmFwaS52MS5JbnZpdGVVc2VyUmVxdWVzdBokLmJsYXhzbWl0aC5hcGkudjEuSW52aXRlVXNlclJlc3BvbnNlEloKC1NldFVzZXJSb2xlEiQuYmxheHNtaXRoLmFwaS52MS5TZXRVc2VyUm9sZVJlcXVlc3QaJS5ibGF4c21pdGguYXBpLnYxLlNldFVzZXJSb2xlUmVzcG9uc2USYwoOU2V0VXNlckVuYWJsZWQSJy5ibGF4c21pdGguYXBpLnYxLlNldFVzZXJFbmFibGVkUmVxdWVzdBooLmJsYXhzbWl0aC5hcGkudjEuU2V0VXNlckVuYWJsZWRSZXNwb25zZRJjCg5Jc3N1ZVJlc2V0TGluaxInLmJsYXhzbWl0aC5hcGkudjEuSXNzdWVSZXNldExpbmtSZXF1ZXN0GiguYmxheHNtaXRoLmFwaS52MS5Jc3N1ZVJlc2V0TGlua1Jlc3BvbnNlEm8KElJldm9rZVVzZXJTZXNzaW9ucxIrLmJsYXhzbWl0aC5hcGkudjEuUmV2b2tlVXNlclNlc3Npb25zUmVxdWVzdBosLmJsYXhzbWl0aC5hcGkudjEuUmV2b2tlVXNlclNlc3Npb25zUmVzcG9uc2USYwoOR2V0QWNjb3VudExpbmsSJy5ibGF4c21pdGguYXBpLnYxLkdldEFjY291bnRMaW5rUmVxdWVzdBooLmJsYXhzbWl0aC5hcGkudjEuR2V0QWNjb3VudExpbmtSZXNwb25zZRJyChNDb21wbGV0ZUFjY291bnRMaW5rEiwuYmxheHNtaXRoLmFwaS52MS5Db21wbGV0ZUFjY291bnRMaW5rUmVxdWVzdBotLmJsYXhzbWl0aC5hcGkudjEuQ29tcGxldGVBY2NvdW50TGlua1Jlc3BvbnNlQsIBChRjb20uYmxheHNtaXRoLmFwaS52MUIKVXNlcnNQcm90b1ABWjxnaXRodWIuY29tL21qdGVjaGd1eS9ibGF4c21pdGgvZ2VuL2dvL2JsYXhzbWl0aC9hcGkvdjE7YXBpdjGiAgNCQViqAhBCbGF4c21pdGguQXBpLlYxygIQQmxheHNtaXRoXEFwaVxWMeICHEJsYXhzbWl0aFxBcGlcVjFcR1BCTWV0YWRhdGHqAhJCbGF4c21pdGg6OkFwaTo6VjFiBnByb3RvMw");
+  fileDesc("ChxibGF4c21pdGgvYXBpL3YxL3VzZXJzLnByb3RvEhBibGF4c21pdGguYXBpLnYxItIBCglPcmdNZW1iZXISFAoMcHJpbmNpcGFsX2lkGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEhQKDGRpc3BsYXlfbmFtZRgDIAEoCRIMCgRyb2xlGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIXCg9hY3RpdmVfc2Vzc2lvbnMYBiABKAUSFQoNbGFzdF9sb2dpbl9hdBgHIAEoCRISCgpjcmVhdGVkX2F0GAggASgJEg0KBWVtYWlsGAkgASgJEhYKDmVtYWlsX3ZlcmlmaWVkGAogASgIIkEKC0FjY291bnRMaW5rEg0KBXRva2VuGAEgASgJEg8KB3B1cnBvc2UYAiABKAkSEgoKZXhwaXJlc19hdBgDIAEoCSIXChVMaXN0T3JnTWVtYmVyc1JlcXVlc3QiRgoWTGlzdE9yZ01lbWJlcnNSZXNwb25zZRIsCgdtZW1iZXJzGAEgAygLMhsuYmxheHNtaXRoLmFwaS52MS5PcmdNZW1iZXIiXAoRSW52aXRlVXNlclJlcXVlc3QSFAoIdXNlcm5hbWUYASABKAlCAhgBEhQKDGRpc3BsYXlfbmFtZRgCIAEoCRIMCgRyb2xlGAMgASgJEg0KBWVtYWlsGAQgASgJIlcKEkludml0ZVVzZXJSZXNwb25zZRIUCgxwcmluY2lwYWxfaWQYASABKAkSKwoEbGluaxgCIAEoCzIdLmJsYXhzbWl0aC5hcGkudjEuQWNjb3VudExpbmsiOAoSU2V0VXNlclJvbGVSZXF1ZXN0EhQKDHByaW5jaXBhbF9pZBgBIAEoCRIMCgRyb2xlGAIgASgJIhUKE1NldFVzZXJSb2xlUmVzcG9uc2UiPgoVU2V0VXNlckVuYWJsZWRSZXF1ZXN0EhQKDHByaW5jaXBhbF9pZBgBIAEoCRIPCgdlbmFibGVkGAIgASgIIhgKFlNldFVzZXJFbmFibGVkUmVzcG9uc2UiLQoVSXNzdWVSZXNldExpbmtSZXF1ZXN0EhQKDHByaW5jaXBhbF9pZBgBIAEoCSJFChZJc3N1ZVJlc2V0TGlua1Jlc3BvbnNlEisKBGxpbmsYASABKAsyHS5ibGF4c21pdGguYXBpLnYxLkFjY291bnRMaW5rIjEKGVJldm9rZVVzZXJTZXNzaW9uc1JlcXVlc3QSFAoMcHJpbmNpcGFsX2lkGAEgASgJIi0KGlJldm9rZVVzZXJTZXNzaW9uc1Jlc3BvbnNlEg8KB3Jldm9rZWQYASABKAMiOgoTU2V0VXNlckVtYWlsUmVxdWVzdBIUCgxwcmluY2lwYWxfaWQYASABKAkSDQoFZW1haWwYAiABKAkiFgoUU2V0VXNlckVtYWlsUmVzcG9uc2UiJgoVR2V0QWNjb3VudExpbmtSZXF1ZXN0Eg0KBXRva2VuGAEgASgJIqoBChZHZXRBY2NvdW50TGlua1Jlc3BvbnNlEg8KB3B1cnBvc2UYASABKAkSEAoIdXNlcm5hbWUYAiABKAkSFAoMZGlzcGxheV9uYW1lGAMgASgJEhkKEW9yZ2FuaXphdGlvbl9zbHVnGAQgASgJEhkKEW9yZ2FuaXphdGlvbl9uYW1lGAUgASgJEhIKCmV4cGlyZXNfYXQYBiABKAkSDQoFZW1haWwYByABKAkiYgoaQ29tcGxldGVBY2NvdW50TGlua1JlcXVlc3QSDQoFdG9rZW4YASABKAkSEAoIcGFzc3dvcmQYAiABKAkSFAoMZGlzcGxheV9uYW1lGAMgASgJEg0KBWVtYWlsGAQgASgJIl0KG0NvbXBsZXRlQWNjb3VudExpbmtSZXNwb25zZRIZChFvcmdhbml6YXRpb25fc2x1ZxgBIAEoCRIUCgh1c2VybmFtZRgCIAEoCUICGAESDQoFZW1haWwYAyABKAkynwcKEFVzZXJBZG1pblNlcnZpY2USYwoOTGlzdE9yZ01lbWJlcnMSJy5ibGF4c21pdGguYXBpLnYxLkxpc3RPcmdNZW1iZXJzUmVxdWVzdBooLmJsYXhzbWl0aC5hcGkudjEuTGlzdE9yZ01lbWJlcnNSZXNwb25zZRJXCgpJbnZpdGVVc2VyEiMuYmxheHNtaXRoLmFwaS52MS5JbnZpdGVVc2VyUmVxdWVzdBokLmJsYXhzbWl0aC5hcGkudjEuSW52aXRlVXNlclJlc3BvbnNlEloKC1NldFVzZXJSb2xlEiQuYmxheHNtaXRoLmFwaS52MS5TZXRVc2VyUm9sZVJlcXVlc3QaJS5ibGF4c21pdGguYXBpLnYxLlNldFVzZXJSb2xlUmVzcG9uc2USYwoOU2V0VXNlckVuYWJsZWQSJy5ibGF4c21pdGguYXBpLnYxLlNldFVzZXJFbmFibGVkUmVxdWVzdBooLmJsYXhzbWl0aC5hcGkudjEuU2V0VXNlckVuYWJsZWRSZXNwb25zZRJjCg5Jc3N1ZVJlc2V0TGluaxInLmJsYXhzbWl0aC5hcGkudjEuSXNzdWVSZXNldExpbmtSZXF1ZXN0GiguYmxheHNtaXRoLmFwaS52MS5Jc3N1ZVJlc2V0TGlua1Jlc3BvbnNlEm8KElJldm9rZVVzZXJTZXNzaW9ucxIrLmJsYXhzbWl0aC5hcGkudjEuUmV2b2tlVXNlclNlc3Npb25zUmVxdWVzdBosLmJsYXhzbWl0aC5hcGkudjEuUmV2b2tlVXNlclNlc3Npb25zUmVzcG9uc2USXQoMU2V0VXNlckVtYWlsEiUuYmxheHNtaXRoLmFwaS52MS5TZXRVc2VyRW1haWxSZXF1ZXN0GiYuYmxheHNtaXRoLmFwaS52MS5TZXRVc2VyRW1haWxSZXNwb25zZRJjCg5HZXRBY2NvdW50TGluaxInLmJsYXhzbWl0aC5hcGkudjEuR2V0QWNjb3VudExpbmtSZXF1ZXN0GiguYmxheHNtaXRoLmFwaS52MS5HZXRBY2NvdW50TGlua1Jlc3BvbnNlEnIKE0NvbXBsZXRlQWNjb3VudExpbmsSLC5ibGF4c21pdGguYXBpLnYxLkNvbXBsZXRlQWNjb3VudExpbmtSZXF1ZXN0Gi0uYmxheHNtaXRoLmFwaS52MS5Db21wbGV0ZUFjY291bnRMaW5rUmVzcG9uc2VCwgEKFGNvbS5ibGF4c21pdGguYXBpLnYxQgpVc2Vyc1Byb3RvUAFaPGdpdGh1Yi5jb20vbWp0ZWNoZ3V5L2JsYXhzbWl0aC9nZW4vZ28vYmxheHNtaXRoL2FwaS92MTthcGl2MaICA0JBWKoCEEJsYXhzbWl0aC5BcGkuVjHKAhBCbGF4c21pdGhcQXBpXFYx4gIcQmxheHNtaXRoXEFwaVxWMVxHUEJNZXRhZGF0YeoCEkJsYXhzbWl0aDo6QXBpOjpWMWIGcHJvdG8z");
 
 /**
  * @generated from message blaxsmith.api.v1.OrgMember
@@ -22,6 +22,8 @@ export type OrgMember = Message<"blaxsmith.api.v1.OrgMember"> & {
   principalId: string;
 
   /**
+   * Internal handle; members sign in with email.
+   *
    * @generated from field: string username = 2;
    */
   username: string;
@@ -61,6 +63,18 @@ export type OrgMember = Message<"blaxsmith.api.v1.OrgMember"> & {
    * @generated from field: string created_at = 8;
    */
   createdAt: string;
+
+  /**
+   * Empty for an account that has not set one yet.
+   *
+   * @generated from field: string email = 9;
+   */
+  email: string;
+
+  /**
+   * @generated from field: bool email_verified = 10;
+   */
+  emailVerified: boolean;
 };
 
 /**
@@ -135,11 +149,17 @@ export const ListOrgMembersResponseSchema: GenMessage<ListOrgMembersResponse> = 
   messageDesc(file_blaxsmith_api_v1_users, 3);
 
 /**
+ * Invites by email; the internal handle is derived from it. The admin copies
+ * the returned setup link to the person (no mail is sent).
+ *
  * @generated from message blaxsmith.api.v1.InviteUserRequest
  */
 export type InviteUserRequest = Message<"blaxsmith.api.v1.InviteUserRequest"> & {
   /**
-   * @generated from field: string username = 1;
+   * Ignored.
+   *
+   * @generated from field: string username = 1 [deprecated = true];
+   * @deprecated
    */
   username: string;
 
@@ -154,6 +174,11 @@ export type InviteUserRequest = Message<"blaxsmith.api.v1.InviteUserRequest"> & 
    * @generated from field: string role = 3;
    */
   role: string;
+
+  /**
+   * @generated from field: string email = 4;
+   */
+  email: string;
 };
 
 /**
@@ -330,6 +355,46 @@ export const RevokeUserSessionsResponseSchema: GenMessage<RevokeUserSessionsResp
   messageDesc(file_blaxsmith_api_v1_users, 13);
 
 /**
+ * Owner/admin repair of a member's sign-in email. It must be unused across the
+ * installation, is stored unverified, revokes the member's sessions, and is
+ * audited. Like reset links, an account shared with another organization
+ * cannot be changed from here; only an owner changes an owner.
+ *
+ * @generated from message blaxsmith.api.v1.SetUserEmailRequest
+ */
+export type SetUserEmailRequest = Message<"blaxsmith.api.v1.SetUserEmailRequest"> & {
+  /**
+   * @generated from field: string principal_id = 1;
+   */
+  principalId: string;
+
+  /**
+   * @generated from field: string email = 2;
+   */
+  email: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.SetUserEmailRequest.
+ * Use `create(SetUserEmailRequestSchema)` to create a new message.
+ */
+export const SetUserEmailRequestSchema: GenMessage<SetUserEmailRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_users, 14);
+
+/**
+ * @generated from message blaxsmith.api.v1.SetUserEmailResponse
+ */
+export type SetUserEmailResponse = Message<"blaxsmith.api.v1.SetUserEmailResponse"> & {
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.SetUserEmailResponse.
+ * Use `create(SetUserEmailResponseSchema)` to create a new message.
+ */
+export const SetUserEmailResponseSchema: GenMessage<SetUserEmailResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_users, 15);
+
+/**
  * Public: no session required. Unknown, used, revoked, and expired links all
  * return NOT_FOUND.
  *
@@ -347,7 +412,7 @@ export type GetAccountLinkRequest = Message<"blaxsmith.api.v1.GetAccountLinkRequ
  * Use `create(GetAccountLinkRequestSchema)` to create a new message.
  */
 export const GetAccountLinkRequestSchema: GenMessage<GetAccountLinkRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_users, 14);
+  messageDesc(file_blaxsmith_api_v1_users, 16);
 
 /**
  * @generated from message blaxsmith.api.v1.GetAccountLinkResponse
@@ -382,6 +447,13 @@ export type GetAccountLinkResponse = Message<"blaxsmith.api.v1.GetAccountLinkRes
    * @generated from field: string expires_at = 6;
    */
   expiresAt: string;
+
+  /**
+   * Empty for an older account without one; setup then asks.
+   *
+   * @generated from field: string email = 7;
+   */
+  email: string;
 };
 
 /**
@@ -389,11 +461,13 @@ export type GetAccountLinkResponse = Message<"blaxsmith.api.v1.GetAccountLinkRes
  * Use `create(GetAccountLinkResponseSchema)` to create a new message.
  */
 export const GetAccountLinkResponseSchema: GenMessage<GetAccountLinkResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_users, 15);
+  messageDesc(file_blaxsmith_api_v1_users, 17);
 
 /**
  * Public, CSRF-protected. Sets the password, consumes the link, and revokes
  * every existing session of the account.
+ * display_name is optional (empty keeps the current one). email is read only
+ * when the account has none yet.
  *
  * @generated from message blaxsmith.api.v1.CompleteAccountLinkRequest
  */
@@ -407,6 +481,16 @@ export type CompleteAccountLinkRequest = Message<"blaxsmith.api.v1.CompleteAccou
    * @generated from field: string password = 2;
    */
   password: string;
+
+  /**
+   * @generated from field: string display_name = 3;
+   */
+  displayName: string;
+
+  /**
+   * @generated from field: string email = 4;
+   */
+  email: string;
 };
 
 /**
@@ -414,7 +498,7 @@ export type CompleteAccountLinkRequest = Message<"blaxsmith.api.v1.CompleteAccou
  * Use `create(CompleteAccountLinkRequestSchema)` to create a new message.
  */
 export const CompleteAccountLinkRequestSchema: GenMessage<CompleteAccountLinkRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_users, 16);
+  messageDesc(file_blaxsmith_api_v1_users, 18);
 
 /**
  * @generated from message blaxsmith.api.v1.CompleteAccountLinkResponse
@@ -426,9 +510,15 @@ export type CompleteAccountLinkResponse = Message<"blaxsmith.api.v1.CompleteAcco
   organizationSlug: string;
 
   /**
-   * @generated from field: string username = 2;
+   * @generated from field: string username = 2 [deprecated = true];
+   * @deprecated
    */
   username: string;
+
+  /**
+   * @generated from field: string email = 3;
+   */
+  email: string;
 };
 
 /**
@@ -436,7 +526,7 @@ export type CompleteAccountLinkResponse = Message<"blaxsmith.api.v1.CompleteAcco
  * Use `create(CompleteAccountLinkResponseSchema)` to create a new message.
  */
 export const CompleteAccountLinkResponseSchema: GenMessage<CompleteAccountLinkResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_users, 17);
+  messageDesc(file_blaxsmith_api_v1_users, 19);
 
 /**
  * @generated from service blaxsmith.api.v1.UserAdminService
@@ -489,6 +579,14 @@ export const UserAdminService: GenService<{
     methodKind: "unary";
     input: typeof RevokeUserSessionsRequestSchema;
     output: typeof RevokeUserSessionsResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.UserAdminService.SetUserEmail
+   */
+  setUserEmail: {
+    methodKind: "unary";
+    input: typeof SetUserEmailRequestSchema;
+    output: typeof SetUserEmailResponseSchema;
   },
   /**
    * @generated from rpc blaxsmith.api.v1.UserAdminService.GetAccountLink

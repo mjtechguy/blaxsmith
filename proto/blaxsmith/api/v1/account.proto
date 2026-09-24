@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package blaxsmith.api.v1;
+
+// The signed-in person's own account. Every call acts only on the principal of
+// the live session; there is no principal_id to name someone else. Reads check
+// origin, mutations also require CSRF, and every mutation is audited.
+
+message MyProfile {
+  string principal_id = 1;
+  string email = 2; // Empty only for an account that must still set one.
+  bool email_verified = 3; // No mail is sent yet, so a changed email is unverified.
+  string display_name = 4;
+  string handle = 5; // Internal handle; not used to sign in.
+  string organization_id = 6;
+  string organization_slug = 7;
+  string organization_name = 8;
+  string role = 9;
+  string created_at = 10; // RFC 3339.
+  bool email_required = 11; // This session may only set an email.
+}
+
+// One of the caller's sessions, in any organization they belong to.
+message MySession {
+  string id = 1;
+  bool current = 2;
+  string organization_slug = 3;
+  string created_at = 4;
+  string last_seen_at = 5; // Last refresh; empty if never refreshed.
+  string expires_at = 6;
+  string source_address = 7;
+  string user_agent = 8;
+}
+
+message GetMyProfileRequest {}
+message GetMyProfileResponse { MyProfile profile = 1; }
+
+// Set only what changes. An email change needs current_password, must be
+// unused across the installation, is stored unverified, and signs out every
+// other session. It is also how an email_required session sets its email.
+message UpdateMyProfileRequest {
+  optional string display_name = 1;
+  optional string email = 2;
+  string current_password = 3;
+}
+message UpdateMyProfileResponse {
+  MyProfile profile = 1;
+  int64 revoked_sessions = 2;
+}
+
+// The new password follows the setup rules (12–1024 bytes of UTF-8). Current-
+// password checks are rate-limited; other sessions are signed out.
+message ChangeMyPasswordRequest {
+  string current_password = 1;
+  string new_password = 2;
+}
+message ChangeMyPasswordResponse { int64 revoked_sessions = 1; }
+
+message ListMySessionsRequest {}
+message ListMySessionsResponse { repeated MySession sessions = 1; }
+
+// Signs out one of the caller's other sessions; NOT_FOUND for anything else,
+// including another person's session. Use AuthService.Logout for this one.
+message RevokeMySessionRequest { string session_id = 1; }
+message RevokeMySessionResponse {}
+
+message RevokeMyOtherSessionsRequest {}
+message RevokeMyOtherSessionsResponse { int64 revoked = 1; }
+
+service AccountService {
+  rpc GetMyProfile(GetMyProfileRequest) returns (GetMyProfileResponse);
+  rpc UpdateMyProfile(UpdateMyProfileRequest) returns (UpdateMyProfileResponse);
+  rpc ChangeMyPassword(ChangeMyPasswordRequest) returns (ChangeMyPasswordResponse);
+  rpc ListMySessions(ListMySessionsRequest) returns (ListMySessionsResponse);
+  rpc RevokeMySession(RevokeMySessionRequest) returns (RevokeMySessionResponse);
+  rpc RevokeMyOtherSessions(RevokeMyOtherSessionsRequest) returns (RevokeMyOtherSessionsResponse);
+}

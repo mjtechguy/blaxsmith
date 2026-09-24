@@ -38,7 +38,7 @@ func TestBootstrapOwnerPostgres(t *testing.T) {
 		err   error
 	}
 	results := make(chan result, 2)
-	for _, candidate := range []struct{ username, slug string }{{"alice", "team-a"}, {"bob", "team-b"}} {
+	for _, candidate := range []struct{ username, slug string }{{"alice@example.com", "team-a"}, {"bob@example.com", "team-b"}} {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

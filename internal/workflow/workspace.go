@@ -29,7 +29,7 @@ type InboxItem struct {
 }
 
 type WorkspaceHome struct {
-	OrganizationName, OrganizationSlug, Username, DisplayName                      string
+	OrganizationName, OrganizationSlug, Username, DisplayName, Email               string
 	WaitingOnYou, OpenItems, RunningAgents, ActiveRuns, RunsLast24h, FailedLast24h int32
 	Waiting                                                                        []InboxItem
 	Agents                                                                         []AdminLiveAttempt
@@ -264,10 +264,10 @@ func (s *Store) WorkspaceHome(ctx context.Context, caller identity.Caller) (Work
 	}
 	org := caller.OrganizationID
 	var out WorkspaceHome
-	if err := s.pool.QueryRow(ctx, `SELECT o.name,o.slug,p.username,p.display_name
+	if err := s.pool.QueryRow(ctx, `SELECT o.name,o.slug,p.username,p.display_name,COALESCE(p.email,'')
 		FROM identity_organizations o JOIN identity_memberships m ON m.organization_id=o.id
 		JOIN identity_principals p ON p.id=m.principal_id WHERE o.id=$1 AND p.id=$2`, org, caller.PrincipalID).
-		Scan(&out.OrganizationName, &out.OrganizationSlug, &out.Username, &out.DisplayName); errors.Is(err, pgx.ErrNoRows) {
+		Scan(&out.OrganizationName, &out.OrganizationSlug, &out.Username, &out.DisplayName, &out.Email); errors.Is(err, pgx.ErrNoRows) {
 		return WorkspaceHome{}, ErrFenced
 	} else if err != nil {
 		return WorkspaceHome{}, err

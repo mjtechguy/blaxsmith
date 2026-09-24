@@ -39,14 +39,14 @@ func testUsersBrowserAPI(t *testing.T, ctx context.Context, client *http.Client,
 	list := connect.NewRequest(&api.ListOrgMembersRequest{})
 	list.Header().Set("Origin", origin)
 	members, err := c.ListOrgMembers(ctx, list)
-	invite := connect.NewRequest(&api.InviteUserRequest{Username: "browser-invitee", DisplayName: "Browser Invitee", Role: "member"})
+	invite := connect.NewRequest(&api.InviteUserRequest{Email: "Browser-Invitee@Example.com", DisplayName: "Browser Invitee", Role: "member"})
 	invite.Header().Set("Origin", origin)
 	invite.Header().Set("X-Blaxsmith-CSRF", csrf)
 	if !admin {
 		if connect.CodeOf(err) != connect.CodePermissionDenied {
 			t.Fatalf("non-admin listed members: %v", err)
 		}
-		invite.Msg.Username = "browser-denied"
+		invite.Msg.Email = "browser-denied@example.com"
 		if _, err := c.InviteUser(ctx, invite); connect.CodeOf(err) != connect.CodePermissionDenied {
 			t.Fatalf("non-admin invited: %v", err)
 		}

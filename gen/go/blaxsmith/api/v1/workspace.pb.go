@@ -477,8 +477,9 @@ type GetWorkspaceHomeResponse struct {
 	// The caller's organization and own account; non-secret.
 	OrganizationName string `protobuf:"bytes,11,opt,name=organization_name,json=organizationName,proto3" json:"organization_name,omitempty"`
 	OrganizationSlug string `protobuf:"bytes,12,opt,name=organization_slug,json=organizationSlug,proto3" json:"organization_slug,omitempty"`
-	Username         string `protobuf:"bytes,13,opt,name=username,proto3" json:"username,omitempty"`
+	Username         string `protobuf:"bytes,13,opt,name=username,proto3" json:"username,omitempty"` // Internal handle.
 	DisplayName      string `protobuf:"bytes,14,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Email            string `protobuf:"bytes,15,opt,name=email,proto3" json:"email,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -607,6 +608,13 @@ func (x *GetWorkspaceHomeResponse) GetUsername() string {
 func (x *GetWorkspaceHomeResponse) GetDisplayName() string {
 	if x != nil {
 		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *GetWorkspaceHomeResponse) GetEmail() string {
+	if x != nil {
+		return x.Email
 	}
 	return ""
 }
@@ -896,10 +904,10 @@ type ListMembersPageRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
 	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
-	Search        string                 `protobuf:"bytes,3,opt,name=search,proto3" json:"search,omitempty"` // Username or display name.
+	Search        string                 `protobuf:"bytes,3,opt,name=search,proto3" json:"search,omitempty"` // Email, display name, or handle.
 	Roles         []string               `protobuf:"bytes,4,rep,name=roles,proto3" json:"roles,omitempty"`
 	Statuses      []string               `protobuf:"bytes,5,rep,name=statuses,proto3" json:"statuses,omitempty"`                                // invited, active, or disabled.
-	SortBy        string                 `protobuf:"bytes,6,opt,name=sort_by,json=sortBy,proto3" json:"sort_by,omitempty"`                      // role (default), username, last_login, or created_at.
+	SortBy        string                 `protobuf:"bytes,6,opt,name=sort_by,json=sortBy,proto3" json:"sort_by,omitempty"`                      // role (default), email, username, last_login, or created_at.
 	SortDirection string                 `protobuf:"bytes,7,opt,name=sort_direction,json=sortDirection,proto3" json:"sort_direction,omitempty"` // asc (default) or desc.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1093,7 +1101,7 @@ const file_blaxsmith_api_v1_workspace_proto_rawDesc = "" +
 	"\x10last_activity_at\x18\f \x01(\tR\x0elastActivityAt\x12\x1d\n" +
 	"\n" +
 	"taken_over\x18\r \x01(\bR\ttakenOver\"\x19\n" +
-	"\x17GetWorkspaceHomeRequest\"\xe1\x04\n" +
+	"\x17GetWorkspaceHomeRequest\"\xf7\x04\n" +
 	"\x18GetWorkspaceHomeResponse\x12$\n" +
 	"\x0ewaiting_on_you\x18\x01 \x01(\x05R\fwaitingOnYou\x12\x1d\n" +
 	"\n" +
@@ -1112,7 +1120,8 @@ const file_blaxsmith_api_v1_workspace_proto_rawDesc = "" +
 	"\x11organization_name\x18\v \x01(\tR\x10organizationName\x12+\n" +
 	"\x11organization_slug\x18\f \x01(\tR\x10organizationSlug\x12\x1a\n" +
 	"\busername\x18\r \x01(\tR\busername\x12!\n" +
-	"\fdisplay_name\x18\x0e \x01(\tR\vdisplayName\"\xb9\x01\n" +
+	"\fdisplay_name\x18\x0e \x01(\tR\vdisplayName\x12\x14\n" +
+	"\x05email\x18\x0f \x01(\tR\x05email\"\xb9\x01\n" +
 	"\x10ListInboxRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x14\n" +

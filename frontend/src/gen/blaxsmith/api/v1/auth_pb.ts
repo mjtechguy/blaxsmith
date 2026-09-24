@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file blaxsmith/api/v1/auth.proto.
  */
 export const file_blaxsmith_api_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChtibGF4c21pdGgvYXBpL3YxL2F1dGgucHJvdG8SEGJsYXhzbWl0aC5hcGkudjEiEAoOR2V0Q3NyZlJlcXVlc3QiIAoPR2V0Q3NyZlJlc3BvbnNlEg0KBXRva2VuGAEgASgJIlIKEUxvZ2luTG9jYWxSZXF1ZXN0EhkKEW9yZ2FuaXphdGlvbl9zbHVnGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEhAKCHBhc3N3b3JkGAMgASgJImkKD1Nlc3Npb25JZGVudGl0eRIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFAoMcHJpbmNpcGFsX2lkGAIgASgJEgwKBHJvbGUYAyABKAkSGQoRYWNjZXNzX2V4cGlyZXNfYXQYBCABKAkiSAoSTG9naW5Mb2NhbFJlc3BvbnNlEjIKB3Nlc3Npb24YASABKAsyIS5ibGF4c21pdGguYXBpLnYxLlNlc3Npb25JZGVudGl0eSIXChVSZWZyZXNoU2Vzc2lvblJlcXVlc3QiTAoWUmVmcmVzaFNlc3Npb25SZXNwb25zZRIyCgdzZXNzaW9uGAEgASgLMiEuYmxheHNtaXRoLmFwaS52MS5TZXNzaW9uSWRlbnRpdHkiFwoVQ3VycmVudFNlc3Npb25SZXF1ZXN0IkwKFkN1cnJlbnRTZXNzaW9uUmVzcG9uc2USMgoHc2Vzc2lvbhgBIAEoCzIhLmJsYXhzbWl0aC5hcGkudjEuU2Vzc2lvbklkZW50aXR5Ig8KDUxvZ291dFJlcXVlc3QiEAoOTG9nb3V0UmVzcG9uc2UyzQMKC0F1dGhTZXJ2aWNlEk4KB0dldENzcmYSIC5ibGF4c21pdGguYXBpLnYxLkdldENzcmZSZXF1ZXN0GiEuYmxheHNtaXRoLmFwaS52MS5HZXRDc3JmUmVzcG9uc2USVwoKTG9naW5Mb2NhbBIjLmJsYXhzbWl0aC5hcGkudjEuTG9naW5Mb2NhbFJlcXVlc3QaJC5ibGF4c21pdGguYXBpLnYxLkxvZ2luTG9jYWxSZXNwb25zZRJjCg5SZWZyZXNoU2Vzc2lvbhInLmJsYXhzbWl0aC5hcGkudjEuUmVmcmVzaFNlc3Npb25SZXF1ZXN0GiguYmxheHNtaXRoLmFwaS52MS5SZWZyZXNoU2Vzc2lvblJlc3BvbnNlEmMKDkN1cnJlbnRTZXNzaW9uEicuYmxheHNtaXRoLmFwaS52MS5DdXJyZW50U2Vzc2lvblJlcXVlc3QaKC5ibGF4c21pdGguYXBpLnYxLkN1cnJlbnRTZXNzaW9uUmVzcG9uc2USSwoGTG9nb3V0Eh8uYmxheHNtaXRoLmFwaS52MS5Mb2dvdXRSZXF1ZXN0GiAuYmxheHNtaXRoLmFwaS52MS5Mb2dvdXRSZXNwb25zZULBAQoUY29tLmJsYXhzbWl0aC5hcGkudjFCCUF1dGhQcm90b1ABWjxnaXRodWIuY29tL21qdGVjaGd1eS9ibGF4c21pdGgvZ2VuL2dvL2JsYXhzbWl0aC9hcGkvdjE7YXBpdjGiAgNCQViqAhBCbGF4c21pdGguQXBpLlYxygIQQmxheHNtaXRoXEFwaVxWMeICHEJsYXhzbWl0aFxBcGlcVjFcR1BCTWV0YWRhdGHqAhJCbGF4c21pdGg6OkFwaTo6VjFiBnByb3RvMw");
+  fileDesc("ChtibGF4c21pdGgvYXBpL3YxL2F1dGgucHJvdG8SEGJsYXhzbWl0aC5hcGkudjEiEAoOR2V0Q3NyZlJlcXVlc3QiIAoPR2V0Q3NyZlJlc3BvbnNlEg0KBXRva2VuGAEgASgJImUKEUxvZ2luTG9jYWxSZXF1ZXN0EhkKEW9yZ2FuaXphdGlvbl9zbHVnGAEgASgJEhQKCHVzZXJuYW1lGAIgASgJQgIYARIQCghwYXNzd29yZBgDIAEoCRINCgVlbWFpbBgEIAEoCSKBAQoPU2Vzc2lvbklkZW50aXR5EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIUCgxwcmluY2lwYWxfaWQYAiABKAkSDAoEcm9sZRgDIAEoCRIZChFhY2Nlc3NfZXhwaXJlc19hdBgEIAEoCRIWCg5lbWFpbF9yZXF1aXJlZBgFIAEoCCJIChJMb2dpbkxvY2FsUmVzcG9uc2USMgoHc2Vzc2lvbhgBIAEoCzIhLmJsYXhzbWl0aC5hcGkudjEuU2Vzc2lvbklkZW50aXR5IhcKFVJlZnJlc2hTZXNzaW9uUmVxdWVzdCJMChZSZWZyZXNoU2Vzc2lvblJlc3BvbnNlEjIKB3Nlc3Npb24YASABKAsyIS5ibGF4c21pdGguYXBpLnYxLlNlc3Npb25JZGVudGl0eSIXChVDdXJyZW50U2Vzc2lvblJlcXVlc3QiTAoWQ3VycmVudFNlc3Npb25SZXNwb25zZRIyCgdzZXNzaW9uGAEgASgLMiEuYmxheHNtaXRoLmFwaS52MS5TZXNzaW9uSWRlbnRpdHkiDwoNTG9nb3V0UmVxdWVzdCIQCg5Mb2dvdXRSZXNwb25zZTLNAwoLQXV0aFNlcnZpY2USTgoHR2V0Q3NyZhIgLmJsYXhzbWl0aC5hcGkudjEuR2V0Q3NyZlJlcXVlc3QaIS5ibGF4c21pdGguYXBpLnYxLkdldENzcmZSZXNwb25zZRJXCgpMb2dpbkxvY2FsEiMuYmxheHNtaXRoLmFwaS52MS5Mb2dpbkxvY2FsUmVxdWVzdBokLmJsYXhzbWl0aC5hcGkudjEuTG9naW5Mb2NhbFJlc3BvbnNlEmMKDlJlZnJlc2hTZXNzaW9uEicuYmxheHNtaXRoLmFwaS52MS5SZWZyZXNoU2Vzc2lvblJlcXVlc3QaKC5ibGF4c21pdGguYXBpLnYxLlJlZnJlc2hTZXNzaW9uUmVzcG9uc2USYwoOQ3VycmVudFNlc3Npb24SJy5ibGF4c21pdGguYXBpLnYxLkN1cnJlbnRTZXNzaW9uUmVxdWVzdBooLmJsYXhzbWl0aC5hcGkudjEuQ3VycmVudFNlc3Npb25SZXNwb25zZRJLCgZMb2dvdXQSHy5ibGF4c21pdGguYXBpLnYxLkxvZ291dFJlcXVlc3QaIC5ibGF4c21pdGguYXBpLnYxLkxvZ291dFJlc3BvbnNlQsEBChRjb20uYmxheHNtaXRoLmFwaS52MUIJQXV0aFByb3RvUAFaPGdpdGh1Yi5jb20vbWp0ZWNoZ3V5L2JsYXhzbWl0aC9nZW4vZ28vYmxheHNtaXRoL2FwaS92MTthcGl2MaICA0JBWKoCEEJsYXhzbWl0aC5BcGkuVjHKAhBCbGF4c21pdGhcQXBpXFYx4gIcQmxheHNtaXRoXEFwaVxWMVxHUEJNZXRhZGF0YeoCEkJsYXhzbWl0aDo6QXBpOjpWMWIGcHJvdG8z");
 
 /**
  * @generated from message blaxsmith.api.v1.GetCsrfRequest
@@ -43,6 +43,11 @@ export const GetCsrfResponseSchema: GenMessage<GetCsrfResponse> = /*@__PURE__*/
   messageDesc(file_blaxsmith_api_v1_auth, 1);
 
 /**
+ * Local sign-in is by email. An account created before emails existed may use
+ * its username once (sent as email); that session must set an email first.
+ * organization_slug may be empty when the account has one organization;
+ * FAILED_PRECONDITION after a correct password means "name the organization".
+ *
  * @generated from message blaxsmith.api.v1.LoginLocalRequest
  */
 export type LoginLocalRequest = Message<"blaxsmith.api.v1.LoginLocalRequest"> & {
@@ -52,7 +57,10 @@ export type LoginLocalRequest = Message<"blaxsmith.api.v1.LoginLocalRequest"> & 
   organizationSlug: string;
 
   /**
-   * @generated from field: string username = 2;
+   * Read only when email is empty.
+   *
+   * @generated from field: string username = 2 [deprecated = true];
+   * @deprecated
    */
   username: string;
 
@@ -60,6 +68,11 @@ export type LoginLocalRequest = Message<"blaxsmith.api.v1.LoginLocalRequest"> & 
    * @generated from field: string password = 3;
    */
   password: string;
+
+  /**
+   * @generated from field: string email = 4;
+   */
+  email: string;
 };
 
 /**
@@ -94,6 +107,14 @@ export type SessionIdentity = Message<"blaxsmith.api.v1.SessionIdentity"> & {
    * @generated from field: string access_expires_at = 4;
    */
   accessExpiresAt: string;
+
+  /**
+   * Until an email is set, every guarded RPC except AccountService's
+   * GetMyProfile and UpdateMyProfile returns FAILED_PRECONDITION.
+   *
+   * @generated from field: bool email_required = 5;
+   */
+  emailRequired: boolean;
 };
 
 /**

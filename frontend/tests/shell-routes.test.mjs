@@ -66,11 +66,9 @@ test("templates: settings sections, create flow steps, detail tabs, and account 
     const home = await renderApp("/", owner);
     assert.match(home, /aria-haspopup="menu"/);
     assert.doesNotMatch(home.match(/<aside[^>]*>.*?<\/aside>/s)[0], /Sign out|My connections/);
-    // Account settings: read-only data and an honest coming-soon state, no fake forms.
+    // Account settings sections are real forms now (see account.test.mjs).
     for (const section of ["profile", "password", "sessions"]) {
-      const page = await renderApp(`/me/settings/${section}`, owner);
-      assert.match(page, /Coming soon/, section);
-      assert.doesNotMatch(page, /<input(?![^>]*type="(search|checkbox)")/, `${section} has no editable form`);
+      assert.doesNotMatch(await renderApp(`/me/settings/${section}`, owner), /Coming soon|Page not found/, section);
     }
     assert.match(await renderApp("/me/settings/preferences", owner), /type="radio"/);
 

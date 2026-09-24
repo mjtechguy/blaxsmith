@@ -101,13 +101,19 @@ func (x *GetCsrfResponse) GetToken() string {
 	return ""
 }
 
+// Local sign-in is by email. An account created before emails existed may use
+// its username once (sent as email); that session must set an email first.
+// organization_slug may be empty when the account has one organization;
+// FAILED_PRECONDITION after a correct password means "name the organization".
 type LoginLocalRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationSlug string                 `protobuf:"bytes,1,opt,name=organization_slug,json=organizationSlug,proto3" json:"organization_slug,omitempty"`
-	Username         string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
-	Password         string                 `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Deprecated: Marked as deprecated in blaxsmith/api/v1/auth.proto.
+	Username      string `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"` // Read only when email is empty.
+	Password      string `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
+	Email         string `protobuf:"bytes,4,opt,name=email,proto3" json:"email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LoginLocalRequest) Reset() {
@@ -147,6 +153,7 @@ func (x *LoginLocalRequest) GetOrganizationSlug() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in blaxsmith/api/v1/auth.proto.
 func (x *LoginLocalRequest) GetUsername() string {
 	if x != nil {
 		return x.Username
@@ -161,14 +168,24 @@ func (x *LoginLocalRequest) GetPassword() string {
 	return ""
 }
 
+func (x *LoginLocalRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
 type SessionIdentity struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationId  string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
 	PrincipalId     string                 `protobuf:"bytes,2,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"`
 	Role            string                 `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
 	AccessExpiresAt string                 `protobuf:"bytes,4,opt,name=access_expires_at,json=accessExpiresAt,proto3" json:"access_expires_at,omitempty"` // RFC 3339.
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Until an email is set, every guarded RPC except AccountService's
+	// GetMyProfile and UpdateMyProfile returns FAILED_PRECONDITION.
+	EmailRequired bool `protobuf:"varint,5,opt,name=email_required,json=emailRequired,proto3" json:"email_required,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SessionIdentity) Reset() {
@@ -227,6 +244,13 @@ func (x *SessionIdentity) GetAccessExpiresAt() string {
 		return x.AccessExpiresAt
 	}
 	return ""
+}
+
+func (x *SessionIdentity) GetEmailRequired() bool {
+	if x != nil {
+		return x.EmailRequired
+	}
+	return false
 }
 
 type LoginLocalResponse struct {
@@ -512,16 +536,18 @@ const file_blaxsmith_api_v1_auth_proto_rawDesc = "" +
 	"\x1bblaxsmith/api/v1/auth.proto\x12\x10blaxsmith.api.v1\"\x10\n" +
 	"\x0eGetCsrfRequest\"'\n" +
 	"\x0fGetCsrfResponse\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\"x\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\"\x92\x01\n" +
 	"\x11LoginLocalRequest\x12+\n" +
-	"\x11organization_slug\x18\x01 \x01(\tR\x10organizationSlug\x12\x1a\n" +
-	"\busername\x18\x02 \x01(\tR\busername\x12\x1a\n" +
-	"\bpassword\x18\x03 \x01(\tR\bpassword\"\x9d\x01\n" +
+	"\x11organization_slug\x18\x01 \x01(\tR\x10organizationSlug\x12\x1e\n" +
+	"\busername\x18\x02 \x01(\tB\x02\x18\x01R\busername\x12\x1a\n" +
+	"\bpassword\x18\x03 \x01(\tR\bpassword\x12\x14\n" +
+	"\x05email\x18\x04 \x01(\tR\x05email\"\xc4\x01\n" +
 	"\x0fSessionIdentity\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12!\n" +
 	"\fprincipal_id\x18\x02 \x01(\tR\vprincipalId\x12\x12\n" +
 	"\x04role\x18\x03 \x01(\tR\x04role\x12*\n" +
-	"\x11access_expires_at\x18\x04 \x01(\tR\x0faccessExpiresAt\"Q\n" +
+	"\x11access_expires_at\x18\x04 \x01(\tR\x0faccessExpiresAt\x12%\n" +
+	"\x0eemail_required\x18\x05 \x01(\bR\remailRequired\"Q\n" +
 	"\x12LoginLocalResponse\x12;\n" +
 	"\asession\x18\x01 \x01(\v2!.blaxsmith.api.v1.SessionIdentityR\asession\"\x17\n" +
 	"\x15RefreshSessionRequest\"U\n" +

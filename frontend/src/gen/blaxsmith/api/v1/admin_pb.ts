@@ -80,6 +80,8 @@ export type AdminLiveAttempt = Message<"blaxsmith.api.v1.AdminLiveAttempt"> & {
   controllerPrincipalId: string;
 
   /**
+   * Display label: name, else email, else handle.
+   *
    * @generated from field: string controller_username = 12;
    */
   controllerUsername: string;
@@ -463,6 +465,8 @@ export type AdminAuditEvent = Message<"blaxsmith.api.v1.AdminAuditEvent"> & {
   actorId: string;
 
   /**
+   * Display label: name, else email, else handle.
+   *
    * @generated from field: string actor_username = 5;
    */
   actorUsername: string;
@@ -519,7 +523,7 @@ export type ListAuditEventsRequest = Message<"blaxsmith.api.v1.ListAuditEventsRe
   action: string;
 
   /**
-   * Principal id or username; empty for all.
+   * Principal id, email, or handle; empty for all.
    *
    * @generated from field: string actor = 4;
    */

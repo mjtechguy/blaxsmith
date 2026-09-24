@@ -82,7 +82,7 @@ func TestTerminalTakeoverPostgres(t *testing.T) {
 	pool := terminalTestPool(t)
 	ctx := t.Context()
 	password := []byte("correct horse battery staple")
-	owner, err := identity.BootstrapOwner(ctx, pool, "alice", "engineering", "Engineering", password)
+	owner, err := identity.BootstrapOwner(ctx, pool, "alice@example.com", "engineering", "Engineering", password)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,8 +91,8 @@ func TestTerminalTakeoverPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	var bobID string
-	if err := pool.QueryRow(ctx, `INSERT INTO identity_principals (id,username,password_hash)
-		VALUES (gen_random_uuid(),'bob',$1) RETURNING id`, hash).Scan(&bobID); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO identity_principals (id,username,email,password_hash)
+		VALUES (gen_random_uuid(),'bob','bob@example.com',$1) RETURNING id`, hash).Scan(&bobID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO identity_memberships (organization_id,principal_id,role)
@@ -141,7 +141,7 @@ func TestTerminalTakeoverPostgres(t *testing.T) {
 	service := &workflowService{guard: guard, store: store, guests: router, terminals: hub}
 
 	login := func(user string) http.Header {
-		tokens, err := manager.LoginLocal(ctx, "engineering", user, password, netip.MustParseAddr("127.0.0.1"))
+		tokens, err := manager.LoginLocal(ctx, "engineering", user+"@example.com", password, netip.MustParseAddr("127.0.0.1"), "")
 		if err != nil {
 			t.Fatal(err)
 		}

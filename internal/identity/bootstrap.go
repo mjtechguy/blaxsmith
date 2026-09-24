@@ -26,8 +26,10 @@ type FirstOwner struct {
 
 // BootstrapOwner is an operator-only entry point. Its one-time database
 // invariant does not grant a public setup endpoint or bypass a later session.
-func BootstrapOwner(ctx context.Context, pool *pgxpool.Pool, username, slug, name string, password []byte) (FirstOwner, error) {
-	if pool == nil || !accountName.MatchString(username) || !organizationSlug.MatchString(slug) ||
+// The owner signs in with email; the internal handle derives from it.
+func BootstrapOwner(ctx context.Context, pool *pgxpool.Pool, email, slug, name string, password []byte) (FirstOwner, error) {
+	email, emailErr := NormalizeEmail(email)
+	if pool == nil || emailErr != nil || !organizationSlug.MatchString(slug) ||
 		strings.TrimSpace(name) == "" || utf8.RuneCountInString(name) > 160 || !utf8.ValidString(name) ||
 		strings.ContainsFunc(name, unicode.IsControl) {
 		return FirstOwner{}, ErrInvalidOwner
@@ -50,6 +52,10 @@ func BootstrapOwner(ctx context.Context, pool *pgxpool.Pool, username, slug, nam
 	if exists {
 		return FirstOwner{}, ErrBootstrapped
 	}
+	username, err := freeHandle(ctx, tx, email)
+	if err != nil {
+		return FirstOwner{}, fmt.Errorf("allocate first-owner handle: %w", err)
+	}
 	var ownerID, orgID string
 	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid(), gen_random_uuid()`).Scan(&ownerID, &orgID); err != nil {
 		return FirstOwner{}, fmt.Errorf("allocate first-owner IDs: %w", err)
@@ -58,7 +64,7 @@ func BootstrapOwner(ctx context.Context, pool *pgxpool.Pool, username, slug, nam
 		query string
 		args  []any
 	}{
-		{`INSERT INTO identity_principals (id, username, password_hash) VALUES ($1,$2,$3)`, []any{ownerID, username, hash}},
+		{`INSERT INTO identity_principals (id, username, email, password_hash) VALUES ($1,$2,$3,$4)`, []any{ownerID, username, email, hash}},
 		{`INSERT INTO identity_organizations (id, slug, name) VALUES ($1,$2,$3)`, []any{orgID, slug, name}},
 		{`INSERT INTO identity_memberships (organization_id, principal_id, role) VALUES ($1,$2,'owner')`, []any{orgID, ownerID}},
 		{`INSERT INTO identity_installation (first_organization_id, first_owner_id) VALUES ($1,$2)`, []any{orgID, ownerID}},

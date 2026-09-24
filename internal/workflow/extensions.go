@@ -384,7 +384,7 @@ func getExtension(ctx context.Context, q queryRower, org, id string) (Extension,
 
 const extensionVersionColumns = `v.id::text,v.extension_id::text,v.version,v.repository_url,v.git_ref,v.commit_sha,v.manifest_json,
 	v.manifest_sha256,v.manifest_origin,v.manifest_path,v.approved_permissions,v.permissions_sha256,v.installed_by::text,
-	COALESCE(p.username,''),v.created_at
+	COALESCE(identity_principal_label(p.display_name,p.email,p.username),''),v.created_at
 	FROM workflow_extension_versions v LEFT JOIN identity_principals p ON p.id=v.installed_by`
 
 func scanExtensionVersion(row pgx.Row) (ExtensionVersion, error) {

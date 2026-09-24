@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useLocation } from "@tanstack/react-router";
-import { KeyRound, LogOut, UserCheck, UserCog, UserX } from "lucide-react";
+import { AtSign, KeyRound, LogOut, UserCheck, UserCog, UserX } from "lucide-react";
+import { personLabel } from "../account";
 import { auditKey, listAuditEvents } from "../admin";
 import { CollectionTable, useLocalView, type GridColumn } from "../data-table";
 import type { AdminAuditEvent } from "../gen/blaxsmith/api/v1/admin_pb";
@@ -31,10 +32,10 @@ function UserDetail() {
   const why = manage ? undefined : "Only an owner can change an owner";
   const ask = (kind: MemberAction["kind"]) => setAction({ kind, member });
 
-  return <DetailLayout back={{ href: "/admin/users", label: "Users" }} title={member.displayName || member.username}
+  return <DetailLayout back={{ href: "/admin/users", label: "Users" }} title={personLabel(member)}
     status={<><span className="state-badge">{roleLabel[member.role] ?? member.role}</span> <span className={`state-badge ${memberStatusBadge[member.status] ?? ""}`}>{member.status}</span></>}
     facts={[
-      { label: "Username", value: member.username },
+      { label: "Email", value: member.email || <span className="muted">Not set</span> },
       { label: "Last login", value: member.lastLoginAt ? <Timestamp value={member.lastLoginAt} /> : "Never" },
       { label: "Active sessions", value: member.activeSessions },
       { label: "Added", value: <Timestamp value={member.createdAt} /> },
@@ -47,10 +48,11 @@ function UserDetail() {
     </>}
     tabs={tabs} current={tab} tabsLabel="User sections">
     {tab === "profile" ? <div className="dash-grid">
-      <Card title="Profile" className="dash-main" description="Members sign in with their username and password. Names are set by the member during setup.">
+      <Card title="Profile" className="dash-main" description="Members sign in with their email and password. Names are set by the member.">
         <SummaryList items={[
           { label: "Display name", value: member.displayName || <span className="muted">Not set</span> },
-          { label: "Username", value: member.username },
+          { label: "Email", value: member.email ? <>{member.email} <span className="state-badge">{member.emailVerified ? "Verified" : "Unverified"}</span></> : <span className="muted">Not set: they must add one at next sign-in</span> },
+          { label: "Internal handle", value: <span className="mono">{member.username}</span> },
           { label: "Role", value: roleLabel[member.role] ?? member.role },
           { label: "Status", value: member.status === "invited" ? "Invited: setup link not used yet" : member.status },
           { label: "Principal ID", value: <CopyValue value={member.principalId} label="Principal ID" chars={13} /> },
@@ -60,6 +62,8 @@ function UserDetail() {
         <div className="card-body stack">
           <button type="button" className="secondary-button" disabled={!manage || member.status === "disabled"} title={member.status === "disabled" ? "Enable the member first" : why} onClick={() => ask("reset")}>
             <KeyRound size={15} aria-hidden="true" /> {member.status === "invited" ? "New setup link" : "Issue reset link"}</button>
+          <button type="button" className="secondary-button" disabled={!manage} title={why} onClick={() => ask("email")}>
+            <AtSign size={15} aria-hidden="true" /> Change email</button>
         </div>
       </Card>
     </div> : null}

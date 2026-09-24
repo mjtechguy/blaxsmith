@@ -33,7 +33,7 @@ message RecipeVersion {
   string sha256 = 5;
   string frozen_path = 6; // Repository-relative label recorded in the run bundle.
   string author_principal_id = 7; // Empty for the installation seed.
-  string author_username = 8;
+  string author_username = 8; // Display label: name, else email, else handle.
   string created_at = 9;
 }
 

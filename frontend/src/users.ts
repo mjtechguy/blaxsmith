@@ -26,8 +26,12 @@ export async function listMembers(signal?: AbortSignal) {
   return client.listOrgMembers({}, { signal });
 }
 
-export async function inviteUser(username: string, displayName: string, role: string) {
-  return client.inviteUser({ username, displayName, role }, await mutation());
+export async function inviteUser(email: string, displayName: string, role: string) {
+  return client.inviteUser({ email, displayName, role }, await mutation());
+}
+
+export async function setUserEmail(principalId: string, email: string) {
+  return client.setUserEmail({ principalId, email }, await mutation());
 }
 
 export async function setUserRole(principalId: string, role: string) {
@@ -50,21 +54,22 @@ export async function getAccountLink(token: string, signal?: AbortSignal) {
   return client.getAccountLink({ token }, { signal });
 }
 
-export async function completeAccountLink(token: string, password: string) {
-  return client.completeAccountLink({ token, password }, await mutation());
+// displayName is optional; email is read only for an older account without one.
+export async function completeAccountLink(token: string, password: string, displayName = "", email = "") {
+  return client.completeAccountLink({ token, password, displayName, email }, await mutation());
 }
 
 export function userAdminError(cause: unknown): string {
   const error = ConnectError.from(cause);
   switch (error.code) {
     case Code.PermissionDenied: return error.rawMessage.includes("owner") ? "Only an owner can grant owner access or change an owner."
-      : error.rawMessage.includes("another organization") ? "This account also belongs to another organization, so its password cannot be reset here."
+      : error.rawMessage.includes("another organization") ? "This account also belongs to another organization, so its password or email cannot be changed here."
         : "Your session is not allowed to do this.";
     case Code.FailedPrecondition: return error.rawMessage.includes("yourself") || error.rawMessage.includes("your own")
       ? "You cannot disable your own account." : "The organization must keep at least one active owner who can sign in.";
-    case Code.AlreadyExists: return "That username is already taken.";
+    case Code.AlreadyExists: return "That email is already used by another account.";
     case Code.NotFound: return "This member no longer exists. The list will refresh.";
-    case Code.InvalidArgument: return "Check the details and try again.";
+    case Code.InvalidArgument: return error.rawMessage.includes("email") ? "Enter a valid email address." : "Check the details and try again.";
     case Code.Unauthenticated: return "Your session changed. Sign in again and retry.";
     default: return "The change could not be completed. Please try again.";
   }

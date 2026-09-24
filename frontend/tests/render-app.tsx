@@ -8,15 +8,17 @@ import { renderToString } from "react-dom/server";
 import { sessionQueryKey } from "../src/auth";
 import { routeTree } from "../src/routeTree.gen";
 
-function setup(path: string, session: Record<string, unknown>) {
+function setup(path: string, session: Record<string, unknown> | null, seed: Array<[readonly unknown[], unknown]> = []) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } } });
   queryClient.setQueryData(sessionQueryKey, session);
+  for (const [key, data] of seed) queryClient.setQueryData(key, data);
   const router = createRouter({ routeTree, context: { queryClient }, history: createMemoryHistory({ initialEntries: [path] }) });
   return { queryClient, router };
 }
 
-export async function renderApp(path: string, session: Record<string, unknown>) {
-  const { queryClient, router } = setup(path, session);
+// seed pre-fills other queries (key, data) so pages render past loading.
+export async function renderApp(path: string, session: Record<string, unknown> | null, seed: Array<[readonly unknown[], unknown]> = []) {
+  const { queryClient, router } = setup(path, session, seed);
   await router.load();
   return renderToString(<QueryClientProvider client={queryClient}><RouterProvider router={router} /></QueryClientProvider>);
 }
@@ -38,6 +40,12 @@ export async function renderInRouter(node: ReactNode, path = "/") {
   const router = createRouter({ routeTree: rootRoute, history: createMemoryHistory({ initialEntries: [path] }) });
   await router.load();
   return renderToString(<QueryClientProvider client={queryClient}><RouterProvider router={router as never} /></QueryClientProvider>);
+}
+
+// The sign-in page on its own (the root layout needs a live session query).
+export async function renderLogin() {
+  const { LoginPage } = await import("../src/login-page");
+  return renderInRouter(<LoginPage />, "/login");
 }
 
 // A setup checklist with the given steps (done: true, false, or undefined while loading).

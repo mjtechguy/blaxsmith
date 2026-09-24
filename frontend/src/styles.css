@@ -1054,3 +1054,13 @@ a.row-title:hover { color: var(--primary); text-decoration: underline; }
 .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .usage-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 .price-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; align-items: end; padding: 0 18px 16px; }
+
+/* Account settings: the caller's own sessions. */
+.session-body { display: grid; gap: 10px; }
+.session-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.session-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; }
+.session-icon { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--hover); color: var(--muted); }
+.session-main { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.session-main strong { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.session-main small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 560px) { .session-item { flex-wrap: wrap; } }

@@ -21,6 +21,7 @@ import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminUsageRouteImport } from './routes/admin.usage'
 import { Route as ExtensionsIndexRouteImport } from './routes/extensions.index'
 import { Route as ExtensionsExtensionIdRouteImport } from './routes/extensions.$extensionId'
+import { Route as MeEmailRouteImport } from './routes/me.email'
 import { Route as MeSettingsRouteImport } from './routes/me.settings'
 import { Route as MeUsageRouteImport } from './routes/me.usage'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
@@ -144,6 +145,11 @@ const ExtensionsIndexRoute = ExtensionsIndexRouteImport.update({
 const ExtensionsExtensionIdRoute = ExtensionsExtensionIdRouteImport.update({
   id: '/extensions/$extensionId',
   path: '/extensions/$extensionId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeEmailRoute = MeEmailRouteImport.update({
+  id: '/me/email',
+  path: '/me/email',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MeSettingsRoute = MeSettingsRouteImport.update({
@@ -509,6 +515,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/usage': typeof AdminUsageRoute
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
+  '/me/email': typeof MeEmailRoute
   '/me/settings': typeof MeSettingsRouteWithChildren
   '/me/usage': typeof MeUsageRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
@@ -585,6 +592,7 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/usage': typeof AdminUsageRoute
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
+  '/me/email': typeof MeEmailRoute
   '/me/usage': typeof MeUsageRoute
   '/projects/new': typeof ProjectsNewRoute
   '/recipes/new': typeof RecipesNewRoute
@@ -661,6 +669,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/usage': typeof AdminUsageRoute
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
+  '/me/email': typeof MeEmailRoute
   '/me/settings': typeof MeSettingsRouteWithChildren
   '/me/usage': typeof MeUsageRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
@@ -741,6 +750,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/usage'
     | '/extensions/$extensionId'
+    | '/me/email'
     | '/me/settings'
     | '/me/usage'
     | '/projects/$projectId'
@@ -817,6 +827,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/usage'
     | '/extensions/$extensionId'
+    | '/me/email'
     | '/me/usage'
     | '/projects/new'
     | '/recipes/new'
@@ -892,6 +903,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/usage'
     | '/extensions/$extensionId'
+    | '/me/email'
     | '/me/settings'
     | '/me/usage'
     | '/projects/$projectId'
@@ -968,6 +980,7 @@ export interface RootRouteChildren {
   RunsRoute: typeof RunsRoute
   ToolsRoute: typeof ToolsRoute
   ExtensionsExtensionIdRoute: typeof ExtensionsExtensionIdRoute
+  MeEmailRoute: typeof MeEmailRoute
   MeSettingsRoute: typeof MeSettingsRouteWithChildren
   MeUsageRoute: typeof MeUsageRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
@@ -1069,6 +1082,13 @@ declare module '@tanstack/react-router' {
       path: '/extensions/$extensionId'
       fullPath: '/extensions/$extensionId'
       preLoaderRoute: typeof ExtensionsExtensionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/me/email': {
+      id: '/me/email'
+      path: '/me/email'
+      fullPath: '/me/email'
+      preLoaderRoute: typeof MeEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/me/settings': {
@@ -1709,6 +1729,7 @@ const rootRouteChildren: RootRouteChildren = {
   RunsRoute: RunsRoute,
   ToolsRoute: ToolsRoute,
   ExtensionsExtensionIdRoute: ExtensionsExtensionIdRoute,
+  MeEmailRoute: MeEmailRoute,
   MeSettingsRoute: MeSettingsRouteWithChildren,
   MeUsageRoute: MeUsageRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,

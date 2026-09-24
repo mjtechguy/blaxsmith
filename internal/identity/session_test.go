@@ -77,7 +77,7 @@ func TestSessionLifecyclePostgres(t *testing.T) {
 	pool := identityTestPool(t)
 	ctx := context.Background()
 	password := []byte("correct horse battery staple")
-	owner, err := BootstrapOwner(ctx, pool, "alice", "engineering", "Engineering", password)
+	owner, err := BootstrapOwner(ctx, pool, "alice@example.com", "engineering", "Engineering", password)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,13 +90,13 @@ func TestSessionLifecyclePostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := netip.MustParseAddr("192.0.2.1")
-	if _, err := manager.LoginLocal(ctx, "engineering", "alice", []byte("wrong password"), source); !errors.Is(err, ErrUnauthenticated) {
+	if _, err := manager.LoginLocal(ctx, "engineering", "alice@example.com", []byte("wrong password"), source, ""); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("wrong password accepted: %v", err)
 	}
-	if _, err := manager.LoginLocal(ctx, "engineering", "unknown", password, source); !errors.Is(err, ErrUnauthenticated) {
+	if _, err := manager.LoginLocal(ctx, "engineering", "unknown@example.com", password, source, ""); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("unknown account accepted: %v", err)
 	}
-	first, err := manager.LoginLocal(ctx, "engineering", "alice", password, source)
+	first, err := manager.LoginLocal(ctx, "engineering", "alice@example.com", password, source, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestSessionLifecyclePostgres(t *testing.T) {
 		t.Fatalf("replayed session still refreshes: %v", err)
 	}
 
-	last, err := manager.LoginLocal(ctx, "engineering", "alice", password, source)
+	last, err := manager.LoginLocal(ctx, "engineering", "alice@example.com", password, source, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestSessionLifecyclePostgres(t *testing.T) {
 	if _, err := manager.ValidateAccess(ctx, last.Access); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("revoked access accepted: %v", err)
 	}
-	final, err := manager.LoginLocal(ctx, "engineering", "alice", password, source)
+	final, err := manager.LoginLocal(ctx, "engineering", "alice@example.com", password, source, "")
 	if err != nil {
 		t.Fatal(err)
 	}
