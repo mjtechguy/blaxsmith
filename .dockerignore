@@ -6,6 +6,9 @@ frontend/dist
 bin
 reference
 deploy/dev
+!deploy/dev/
+deploy/dev/*
+!deploy/dev/model-probe-cli
 docs
 *.md
 !frontend/README.md
