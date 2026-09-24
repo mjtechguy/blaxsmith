@@ -106,6 +106,7 @@ spec:
 
 func TestPerAttemptWorkspaceMatchesOnlyFrozenGitInput(t *testing.T) {
 	request := tooladapter.Request{RepositoryURL: "https://github.com/owner/repo", SourceRef: "feature/work",
+		SourceCommit:    "0123456789abcdef0123456789abcdef01234567",
 		SourceDirectory: "source"}
 	name := AttemptWorkspaceName("attempt-1234")
 	workspace := sourceWorkspace("space", name, request)
@@ -115,17 +116,21 @@ func TestPerAttemptWorkspaceMatchesOnlyFrozenGitInput(t *testing.T) {
 	git := workspace.Spec["git"].([]any)[0].(map[string]any)
 	git["branch"] = "main"
 	if sourceWorkspaceMatches(workspace, "space", name, request) {
-		t.Fatal("mutable source ref accepted")
+		t.Fatal("Workspace not pinned to commit accepted")
 	}
-	git["branch"] = "feature/work"
+	git["branch"] = request.SourceCommit
+	request.SourceCommit = "1123456789abcdef0123456789abcdef01234567"
+	if sourceWorkspaceMatches(workspace, "space", name, request) {
+		t.Fatal("Workspace for another frozen commit accepted")
+	}
+	request.SourceCommit = "0123456789abcdef0123456789abcdef01234567"
 	workspace.Spec["mcp"] = map[string]any{"servers": []any{"ambient"}}
 	if sourceWorkspaceMatches(workspace, "space", name, request) {
 		t.Fatal("unapproved MCP configuration accepted")
 	}
 	request.SourceRef = ""
-	git["branch"] = "HEAD"
 	delete(workspace.Spec, "mcp")
 	if !sourceWorkspaceMatches(workspace, "space", name, request) {
-		t.Fatal("empty ref did not map to exact AX HEAD input")
+		t.Fatal("empty ref changed the exact commit Workspace input")
 	}
 }

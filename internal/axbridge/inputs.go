@@ -74,19 +74,15 @@ func AttemptWorkspaceName(attemptID string) string {
 }
 
 func sourceWorkspace(space, name string, request tooladapter.Request) Workspace {
-	ref := request.SourceRef
-	if ref == "" {
-		ref = "HEAD"
-	}
 	return Workspace{APIVersion: "ax.io/v1alpha1", Kind: "Workspace",
 		Metadata: TaskMetadata{Name: name, Atespace: space}, Spec: map[string]any{"git": []any{
-			map[string]any{"name": "source", "repo": request.RepositoryURL, "branch": ref,
+			map[string]any{"name": "source", "repo": request.RepositoryURL, "branch": request.SourceCommit,
 				"dir": request.SourceDirectory, "depth": 1},
 		}}}
 }
 
 func sourceWorkspaceMatches(workspace Workspace, space, name string, request tooladapter.Request) bool {
-	if gitfetch.Validate(request.RepositoryURL, request.SourceRef) != nil ||
+	if gitfetch.Validate(request.RepositoryURL, request.SourceRef) != nil || !gitfetch.IsCommit(request.SourceCommit) ||
 		workspace.APIVersion != "ax.io/v1alpha1" || workspace.Kind != "Workspace" ||
 		workspace.Metadata != (TaskMetadata{Name: name, Atespace: space}) {
 		return false
@@ -106,12 +102,8 @@ func sourceWorkspaceMatches(workspace Workspace, space, name string, request too
 		return false
 	}
 	repo, ok := git[0].(map[string]any)
-	ref := request.SourceRef
-	if ref == "" {
-		ref = "HEAD"
-	}
 	if !ok || len(repo) != 5 || repo["name"] != "source" || repo["repo"] != request.RepositoryURL ||
-		repo["branch"] != ref || repo["dir"] != request.SourceDirectory {
+		repo["branch"] != request.SourceCommit || repo["dir"] != request.SourceDirectory {
 		return false
 	}
 	switch depth := repo["depth"].(type) {

@@ -63,8 +63,10 @@ The lease table now permits **one Git and one model capability per challenge**;
 each keeps a separate binding and lease while AX seals both in one challenge-bound
 envelope. The pinned AX overlay and combined Git/model path have passed the
 overlay build and security tests. Public dispatch now creates a per-attempt AX
-Git Workspace, and the worker checks the mounted checkout against the frozen
-URL and commit. Product selection of a private Git binding and a
+Git Workspace, fetches the frozen commit object ID rather than a mutable branch,
+and the worker checks the mounted checkout against the frozen URL and commit.
+An exact shallow fetch was confirmed against GitHub's public Git transport.
+Product selection of a private Git binding and a
 browser-launched private-repository task are still missing. A recorded
 revocation fences future delivery; an already issued raw provider key remains
 usable until provider rotation, expiry, or actor termination. The scheduler

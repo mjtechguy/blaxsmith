@@ -48,14 +48,15 @@ an explicit lifecycle and execution policy. The adapter stays pinned and
 noninteractive, and launch stays disabled until end-to-end AX verification.
 
 For public Git runs, the dispatcher creates an attempt-named AX Workspace with
-the frozen repository/ref and a `source` child directory. The AX Task binds
-that definition at `/workspace`; the worker rejects path traversal/symlinks
-and verifies the child's origin URL and `HEAD` against the frozen repository
-and commit before launching a CLI. The bridge reads the exact Workspace back
-before releasing the model lease and removes it after stop proves the actor is
-gone. Private-repository binding selection from the product is still missing;
-the encrypted AX bootstrap capability is not yet exposed by project settings
-or dispatch.
+the frozen repository and commit object ID as its fetch ref, in a `source`
+child directory. The AX Task binds that definition at `/workspace`; the worker
+rejects path traversal/symlinks and verifies the child's origin URL and `HEAD`
+against the frozen repository and commit before launching a CLI. This avoids
+fetching a moved branch and then discovering the mismatch in the worker. The
+bridge reads the exact Workspace back before releasing the model lease and
+removes it after stop proves the actor is gone. Private-repository binding
+selection from the product is still missing; the encrypted AX bootstrap
+capability is not yet exposed by project settings or dispatch.
 
 ## Substrate connector authority
 

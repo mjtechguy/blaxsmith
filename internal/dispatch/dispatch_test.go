@@ -282,7 +282,7 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		t.Fatalf("attempt Workspace was not frozen into its AX task: name=%q workspace=%+v task=%+v", workspaceName, workspace, ax.task)
 	}
 	git := workspace.Spec["git"].([]any)[0].(map[string]any)
-	if git["repo"] != "https://github.com/owner/repo" || git["branch"] != "main" || git["dir"] != "source" {
+	if git["repo"] != "https://github.com/owner/repo" || git["branch"] != bundle.Source.Commit || git["dir"] != "source" {
 		t.Fatalf("AX Workspace did not contain the frozen source: %+v", git)
 	}
 	var taskState, attemptState string

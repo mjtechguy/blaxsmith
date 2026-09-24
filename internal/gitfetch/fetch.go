@@ -31,6 +31,9 @@ var (
 	gitCommit  = regexp.MustCompile(`^[0-9a-f]{40}([0-9a-f]{24})?$`)
 )
 
+// IsCommit reports whether commit is a canonical lowercase SHA-1 or SHA-256 ID.
+func IsCommit(commit string) bool { return gitCommit.MatchString(commit) }
+
 // Validate rejects non-public transport choices before a workflow attempt is
 // reserved. Fetch additionally pins each connection through its local proxy.
 func Validate(rawURL, ref string) error {
@@ -126,7 +129,7 @@ func Fetch(ctx context.Context, rawURL, ref string) (Source, error) {
 func Checkout(ctx context.Context, rawURL, ref, commit, workdir string) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	if !gitCommit.MatchString(commit) || !filepath.IsAbs(workdir) || workdir == "/" {
+	if !IsCommit(commit) || !filepath.IsAbs(workdir) || workdir == "/" {
 		return errors.New("invalid pinned Git workspace")
 	}
 	info, err := os.Lstat(workdir)

@@ -21,6 +21,22 @@ func TestPublicIP(t *testing.T) {
 	}
 }
 
+func TestIsCommit(t *testing.T) {
+	for _, test := range []struct {
+		commit string
+		valid  bool
+	}{
+		{"0123456789abcdef0123456789abcdef01234567", true},
+		{"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", true},
+		{"0123456789ABCDEF0123456789abcdef01234567", false},
+		{"0123456789abcdef", false},
+	} {
+		if got := IsCommit(test.commit); got != test.valid {
+			t.Errorf("IsCommit(%q) = %t, want %t", test.commit, got, test.valid)
+		}
+	}
+}
+
 func TestFetchPublic(t *testing.T) {
 	if os.Getenv("BLAXSMITH_TEST_PUBLIC_GIT") == "" {
 		t.Skip("set BLAXSMITH_TEST_PUBLIC_GIT for a live public Git fetch")

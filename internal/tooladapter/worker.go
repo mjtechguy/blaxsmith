@@ -58,7 +58,7 @@ func Command(request Request) ([]string, error) {
 	if request.AttemptID == "" || len(request.AttemptID) > 128 || strings.ContainsAny(request.AttemptID, " \t\r\n\x00") {
 		return nil, ErrBlocked
 	}
-	if err := gitfetch.Validate(request.RepositoryURL, request.SourceRef); err != nil || !gitCommit.MatchString(request.SourceCommit) ||
+	if err := gitfetch.Validate(request.RepositoryURL, request.SourceRef); err != nil || !gitfetch.IsCommit(request.SourceCommit) ||
 		request.SourceDirectory != "" && (request.SourceDirectory == "." || request.SourceDirectory == ".." ||
 			strings.ContainsAny(request.SourceDirectory, "/\\\r\n\x00")) {
 		return nil, fmt.Errorf("%w: invalid frozen public Git source", ErrBlocked)
@@ -172,7 +172,7 @@ func workspaceSourcePath(root, name string) (string, error) {
 }
 
 func verifyWorkspaceCheckout(ctx context.Context, workdir, repositoryURL, commit string) error {
-	if gitfetch.Validate(repositoryURL, "") != nil || !gitCommit.MatchString(commit) {
+	if gitfetch.Validate(repositoryURL, "") != nil || !gitfetch.IsCommit(commit) {
 		return ErrBlocked
 	}
 	gitDir := filepath.Join(workdir, ".git")
