@@ -118,6 +118,10 @@ export async function removeConnectionUse(useId: string) {
   return client.removeConnectionUse({ useId }, await csrf());
 }
 
+export async function setRecommendedModels(connectionId: string, models: string[]) {
+  return client.setRecommendedModels({ connectionId, models }, await csrf());
+}
+
 export async function revokeConnection(connectionId: string) {
   return client.revokeConnection({ connectionId }, await csrf());
 }

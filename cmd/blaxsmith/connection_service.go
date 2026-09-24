@@ -307,7 +307,8 @@ func (s *connectionService) ListConnectionModels(ctx context.Context, req *conne
 	for _, m := range models {
 		out.Models = append(out.Models, &api.ConnectionModel{Id: m.ID, DisplayName: m.DisplayName, CreatedAt: optionalTime(m.ReleasedAt),
 			ContextTokens: m.ContextTokens, CapabilitiesJson: m.Capabilities, Harnesses: m.Harnesses,
-			IsDefault: m.IsDefault, Legacy: m.Legacy, Badge: m.Badge, Efforts: m.Efforts, DefaultEffort: m.DefaultEffort})
+			IsDefault: m.IsDefault, Legacy: m.Legacy, Badge: m.Badge, Efforts: m.Efforts, DefaultEffort: m.DefaultEffort,
+			Recommended: m.Recommended})
 	}
 	return connect.NewResponse(out), nil
 }
@@ -418,6 +419,18 @@ func (s *connectionService) RemoveConnectionUse(ctx context.Context, req *connec
 		return nil, connectionError(err)
 	}
 	return connect.NewResponse(&api.RemoveConnectionUseResponse{}), nil
+}
+
+func (s *connectionService) SetRecommendedModels(ctx context.Context, req *connect.Request[api.SetRecommendedModelsRequest]) (*connect.Response[api.SetRecommendedModelsResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	models, err := s.store.SetRecommendedModelsAs(ctx, caller, req.Msg.ConnectionId, req.Msg.Models)
+	if err != nil {
+		return nil, connectionError(err)
+	}
+	return connect.NewResponse(&api.SetRecommendedModelsResponse{Models: models}), nil
 }
 
 func (s *connectionService) RevokeConnection(ctx context.Context, req *connect.Request[api.RevokeConnectionRequest]) (*connect.Response[api.RevokeConnectionResponse], error) {

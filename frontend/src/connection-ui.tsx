@@ -4,21 +4,24 @@ import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, GitBranch, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowRight, GitBranch, KeyRound, Pin, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { ago } from "./admin";
 import { currentSession, sessionQueryKey } from "./auth";
 import {
   addConnectionUse, apiKeyProviders, authLabel, connectionModelsKey, connectionsKey, createApiKeyConnection, createGitTokenConnection,
   getGitHubApp, gitHubAppKey, grantConnection, healthFix, kindLabel, listConnectionModels, listConnections, modelsSummary, providerLabel,
-  refreshConnectionModels, removeConnectionUse, revokeConnection, revokeConnectionGrant, scopeLabel, startGitHubConnect,
+  refreshConnectionModels, removeConnectionUse, revokeConnection, setRecommendedModels, revokeConnectionGrant, scopeLabel, startGitHubConnect,
   type ListScope, type Scope,
 } from "./connections";
 import { DataTable } from "./data-table";
 import { TextField } from "./form-field";
 import { AccessCheck, AccessExplanation } from "./access-explain";
+import { ModelSelect } from "./model-select";
+
+export { ModelSelect };
 import { isBusy, type SignInState } from "./sign-in";
 import { SignInStatus, useSignIn } from "./sign-in-flow";
-import type { Connection, ConnectionGrant, ConnectionUse } from "./gen/blaxsmith/api/v1/connections_pb";
+import type { Connection, ConnectionGrant, ConnectionModel, ConnectionUse } from "./gen/blaxsmith/api/v1/connections_pb";
 import { listProjects } from "./workflow";
 
 export function useOrg() {
@@ -119,56 +122,11 @@ export function useConnections(scope: ListScope, projectId = "", enabled = true)
     queryFn: ({ signal }) => listConnections(scope, projectId, signal) });
 }
 
-const harnesses = [["", "Any harness"], ["codex", "Codex"], ["claude-code", "Claude Code"], ["opencode", "OpenCode"]] as const;
-const modelId = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/;
-
-// Models the connection can actually use; free text only under Advanced.
-// harness fixes the harness filter (a recipe profile already chose one);
-// without a connection only the Advanced free-text field is offered. fieldId
-// keeps element ids unique when several selects share a connection.
 // One connection's models for a harness; shared by pickers and effort lists.
 export function useConnectionModels(connectionId: string, harness: string) {
   const { org } = useOrg();
   return useQuery({ queryKey: connectionModelsKey(org, connectionId, harness), enabled: Boolean(org && connectionId),
     queryFn: ({ signal }) => listConnectionModels(connectionId, harness, signal) });
-}
-
-export function ModelSelect({ connectionId, value, onChange, harness: fixedHarness, fieldId, error }: {
-  connectionId: string; value: string; onChange: (model: string) => void; harness?: string; fieldId?: string; error?: string;
-}) {
-  const [chosenHarness, setHarness] = useState("");
-  const harness = fixedHarness ?? chosenHarness;
-  const [search, setSearch] = useState("");
-  const [showLegacy, setShowLegacy] = useState(false);
-  const models = useConnectionModels(connectionId, harness);
-  const list = connectionId ? models.data?.models ?? [] : [];
-  const legacyCount = list.filter((m) => m.legacy).length;
-  const needle = search.trim().toLowerCase();
-  const shown = list.filter((m) => (showLegacy || !m.legacy || m.id === value) &&
-    (!needle || m.id.toLowerCase().includes(needle) || m.displayName.toLowerCase().includes(needle)));
-  const listed = list.some((m) => m.id === value);
-  const id = fieldId || connectionId || "none";
-  return <div className="editor-form">
-    {connectionId && fixedHarness === undefined ? <div className="form-field"><label htmlFor={`harness-${id}`}>Harness</label>
-      <select id={`harness-${id}`} value={harness} onChange={(event) => setHarness(event.target.value)}>
-        {harnesses.map(([hid, name]) => <option key={hid} value={hid}>{name}</option>)}
-      </select></div> : null}
-    {list.length > 12 ? <TextField label="Search models" name={`model-search-${id}`} autoComplete="off" placeholder="Filter by id or name" value={search} onChange={setSearch} onBlur={() => {}} required={false} /> : null}
-    {connectionId ? <div className="form-field"><label htmlFor={`model-${id}`}>Model</label>
-      <select id={`model-${id}`} value={listed ? value : ""} onChange={(event) => onChange(event.target.value)} disabled={models.isPending} aria-invalid={error ? true : undefined}>
-        <option value="">{models.isPending ? "Loading models…" : list.length ? "Choose a model" : "No models available"}</option>
-        {shown.map((m) => <option key={m.id} value={m.id}>{m.displayName && m.displayName !== m.id ? `${m.displayName} (${m.id})` : m.id}{m.contextTokens ? ` · ${Math.round(m.contextTokens / 1000)}k` : ""}{m.isDefault ? " · default" : ""}{m.badge ? ` · ${m.badge}` : ""}{m.legacy ? " · legacy" : ""}</option>)}
-      </select>
-      {legacyCount ? <label className="recipe-check"><input type="checkbox" checked={showLegacy} onChange={(event) => setShowLegacy(event.target.checked)} /> Show legacy models ({legacyCount})</label> : null}
-      {models.data?.error ? <span className="form-field-error">{models.data.error}</span> : null}
-      {models.isError ? <span className="form-field-error">Models could not be loaded.</span> : null}
-      {error && listed ? <span className="form-field-error">{error}</span> : null}
-    </div> : null}
-    <details className="advanced-disclosure" open={!connectionId || (Boolean(value) && !listed && !models.isPending) || undefined}><summary>Advanced: type a model id</summary>
-      <TextField label="Model id" name={`model-free-text-${id}`} autoComplete="off" placeholder="Exact provider model id" value={listed ? "" : value} onChange={onChange} onBlur={() => {}} required={false}
-        error={value && !listed && !modelId.test(value) ? "Use up to 128 letters, numbers, periods, underscores, slashes, or hyphens." : !listed ? error : undefined} />
-    </details>
-  </div>;
 }
 
 export function ProjectSelect({ value, onChange, idPrefix = "project" }: { value: string; onChange: (id: string) => void; idPrefix?: string }) {
@@ -363,6 +321,7 @@ export function ConnectionDetail({ connection, scope, projectId = "", onRevoked 
       <DataTable table={useTableModel} label="Model uses" empty="Not used by any project yet." />
       {connection.state === "active" ? <AddUse connection={connection} projectId={projectId} /> : null}
     </section> : null}
+    {connection.kind !== "git" && connection.canManage && connection.state === "active" ? <RecommendedModels connection={connection} /> : null}
     {scope === "organization" && connection.scope === "organization" ? <ResourceGrants grants={connection.grants} label="Connection grants"
       canManage={connection.canManage} canAdd={connection.canManage && connection.state === "active"}
       description="Each grant names one project, one user, or a minimum role. Owners and admins get no implicit use; viewers never. A project grant lets that project's admins attach it to runs."
@@ -375,6 +334,35 @@ export function ConnectionDetail({ connection, scope, projectId = "", onRevoked 
       body={pending.kind === "use" ? <>Stop <strong>{pending.use.projectName}</strong> from using <strong className="mono">{pending.use.model}</strong> through this connection? Future attempts lose it; a running actor may still hold a delivered credential until stopped.</>
           : <>Revoke this {providerLabel(connection.provider)} connection? Every grant, use, and lease is revoked. Rotate the credential at the provider to invalidate copies already delivered.</>} /> : null}
   </>;
+}
+
+// Managers pin recommended models; every picker lists them first.
+function RecommendedModels({ connection }: { connection: Connection }) {
+  const queryClient = useQueryClient();
+  const { org } = useOrg();
+  const models = useConnectionModels(connection.id, "");
+  const [error, setError] = useState("");
+  const pinned = (models.data?.models ?? []).filter((m) => m.recommended).map((m) => m.id);
+  const save = useMutation({
+    mutationFn: (next: string[]) => setRecommendedModels(connection.id, next),
+    onSuccess: async () => { setError(""); await queryClient.invalidateQueries({ queryKey: ["connection-models", org, connection.id] }); },
+    onError: (cause) => setError(failure(cause, "Recommended models could not be saved.")),
+  });
+  const columns = useMemo<ColumnDef<typeof features, ConnectionModel>[]>(() => [
+    { id: "model", header: "Model", cell: ({ row }) => <span className="task-stage"><strong>{row.original.displayName || row.original.id}</strong><small className="mono">{row.original.id}</small></span> },
+    { id: "flags", header: "Status", cell: ({ row }) => [row.original.recommended ? "Recommended" : "", row.original.isDefault ? "Provider default" : "", row.original.legacy ? "Legacy" : "", row.original.badge].filter(Boolean).join(" · ") || "—" },
+    { id: "efforts", header: "Efforts", cell: ({ row }) => row.original.efforts.length ? <span className="mono">{row.original.efforts.join(", ")}</span> : "Harness default" },
+    { id: "actions", header: "Actions", cell: ({ row }) => <button type="button" className="text-action" disabled={save.isPending} aria-pressed={row.original.recommended}
+      onClick={() => save.mutate(row.original.recommended ? pinned.filter((id) => id !== row.original.id) : [...pinned, row.original.id])}>
+      <Pin size={13} aria-hidden="true" /> {row.original.recommended ? "Unpin" : "Recommend"}</button> },
+  ], [pinned.join(","), save.isPending]);
+  const table = useTable({ features, data: models.data?.models ?? [], columns, getRowId: (m) => m.id });
+  return <section className="table-section" aria-labelledby="recommended-models-heading">
+    <div className="table-heading"><div><h2 id="recommended-models-heading">Models</h2><p>Recommend models to list them first in every model picker. Legacy models stay hidden behind a toggle there.</p></div>
+      <span className="fetched-time">{pinned.length} recommended</span></div>
+    {error ? <p className="auth-alert" role="alert">{error}</p> : null}
+    <DataTable table={table} label="Connection models" empty={models.isPending ? undefined : "No models listed yet. Refresh models."} />
+  </section>;
 }
 
 function AddUse({ connection, projectId }: { connection: Connection; projectId: string }) {

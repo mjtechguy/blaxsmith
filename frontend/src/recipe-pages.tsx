@@ -370,8 +370,12 @@ function ProfileCard({ id, profile, errors, harnesses, allHarnesses, connections
   const models = useConnectionModels(connectionId, harness ? profile.harness : "");
   const modelInfo = (id: string) => models.data?.models.find((m) => m.id === id);
   const efforts = effortChoices(modelInfo(shownModel), harness?.efforts || []);
-  const setModel = (model: string) => onChange({ ...profile, model: prefix && model && !model.includes("/") ? prefix + model : model,
-    effort: effortForModel(modelInfo(model), harness?.efforts || [], profile.effort) });
+  const setModel = (model: string, chosen = connectionId, info = modelInfo(model)) => {
+    const provider = eligible.find((c) => c.id === chosen)?.provider;
+    const pre = profile.harness === "opencode" && provider ? `${provider}/` : "";
+    if (chosen !== connectionId) setConnectionId(chosen);
+    onChange({ ...profile, model: pre && model && !model.includes("/") ? pre + model : model, effort: effortForModel(info, harness?.efforts || [], profile.effort) });
+  };
   const skills = profile.skills || [];
   const at = `profiles.${id}`;
   return <div className="verification-check">
@@ -381,10 +385,10 @@ function ProfileCard({ id, profile, errors, harnesses, allHarnesses, connections
     <div className="recipe-grid">
       <Select label="Harness" value={profile.harness} choices={harnesses.map((h) => [h.harness, h.harness])}
         onChange={(value) => onChange({ ...profile, harness: value, effort: allHarnesses.find((h) => h.harness === value)?.efforts.includes(profile.effort) ? profile.effort : allHarnesses.find((h) => h.harness === value)?.efforts[0] || profile.effort })} />
-      <Select label="Connection" value={connectionId} choices={eligible.map((c) => [c.id, `${c.provider} · ${c.account}`])} onChange={setConnectionId} />
       <Select label="Effort" value={profile.effort} choices={efforts.map((e) => [e, e === modelInfo(shownModel)?.defaultEffort ? `${e} (model default)` : e])} onChange={(effort) => onChange({ ...profile, effort })} />
     </div>
-    <ModelSelect connectionId={connectionId} harness={harness ? profile.harness : ""} fieldId={`${at}-model`} value={shownModel} onChange={setModel} error={fieldError(errors, `${at}.model`)} />
+    <ModelSelect connectionId={connectionId} connections={eligible.map((c) => ({ id: c.id, label: `${c.provider} · ${c.account}`, provider: c.provider }))}
+      harness={harness ? profile.harness : ""} fieldId={`${at}-model`} value={shownModel} onChange={(model, chosen, info) => setModel(model, chosen || connectionId, info)} error={fieldError(errors, `${at}.model`)} />
     {!eligible.length ? <p className="form-hint">No active {harness?.provider || "model"} connection lists models yet; type the model ID under Advanced.</p> : null}
     {skillPaths ? <fieldset className="recipe-fieldset"><legend>Skills</legend>
       {[...new Set([...skillPaths, ...skills])].map((path) => <label key={path} className="recipe-check"><input type="checkbox" checked={skills.includes(path)}

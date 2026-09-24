@@ -71,6 +71,7 @@ type ConnectionModel struct {
 	ContextTokens   int32
 	Capabilities    string
 	Harnesses       []string
+	Recommended     bool // Pinned by the connection's managers.
 	access.ModelMeta
 }
 
@@ -820,6 +821,10 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 			}
 		}
 	}
+	recommended, err := s.recommendedModels(ctx, caller.OrganizationID, connectionID)
+	if err != nil {
+		return nil, nil, "", err
+	}
 	var harnessEfforts []string
 	if harness != "" {
 		harnessEfforts = recipe.Efforts[harness]
@@ -831,6 +836,7 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 			continue
 		}
 		m.ModelMeta = access.ResolveModel(r.Provider, m.ID, m.ModelMeta, harnessEfforts)
+		m.Recommended = slices.Contains(recommended, m.ID)
 		if name := manifestName(r.Provider, m.ID); name != "" && m.DisplayName == m.ID {
 			m.DisplayName = name
 		}

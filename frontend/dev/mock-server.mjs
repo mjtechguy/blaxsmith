@@ -305,8 +305,9 @@ const rpc = {
   CreateCodexSubscription: () => hubAdd({ scope: "personal", ownerId: principalId, kind: "subscription", provider: "codex", account: "acct-demo", modelCount: 2, modelsCheckedAt: now() }),
   StartCodexDeviceLogin: () => { deviceStarted = Date.now(); return { loginId: "login-1", verificationUrl: "https://auth.openai.com/codex/device", userCode: "ABCD-1234", intervalSeconds: 2, expiresAt: new Date(Date.now() + 900_000).toISOString() }; },
   PollCodexDeviceLogin: () => Date.now() - deviceStarted < 6_000 ? { state: "pending" } : { state: "connected", connection: rpc.CreateCodexSubscription().connection },
-  ListConnectionModels: ({ harness = "" }) => ({ checkedAt: now(), models: mockModels.filter((m) => !harness || m.harnesses.includes(harness))
-    .map((m) => ({ ...m, efforts: harness === "codex" ? m.efforts.filter((e) => e !== "max") : m.efforts })) }),
+  ListConnectionModels: ({ connectionId, harness = "" }) => ({ checkedAt: now(), models: mockModels.filter((m) => !harness || m.harnesses.includes(harness))
+    .map((m) => ({ ...m, recommended: (recommended.get(connectionId) ?? ["claude-opus-5"]).includes(m.id), efforts: harness === "codex" ? m.efforts.filter((e) => e !== "max") : m.efforts })) }),
+  SetRecommendedModels: ({ connectionId, models = [] }) => { recommended.set(connectionId, models); return { models }; },
   RefreshConnectionModels: () => ({ valid: true, modelCount: 2, checkedAt: now() }),
   GrantConnection: ({ connectionId, projectId: pid = "", granteeKind, granteeId = "" }) => { const grant = { id: `grant-${hub.length}-${Date.now()}`, projectId: pid, projectName: pid ? "Demo project" : "", granteeKind, granteeId, createdAt: now() }; hub.find((c) => c.id === connectionId)?.grants.push(grant); return { grant }; },
   RevokeConnectionGrant: ({ grantId }) => { for (const c of hub) c.grants = c.grants.filter((g) => g.id !== grantId); return {}; },
@@ -360,6 +361,7 @@ const mockModels = [
   mockModel("claude-opus-4-6", "Claude Opus 4.6", ["claude-code", "opencode"], ["low", "medium", "high", "max"], "high", { legacy: true }),
   mockModel("claude-haiku-4-5", "Claude Haiku 4.5", ["claude-code", "opencode"], [], "", { legacy: true, contextTokens: 200000 }),
 ];
+const recommended = new Map();
 const recipes = [];
 function addVersion(r, recipeJson, frozenPath, makeCurrent) {
   const doc = (() => { try { return JSON.parse(recipeJson); } catch { return {}; } })();

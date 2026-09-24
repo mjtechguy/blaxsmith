@@ -1152,6 +1152,7 @@ type ConnectionModel struct {
 	// harness filter when one is given. Empty: unknown, use the harness list.
 	Efforts       []string `protobuf:"bytes,10,rep,name=efforts,proto3" json:"efforts,omitempty"`
 	DefaultEffort string   `protobuf:"bytes,11,opt,name=default_effort,json=defaultEffort,proto3" json:"default_effort,omitempty"` // Empty when unknown.
+	Recommended   bool     `protobuf:"varint,12,opt,name=recommended,proto3" json:"recommended,omitempty"`                         // Pinned by the connection's managers; pickers list it first.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1261,6 +1262,13 @@ func (x *ConnectionModel) GetDefaultEffort() string {
 		return x.DefaultEffort
 	}
 	return ""
+}
+
+func (x *ConnectionModel) GetRecommended() bool {
+	if x != nil {
+		return x.Recommended
+	}
+	return false
 }
 
 type ListConnectionModelsRequest struct {
@@ -1866,6 +1874,104 @@ func (*RemoveConnectionUseResponse) Descriptor() ([]byte, []int) {
 	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{28}
 }
 
+// Replace a connection's recommended models (in order, at most 50). Allowed
+// to whoever manages the connection.
+type SetRecommendedModelsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ConnectionId  string                 `protobuf:"bytes,1,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	Models        []string               `protobuf:"bytes,2,rep,name=models,proto3" json:"models,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetRecommendedModelsRequest) Reset() {
+	*x = SetRecommendedModelsRequest{}
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetRecommendedModelsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetRecommendedModelsRequest) ProtoMessage() {}
+
+func (x *SetRecommendedModelsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetRecommendedModelsRequest.ProtoReflect.Descriptor instead.
+func (*SetRecommendedModelsRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *SetRecommendedModelsRequest) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *SetRecommendedModelsRequest) GetModels() []string {
+	if x != nil {
+		return x.Models
+	}
+	return nil
+}
+
+type SetRecommendedModelsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Models        []string               `protobuf:"bytes,1,rep,name=models,proto3" json:"models,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetRecommendedModelsResponse) Reset() {
+	*x = SetRecommendedModelsResponse{}
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetRecommendedModelsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetRecommendedModelsResponse) ProtoMessage() {}
+
+func (x *SetRecommendedModelsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetRecommendedModelsResponse.ProtoReflect.Descriptor instead.
+func (*SetRecommendedModelsResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *SetRecommendedModelsResponse) GetModels() []string {
+	if x != nil {
+		return x.Models
+	}
+	return nil
+}
+
 type RevokeConnectionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ConnectionId  string                 `protobuf:"bytes,1,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
@@ -1875,7 +1981,7 @@ type RevokeConnectionRequest struct {
 
 func (x *RevokeConnectionRequest) Reset() {
 	*x = RevokeConnectionRequest{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[29]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1887,7 +1993,7 @@ func (x *RevokeConnectionRequest) String() string {
 func (*RevokeConnectionRequest) ProtoMessage() {}
 
 func (x *RevokeConnectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[29]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1900,7 +2006,7 @@ func (x *RevokeConnectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeConnectionRequest.ProtoReflect.Descriptor instead.
 func (*RevokeConnectionRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{29}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RevokeConnectionRequest) GetConnectionId() string {
@@ -1918,7 +2024,7 @@ type RevokeConnectionResponse struct {
 
 func (x *RevokeConnectionResponse) Reset() {
 	*x = RevokeConnectionResponse{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[30]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1930,7 +2036,7 @@ func (x *RevokeConnectionResponse) String() string {
 func (*RevokeConnectionResponse) ProtoMessage() {}
 
 func (x *RevokeConnectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[30]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1943,7 +2049,7 @@ func (x *RevokeConnectionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeConnectionResponse.ProtoReflect.Descriptor instead.
 func (*RevokeConnectionResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{30}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{32}
 }
 
 // Git discovery for the project source page.
@@ -1959,7 +2065,7 @@ type GitRepository struct {
 
 func (x *GitRepository) Reset() {
 	*x = GitRepository{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[31]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1971,7 +2077,7 @@ func (x *GitRepository) String() string {
 func (*GitRepository) ProtoMessage() {}
 
 func (x *GitRepository) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[31]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1984,7 +2090,7 @@ func (x *GitRepository) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitRepository.ProtoReflect.Descriptor instead.
 func (*GitRepository) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{31}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *GitRepository) GetFullName() string {
@@ -2025,7 +2131,7 @@ type ListGitRepositoriesRequest struct {
 
 func (x *ListGitRepositoriesRequest) Reset() {
 	*x = ListGitRepositoriesRequest{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[32]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2037,7 +2143,7 @@ func (x *ListGitRepositoriesRequest) String() string {
 func (*ListGitRepositoriesRequest) ProtoMessage() {}
 
 func (x *ListGitRepositoriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[32]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2050,7 +2156,7 @@ func (x *ListGitRepositoriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGitRepositoriesRequest.ProtoReflect.Descriptor instead.
 func (*ListGitRepositoriesRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{32}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ListGitRepositoriesRequest) GetConnectionId() string {
@@ -2076,7 +2182,7 @@ type ListGitRepositoriesResponse struct {
 
 func (x *ListGitRepositoriesResponse) Reset() {
 	*x = ListGitRepositoriesResponse{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[33]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2088,7 +2194,7 @@ func (x *ListGitRepositoriesResponse) String() string {
 func (*ListGitRepositoriesResponse) ProtoMessage() {}
 
 func (x *ListGitRepositoriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[33]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2101,7 +2207,7 @@ func (x *ListGitRepositoriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGitRepositoriesResponse.ProtoReflect.Descriptor instead.
 func (*ListGitRepositoriesResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{33}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ListGitRepositoriesResponse) GetRepositories() []*GitRepository {
@@ -2121,7 +2227,7 @@ type ListGitBranchesRequest struct {
 
 func (x *ListGitBranchesRequest) Reset() {
 	*x = ListGitBranchesRequest{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[34]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2133,7 +2239,7 @@ func (x *ListGitBranchesRequest) String() string {
 func (*ListGitBranchesRequest) ProtoMessage() {}
 
 func (x *ListGitBranchesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[34]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2146,7 +2252,7 @@ func (x *ListGitBranchesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGitBranchesRequest.ProtoReflect.Descriptor instead.
 func (*ListGitBranchesRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{34}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ListGitBranchesRequest) GetConnectionId() string {
@@ -2172,7 +2278,7 @@ type ListGitBranchesResponse struct {
 
 func (x *ListGitBranchesResponse) Reset() {
 	*x = ListGitBranchesResponse{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[35]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2184,7 +2290,7 @@ func (x *ListGitBranchesResponse) String() string {
 func (*ListGitBranchesResponse) ProtoMessage() {}
 
 func (x *ListGitBranchesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[35]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2197,7 +2303,7 @@ func (x *ListGitBranchesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGitBranchesResponse.ProtoReflect.Descriptor instead.
 func (*ListGitBranchesResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{35}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ListGitBranchesResponse) GetBranches() []string {
@@ -2217,7 +2323,7 @@ type GetGitHubAppRequest struct {
 
 func (x *GetGitHubAppRequest) Reset() {
 	*x = GetGitHubAppRequest{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[36]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2229,7 +2335,7 @@ func (x *GetGitHubAppRequest) String() string {
 func (*GetGitHubAppRequest) ProtoMessage() {}
 
 func (x *GetGitHubAppRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[36]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2242,7 +2348,7 @@ func (x *GetGitHubAppRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGitHubAppRequest.ProtoReflect.Descriptor instead.
 func (*GetGitHubAppRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{36}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{38}
 }
 
 type GetGitHubAppResponse struct {
@@ -2256,7 +2362,7 @@ type GetGitHubAppResponse struct {
 
 func (x *GetGitHubAppResponse) Reset() {
 	*x = GetGitHubAppResponse{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[37]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2268,7 +2374,7 @@ func (x *GetGitHubAppResponse) String() string {
 func (*GetGitHubAppResponse) ProtoMessage() {}
 
 func (x *GetGitHubAppResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[37]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2281,7 +2387,7 @@ func (x *GetGitHubAppResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGitHubAppResponse.ProtoReflect.Descriptor instead.
 func (*GetGitHubAppResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{37}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *GetGitHubAppResponse) GetClientId() string {
@@ -2315,7 +2421,7 @@ type SetGitHubAppRequest struct {
 
 func (x *SetGitHubAppRequest) Reset() {
 	*x = SetGitHubAppRequest{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[38]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2327,7 +2433,7 @@ func (x *SetGitHubAppRequest) String() string {
 func (*SetGitHubAppRequest) ProtoMessage() {}
 
 func (x *SetGitHubAppRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[38]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2340,7 +2446,7 @@ func (x *SetGitHubAppRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetGitHubAppRequest.ProtoReflect.Descriptor instead.
 func (*SetGitHubAppRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{38}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *SetGitHubAppRequest) GetClientId() string {
@@ -2367,7 +2473,7 @@ type SetGitHubAppResponse struct {
 
 func (x *SetGitHubAppResponse) Reset() {
 	*x = SetGitHubAppResponse{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[39]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2379,7 +2485,7 @@ func (x *SetGitHubAppResponse) String() string {
 func (*SetGitHubAppResponse) ProtoMessage() {}
 
 func (x *SetGitHubAppResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[39]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2392,7 +2498,7 @@ func (x *SetGitHubAppResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetGitHubAppResponse.ProtoReflect.Descriptor instead.
 func (*SetGitHubAppResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{39}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *SetGitHubAppResponse) GetClientId() string {
@@ -2420,7 +2526,7 @@ type StartGitHubConnectRequest struct {
 
 func (x *StartGitHubConnectRequest) Reset() {
 	*x = StartGitHubConnectRequest{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[40]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2432,7 +2538,7 @@ func (x *StartGitHubConnectRequest) String() string {
 func (*StartGitHubConnectRequest) ProtoMessage() {}
 
 func (x *StartGitHubConnectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[40]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2445,7 +2551,7 @@ func (x *StartGitHubConnectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartGitHubConnectRequest.ProtoReflect.Descriptor instead.
 func (*StartGitHubConnectRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{40}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *StartGitHubConnectRequest) GetScope() string {
@@ -2478,7 +2584,7 @@ type StartGitHubConnectResponse struct {
 
 func (x *StartGitHubConnectResponse) Reset() {
 	*x = StartGitHubConnectResponse{}
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[41]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2490,7 +2596,7 @@ func (x *StartGitHubConnectResponse) String() string {
 func (*StartGitHubConnectResponse) ProtoMessage() {}
 
 func (x *StartGitHubConnectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[41]
+	mi := &file_blaxsmith_api_v1_connections_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2503,7 +2609,7 @@ func (x *StartGitHubConnectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartGitHubConnectResponse.ProtoReflect.Descriptor instead.
 func (*StartGitHubConnectResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{41}
+	return file_blaxsmith_api_v1_connections_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *StartGitHubConnectResponse) GetAuthorizeUrl() string {
@@ -2624,7 +2730,7 @@ const file_blaxsmith_api_v1_connections_proto_rawDesc = "" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12<\n" +
 	"\n" +
 	"connection\x18\x03 \x01(\v2\x1c.blaxsmith.api.v1.ConnectionR\n" +
-	"connection\"\xe3\x02\n" +
+	"connection\"\x85\x03\n" +
 	"\x0fConnectionModel\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x1d\n" +
@@ -2639,7 +2745,8 @@ const file_blaxsmith_api_v1_connections_proto_rawDesc = "" +
 	"\x05badge\x18\t \x01(\tR\x05badge\x12\x18\n" +
 	"\aefforts\x18\n" +
 	" \x03(\tR\aefforts\x12%\n" +
-	"\x0edefault_effort\x18\v \x01(\tR\rdefaultEffort\"\\\n" +
+	"\x0edefault_effort\x18\v \x01(\tR\rdefaultEffort\x12 \n" +
+	"\vrecommended\x18\f \x01(\bR\vrecommended\"\\\n" +
 	"\x1bListConnectionModelsRequest\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12\x18\n" +
 	"\aharness\x18\x02 \x01(\tR\aharness\"\x8e\x01\n" +
@@ -2678,7 +2785,12 @@ const file_blaxsmith_api_v1_connections_proto_rawDesc = "" +
 	"\x03use\x18\x01 \x01(\v2\x1f.blaxsmith.api.v1.ConnectionUseR\x03use\"3\n" +
 	"\x1aRemoveConnectionUseRequest\x12\x15\n" +
 	"\x06use_id\x18\x01 \x01(\tR\x05useId\"\x1d\n" +
-	"\x1bRemoveConnectionUseResponse\">\n" +
+	"\x1bRemoveConnectionUseResponse\"Z\n" +
+	"\x1bSetRecommendedModelsRequest\x12#\n" +
+	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12\x16\n" +
+	"\x06models\x18\x02 \x03(\tR\x06models\"6\n" +
+	"\x1cSetRecommendedModelsResponse\x12\x16\n" +
+	"\x06models\x18\x01 \x03(\tR\x06models\">\n" +
 	"\x17RevokeConnectionRequest\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\"\x1a\n" +
 	"\x18RevokeConnectionResponse\"\x8a\x01\n" +
@@ -2718,7 +2830,7 @@ const file_blaxsmith_api_v1_connections_proto_rawDesc = "" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x1b\n" +
 	"\treturn_to\x18\x03 \x01(\tR\breturnTo\"A\n" +
 	"\x1aStartGitHubConnectResponse\x12#\n" +
-	"\rauthorize_url\x18\x01 \x01(\tR\fauthorizeUrl2\x9b\x10\n" +
+	"\rauthorize_url\x18\x01 \x01(\tR\fauthorizeUrl2\x92\x11\n" +
 	"\x11ConnectionService\x12f\n" +
 	"\x0fListConnections\x12(.blaxsmith.api.v1.ListConnectionsRequest\x1a).blaxsmith.api.v1.ListConnectionsResponse\x12{\n" +
 	"\x16CreateApiKeyConnection\x12/.blaxsmith.api.v1.CreateApiKeyConnectionRequest\x1a0.blaxsmith.api.v1.CreateApiKeyConnectionResponse\x12\x81\x01\n" +
@@ -2732,7 +2844,8 @@ const file_blaxsmith_api_v1_connections_proto_rawDesc = "" +
 	"\x15RevokeConnectionGrant\x12..blaxsmith.api.v1.RevokeConnectionGrantRequest\x1a/.blaxsmith.api.v1.RevokeConnectionGrantResponse\x12i\n" +
 	"\x10AddConnectionUse\x12).blaxsmith.api.v1.AddConnectionUseRequest\x1a*.blaxsmith.api.v1.AddConnectionUseResponse\x12r\n" +
 	"\x13RemoveConnectionUse\x12,.blaxsmith.api.v1.RemoveConnectionUseRequest\x1a-.blaxsmith.api.v1.RemoveConnectionUseResponse\x12i\n" +
-	"\x10RevokeConnection\x12).blaxsmith.api.v1.RevokeConnectionRequest\x1a*.blaxsmith.api.v1.RevokeConnectionResponse\x12r\n" +
+	"\x10RevokeConnection\x12).blaxsmith.api.v1.RevokeConnectionRequest\x1a*.blaxsmith.api.v1.RevokeConnectionResponse\x12u\n" +
+	"\x14SetRecommendedModels\x12-.blaxsmith.api.v1.SetRecommendedModelsRequest\x1a..blaxsmith.api.v1.SetRecommendedModelsResponse\x12r\n" +
 	"\x13ListGitRepositories\x12,.blaxsmith.api.v1.ListGitRepositoriesRequest\x1a-.blaxsmith.api.v1.ListGitRepositoriesResponse\x12f\n" +
 	"\x0fListGitBranches\x12(.blaxsmith.api.v1.ListGitBranchesRequest\x1a).blaxsmith.api.v1.ListGitBranchesResponse\x12]\n" +
 	"\fGetGitHubApp\x12%.blaxsmith.api.v1.GetGitHubAppRequest\x1a&.blaxsmith.api.v1.GetGitHubAppResponse\x12]\n" +
@@ -2752,7 +2865,7 @@ func file_blaxsmith_api_v1_connections_proto_rawDescGZIP() []byte {
 	return file_blaxsmith_api_v1_connections_proto_rawDescData
 }
 
-var file_blaxsmith_api_v1_connections_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
+var file_blaxsmith_api_v1_connections_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_blaxsmith_api_v1_connections_proto_goTypes = []any{
 	(*ConnectionGrant)(nil),                  // 0: blaxsmith.api.v1.ConnectionGrant
 	(*ConnectionUse)(nil),                    // 1: blaxsmith.api.v1.ConnectionUse
@@ -2783,19 +2896,21 @@ var file_blaxsmith_api_v1_connections_proto_goTypes = []any{
 	(*AddConnectionUseResponse)(nil),         // 26: blaxsmith.api.v1.AddConnectionUseResponse
 	(*RemoveConnectionUseRequest)(nil),       // 27: blaxsmith.api.v1.RemoveConnectionUseRequest
 	(*RemoveConnectionUseResponse)(nil),      // 28: blaxsmith.api.v1.RemoveConnectionUseResponse
-	(*RevokeConnectionRequest)(nil),          // 29: blaxsmith.api.v1.RevokeConnectionRequest
-	(*RevokeConnectionResponse)(nil),         // 30: blaxsmith.api.v1.RevokeConnectionResponse
-	(*GitRepository)(nil),                    // 31: blaxsmith.api.v1.GitRepository
-	(*ListGitRepositoriesRequest)(nil),       // 32: blaxsmith.api.v1.ListGitRepositoriesRequest
-	(*ListGitRepositoriesResponse)(nil),      // 33: blaxsmith.api.v1.ListGitRepositoriesResponse
-	(*ListGitBranchesRequest)(nil),           // 34: blaxsmith.api.v1.ListGitBranchesRequest
-	(*ListGitBranchesResponse)(nil),          // 35: blaxsmith.api.v1.ListGitBranchesResponse
-	(*GetGitHubAppRequest)(nil),              // 36: blaxsmith.api.v1.GetGitHubAppRequest
-	(*GetGitHubAppResponse)(nil),             // 37: blaxsmith.api.v1.GetGitHubAppResponse
-	(*SetGitHubAppRequest)(nil),              // 38: blaxsmith.api.v1.SetGitHubAppRequest
-	(*SetGitHubAppResponse)(nil),             // 39: blaxsmith.api.v1.SetGitHubAppResponse
-	(*StartGitHubConnectRequest)(nil),        // 40: blaxsmith.api.v1.StartGitHubConnectRequest
-	(*StartGitHubConnectResponse)(nil),       // 41: blaxsmith.api.v1.StartGitHubConnectResponse
+	(*SetRecommendedModelsRequest)(nil),      // 29: blaxsmith.api.v1.SetRecommendedModelsRequest
+	(*SetRecommendedModelsResponse)(nil),     // 30: blaxsmith.api.v1.SetRecommendedModelsResponse
+	(*RevokeConnectionRequest)(nil),          // 31: blaxsmith.api.v1.RevokeConnectionRequest
+	(*RevokeConnectionResponse)(nil),         // 32: blaxsmith.api.v1.RevokeConnectionResponse
+	(*GitRepository)(nil),                    // 33: blaxsmith.api.v1.GitRepository
+	(*ListGitRepositoriesRequest)(nil),       // 34: blaxsmith.api.v1.ListGitRepositoriesRequest
+	(*ListGitRepositoriesResponse)(nil),      // 35: blaxsmith.api.v1.ListGitRepositoriesResponse
+	(*ListGitBranchesRequest)(nil),           // 36: blaxsmith.api.v1.ListGitBranchesRequest
+	(*ListGitBranchesResponse)(nil),          // 37: blaxsmith.api.v1.ListGitBranchesResponse
+	(*GetGitHubAppRequest)(nil),              // 38: blaxsmith.api.v1.GetGitHubAppRequest
+	(*GetGitHubAppResponse)(nil),             // 39: blaxsmith.api.v1.GetGitHubAppResponse
+	(*SetGitHubAppRequest)(nil),              // 40: blaxsmith.api.v1.SetGitHubAppRequest
+	(*SetGitHubAppResponse)(nil),             // 41: blaxsmith.api.v1.SetGitHubAppResponse
+	(*StartGitHubConnectRequest)(nil),        // 42: blaxsmith.api.v1.StartGitHubConnectRequest
+	(*StartGitHubConnectResponse)(nil),       // 43: blaxsmith.api.v1.StartGitHubConnectResponse
 }
 var file_blaxsmith_api_v1_connections_proto_depIdxs = []int32{
 	0,  // 0: blaxsmith.api.v1.Connection.grants:type_name -> blaxsmith.api.v1.ConnectionGrant
@@ -2809,7 +2924,7 @@ var file_blaxsmith_api_v1_connections_proto_depIdxs = []int32{
 	16, // 8: blaxsmith.api.v1.ListConnectionModelsResponse.models:type_name -> blaxsmith.api.v1.ConnectionModel
 	0,  // 9: blaxsmith.api.v1.GrantConnectionResponse.grant:type_name -> blaxsmith.api.v1.ConnectionGrant
 	1,  // 10: blaxsmith.api.v1.AddConnectionUseResponse.use:type_name -> blaxsmith.api.v1.ConnectionUse
-	31, // 11: blaxsmith.api.v1.ListGitRepositoriesResponse.repositories:type_name -> blaxsmith.api.v1.GitRepository
+	33, // 11: blaxsmith.api.v1.ListGitRepositoriesResponse.repositories:type_name -> blaxsmith.api.v1.GitRepository
 	4,  // 12: blaxsmith.api.v1.ConnectionService.ListConnections:input_type -> blaxsmith.api.v1.ListConnectionsRequest
 	6,  // 13: blaxsmith.api.v1.ConnectionService.CreateApiKeyConnection:input_type -> blaxsmith.api.v1.CreateApiKeyConnectionRequest
 	8,  // 14: blaxsmith.api.v1.ConnectionService.CreateGitTokenConnection:input_type -> blaxsmith.api.v1.CreateGitTokenConnectionRequest
@@ -2822,32 +2937,34 @@ var file_blaxsmith_api_v1_connections_proto_depIdxs = []int32{
 	23, // 21: blaxsmith.api.v1.ConnectionService.RevokeConnectionGrant:input_type -> blaxsmith.api.v1.RevokeConnectionGrantRequest
 	25, // 22: blaxsmith.api.v1.ConnectionService.AddConnectionUse:input_type -> blaxsmith.api.v1.AddConnectionUseRequest
 	27, // 23: blaxsmith.api.v1.ConnectionService.RemoveConnectionUse:input_type -> blaxsmith.api.v1.RemoveConnectionUseRequest
-	29, // 24: blaxsmith.api.v1.ConnectionService.RevokeConnection:input_type -> blaxsmith.api.v1.RevokeConnectionRequest
-	32, // 25: blaxsmith.api.v1.ConnectionService.ListGitRepositories:input_type -> blaxsmith.api.v1.ListGitRepositoriesRequest
-	34, // 26: blaxsmith.api.v1.ConnectionService.ListGitBranches:input_type -> blaxsmith.api.v1.ListGitBranchesRequest
-	36, // 27: blaxsmith.api.v1.ConnectionService.GetGitHubApp:input_type -> blaxsmith.api.v1.GetGitHubAppRequest
-	38, // 28: blaxsmith.api.v1.ConnectionService.SetGitHubApp:input_type -> blaxsmith.api.v1.SetGitHubAppRequest
-	40, // 29: blaxsmith.api.v1.ConnectionService.StartGitHubConnect:input_type -> blaxsmith.api.v1.StartGitHubConnectRequest
-	5,  // 30: blaxsmith.api.v1.ConnectionService.ListConnections:output_type -> blaxsmith.api.v1.ListConnectionsResponse
-	7,  // 31: blaxsmith.api.v1.ConnectionService.CreateApiKeyConnection:output_type -> blaxsmith.api.v1.CreateApiKeyConnectionResponse
-	9,  // 32: blaxsmith.api.v1.ConnectionService.CreateGitTokenConnection:output_type -> blaxsmith.api.v1.CreateGitTokenConnectionResponse
-	11, // 33: blaxsmith.api.v1.ConnectionService.CreateCodexSubscription:output_type -> blaxsmith.api.v1.CreateCodexSubscriptionResponse
-	13, // 34: blaxsmith.api.v1.ConnectionService.StartCodexDeviceLogin:output_type -> blaxsmith.api.v1.StartCodexDeviceLoginResponse
-	15, // 35: blaxsmith.api.v1.ConnectionService.PollCodexDeviceLogin:output_type -> blaxsmith.api.v1.PollCodexDeviceLoginResponse
-	18, // 36: blaxsmith.api.v1.ConnectionService.ListConnectionModels:output_type -> blaxsmith.api.v1.ListConnectionModelsResponse
-	20, // 37: blaxsmith.api.v1.ConnectionService.RefreshConnectionModels:output_type -> blaxsmith.api.v1.RefreshConnectionModelsResponse
-	22, // 38: blaxsmith.api.v1.ConnectionService.GrantConnection:output_type -> blaxsmith.api.v1.GrantConnectionResponse
-	24, // 39: blaxsmith.api.v1.ConnectionService.RevokeConnectionGrant:output_type -> blaxsmith.api.v1.RevokeConnectionGrantResponse
-	26, // 40: blaxsmith.api.v1.ConnectionService.AddConnectionUse:output_type -> blaxsmith.api.v1.AddConnectionUseResponse
-	28, // 41: blaxsmith.api.v1.ConnectionService.RemoveConnectionUse:output_type -> blaxsmith.api.v1.RemoveConnectionUseResponse
-	30, // 42: blaxsmith.api.v1.ConnectionService.RevokeConnection:output_type -> blaxsmith.api.v1.RevokeConnectionResponse
-	33, // 43: blaxsmith.api.v1.ConnectionService.ListGitRepositories:output_type -> blaxsmith.api.v1.ListGitRepositoriesResponse
-	35, // 44: blaxsmith.api.v1.ConnectionService.ListGitBranches:output_type -> blaxsmith.api.v1.ListGitBranchesResponse
-	37, // 45: blaxsmith.api.v1.ConnectionService.GetGitHubApp:output_type -> blaxsmith.api.v1.GetGitHubAppResponse
-	39, // 46: blaxsmith.api.v1.ConnectionService.SetGitHubApp:output_type -> blaxsmith.api.v1.SetGitHubAppResponse
-	41, // 47: blaxsmith.api.v1.ConnectionService.StartGitHubConnect:output_type -> blaxsmith.api.v1.StartGitHubConnectResponse
-	30, // [30:48] is the sub-list for method output_type
-	12, // [12:30] is the sub-list for method input_type
+	31, // 24: blaxsmith.api.v1.ConnectionService.RevokeConnection:input_type -> blaxsmith.api.v1.RevokeConnectionRequest
+	29, // 25: blaxsmith.api.v1.ConnectionService.SetRecommendedModels:input_type -> blaxsmith.api.v1.SetRecommendedModelsRequest
+	34, // 26: blaxsmith.api.v1.ConnectionService.ListGitRepositories:input_type -> blaxsmith.api.v1.ListGitRepositoriesRequest
+	36, // 27: blaxsmith.api.v1.ConnectionService.ListGitBranches:input_type -> blaxsmith.api.v1.ListGitBranchesRequest
+	38, // 28: blaxsmith.api.v1.ConnectionService.GetGitHubApp:input_type -> blaxsmith.api.v1.GetGitHubAppRequest
+	40, // 29: blaxsmith.api.v1.ConnectionService.SetGitHubApp:input_type -> blaxsmith.api.v1.SetGitHubAppRequest
+	42, // 30: blaxsmith.api.v1.ConnectionService.StartGitHubConnect:input_type -> blaxsmith.api.v1.StartGitHubConnectRequest
+	5,  // 31: blaxsmith.api.v1.ConnectionService.ListConnections:output_type -> blaxsmith.api.v1.ListConnectionsResponse
+	7,  // 32: blaxsmith.api.v1.ConnectionService.CreateApiKeyConnection:output_type -> blaxsmith.api.v1.CreateApiKeyConnectionResponse
+	9,  // 33: blaxsmith.api.v1.ConnectionService.CreateGitTokenConnection:output_type -> blaxsmith.api.v1.CreateGitTokenConnectionResponse
+	11, // 34: blaxsmith.api.v1.ConnectionService.CreateCodexSubscription:output_type -> blaxsmith.api.v1.CreateCodexSubscriptionResponse
+	13, // 35: blaxsmith.api.v1.ConnectionService.StartCodexDeviceLogin:output_type -> blaxsmith.api.v1.StartCodexDeviceLoginResponse
+	15, // 36: blaxsmith.api.v1.ConnectionService.PollCodexDeviceLogin:output_type -> blaxsmith.api.v1.PollCodexDeviceLoginResponse
+	18, // 37: blaxsmith.api.v1.ConnectionService.ListConnectionModels:output_type -> blaxsmith.api.v1.ListConnectionModelsResponse
+	20, // 38: blaxsmith.api.v1.ConnectionService.RefreshConnectionModels:output_type -> blaxsmith.api.v1.RefreshConnectionModelsResponse
+	22, // 39: blaxsmith.api.v1.ConnectionService.GrantConnection:output_type -> blaxsmith.api.v1.GrantConnectionResponse
+	24, // 40: blaxsmith.api.v1.ConnectionService.RevokeConnectionGrant:output_type -> blaxsmith.api.v1.RevokeConnectionGrantResponse
+	26, // 41: blaxsmith.api.v1.ConnectionService.AddConnectionUse:output_type -> blaxsmith.api.v1.AddConnectionUseResponse
+	28, // 42: blaxsmith.api.v1.ConnectionService.RemoveConnectionUse:output_type -> blaxsmith.api.v1.RemoveConnectionUseResponse
+	32, // 43: blaxsmith.api.v1.ConnectionService.RevokeConnection:output_type -> blaxsmith.api.v1.RevokeConnectionResponse
+	30, // 44: blaxsmith.api.v1.ConnectionService.SetRecommendedModels:output_type -> blaxsmith.api.v1.SetRecommendedModelsResponse
+	35, // 45: blaxsmith.api.v1.ConnectionService.ListGitRepositories:output_type -> blaxsmith.api.v1.ListGitRepositoriesResponse
+	37, // 46: blaxsmith.api.v1.ConnectionService.ListGitBranches:output_type -> blaxsmith.api.v1.ListGitBranchesResponse
+	39, // 47: blaxsmith.api.v1.ConnectionService.GetGitHubApp:output_type -> blaxsmith.api.v1.GetGitHubAppResponse
+	41, // 48: blaxsmith.api.v1.ConnectionService.SetGitHubApp:output_type -> blaxsmith.api.v1.SetGitHubAppResponse
+	43, // 49: blaxsmith.api.v1.ConnectionService.StartGitHubConnect:output_type -> blaxsmith.api.v1.StartGitHubConnectResponse
+	31, // [31:50] is the sub-list for method output_type
+	12, // [12:31] is the sub-list for method input_type
 	12, // [12:12] is the sub-list for extension type_name
 	12, // [12:12] is the sub-list for extension extendee
 	0,  // [0:12] is the sub-list for field type_name
@@ -2864,7 +2981,7 @@ func file_blaxsmith_api_v1_connections_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blaxsmith_api_v1_connections_proto_rawDesc), len(file_blaxsmith_api_v1_connections_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   42,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -129,6 +129,7 @@ message ConnectionModel {
   // harness filter when one is given. Empty: unknown, use the harness list.
   repeated string efforts = 10;
   string default_effort = 11; // Empty when unknown.
+  bool recommended = 12; // Pinned by the connection's managers; pickers list it first.
 }
 message ListConnectionModelsRequest {
   string connection_id = 1;
@@ -168,6 +169,14 @@ message AddConnectionUseRequest {
 message AddConnectionUseResponse { ConnectionUse use = 1; }
 message RemoveConnectionUseRequest { string use_id = 1; }
 message RemoveConnectionUseResponse {}
+
+// Replace a connection's recommended models (in order, at most 50). Allowed
+// to whoever manages the connection.
+message SetRecommendedModelsRequest {
+  string connection_id = 1;
+  repeated string models = 2;
+}
+message SetRecommendedModelsResponse { repeated string models = 1; }
 
 message RevokeConnectionRequest { string connection_id = 1; }
 message RevokeConnectionResponse {}
@@ -227,6 +236,7 @@ service ConnectionService {
   rpc AddConnectionUse(AddConnectionUseRequest) returns (AddConnectionUseResponse);
   rpc RemoveConnectionUse(RemoveConnectionUseRequest) returns (RemoveConnectionUseResponse);
   rpc RevokeConnection(RevokeConnectionRequest) returns (RevokeConnectionResponse);
+  rpc SetRecommendedModels(SetRecommendedModelsRequest) returns (SetRecommendedModelsResponse);
   rpc ListGitRepositories(ListGitRepositoriesRequest) returns (ListGitRepositoriesResponse);
   rpc ListGitBranches(ListGitBranchesRequest) returns (ListGitBranchesResponse);
   rpc GetGitHubApp(GetGitHubAppRequest) returns (GetGitHubAppResponse);

@@ -571,6 +571,11 @@ a { color: inherit; text-decoration: none; }
 .palette-hint { display: flex; align-items: center; gap: 4px; margin: 0; padding: 8px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
 @media (max-width: 640px) { .command-palette { margin-top: 16px; } .palette-hint { display: none; } }
 
+/* Model picker. */
+.model-select-row { display: flex; align-items: center; gap: 8px; }
+.model-select-row select { flex: 1; min-width: 0; }
+.model-select .is-favorite { fill: currentColor; color: var(--warning-text); }
+
 /* Connection health line. */
 .health-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .health-line .state-badge { flex: none; }
