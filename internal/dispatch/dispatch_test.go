@@ -30,11 +30,17 @@ type dispatchAX struct {
 	gateway                    axbridge.Gateway
 	attemptGateways            map[string]axbridge.Gateway
 	invalidateGatewayAfterTask bool
+	delayWorkspaceReady        bool
+	workspaceReadyAt           time.Time
 }
 
 func (a *dispatchAX) Get(context.Context, string, string) (axbridge.Task, error) {
 	if a.task == nil {
 		return axbridge.Task{}, axbridge.ErrNotFound
+	}
+	if !a.workspaceReadyAt.IsZero() && !time.Now().Before(a.workspaceReadyAt) {
+		a.task.Status.Conditions = []axbridge.TaskCondition{{Type: "WorkspaceReady", Status: "True", Reason: "SetupComplete"}}
+		a.workspaceReadyAt = time.Time{}
 	}
 	return *a.task, nil
 }
@@ -56,7 +62,11 @@ func (a *dispatchAX) Apply(_ context.Context, task axbridge.Task) error {
 		}
 	}
 	task.Status.Phase, task.Status.Actor = "Running", task.Metadata.Name
-	task.Status.Conditions = []axbridge.TaskCondition{{Type: "WorkspaceReady", Status: "True", Reason: "SetupComplete"}}
+	readyStatus, readyReason := "True", "SetupComplete"
+	if a.delayWorkspaceReady {
+		readyStatus, readyReason = "False", "Initializing"
+	}
+	task.Status.Conditions = []axbridge.TaskCondition{{Type: "WorkspaceReady", Status: readyStatus, Reason: readyReason}}
 	a.task = &task
 	return nil
 }
@@ -137,11 +147,13 @@ func TestDispatchBatchPostgres(t *testing.T) {
 	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
+	defer func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _ = admin.Exec(cleanup, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE")
-	})
+		if _, err := admin.Exec(cleanup, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE"); err != nil {
+			t.Errorf("drop temporary schema: %v", err)
+		}
+	}()
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -294,9 +306,26 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		Metadata: axbridge.TaskMetadata{Name: "public-egress", Atespace: axbridge.Space(orgID)}}
 	ax.gateway.Spec.Egress = &axbridge.GatewayEgress{Allowlist: &axbridge.GatewayAllowlist{
 		Hosts: []axbridge.GatewayHostRule{{Host: "140.82.114.3/32"}, {Host: "104.18.33.45/32"}}}}
+	ax.delayWorkspaceReady = true
+	activationSawWorkspacePending := false
+	dispatcher.Activate = func(_ context.Context, attempt workflow.Attempt, runtime bootstrap.Runtime, binding workflow.RuntimeBinding, invoke access.ModelInvoke) error {
+		if ax.task == nil || ax.task.Status.Phase != "Running" || ax.task.Status.Actor != ax.task.Metadata.Name ||
+			ax.task.Status.Conditions[0].Status != "False" || ax.task.Status.Conditions[0].Reason != "Initializing" {
+			return errors.New("activation ran before checking the expected pending workspace")
+		}
+		activationSawWorkspacePending = true
+		ax.workspaceReadyAt = time.Now().Add(25 * time.Millisecond)
+		if attempt.ID == "" || runtime.Actor.UID != "actor-uid" || invoke.AttemptID != attempt.ID ||
+			binding.ActorUID != runtime.Actor.UID || binding.CommandSHA256 == "" || invoke.BindingID == "" ||
+			invoke.Provider != "openai" || invoke.Model != "gpt-6-luna" || invoke.PolicyVersion < 1 {
+			return errors.New("unexpected model lease activation input")
+		}
+		return nil
+	}
 	batch, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
 	if err != nil || len(batch.Outcomes) != 1 || batch.Outcomes[0].State != "started" ||
-		batch.Outcomes[0].AttemptID == "" || batch.Outcomes[0].BindingID == "" || ax.task == nil || activationPreflights != 1 {
+		batch.Outcomes[0].AttemptID == "" || batch.Outcomes[0].BindingID == "" || ax.task == nil || activationPreflights != 1 ||
+		!activationSawWorkspacePending || ax.task.Status.Conditions[0].Status != "True" || ax.task.Status.Conditions[0].Reason != "SetupComplete" {
 		t.Fatalf("dispatch batch: %+v, %v", batch, err)
 	}
 	workspaceName := axbridge.AttemptWorkspaceName(batch.Outcomes[0].AttemptID)
