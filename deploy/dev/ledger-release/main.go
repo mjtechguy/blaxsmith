@@ -27,6 +27,7 @@ import (
 
 func main() {
 	var space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit, gitBinding, secretKeyFile string
+	var modelBinding, modelProvider, modelName, phase string
 	var generation int64
 	var finish bool
 	flag.StringVar(&space, "space", "", "AX atespace")
@@ -42,6 +43,10 @@ func main() {
 	flag.StringVar(&gitCommit, "git-commit", "", "expected immutable Git commit")
 	flag.StringVar(&gitBinding, "git-binding", "", "frozen synthetic Git-read binding")
 	flag.StringVar(&secretKeyFile, "secret-key-file", "", "owner-only database encryption key")
+	flag.StringVar(&phase, "phase", "setup", "bootstrap phase: setup or model")
+	flag.StringVar(&modelBinding, "model-binding", "", "frozen synthetic model-invoke binding")
+	flag.StringVar(&modelProvider, "model-provider", "openai", "synthetic model provider")
+	flag.StringVar(&modelName, "model", "gpt-6-luna", "synthetic model name")
 	flag.Int64Var(&generation, "previous-generation", 0, "prior scheduler owner generation")
 	flag.BoolVar(&finish, "finish", false, "deactivate the current synthetic owner")
 	flag.Parse()
@@ -52,7 +57,8 @@ func main() {
 		}
 		return
 	}
-	if err := run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit, gitBinding, secretKeyFile, generation); err != nil {
+	if err := run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit,
+		gitBinding, modelBinding, modelProvider, modelName, secretKeyFile, phase, generation); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -72,15 +78,24 @@ func deactivate(space, task, database string, generation int64) error {
 	if err != nil {
 		return err
 	}
+	if err := access.RevokeAttemptLeases(ctx, poolDB, scope.ClusterID, scope.AttemptID); err != nil {
+		return err
+	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]any{"deactivated": true,
-		"fenced_generation": scope.OwnerGeneration})
+		"leases_revoked": true, "fenced_generation": scope.OwnerGeneration})
 }
 
-func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit, gitBinding, secretKeyFile string, generation int64) error {
+func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, database, gitRepo, gitCommit,
+	gitBinding, modelBinding, modelProvider, modelName, secretKeyFile, phase string, generation int64) error {
 	if space == "" || task == "" || !strings.Contains(image, "@sha256:") || pool == "" ||
 		net.ParseIP(routerIP) == nil || routerCA == "" || actorCA == "" || signerFile == "" ||
-		(gitRepo == "") != (gitBinding == "") || (gitRepo == "") != (gitCommit == "") || (gitRepo == "") != (secretKeyFile == "") {
+		(gitRepo == "") != (gitBinding == "") || (gitRepo == "") != (gitCommit == "") ||
+		((gitRepo != "" || modelBinding != "") != (secretKeyFile != "")) {
 		return errors.New("incomplete synthetic connector inputs")
+	}
+	if (phase != bootstrap.PhaseSetup && phase != bootstrap.PhaseModel) ||
+		(phase == bootstrap.PhaseModel && (modelBinding == "" || modelProvider == "" || modelName == "")) {
+		return errors.New("incomplete synthetic model phase inputs")
 	}
 	keyInfo, err := os.Stat(signerFile)
 	if err != nil || keyInfo.Mode().Perm()&0077 != 0 {
@@ -123,7 +138,7 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 	}
 	defer poolDB.Close()
 	var secretStore *access.SecretStore
-	if gitRepo != "" {
+	if gitRepo != "" || modelBinding != "" {
 		info, err := os.Lstat(secretKeyFile)
 		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 			return access.ErrDenied
@@ -149,7 +164,17 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 		return bootstrap.ErrDenied
 	}
 	ledger := bootstrap.NewLedger(poolDB)
-	scope, err := ledger.Assign(ctx, "dev-cluster", space+"/"+task, generation, expected.Actor)
+	var scope bootstrap.Scope
+	if phase == bootstrap.PhaseSetup {
+		scope, err = ledger.Assign(ctx, "dev-cluster", space+"/"+task, generation, expected.Actor)
+	} else {
+		var actor bootstrap.Actor
+		var active, exists bool
+		scope, actor, active, exists, err = ledger.CurrentOwner(ctx, "dev-cluster", space+"/"+task)
+		if err == nil && (!exists || !active || actor != expected.Actor || scope.OwnerGeneration != generation) {
+			err = bootstrap.ErrDenied
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -159,6 +184,7 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 			cleanupCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
 			defer stop()
 			_, _ = ledger.Deactivate(cleanupCtx, scope)
+			_ = access.RevokeAttemptLeases(cleanupCtx, poolDB, scope.ClusterID, scope.AttemptID)
 		}
 	}()
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
@@ -167,76 +193,144 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 			return dialer.DialContext(ctx, "tcp", net.JoinHostPort(routerIP, "443"))
 		}}
 	defer transport.CloseIdleConnections()
-	var decision access.Decision
-	var leaseID string
+	var gitDecision, modelDecision access.Decision
+	var gitLeaseID, modelLeaseID string
+	modelExpiry := time.Now().Add(10 * time.Minute)
 	connector := &bootstrap.Connector{Ledger: ledger, Client: &http.Client{Transport: transport, Timeout: 20 * time.Second},
 		RouterURL: "https://atenet-router.ate-system.svc", Roots: actorRoots, Signer: signer,
 		Token: func(context.Context) (string, error) { return token, nil }, Current: current,
 		Authorize: func(ctx context.Context, tx pgx.Tx, runtime bootstrap.Runtime, challenge bootstrap.Challenge) error {
-			if challenge.Phase != bootstrap.PhaseSetup {
-				return bootstrap.ErrDenied
-			}
 			if runtime.Image != image || runtime.WorkerPool != pool || runtime.SandboxClass != "SANDBOX_CLASS_GVISOR" || !dataSnapshots(runtime) {
 				return bootstrap.ErrDenied
 			}
-			if gitRepo == "" {
+			switch challenge.Phase {
+			case bootstrap.PhaseSetup:
+				if gitRepo == "" {
+					return nil
+				}
+				checked, err := access.AuthorizeGitRead(ctx, tx, access.GitRead{
+					OrganizationID: "synthetic-org", ProjectID: space, AttemptID: space + "/" + task,
+					BindingID: gitBinding, GranteeKind: "user", GranteeID: "synthetic-operator",
+					RepoURL: gitRepo, Commit: gitCommit, PolicyVersion: 1,
+				})
+				if err != nil || checked.DeliveryMode != "native_raw" {
+					return access.ErrDenied
+				}
+				gitDecision = checked
 				return nil
+			case bootstrap.PhaseModel:
+				checked, err := access.AuthorizeModelInvoke(ctx, tx, access.ModelInvoke{
+					OrganizationID: "synthetic-org", ProjectID: space, AttemptID: space + "/" + task,
+					BindingID: modelBinding, GranteeKind: "user", GranteeID: "synthetic-operator",
+					Provider: modelProvider, Model: modelName, PolicyVersion: 1,
+				})
+				if err != nil || checked.DeliveryMode != "native_raw" {
+					return access.ErrDenied
+				}
+				modelDecision = checked
+				return nil
+			default:
+				return bootstrap.ErrDenied
 			}
-			checked, err := access.AuthorizeGitRead(ctx, tx, access.GitRead{
-				OrganizationID: "synthetic-org", ProjectID: space, AttemptID: space + "/" + task,
-				BindingID: gitBinding, GranteeKind: "user", GranteeID: "synthetic-operator",
-				RepoURL: gitRepo, Commit: gitCommit, PolicyVersion: 1,
-			})
-			if err != nil {
-				return err
-			}
-			if checked.DeliveryMode != "native_raw" {
-				return access.ErrDenied
-			}
-			decision = checked
-			return nil
 		},
 	}
-	if gitRepo != "" {
+	if gitRepo != "" || modelBinding != "" {
 		connector.Reserve = func(ctx context.Context, tx pgx.Tx, redeemed bootstrap.Redeemed) error {
-			id, err := access.ReserveGitLease(ctx, tx, access.LeaseRequest{
-				OrganizationID: "synthetic-org", BindingID: gitBinding, ChallengeID: redeemed.ID,
-				ClusterID: redeemed.Scope.ClusterID, AttemptID: redeemed.Scope.AttemptID,
-				OwnerGeneration: redeemed.Scope.OwnerGeneration, ActorUID: redeemed.ActorUID,
-				RepoURL: gitRepo, GuestExpiresAt: time.Unix(redeemed.Challenge.ExpiresAt, 0),
-			})
-			leaseID = id
-			return err
+			switch redeemed.Challenge.Phase {
+			case bootstrap.PhaseSetup:
+				if gitRepo == "" {
+					return nil
+				}
+				id, err := access.ReserveGitLease(ctx, tx, access.LeaseRequest{
+					OrganizationID: "synthetic-org", BindingID: gitBinding, ChallengeID: redeemed.ID,
+					ClusterID: redeemed.Scope.ClusterID, AttemptID: redeemed.Scope.AttemptID,
+					OwnerGeneration: redeemed.Scope.OwnerGeneration, ActorUID: redeemed.ActorUID,
+					RepoURL: gitRepo, GuestExpiresAt: time.Unix(redeemed.Challenge.ExpiresAt, 0),
+				})
+				gitLeaseID = id
+				return err
+			case bootstrap.PhaseModel:
+				if modelBinding == "" {
+					return access.ErrDenied
+				}
+				id, err := access.ReserveModelLease(ctx, tx, access.ModelLeaseRequest{
+					OrganizationID: "synthetic-org", BindingID: modelBinding, ChallengeID: redeemed.ID,
+					ClusterID: redeemed.Scope.ClusterID, AttemptID: redeemed.Scope.AttemptID,
+					OwnerGeneration: redeemed.Scope.OwnerGeneration, ActorUID: redeemed.ActorUID,
+					Provider: modelProvider, Model: modelName, ExpiresAt: modelExpiry,
+				})
+				modelLeaseID = id
+				return err
+			default:
+				return bootstrap.ErrDenied
+			}
 		}
+		connector.Delivered = func(ctx context.Context, tx pgx.Tx, redeemed bootstrap.Redeemed) error {
+			switch redeemed.Challenge.Phase {
+			case bootstrap.PhaseSetup:
+				if gitRepo == "" {
+					return nil
+				}
+				return access.MarkLeaseDelivered(ctx, tx, "synthetic-org", gitLeaseID)
+			case bootstrap.PhaseModel:
+				return access.MarkLeaseDelivered(ctx, tx, "synthetic-org", modelLeaseID)
+			default:
+				return bootstrap.ErrDenied
+			}
+		}
+	}
+	if gitRepo != "" {
 		connector.GitSetup = func(ctx context.Context, tx pgx.Tx, _ bootstrap.Runtime) (bootstrap.GitSetup, error) {
-			if decision.ConnectionID == "" || leaseID == "" {
+			if gitDecision.ConnectionID == "" || gitLeaseID == "" {
 				return bootstrap.GitSetup{}, access.ErrDenied
 			}
-			secret, err := secretStore.ReadCurrent(ctx, tx, "synthetic-org", decision.ConnectionID)
+			secret, err := secretStore.ReadCurrent(ctx, tx, "synthetic-org", gitDecision.ConnectionID)
 			if err != nil {
 				return bootstrap.GitSetup{}, err
 			}
-			if err := access.MarkLeaseAttempt(ctx, tx, "synthetic-org", leaseID, decision.ConnectionID, secret.Version); err != nil {
+			if err := access.MarkLeaseAttempt(ctx, tx, "synthetic-org", gitLeaseID, gitDecision.ConnectionID, secret.Version); err != nil {
 				secret.Clear()
 				return bootstrap.GitSetup{}, err
 			}
 			return bootstrap.GitSetup{RepoURL: gitRepo, Commit: gitCommit, Username: "blaxsmith-probe", Token: secret.Bytes}, nil
 		}
-		connector.Delivered = func(ctx context.Context, tx pgx.Tx, _ bootstrap.Redeemed) error {
-			return access.MarkLeaseDelivered(ctx, tx, "synthetic-org", leaseID)
+	}
+	if modelBinding != "" {
+		connector.ModelCredential = func(ctx context.Context, tx pgx.Tx, _ bootstrap.Runtime) (bootstrap.ModelCredential, error) {
+			if modelDecision.ConnectionID == "" || modelLeaseID == "" || !modelExpiry.After(time.Now()) {
+				return bootstrap.ModelCredential{}, access.ErrDenied
+			}
+			secret, err := secretStore.ReadCurrent(ctx, tx, "synthetic-org", modelDecision.ConnectionID)
+			if err != nil {
+				return bootstrap.ModelCredential{}, err
+			}
+			if err := access.MarkLeaseAttempt(ctx, tx, "synthetic-org", modelLeaseID,
+				modelDecision.ConnectionID, secret.Version); err != nil {
+				secret.Clear()
+				return bootstrap.ModelCredential{}, err
+			}
+			return bootstrap.ModelCredential{AttemptID: scope.AttemptID, Provider: modelProvider,
+				ExpiresAt: modelExpiry, APIKey: secret.Bytes}, nil
 		}
 	}
-	if err := connector.Open(ctx, scope, expected); err != nil {
+	if phase == bootstrap.PhaseModel {
+		err = connector.OpenModel(ctx, scope, expected)
+	} else {
+		err = connector.Open(ctx, scope, expected)
+	}
+	if err != nil {
 		return err
 	}
+	connectionID, leaseID := gitDecision.ConnectionID, gitLeaseID
+	if phase == bootstrap.PhaseModel {
+		connectionID, leaseID = modelDecision.ConnectionID, modelLeaseID
+	}
 	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{
-		"cluster_id": scope.ClusterID, "attempt_id": scope.AttemptID,
+		"phase": phase, "cluster_id": scope.ClusterID, "attempt_id": scope.AttemptID,
 		"owner_generation": scope.OwnerGeneration, "actor_uid": expected.Actor.UID,
 		"template_uid": expected.TemplateUID, "worker_pool": expected.WorkerPool,
 		"snapshot_scope":    expected.SnapshotOnPause,
-		"access_connection": decision.ConnectionID,
-		"access_lease":      leaseID,
-		"opened":            true,
+		"access_connection": connectionID, "access_lease": leaseID, "opened": true,
 	}); err != nil {
 		return err
 	}

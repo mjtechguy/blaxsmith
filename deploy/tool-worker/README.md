@@ -22,7 +22,8 @@ already present. Build the same image with Buildah, without Docker:
 ```sh
 cd /opt/blaxsmith-dev/blaxsmith-work
 bash deploy/tool-worker/build.sh /opt/blaxsmith-dev/ax-provider-20260923 \
-  /opt/blaxsmith-dev/tool-worker-image-20260923 --buildah
+  /opt/blaxsmith-dev/tool-worker-image-20260923 --buildah \
+  --git-ca /opt/blaxsmith-dev/private-git-fixture/ca.pem
 ```
 
 The Buildah path uses the same Dockerfiles, pinned package lock, AX
@@ -35,6 +36,11 @@ to `provenance.json`. It compiles the static `blaxsmith-tool-worker` from the
 current commit, builds the [pinned CLI proof](../runtime-proof/README.md),
 then adds the AX runner, worker, and Git to the final image. The final image
 pre-owns `/run/blaxsmith` as mode 0700 for the bootstrap credential file.
+Pass `--git-ca PEM` when the AX Workspace Git origin uses an administrator
+managed private CA; the image combines that PEM with the pinned base trust
+bundle at `/etc/ssl/certs/blaxsmith-git-ca.pem`. Its hash is recorded in
+`proof.json`. Without it, the image still provides the system root bundle at
+that AX-owned path.
 `proof.json` records the local image manifest digest, AX provenance hash,
 package-lock hash, image IDs, and `cli_manifest` with each absolute CLI binary
 path, SHA-256, and exact version. `--check` verifies clean source and AX

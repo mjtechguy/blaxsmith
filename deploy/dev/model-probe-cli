@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+if [ "${1:-}" = --version ]; then
+  printf '%s\n' 'codex-cli 0.156.1'
+  exit 0
+fi
+
+credential=/run/blaxsmith/agent-credential.json
+test -n "${OPENAI_API_KEY:-}"
+case "$OPENAI_API_KEY" in synthetic-model-*) ;; *) exit 1 ;; esac
+test -f "$credential" && test "$(stat -c '%a' "$credential")" = 600
+printf '%s\n' 'synthetic model phase credential check passed' > /run/blaxsmith/model-probe-result
+printf '%s\n' 'synthetic model phase credential check passed'

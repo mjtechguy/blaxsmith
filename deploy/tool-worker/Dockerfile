@@ -16,9 +16,13 @@ RUN printf '%s\n' \
 COPY --from=binaries --chmod=0755 /ax-task-runner /usr/local/bin/ax-task-runner
 COPY --from=binaries --chmod=0755 /blaxsmith-tool-worker /usr/local/bin/blaxsmith-tool-worker
 COPY --from=binaries --chmod=0755 /blaxsmith-git-askpass /usr/local/bin/blaxsmith-git-askpass
+COPY --from=binaries /blaxsmith-git-ca.pem /tmp/blaxsmith-git-ca.pem
 COPY deploy/tool-worker/manifest.mjs /opt/blaxsmith/manifest.mjs
 RUN mkdir -p /run/blaxsmith /workspace \
     && chmod 0700 /run/blaxsmith \
+    && cp /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/blaxsmith-git-ca.pem \
+    && if [ -s /tmp/blaxsmith-git-ca.pem ]; then cat /tmp/blaxsmith-git-ca.pem >> /etc/ssl/certs/blaxsmith-git-ca.pem; fi \
+    && rm /tmp/blaxsmith-git-ca.pem \
     && node /opt/blaxsmith/verify.mjs \
     && node /opt/blaxsmith/manifest.mjs >/dev/null
 

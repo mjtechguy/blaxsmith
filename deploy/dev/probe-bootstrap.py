@@ -2,7 +2,9 @@
 """Synthetic AX bootstrap gate probe. No credential or private repository."""
 
 import base64
+import hashlib
 import http.client
+import ipaddress
 import json
 import os
 import pathlib
@@ -32,11 +34,23 @@ git_repo = os.environ.get("BLAXSMITH_DEV_GIT_REPO", "")
 git_commit = os.environ.get("BLAXSMITH_DEV_GIT_COMMIT", "")
 git_token_file = os.environ.get("BLAXSMITH_DEV_GIT_TOKEN_FILE", "")
 secret_key_file = os.environ.get("BLAXSMITH_DEV_SECRET_KEY_FILE", "")
+model_token_file = os.environ.get("BLAXSMITH_DEV_MODEL_TOKEN_FILE", "")
+model_repo = "https://github.com/octocat/Hello-World.git"
+model_ref = "master"
+model_commit = "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d"
 report["debug_task"] = bool(git_repo)
 if (git_repo == "") != (git_token_file == "") or (git_repo == "") != (git_commit == "") or (git_repo and not ledger_mode):
     sys.exit("private Git probe requires BLAXSMITH_DEV_LEDGER=1 and repository, commit, and token inputs")
 if git_repo and not secret_key_file:
     sys.exit("private Git probe requires BLAXSMITH_DEV_SECRET_KEY_FILE")
+model_mode = bool(model_token_file)
+if model_mode and (not ledger_mode or git_repo or not secret_key_file or
+        not re.fullmatch(r"[0-9a-f]{40}", model_commit)):
+    sys.exit("model phase probe requires the ledger, a secret key, and a separate public source")
+if model_mode:
+    report["model_source"] = {"repository_url": model_repo, "source_ref": model_ref, "commit": model_commit}
+    report["model_probe"] = {"provider": "openai", "model": "gpt-6-luna", "api_requests": False,
+        "fake_cli_sha256": hashlib.sha256(pathlib.Path(__file__).with_name("model-probe-cli").read_bytes()).hexdigest()}
 if git_commit:
     report["git_commit"] = git_commit
 
@@ -157,19 +171,68 @@ def request(path, body=None, uid=None):
         connection.close()
 
 
-def until_challenge():
+def until_challenge(phase="setup"):
     deadline = time.monotonic() + 150
     last = None
     while time.monotonic() < deadline:
-        status, body = request("/blaxsmith/bootstrap/challenge?phase=setup")
+        status, body = request("/blaxsmith/bootstrap/challenge?phase=" + phase)
         if status == 200:
             challenge = json.loads(body)
-            if challenge.get("phase") != "setup":
-                raise RuntimeError("setup probe received a non-setup challenge")
+            if challenge.get("phase") != phase:
+                raise RuntimeError(f"{phase} probe received a different phase")
             return challenge
         last = (status, body.decode(errors="replace")[:100])
         time.sleep(2)
     raise RuntimeError(f"challenge unavailable: {last}")
+
+
+def public_gateway(name):
+    addresses = set()
+    for hostname in ("github.com",):
+        for result in socket.getaddrinfo(hostname, 443, socket.AF_INET, socket.SOCK_STREAM):
+            address = ipaddress.ip_address(result[4][0])
+            if not address.is_global:
+                raise RuntimeError(f"{hostname} resolved to a non-public address")
+            addresses.add(str(address) + "/32")
+    return {"apiVersion": "ax.io/v1alpha1", "kind": "Gateway",
+        "metadata": {"name": name, "atespace": space},
+        "spec": {"egress": {"allowlist": {"hosts": [{"host": host} for host in sorted(addresses)]}}}}
+
+
+def wait_workspace_ready():
+    deadline = time.monotonic() + 180
+    last = {}
+    while time.monotonic() < deadline:
+        last = yaml.safe_load(ax("get", "task", task)) or {}
+        status = last.get("status", {})
+        if status.get("phase") == "Running" and any(
+                condition.get("type") == "WorkspaceReady" and condition.get("status") == "True" and
+                condition.get("reason") == "SetupComplete" for condition in status.get("conditions", [])):
+            report["checks"].append("AX reports WorkspaceReady=True/SetupComplete before model release")
+            return
+        time.sleep(2)
+    raise RuntimeError("AX WorkspaceReady=True/SetupComplete was not observed: " + str(last.get("status", {}))[:500])
+
+
+def wait_model_probe():
+    expected = "synthetic model phase credential check passed"
+    deadline = time.monotonic() + 90
+    last = ""
+    while time.monotonic() < deadline:
+        result = subprocess.run(("ax", "-a", space, "ssh", task, "--", "/bin/sh", "-c",
+            "cat /run/blaxsmith/model-probe-result; test ! -e /run/blaxsmith/agent-credential.json"),
+            text=True, capture_output=True, timeout=25)
+        last = result.stdout.strip()
+        if result.returncode == 0 and last == expected:
+            report["checks"].append("pinned fake CLI saw a 0600 model credential; runner removed it after exit")
+            return
+        time.sleep(2)
+    raise RuntimeError("synthetic model worker did not finish cleanly: " + last[:160])
+
+
+def clear_model_probe():
+    ax("ssh", task, "--", "/bin/sh", "-c",
+        "test ! -e /run/blaxsmith/agent-credential.json && rm -f /run/blaxsmith/model-probe-result")
 
 
 def signed_release(challenge):
@@ -189,6 +252,7 @@ def signed_release(challenge):
 
 
 def release(challenge, previous_generation):
+    phase = challenge["phase"]
     if not ledger_mode:
         return request("/blaxsmith/bootstrap/release", signed_release(challenge))[0]
     args = ["go", "run", "./deploy/dev/ledger-release",
@@ -196,30 +260,39 @@ def release(challenge, previous_generation):
         "-router-ip", router_ip, "-router-ca", str(output / "router-ca.pem"),
         "-actor-ca", str(output / "actor-ca.pem"),
         "-signer", os.environ["BLAXSMITH_DEV_SIGNING_KEY_FILE"],
-        "-previous-generation", str(previous_generation)]
+        "-previous-generation", str(previous_generation), "-phase", phase]
     if git_repo:
         args += ["-git-repo", git_repo, "-git-commit", git_commit,
                  "-git-binding", report["access_seed"]["binding_id"], "-secret-key-file", secret_key_file]
+    if model_mode:
+        args += ["-model-binding", report["access_seed"]["model_binding_id"],
+                 "-model-provider", "openai", "-model", "gpt-6-luna",
+                 "-secret-key-file", secret_key_file]
     result = subprocess.run(args, input=connector_token, text=True, capture_output=True, timeout=90)
     if result.returncode:
         raise RuntimeError(f"ledger connector: {result.stderr.strip()}")
     record = json.loads(result.stdout)
     report["ledger_releases"].append(record)
-    if git_repo:
+    if (git_repo and phase == "setup") or (model_mode and phase == "model"):
         lease_id = record["access_lease"]
         if not re.fullmatch(r"[A-Za-z0-9_-]{22}", lease_id):
             raise RuntimeError("invalid access lease ID")
-        query = ("SELECT owner_generation,actor_uid,secret_version,"
+        model_lease = phase == "model"
+        capability = "model.invoke" if model_lease else "git.read"
+        resource = "openai/gpt-6-luna" if model_lease else git_repo
+        secret_version = report["access_seed"]["model_secret_version"] if model_lease else report["access_seed"]["secret_version"]
+        query = ("SELECT capability,resource,owner_generation,actor_uid,secret_version,"
                  "delivery_attempted_at IS NOT NULL,delivered_at IS NOT NULL,revoked_at IS NOT NULL "
                  "FROM access_leases WHERE organization_id='synthetic-org' AND id='" + lease_id + "'")
         state = subprocess.run(("psql", "-d", "blaxsmith_dev", "-Atc", query),
                                text=True, capture_output=True, timeout=15)
-        expected = f"{record['owner_generation']}|{record['actor_uid']}|{report['access_seed']['secret_version']}|t|t|f"
+        expected = f"{capability}|{resource}|{record['owner_generation']}|{record['actor_uid']}|{secret_version}|t|t|f"
         if state.returncode or state.stdout.strip() != expected:
             raise RuntimeError("access lease is not a committed delivery for the current owner")
         report.setdefault("access_leases", []).append({"id": lease_id,
+            "capability": capability, "resource": resource,
             "owner_generation": record["owner_generation"], "actor_uid": record["actor_uid"],
-            "secret_version": report["access_seed"]["secret_version"], "delivered": True})
+            "secret_version": secret_version, "delivered": True})
     return 204
 
 
@@ -249,6 +322,32 @@ if git_repo:
         "spec": {"egress": {"allowlist": {"hosts": [{"host": "10.42.0.1/32"}]}}}}
     (output / "workspace.json").write_text(json.dumps(workspace, indent=2) + "\n")
     (output / "gateway.json").write_text(json.dumps(gateway, indent=2) + "\n")
+elif model_mode:
+    cli_path = pathlib.Path(__file__).with_name("model-probe-cli")
+    request_body = {
+        "attempt_id": space + "/" + task,
+        "repository_url": model_repo,
+        "source_ref": model_ref,
+        "source_commit": model_commit,
+        "source_directory": "source",
+        "runtime": {"Harness": "codex", "Image": image,
+            "Binary": "/usr/local/bin/blaxsmith-model-probe-cli",
+            "BinarySHA256": hashlib.sha256(cli_path.read_bytes()).hexdigest(),
+            "Version": "0.156.1", "Supported": [{"Model": "gpt-6-luna", "Effort": "xhigh"}]},
+        "profile": {"harness": "codex", "model": "gpt-6-luna", "effort": "xhigh"},
+        "prompt": "Synthetic local credential-path probe. Do not make provider requests.",
+        "timeout_seconds": 60, "max_output_bytes": 2048,
+    }
+    manifest["spec"]["workspaces"] = [{"name": "model-source", "path": "/workspace"}]
+    manifest["spec"]["gateway"] = {"name": "model-gateway"}
+    manifest["spec"]["command"] = ["/usr/local/bin/blaxsmith-tool-worker",
+        json.dumps(request_body, separators=(",", ":"))]
+    workspace = {"apiVersion": "ax.io/v1alpha1", "kind": "Workspace",
+        "metadata": {"name": "model-source", "atespace": space},
+        "spec": {"git": [{"name": "source", "repo": model_repo,
+            "branch": model_commit, "dir": "source", "depth": 1}]}}
+    (output / "workspace.json").write_text(json.dumps(workspace, indent=2) + "\n")
+    (output / "gateway.json").write_text(json.dumps(public_gateway("model-gateway"), indent=2) + "\n")
 (output / "task.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 
@@ -270,10 +369,14 @@ def denied_task(name, spec, reason):
     raise RuntimeError(f"{name} did not fail closed")
 
 try:
-    if git_repo:
-        seed = subprocess.run(["go", "run", "./deploy/dev/seed-access",
-            "-space", space, "-task", task, "-repo", git_repo, "-commit", git_commit,
-            "-token-file", git_token_file, "-key-file", secret_key_file],
+    if git_repo or model_mode:
+        seed_args = ["go", "run", "./deploy/dev/seed-access", "-space", space,
+            "-task", task, "-key-file", secret_key_file]
+        if git_repo:
+            seed_args += ["-repo", git_repo, "-commit", git_commit, "-token-file", git_token_file]
+        if model_mode:
+            seed_args += ["-model-token-file", model_token_file]
+        seed = subprocess.run(seed_args,
             text=True, capture_output=True, timeout=45)
         if seed.returncode:
             raise RuntimeError(f"synthetic access seed: {seed.stderr.strip()}")
@@ -306,6 +409,16 @@ try:
     if request("/readyz")[0] != 200:
         raise RuntimeError("workspace did not become ready after release")
     report["checks"].append("signed release starts workspace")
+    if model_mode:
+        wait_workspace_ready()
+        clear_model_probe()
+        model_challenge = until_challenge("model")
+        if request("/readyz")[0] != 200:
+            raise RuntimeError("model phase opened before setup readiness")
+        status = release(model_challenge, report["ledger_releases"][-1]["owner_generation"])
+        if status != 204:
+            raise RuntimeError(f"model release returned {status}")
+        wait_model_probe()
     task_resources = manifest["spec"]["resources"]
     actor = ate("get", "actor", task, "-a", space, "-o", "json")["actors"][0]
     actor_template = actor["actorTemplate"]
@@ -392,6 +505,17 @@ try:
     if status != 204:
         raise RuntimeError(f"fresh release on resume returned {status}")
     report["checks"].append("data-snapshot resume requires fresh release; replay denied")
+    if model_mode:
+        wait_workspace_ready()
+        clear_model_probe()
+        resumed_model = until_challenge("model")
+        if resumed_model["nonce"] == model_challenge["nonce"]:
+            raise RuntimeError("resumed actor reused the previous model challenge")
+        status = release(resumed_model, report["ledger_releases"][-1]["owner_generation"])
+        if status != 204:
+            raise RuntimeError(f"model release on resume returned {status}")
+        wait_model_probe()
+        report["checks"].append("data-snapshot resume requires a fresh post-ready model release")
     if git_repo:
         resumed = None
         deadline = time.monotonic() + 45

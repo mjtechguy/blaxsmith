@@ -1,14 +1,41 @@
 #!/usr/bin/env bash
 # Build one credential-free AX runner + pinned CLI image on native Linux/amd64.
 set -euo pipefail
-test "$#" -ge 2 && test "$#" -le 3 || {
-  echo 'usage: build.sh VERIFIED_AX_BUILD NEW_OUTPUT_DIRECTORY [--check|--buildah]' >&2
+test "$#" -ge 2 && test "$#" -le 5 || {
+  echo 'usage: build.sh VERIFIED_AX_BUILD NEW_OUTPUT_DIRECTORY [--check|--buildah] [--git-ca PEM]' >&2
   exit 2
 }
-test "$#" -eq 2 || test "$3" = --check || test "$3" = --buildah || exit 2
 root=$(cd "$(dirname "$0")/../.." && pwd)
 ax_build=$(cd "$1" && pwd)
 output=$2
+mode=
+git_ca=
+shift 2
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --check|--buildah)
+      test -z "$mode" || { echo 'choose one build mode' >&2; exit 2; }
+      mode=$1
+      ;;
+    --git-ca)
+      test -z "$git_ca" && test "$#" -ge 2 || { echo '--git-ca requires one PEM path' >&2; exit 2; }
+      git_ca=$2
+      shift
+      ;;
+    *) echo "unknown build option: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+if [ -n "$git_ca" ]; then
+  test -f "$git_ca" && test ! -L "$git_ca" || { echo 'Git CA must be a regular PEM file' >&2; exit 2; }
+  python3 - "$git_ca" <<'PY'
+import pathlib, ssl, sys
+try:
+    ssl.create_default_context(cadata=pathlib.Path(sys.argv[1]).read_text())
+except (OSError, ssl.SSLError) as exc:
+    sys.exit(f'invalid Git CA PEM: {exc}')
+PY
+fi
 test ! -e "$output" || { echo 'output directory already exists' >&2; exit 2; }
 test -z "$(git -C "$root" status --porcelain)" || {
   echo 'commit the build inputs before producing an image' >&2
@@ -31,6 +58,7 @@ patches = {
     'redis_ha_patch_sha256': 'redis-ha.patch',
     'consumer_recovery_patch_sha256': 'consumer-recovery.patch',
     'provider_credential_patch_sha256': 'provider-credential.patch',
+    'post_ready_model_patch_sha256': 'post-ready-model.patch',
     'task_resources_patch_sha256': 'task-resources.patch',
     'askpass_sha256': 'blaxsmith-git-askpass',
 }
@@ -41,7 +69,7 @@ for field, filename in patches.items():
 if record['binaries']['ax-task-runner'] != sha(build / 'ax-task-runner'):
     sys.exit('AX runner differs from verified binary')
 PY
-if [ "${3:-}" = --check ]; then
+if [ "$mode" = --check ]; then
   echo 'AX provenance and committed build inputs match'
   exit 0
 fi
@@ -53,6 +81,7 @@ mkdir -p "$output/bin"
 output=$(cd "$output" && pwd)
 cp "$ax_build/ax-task-runner" "$output/bin/ax-task-runner"
 cp "$root/integrations/ax/blaxsmith-git-askpass" "$output/bin/blaxsmith-git-askpass"
+if [ -n "$git_ca" ]; then cp "$git_ca" "$output/bin/blaxsmith-git-ca.pem"; else : > "$output/bin/blaxsmith-git-ca.pem"; fi
 (
   cd "$root"
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' \
@@ -72,7 +101,7 @@ PY
 )
 runtime_image="blaxsmith-runtime-proof:${fingerprint}"
 worker_image="blaxsmith-tool-worker:proof-${fingerprint}"
-if [ "${3:-}" = --buildah ]; then
+if [ "$mode" = --buildah ]; then
   buildah bud --format oci --arch amd64 --network host \
     -t "$runtime_image" -f "$root/deploy/runtime-proof/Dockerfile" "$root"
   buildah bud --format oci --arch amd64 --network host \
@@ -124,6 +153,7 @@ proof = {
     'source_commit': subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(),
     'package_lock_sha256': sha(root / 'deploy/runtime-proof/package-lock.json'),
     'ax_provenance_sha256': sha(ax / 'provenance.json'),
+    'git_ca_sha256': sha(output / 'bin/blaxsmith-git-ca.pem') if (output / 'bin/blaxsmith-git-ca.pem').stat().st_size else None,
     'runtime_image_id': (output / 'runtime-image-id.txt').read_text().strip(),
     'worker_image_id': (output / 'worker-image-id.txt').read_text().strip(),
     'local_tag': tag,

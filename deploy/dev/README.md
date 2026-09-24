@@ -468,6 +468,72 @@ live `model`-phase delivery remains unproved. Generate a fresh fixture and CA
 for each run because the synthetic certificate expires. The probe turns AX
 `debug` on only so its test code can read back the checkout; normal product
 Tasks remain debug-off.
+
+### Synthetic post-ready model phase
+
+This probe uses the real tool-worker and AX model gate with a fake Codex
+executable. It never calls OpenAI. The model source is the immutable public
+`octocat/Hello-World` commit in `probe-bootstrap.py`; the synthetic key is
+encrypted in `blaxsmith_dev`, delivered only after AX reports
+`WorkspaceReady=True/SetupComplete`, then checked for mode 0600 and removed by
+the runner. Its Gateway allows only the pinned source host, so provider egress
+is denied throughout the probe. The same sequence repeats after data-only resume. The fake runner
+image has a separate registry proof and is enabled only for the probe.
+
+On the dev node, build a fresh AX/tool-worker chain, publish both images, and
+temporarily allow the probe image:
+
+```sh
+cd /opt/blaxsmith-dev/blaxsmith
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+ax_built=/opt/blaxsmith-dev/ax-model-probe-$(date +%s)
+bash integrations/ax/build.sh /opt/blaxsmith-dev/ax "$ax_built"
+bash deploy/dev/publish-ax.sh "$ax_built"
+signer=/opt/blaxsmith-dev/platform-bootstrap-signing.key
+python3 deploy/dev/enable-platform-bootstrap.py "$ax_built" "$signer"
+worker_built=/opt/blaxsmith-dev/tool-worker-model-probe-$(date +%s)
+bash deploy/tool-worker/build.sh "$ax_built" "$worker_built" --buildah
+worker_tag=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["local_tag"])' "$worker_built/proof.json")
+bash deploy/tool-worker/publish-buildah.sh "$worker_built" \
+  "127.0.0.1:5001/blaxsmith-tool-worker:${worker_tag##*:}"
+probe_built=/opt/blaxsmith-dev/model-probe-image-$(date +%s)
+bash deploy/dev/build-model-probe-image.sh "$worker_built" "$probe_built"
+probe_tag=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["local_tag"])' "$probe_built/proof.json")
+bash deploy/tool-worker/publish-buildah.sh "$probe_built" \
+  "127.0.0.1:5001/blaxsmith-tool-worker:${probe_tag##*:}"
+python3 deploy/dev/enable-platform-bootstrap.py "$ax_built" "$signer" "$probe_built/registry-proof.json"
+```
+
+Create a fresh owner-only test key and run the probe. Its scanner checks the
+same AX, database, Redis, log, and evidence surfaces as the Git-token probe.
+
+```sh
+secret_key=/opt/blaxsmith-dev/platform-secret-key
+if test ! -e "$secret_key"; then (umask 077; head -c 32 /dev/urandom > "$secret_key"); fi
+model_token=/opt/blaxsmith-dev/model-probe-key-$(date +%s)
+(umask 077; printf 'synthetic-model-%s' "$(openssl rand -hex 24)" > "$model_token")
+export BLAXSMITH_DEV_SIGNING_KEY_FILE="$signer"
+export BLAXSMITH_DEV_LEDGER=1
+export BLAXSMITH_DEV_SECRET_KEY_FILE="$secret_key"
+export BLAXSMITH_DEV_MODEL_TOKEN_FILE="$model_token"
+probe_image=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$probe_built/registry-proof.json")
+evidence=/opt/blaxsmith-dev/model-phase-probe-$(date +%s)
+cleanup_model_probe() {
+  python3 deploy/dev/enable-platform-bootstrap.py "$ax_built" "$signer"
+  rm -f "$model_token"
+}
+trap cleanup_model_probe EXIT
+python3 deploy/dev/probe-bootstrap.py "$probe_image" 10.43.36.216 "$evidence"
+python3 deploy/dev/scan-private-git.py "$model_token" "$evidence" > "$evidence/secret-scan.json"
+cleanup_model_probe
+trap - EXIT
+```
+
+The final command restores the allowlisted runner to the pinned AX runner
+image. Retain the probe build and evidence directories; never use the fake
+image for product runs. A passing report proves the encrypted `model.invoke`
+lease and post-ready credential handoff on AX, but it is still a synthetic
+connector run, not product dispatcher/UI wiring or a real provider request.
 The current rerun checks the trusted template's data-only pause/commit and
 golden-image resume settings before release, pins the dev snapshot bucket,
 and confirms the suspended actor's external snapshot is data-only. The

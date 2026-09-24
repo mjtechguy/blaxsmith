@@ -5,6 +5,7 @@ import base64
 import hashlib
 import json
 import pathlib
+import re
 import stat
 import subprocess
 import sys
@@ -12,8 +13,8 @@ import sys
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-if len(sys.argv) != 3:
-    sys.exit("usage: enable-platform-bootstrap.py VERIFIED_AX_BUILD DEV_SIGNING_KEY_FILE")
+if len(sys.argv) not in (3, 4):
+    sys.exit("usage: enable-platform-bootstrap.py VERIFIED_AX_BUILD DEV_SIGNING_KEY_FILE [MODEL_PROBE_REGISTRY_PROOF]")
 build, key_file = pathlib.Path(sys.argv[1]).resolve(), pathlib.Path(sys.argv[2]).resolve()
 record = json.loads((build / "provenance.json").read_text())
 for component in ("ax-controller", "ax-task-runner"):
@@ -28,6 +29,14 @@ images = [(build / f"{component}.image").read_text().strip()
           for component in ("ax-controller", "ax-task-runner")]
 if any("@sha256:" not in image for image in images):
     sys.exit("AX images must be digest-pinned")
+runner_image = images[1]
+if len(sys.argv) == 4:
+    probe = json.loads(pathlib.Path(sys.argv[3]).read_text())
+    if probe.get("schema") != "blaxsmith.tool-worker-registry/v1alpha1" or \
+            probe.get("model_probe", {}).get("provider_calls") is not False or \
+            not re.fullmatch(r"[^@\s]+@sha256:[0-9a-f]{64}", probe.get("image", "")):
+        sys.exit("model probe runner needs an immutable registry proof with provider calls disabled")
+    runner_image = probe["image"]
 
 deployment = json.loads(subprocess.check_output([
     "kubectl", "-n", "ax-system", "get", "deployment", "ax-controller", "-o", "json",
@@ -37,7 +46,7 @@ controller = next(c for c in deployment["spec"]["template"]["spec"]["containers"
 args = [arg for arg in controller["args"] if not arg.startswith((
     "--blaxsmith-bootstrap-public-key=", "--blaxsmith-runner-image=",
 ))]
-args += ["--blaxsmith-bootstrap-public-key=" + public, "--blaxsmith-runner-image=" + images[1]]
+args += ["--blaxsmith-bootstrap-public-key=" + public, "--blaxsmith-runner-image=" + runner_image]
 annotations = {
     "blaxsmith.dev/ax-patch-sha256": record["patch_sha256"],
     "blaxsmith.dev/ax-egress-patch-sha256": record["egress_patch_sha256"],

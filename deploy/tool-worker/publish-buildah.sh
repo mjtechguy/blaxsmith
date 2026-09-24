@@ -44,6 +44,8 @@ proof = json.loads((output / 'proof.json').read_text())
 record = {'schema': 'blaxsmith.tool-worker-registry/v1alpha1',
           'image': target.rsplit(':', 1)[0] + '@' + digest,
           'local_manifest_digest': proof['local_manifest_digest'],
+          'git_ca_sha256': proof.get('git_ca_sha256'),
+          'model_probe': proof.get('model_probe'),
           'cli_manifest': proof['cli_manifest']}
 (output / 'registry-proof.json').write_text(json.dumps(record, indent=2) + '\n')
 print(record['image'])
