@@ -2,10 +2,9 @@
 
 The [pinned overlay](../integrations/ax/redis-ha.patch) gives the AX server and
 controller the same Redis connection settings. It applies after the
-[task-tombstone overlay](ax-task-tombstones.md) at AX commit
-`d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`. The local development default
-remains one Redis address with no TLS. This patch has not been deployed to the
-shared k3s node.
+[task-tombstone overlay](ax-task-tombstones.md) in the supported AX build at
+`f009cc81c9a571073bc1dd58cd2ed934bf2d5b1c`. The dev node keeps the local
+single Redis address with no TLS; HA Redis is not enabled there.
 
 | Setting | Purpose |
 | --- | --- |

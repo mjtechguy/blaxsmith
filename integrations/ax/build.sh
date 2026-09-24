@@ -6,7 +6,8 @@ test "$#" -eq 2 || { echo 'usage: build.sh AX_SOURCE OUTPUT_DIRECTORY' >&2; exit
 ax_source=$(cd "$1" && pwd)
 output=$2
 integration=$(cd "$(dirname "$0")" && pwd)
-expected=d8ed0fe38bceb7842d3c47817d53d16ccdfcb601
+expected=f009cc81c9a571073bc1dd58cd2ed934bf2d5b1c
+overlay_base=d8ed0fe38bceb7842d3c47817d53d16ccdfcb601
 test "$(git -C "$ax_source" rev-parse HEAD)" = "$expected" || {
   echo 'AX revision changed; review and revalidate the compatibility patch.' >&2
   exit 1
@@ -18,7 +19,7 @@ mkdir "$output"
 output=$(cd "$output" && pwd)
 ax_build=$(mktemp -d)
 trap 'rm -rf "$ax_build"' EXIT
-git -C "$ax_source" archive "$expected" | tar -x -C "$ax_build"
+git -C "$ax_source" archive "$overlay_base" | tar -x -C "$ax_build"
 cd "$ax_build"
 git apply --check --whitespace=error-all "$integration/fail-closed.patch"
 git apply "$integration/fail-closed.patch"
@@ -44,18 +45,22 @@ git apply --check --whitespace=error-all "$integration/post-ready-model.patch"
 git apply "$integration/post-ready-model.patch"
 git apply --check --whitespace=error-all "$integration/task-resources.patch"
 git apply "$integration/task-resources.patch"
+git apply --check --whitespace=error-all "$integration/upstream-refresh-f009cc8.patch"
+git apply "$integration/upstream-refresh-f009cc8.patch"
 go test ./...
 go vet ./...
 for component in ax ax-server ax-controller ax-task-runner; do
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
     -ldflags='-s -w' -o "$output/$component" "./cmd/$component"
 done
-python3 - "$output" "$integration/fail-closed.patch" "$integration/egress-policy.patch" "$integration/bootstrap-gate.patch" "$integration/platform-bootstrap-key.patch" "$integration/encrypted-git-bootstrap.patch" "$integration/command-exit-readback.patch" "$integration/task-tombstones.patch" "$integration/redis-ha.patch" "$integration/consumer-recovery.patch" "$integration/provider-credential.patch" "$integration/post-ready-model.patch" "$integration/task-resources.patch" "$integration/blaxsmith-git-askpass" "$expected" <<'PY'
+python3 - "$output" "$integration/fail-closed.patch" "$integration/egress-policy.patch" "$integration/bootstrap-gate.patch" "$integration/platform-bootstrap-key.patch" "$integration/encrypted-git-bootstrap.patch" "$integration/command-exit-readback.patch" "$integration/task-tombstones.patch" "$integration/redis-ha.patch" "$integration/consumer-recovery.patch" "$integration/provider-credential.patch" "$integration/post-ready-model.patch" "$integration/task-resources.patch" "$integration/upstream-refresh-f009cc8.patch" "$integration/blaxsmith-git-askpass" "$expected" "$overlay_base" <<'PY'
 import hashlib, json, pathlib, subprocess, sys
-output, patch, egress_patch, bootstrap_patch, platform_key_patch, encrypted_git_patch, command_exit_patch, tombstone_patch, redis_ha_patch, recovery_patch, provider_patch, post_ready_patch, resources_patch, askpass, revision = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5]), pathlib.Path(sys.argv[6]), pathlib.Path(sys.argv[7]), pathlib.Path(sys.argv[8]), pathlib.Path(sys.argv[9]), pathlib.Path(sys.argv[10]), pathlib.Path(sys.argv[11]), pathlib.Path(sys.argv[12]), pathlib.Path(sys.argv[13]), pathlib.Path(sys.argv[14]), sys.argv[15]
+output, patch, egress_patch, bootstrap_patch, platform_key_patch, encrypted_git_patch, command_exit_patch, tombstone_patch, redis_ha_patch, recovery_patch, provider_patch, post_ready_patch, resources_patch, refresh_patch, askpass, revision, overlay_base = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5]), pathlib.Path(sys.argv[6]), pathlib.Path(sys.argv[7]), pathlib.Path(sys.argv[8]), pathlib.Path(sys.argv[9]), pathlib.Path(sys.argv[10]), pathlib.Path(sys.argv[11]), pathlib.Path(sys.argv[12]), pathlib.Path(sys.argv[13]), pathlib.Path(sys.argv[14]), pathlib.Path(sys.argv[15]), sys.argv[16], sys.argv[17]
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 record = {
     'upstream_commit': revision,
+    'overlay_base_commit': overlay_base,
+    'upstream_refresh_patch_sha256': sha(refresh_patch),
     'patch_sha256': sha(patch),
     'egress_patch_sha256': sha(egress_patch),
     'bootstrap_patch_sha256': sha(bootstrap_patch),

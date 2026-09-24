@@ -16,9 +16,11 @@ worker. Reference sources on the node live under `/opt/blaxsmith-dev`.
   `registry.blaxsmith-build.svc:5001` in
   `manifests/ate-install/kind/atelet/kustomization.yaml`. Its build/node label is
   consequently `67253354-dirty`; the Go source is unchanged.
-- AX commit `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`. The source checkout
-  remains clean; the deployed controller and follow-up runner include the
-  [Blaxsmith launch patch](../../integrations/ax/README.md) applied to an export.
+- AX source is fetched from `google/ax` and pinned at
+  `f009cc81c9a571073bc1dd58cd2ed934bf2d5b1c`. The source checkout remains
+  clean; the deployed controller and runner use the tested Blaxsmith overlay
+  against that revision. The build verifies the exact pin and records its
+  provenance in [`integrations/ax/README.md`](../../integrations/ax/README.md).
 - The pinned Substrate tool module supplies ko 0.19.1. Images are built on the
   remote node and retained in the development registry; resolved deployment
   manifests use image digests. [Observed images](../../docs/runtime-images.json)
@@ -45,6 +47,25 @@ The registry is protected by the node firewall and is for this trusted dev node.
 External IPv4 probes confirmed 22 reachable and 6443, 5001, 5002, 8085, 9090,
 and 10250 unreachable. External IPv6 probing was unavailable from the workstation;
 the UFW IPv6 and nftables `inet` rules are configured but that path is not proved.
+
+## Authenticated Blaxsmith preview
+
+The product app runs in `blaxsmith-preview`; its repeatable, non-secret Helm
+values are in [`preview-app-values.yaml`](preview-app-values.yaml). The existing
+NodePort front end serves `https://135.181.34.21/login`. Render and apply an app
+release from the repository root with:
+
+```sh
+helm template preview deploy/charts/blaxsmith-app \
+  --namespace blaxsmith-preview -f deploy/dev/preview-app-values.yaml |
+  ssh root@135.181.34.21 kubectl -n blaxsmith-preview apply -f -
+```
+
+This development installation has AX dispatch enabled and explicitly selects
+`open-dev` egress so model and Git endpoints are reachable. Use synthetic or
+public work only; it does not establish production egress enforcement. The AX
+and Substrate credentials are pre-created namespace Secrets and never belong in
+this file. Provider model keys still come from the authenticated UI.
 
 ## Rebuild the runtime on this prepared node
 

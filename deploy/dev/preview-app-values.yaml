@@ -1,0 +1,35 @@
+replicaCount: 1
+image: 127.0.0.1:5001/blaxsmith-app@sha256:2eaf62f76968ec3181024b48250d37bc85981da06c0232d39492b9e60ddfa6fa
+imagePullPolicy: IfNotPresent
+origin: https://135.181.34.21
+tlsSecretName: preview-app-tls
+signerSecretName: preview-app-signer
+databaseSecretName: preview-app-db
+databaseCASecretName: preview-app-db-ca
+accessKeySecretName: preview-app-access-key
+dispatch:
+  enabled: true
+  egressMode: open-dev
+  dev:
+    allowOpenEgress: true
+  credentialsSecretName: preview-app-dispatch
+  tools:
+    image: 127.0.0.1:5001/blaxsmith-dispatch-tools@sha256:a464b577f1317e86fe32892a3ce455420037a34c8b735edac26d605168a18d7b
+  tunnel:
+    targetHost: ax-server.ax-system.svc.cluster.local
+    targetPort: 8080
+    localPort: 18443
+  ax:
+    cliSHA256: b9320558808f77122c515ec71b31448cd45da1180074bc4558c8402758d901c7
+  substrate:
+    cliSHA256: 8b63542a649c4dc0de06c3c05560dead7a83fc2cc5e93221224d07b1be322e44
+    endpoint: api.ate-system.svc:443
+  bootstrap:
+    routerURL: https://atenet-router.ate-system.svc
+  clusterID: blaxsmith-dev1
+  leaseTTL: 10m
+  workerImage: 127.0.0.1:5001/blaxsmith-tool-worker@sha256:3a04f031ba71c8f197cda90f48a39e05492e5e67e6490b7601efc045137fe1df
+  workerPool: blaxsmith-smoke
+  snapshotStorage: gs://ate-snapshots/blaxsmith/
+  workspace: blaxsmith-source
+  gateway: blaxsmith-open-dev

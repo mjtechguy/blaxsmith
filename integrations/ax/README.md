@@ -1,7 +1,10 @@
 # AX runtime compatibility overlays
 
-Upstream: `github.com/google/ax`, commit
-`d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`, Apache-2.0 (see LICENSE).
+Upstream: `github.com/google/ax`, current supported commit
+`f009cc81c9a571073bc1dd58cd2ed934bf2d5b1c`, Apache-2.0 (see LICENSE). This
+revision includes AX's stable task-template lifecycle fix and the latest demo
+update. The `upstream-refresh-f009cc8.patch` carries these upstream changes
+through the existing overlay stack; the build fails if the checkout differs.
 `fail-closed.patch`, `egress-policy.patch`, `bootstrap-gate.patch`,
 `platform-bootstrap-key.patch`, `encrypted-git-bootstrap.patch`,
 `command-exit-readback.patch`, `task-tombstones.patch`, `redis-ha.patch`,
@@ -62,14 +65,16 @@ it ran on the Linux development node.
 bash integrations/ax/build.sh ../reference/ax /tmp/blaxsmith-ax-build
 ```
 
-The script exports committed source into a temporary directory, applies all twelve
-patches without changing the checkout, runs the full AX test suite and `go vet`,
-and builds the CLI, server, controller and runner. It records source/patch/binary
-hashes in `provenance.json`. The pinned `ax` CLI is for the isolated connector
-image; configure it with an explicit local tunnel endpoint so it never discovers
-a workstation or pod kubeconfig. Changing the upstream revision fails before
-building; update the patch intentionally and repeat the runtime probes when
-adopting a new AX pin.
+The script verifies the clean AX checkout at the supported revision, exports
+the compatible base plus the reviewed upstream refresh into a temporary
+directory, applies the compatibility overlays without changing the checkout,
+runs the full AX test suite and `go vet`, and builds the CLI, server, controller
+and runner. It records upstream/base/patch/binary hashes in `provenance.json`.
+The pinned `ax` CLI is for the isolated connector image; configure it with an
+explicit local tunnel endpoint so it never discovers a workstation or pod
+kubeconfig. Changing the upstream revision fails before building. Fetch
+`origin/main`, review new AX commits, update the supported revision and refresh
+patch, then rerun the full build and runtime probes before adopting that pin.
 The [initial provenance](provenance.json), [egress follow-up
 provenance](provenance-egress.json), [bootstrap-gate provenance](provenance-bootstrap.json),
 [platform-key provenance](provenance-platform-key.json), [encrypted-Git

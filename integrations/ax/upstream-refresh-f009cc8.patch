@@ -1,0 +1,236 @@
+diff --git a/README.md b/README.md
+index 27e2202..e96c953 100644
+--- a/README.md
++++ b/README.md
+@@ -104,6 +104,7 @@ Want to see the whole lifecycle end to end? Run [`./demo.sh`](demo.sh). It appli
+ | [Networking](docs/networking.md) | Reach a running task through the atenet router from the cluster, your laptop, or a gRPC client. |
+ | [Architecture](DESIGN.md) | Understand how the control plane fits together, plus the [API reference](DESIGN.md#api-reference). |
+ | [Development](docs/development.md) | Build, test, and ship changes to AX itself. |
++| [Roadmap](docs/roadmap.md) | See planned milestones across core specs, actor architecture, agentic environments, and governance. |
+ 
+ ## CLI usage
+ 
+diff --git a/demo.sh b/demo.sh
+index 3fad06b..c1b9c93 100755
+--- a/demo.sh
++++ b/demo.sh
+@@ -15,8 +15,8 @@
+ 
+ # AX demo: the full lifecycle of one task in about two minutes.
+ #
+-#   1. Declare a Workspace (a Git repo) and a Task in YAML and apply them.
+-#   2. Watch the task come up and the workspace get cloned.
++#   1. Declare a Workspace and a Task in YAML and apply them.
++#   2. Watch the task come up and the workspace get initialized.
+ #   3. Look inside the task with `ax ssh`.
+ #   4. Suspend the task, checkpointing its workspace.
+ #
+@@ -32,9 +32,9 @@ AX_BIN="${AX_BIN:-./bin/ax}"
+ # ax runs the CLI at AX_BIN so the commands below read the way you would type them.
+ ax() { "${AX_BIN}" "$@"; }
+ ATESPACE="${ATESPACE:-default}"
+-TASK_NAME="demo-task"
++TASK_NAME="test-task"
+ WORKSPACE_NAME="demo-workspace"
+-REPO_URL="https://github.com/chalk/chalk.git"
++TASK_IMAGE="${AX_TASK_IMAGE:-${AX_IMAGE_REPO:-gcr.io/dberkov-gke-dev3}/ax-task-runner@sha256:127dbe6650f2b93e5af793a9d7995ce0cf70c0f37ffb4c696154d3cc1a32f8bd}"
+ 
+ # ---------------------------------------------------------------------------
+ # Presentation helpers
+@@ -120,12 +120,6 @@ kind: Workspace
+ metadata:
+   name: ${WORKSPACE_NAME}
+   atespace: ${ATESPACE}
+-spec:
+-  git:
+-    - name: chalk
+-      repo: "${REPO_URL}"
+-      branch: "main"
+-      depth: 1
+ ---
+ apiVersion: ax.io/v1alpha1
+ kind: Task
+@@ -133,8 +127,8 @@ metadata:
+   name: ${TASK_NAME}
+   atespace: ${ATESPACE}
+ spec:
+-  debug: true   # serve guest services so we can ax ssh in
+-  image: "gcr.io/ax-substrate/ate-images/ax-task-runner@sha256:3a0dea6ad8b55278685db58aca6e37dc4ba04056831d45bef3aaeafdca43cac6"
++  debug: true
++  image: "${TASK_IMAGE}"
+   workspaces:
+     - name: ${WORKSPACE_NAME}
+       path: "/workspace"
+@@ -146,7 +140,7 @@ printf '%s' "${DIM}"; sed 's/^/    /' "${DEMO_YAML}"; printf '%s\n\n' "${RESET}"
+ run ax apply -f "${DEMO_YAML}"
+ 
+ step "Watch the task come up"
+-note "The controller creates an actor on Agent Substrate; the runner clones ${REPO_URL##*/} into /workspace."
++note "The controller creates an actor on Agent Substrate and initializes /workspace."
+ wait_for "Running" "True"
+ ok "${TASK_NAME} is Running and Ready"
+ echo
+@@ -157,8 +151,6 @@ run ax describe task "${TASK_NAME}" -a "${ATESPACE}"
+ step "Look inside the task with ax ssh"
+ in_sandbox 'ls -la /workspace'
+ echo
+-in_sandbox 'ls -la /workspace/chalk'
+-echo
+ in_sandbox 'echo "DEMO_ENV=$DEMO_ENV"; echo "AX_METADATA_URL=$AX_METADATA_URL"'
+ echo
+ note "The runner serves the task's own spec back to it over HTTP:"
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+new file mode 100644
+index 0000000..69ae531
+--- /dev/null
++++ b/docs/roadmap.md
+@@ -0,0 +1,52 @@
++# Roadmap
++
++## 1. Stabilize Core Specs
++
++Stabilize the `ax.io/v1alpha1` declarative schemas and lifecycle contracts across the API, CLI, and controller:
++
++| Resource | Scope |
++|---|---|
++| **`Task`** | Lifecycle phases, status conditions, resource limits, token/timeout budgets, and approval policies. |
++| **`Workspace`** | Git checkouts, static/registry MCP servers, skill registries, mount paths, and goal overrides. |
++| **`Gateway`** | Inbound listeners (`gRPC`, `HTTP`) and outbound egress host/port allowlists. |
++| **`Model`** | Provider bindings, model identifiers, sampling parameters, and credential secret references. |
++| **`Sandbox` / `SandboxConfig`** | Runtime isolation backends, kernel/syscall constraints, filesystem mounts, and security profiles. |
++
++
++## 2. Actor Architecture
++
++Evolve how AX maps tasks onto Agent Substrate actors to improve security boundaries, cluster utilization, and stateful workflows:
++
++- **Migration to the New Actor**: Migrate `ax-controller` and the Substrate integration layer (`internal/substrate`) to the new Agent Substrate Actor API and lifecycle model.
++- **Splitting Task Workspace Setup into a Separate Actor**: Decouple maiden workspace initialization (Git repository cloning, MCP and skill materialization, and goal-driven bootstrap) from the primary task runtime by executing setup in a dedicated setup actor before handing off the prepared workspace state to the task actor.
++- **Minimally Privileged Policies**: Apply strict least-privilege policies tailored independently to the workspace setup actor and the task execution actor—scoping repository/registry credentials and setup egress exclusively to the initialization phase while enforcing minimal runtime permissions, network egress, and capabilities on the task actor.
++- **Idleness Detection and Automatic Suspension for Density**: Continuously monitor actor activity (process execution, I/O, network traffic, and active gRPC/SSH sessions) to detect idle tasks and automatically trigger `SuspendActor` checkpointing, reclaiming worker CPU and memory to maximize cluster density.
++- **Stateful Task Branching**: Enable branching (forking) a running or suspended `Task`—including its checkpointed memory and workspace filesystem state—into multiple parallel tasks to explore speculative execution paths concurrently.
++
++
++## 3. Agentic Environment
++
++Make workspace synthesis and in-sandbox agent harnesses dynamic and extensible:
++
++- **Dynamic Agentic Environment Curation**: Enhance goal-driven workspace preparation (`Workspace.spec.goal` and `Task.spec.workspace.goal`) to dynamically inspect repository contents, resolve toolchains, discover relevant MCP servers and skills from registries, and curate a verified working environment automatically.
++- **Allow Customization**: Decouple the built-in workspace bootstrap and coding agent harness so users can configure custom agent runtimes, system instructions, tool policies, and model configurations.
++
++
++## 4. Networking, Identity, Governance & Observability
++
++Harden perimeter security, enterprise governance, and platform observability for production deployments:
++
++- **Reconciliation of `Gateway` Specs**: Implement full continuous reconciliation for `Gateway` resources in `ax-controller` so updates to listeners and egress allowlists dynamically propagate to all referencing tasks and underlying Substrate network policies.
++- **Swappable Google-Managed Gateway**: Abstract the gateway data/control plane interface so clusters can seamlessly swap between the built-in Substrate gateway and a Google-managed gateway implementation.
++- **SPIFFE Identity for Tasks and Gateways**: Issue cryptographic workload identities (SPIFFE IDs / X.509-SVIDs) to every `Task` actor and `Gateway`, enabling zero-trust mutual TLS (mTLS) authentication across tasks, gateways, MCP servers, and internal services.
++- **Google Platform Requirements for Governance**: Meet baseline Google platform requirements for MCP and skill registry integration, access control, policy enforcement, budget guardrails, and audit compliance.
++- **Telemetry and Trajectory Collection**: Automatically collect and export OpenTelemetry metrics, distributed traces, and structured agent trajectories (prompts, model responses, tool calls, process executions, and lifecycle transitions) at the runner and gateway layers without requiring custom instrumentation in user containers.
++
++
++## 5. Documentation
++
++Expand documentation in `docs/` to cover architecture rationale and extensibility guides:
++
++- **Layering with Substrate**: Document the architectural division of responsibilities between AX and Agent Substrate, answering major questions.
++- **Custom Images**: Provide guides and conventions for authoring, building, and configuring custom container images for `Task` workloads.
++- **Custom Runners**: Document the internal contract of `ax-task-runner` more comprehensively.
+diff --git a/docs/runner.md b/docs/runner.md
+index 92c6e99..d9bfff4 100644
+--- a/docs/runner.md
++++ b/docs/runner.md
+@@ -14,7 +14,7 @@ The controller does not run `spec.command` as the container entrypoint. It alway
+ |---|---|
+ | Container image | `spec.image`, or the default `ax-task-runner` image when unset |
+ | Container command | `/usr/local/bin/ax-task-runner`, always |
+-| `AX_TASK_YAML` | The full `Task` resource as YAML, including status |
++| `AX_TASK_YAML` | The `Task` launch configuration as YAML, excluding status and the suspend flag |
+ | `AX_WORKSPACES_YAML` | Every bound `Workspace` resource as a multi-document YAML stream, in the task's binding order |
+ | `spec.env` entries | Each one set directly in the container environment |
+ | `GEMINI_API_KEY` | Set when the atespace has a Gemini credential configured |
+diff --git a/docs/sandbox.md b/docs/sandbox.md
+index b6fff77..f582278 100644
+--- a/docs/sandbox.md
++++ b/docs/sandbox.md
+@@ -17,7 +17,7 @@ The daemon speaks HTTP/1.1 and `h2c` on the same port. Your agent can introspect
+ |---|---|---|---|
+ | `/healthz` | `GET` | `text/plain` | Liveness. Always `200 OK`. |
+ | `/readyz` | `GET` | `text/plain` | Readiness. `503` while the workspace is initializing, `200` once clones, MCP config, and skills are in place. |
+-| `/metadata/v1alpha1/ax/task` | `GET` | `application/yaml` | Full spec and status of the current `Task`. |
++| `/metadata/v1alpha1/ax/task` | `GET` | `application/yaml` | Task launch configuration, excluding status and the suspend flag. |
+ | `/metadata/v1alpha1/ax/workspaces` | `GET` | `application/yaml` | Every bound `Workspace`, as a multi-document stream in binding order. |
+ 
+ ```bash
+diff --git a/internal/controller/reconciler.go b/internal/controller/reconciler.go
+index 552413a..7599a71 100644
+--- a/internal/controller/reconciler.go
++++ b/internal/controller/reconciler.go
+@@ -184,8 +184,8 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, task *v1alpha1.Task, gat
+ 		extraEnv["BLAXSMITH_BOOTSTRAP_PUBLIC_KEY"] = r.BootstrapPublicKey
+ 	}
+ 
+-	// Only launch inputs belong in the template. Status, creation time and the
+-	// suspend control flag change across reconciles without changing the runner.
++	// Only launch inputs belong in the template. Status and metadata that change
++	// across reconciles must not create new golden snapshots.
+ 	templateSpec := proto.Clone(task.Spec).(*v1alpha1.TaskSpec)
+ 	templateSpec.Suspend = false
+ 	templateTask := &v1alpha1.Task{
+diff --git a/internal/controller/reconciler_test.go b/internal/controller/reconciler_test.go
+index bce1e88..2d37b0d 100644
+--- a/internal/controller/reconciler_test.go
++++ b/internal/controller/reconciler_test.go
+@@ -54,20 +54,30 @@ type mockControlServer struct {
+ 	createdTemplateNames []string
+ }
+ 
+-func (m *mockControlServer) GetActorTemplate(context.Context, *ateapipb.GetActorTemplateRequest) (*ateapipb.ActorTemplate, error) {
+-	return nil, status.Error(codes.NotFound, "no template")
++func (m *mockControlServer) GetActorTemplate(_ context.Context, req *ateapipb.GetActorTemplateRequest) (*ateapipb.ActorTemplate, error) {
++	ref := req.GetActorTemplate()
++	m.createdTemplateNames = append(m.createdTemplateNames, ref.GetName())
++	if !m.actorTemplates[ref.GetName()] {
++		return nil, status.Error(codes.NotFound, "template not found")
++	}
++	return &ateapipb.ActorTemplate{Metadata: &ateapipb.ResourceMetadata{Name: ref.GetName(), Atespace: ref.GetAtespace()}}, nil
+ }
+ 
+ func (m *mockControlServer) CreateActorTemplate(_ context.Context, req *ateapipb.CreateActorTemplateRequest) (*ateapipb.ActorTemplate, error) {
+ 	if m.templateErr != nil {
+ 		return nil, m.templateErr
+ 	}
+-	m.createdTemplate = req.ActorTemplate
+-	m.createdTemplateNames = append(m.createdTemplateNames, req.ActorTemplate.GetMetadata().GetName())
++	tmpl := req.GetActorTemplate()
++	m.createdTemplate = tmpl
++	m.createdTemplateNames = append(m.createdTemplateNames, tmpl.GetMetadata().GetName())
+ 	if m.badTemplate {
+ 		return &ateapipb.ActorTemplate{}, nil
+ 	}
+-	return req.ActorTemplate, nil
++	if m.actorTemplates == nil {
++		m.actorTemplates = make(map[string]bool)
++	}
++	m.actorTemplates[tmpl.GetMetadata().GetName()] = true
++	return tmpl, nil
+ }
+ 
+ func (m *mockControlServer) CreateAtespace(ctx context.Context, req *ateapipb.CreateAtespaceRequest) (*ateapipb.Atespace, error) {
+@@ -420,6 +430,7 @@ func TestTaskReconciler_WorkspaceReady(t *testing.T) {
+ 	if err != nil {
+ 		t.Fatalf("Reconcile with resume failed: %v", err)
+ 	}
++
+ 	assertCondition(t, reconciledResumed, "WorkspaceReady", "False", "Initializing")
+ 	assertCondition(t, reconciledResumed, "Ready", "False", "WorkspaceInitializing")
+ 	if len(mockSrv.createdTemplateNames) < 2 {
+@@ -551,6 +562,7 @@ func TestBlaxsmithLaunchBoundaries(t *testing.T) {
+ 				}
+ 			}
+ 		})
++
+ 	}
+ }
+ 

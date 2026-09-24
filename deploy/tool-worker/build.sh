@@ -45,7 +45,7 @@ python3 - "$root" "$ax_build" <<'PY'
 import hashlib, json, pathlib, sys
 root, build = map(pathlib.Path, sys.argv[1:])
 record = json.loads((build / 'provenance.json').read_text())
-if record['upstream_commit'] != 'd8ed0fe38bceb7842d3c47817d53d16ccdfcb601' or record['platform'] != 'linux/amd64':
+if record['upstream_commit'] != 'f009cc81c9a571073bc1dd58cd2ed934bf2d5b1c' or record['platform'] != 'linux/amd64':
     sys.exit('AX source or platform differs from the supported pin')
 patches = {
     'patch_sha256': 'fail-closed.patch',
@@ -60,6 +60,7 @@ patches = {
     'provider_credential_patch_sha256': 'provider-credential.patch',
     'post_ready_model_patch_sha256': 'post-ready-model.patch',
     'task_resources_patch_sha256': 'task-resources.patch',
+    'upstream_refresh_patch_sha256': 'upstream-refresh-f009cc8.patch',
     'askpass_sha256': 'blaxsmith-git-askpass',
 }
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()

@@ -1,8 +1,7 @@
 # AX task-name tombstones: proposed upstream patch
 
-The [patch](../integrations/ax/task-tombstones.patch) applies to
-AX commit `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`. It has **not** been
-deployed to the shared k3s node.
+The [patch](../integrations/ax/task-tombstones.patch) is included in the
+supported AX overlay build at `f009cc81c9a571073bc1dd58cd2ed934bf2d5b1c`.
 
 AX currently handles `UpdateTask` as an unconditional upsert. A request that
 times out at the Blaxsmith connector can reach AX after `DeleteTask`, recreate
@@ -18,12 +17,11 @@ returns `FailedPrecondition` for a deleted name. A retry must use a **new**
 attempt ID and task name. Deleting a missing name still returns `NotFound`,
 but permanently fences it.
 
-To verify on a clean AX checkout at the pinned commit:
+To verify on a clean AX checkout at the supported pin, use the composite build
+script. The individual patches apply in order and are not standalone:
 
 ```sh
-git apply --check /path/to/blaxsmith/integrations/ax/task-tombstones.patch
-git apply /path/to/blaxsmith/integrations/ax/task-tombstones.patch
-go test ./...
+bash integrations/ax/build.sh ../reference/ax /tmp/blaxsmith-ax-build
 ```
 
 The Redis integration test starts a local `redis-server` and checks that an
