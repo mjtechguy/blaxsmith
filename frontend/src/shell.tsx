@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Hammer, KeyRound, LayoutDashboard, LogOut, Menu, Moon, PlugZap, ShieldCheck, Sun, Wrench, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Hammer, KeyRound, LayoutDashboard, LogOut, Menu, Moon, ShieldCheck, Sun, Wrench, X } from "lucide-react";
 import { isOrgAdmin } from "./admin";
 import { announceSessionChange, clearWorkspaceCache, logout, sessionQueryKey } from "./auth";
 import type { SessionIdentity } from "./gen/blaxsmith/api/v1/auth_pb";
@@ -46,13 +46,10 @@ export function Shell({ children, session }: { children: ReactNode; session?: Se
     ...(session ? [{ to: "/" as const, label: "Workspace", icon: LayoutDashboard }] : []),
     { to: "/tools" as const, label: "Tools & runtimes", icon: Wrench },
     ...(session ? [{ to: "/me/connections" as const, label: "My connections", icon: KeyRound }] : []),
-    ...(isOrgAdmin(session) ? [{ to: "/admin" as const, label: "Admin", icon: ShieldCheck },
-      { to: "/admin/connections" as const, label: "Connections", icon: PlugZap }] : []),
+    ...(isOrgAdmin(session) ? [{ to: "/admin" as const, label: "Admin", icon: ShieldCheck }] : []),
   ];
-  // Prefix match, except that Admin does not also light up under Admin → Connections.
-  const isActive = (to: string) => to === "/" || to === "/tools" ? pathname === to
-    : pathname === to || (pathname.startsWith(`${to}/`) && !(to === "/admin" && pathname.startsWith("/admin/connections")));
-  const pageName = pathname === "/tools" ? "Tools & runtimes" : pathname.includes("/connections") ? "Connections" : pathname.startsWith("/admin") ? "Admin" : "Workspace";
+  const isActive = (to: string) => to === "/" || to === "/tools" ? pathname === to : pathname === to || pathname.startsWith(`${to}/`);
+  const pageName = pathname === "/tools" ? "Tools & runtimes" : pathname.startsWith("/admin") ? "Admin" : pathname.includes("/connections") ? "Connections" : "Workspace";
   const nextTheme: Theme = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
 
   async function signOut() {

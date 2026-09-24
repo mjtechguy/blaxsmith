@@ -3,9 +3,9 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createSortedRowModel, rowSortingFeature, sortFns, tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, KeyRound, LogOut, Plus, RefreshCw, Search, ShieldAlert, UserCheck, UserCog, UserX } from "lucide-react";
+import { ArrowLeft, KeyRound, LogOut, Plus, RefreshCw, Search, UserCheck, UserCog, UserX } from "lucide-react";
 import { OneTimeLink } from "../account-link";
-import { ago, isOrgAdmin } from "../admin";
+import { ago } from "../admin";
 import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
 import type { AccountLink, OrgMember } from "../gen/blaxsmith/api/v1/users_pb";
@@ -28,8 +28,7 @@ function Users() {
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const org = session.data?.organizationId || "";
   const self = session.data?.principalId || "";
-  const allowed = isOrgAdmin(session.data);
-  const members = useQuery({ queryKey: membersKey(org), enabled: Boolean(org && allowed), queryFn: ({ signal }) => listMembers(signal) });
+  const members = useQuery({ queryKey: membersKey(org), enabled: Boolean(org), queryFn: ({ signal }) => listMembers(signal) });
   const [search, setSearch] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -100,7 +99,6 @@ function Users() {
   }, [members.data, search]);
   const table = useTable({ features, data: rows, columns, getRowId: (row) => row.principalId, initialState: { sorting: [{ id: "role", desc: false }] } });
 
-  if (session.data && !allowed) return <PageShell><div className="state-panel" role="alert"><ShieldAlert size={22} aria-hidden="true" /><h2>Administration is restricted</h2><p>Only organization owners and admins can manage members.</p><Link className="secondary-button" to="/">Back to workspace</Link></div></PageShell>;
   const denied = members.isError && ConnectError.from(members.error).code === Code.PermissionDenied;
   const roles = assignableRoles(session.data);
 

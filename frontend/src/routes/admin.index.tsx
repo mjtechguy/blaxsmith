@@ -3,8 +3,8 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { Activity, ArrowRight, BookCopy, Inbox, KeyRound, OctagonX, RefreshCw, ScrollText, ShieldAlert, Square, Trash2, Users } from "lucide-react";
-import { ADMIN_REFRESH_MS, adminOverviewKey, ago, getAdminOverview, haltRun, isOrgAdmin, revokeGrant } from "../admin";
+import { Activity, ArrowRight, BookCopy, Inbox, KeyRound, OctagonX, RefreshCw, ScrollText, Square, Trash2, Users } from "lucide-react";
+import { ADMIN_REFRESH_MS, adminOverviewKey, ago, getAdminOverview, haltRun, revokeGrant } from "../admin";
 import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
 import type { AdminConnection, AdminGrant, AdminLiveAttempt, AdminOpenInteraction } from "../gen/blaxsmith/api/v1/admin_pb";
@@ -47,9 +47,8 @@ function AdminOverview() {
   const queryClient = useQueryClient();
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const org = session.data?.organizationId || "";
-  const allowed = isOrgAdmin(session.data);
   const overview = useQuery({
-    queryKey: adminOverviewKey(org), enabled: Boolean(org && allowed),
+    queryKey: adminOverviewKey(org), enabled: Boolean(org),
     queryFn: ({ signal }) => getAdminOverview(signal), refetchInterval: ADMIN_REFRESH_MS,
   });
   const [now, setNow] = useState(() => Date.now());
@@ -147,7 +146,6 @@ function AdminOverview() {
   const connections = useTable({ features, data: data?.connections || [], columns: connectionColumns, getRowId: (row) => row.id });
   const grants = useTable({ features, data: data?.grants || [], columns: grantColumns, getRowId: (row) => row.id });
 
-  if (session.data && !allowed) return <PageShell><div className="state-panel" role="alert"><ShieldAlert size={22} aria-hidden="true" /><h2>Administration is restricted</h2><p>Only organization owners and admins can open the admin dashboard.</p><Link className="secondary-button" to="/">Back to workspace</Link></div></PageShell>;
   const denied = overview.isError && ConnectError.from(overview.error).code === Code.PermissionDenied;
   const capacity = data?.capacity;
 

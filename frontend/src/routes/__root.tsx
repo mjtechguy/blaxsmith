@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createRootRoute, Navigate, Outlet, useLocation } from "@tanstack/react-router";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { createRootRouteWithContext, Navigate, Outlet, useLocation } from "@tanstack/react-router";
 import { clearWorkspaceCache, currentSession, isAccountLinkRoute, isPublicCatalogRoute, onOtherTabSessionChange, sessionQueryKey } from "../auth";
 import { AuthFrame, AuthUnavailable } from "../auth-frame";
 import { Shell } from "../shell";
 
-export const Route = createRootRoute({
+// The query client is router context so guarded layouts (see admin.tsx) can read the session before rendering.
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: Root,
   notFoundComponent: () => <div className="state-panel"><h1>Page not found</h1><p>This workspace route does not exist.</p></div>,
 });

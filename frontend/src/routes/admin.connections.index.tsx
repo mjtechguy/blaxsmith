@@ -1,17 +1,13 @@
 import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, GitBranch, KeyRound, Plus, Settings, ShieldAlert, UserRound } from "lucide-react";
-import { isOrgAdmin } from "../admin";
-import { ConnectionTable, GitHubReturnNotice, LoadError, Loading, useConnections, useOrg } from "../connection-ui";
+import { ArrowLeft, ArrowRight, GitBranch, KeyRound, Plus, Settings, UserRound } from "lucide-react";
+import { ConnectionTable, GitHubReturnNotice, LoadError, Loading, useConnections } from "../connection-ui";
 import { PageHeader, PageShell } from "../page";
 
 export const Route = createFileRoute("/admin/connections/")({ component: AdminConnections });
 
 function AdminConnections() {
-  const { session } = useOrg();
   const search = useLocation({ select: (l) => l.search as Record<string, unknown> });
-  const allowed = isOrgAdmin(session.data);
-  const connections = useConnections("organization", "", allowed);
-  if (session.data && !allowed) return <PageShell><div className="state-panel" role="alert"><ShieldAlert size={22} aria-hidden="true" /><h2>Administration is restricted</h2><p>Only organization owners and admins can manage organization connections.</p><Link className="secondary-button" to="/me/connections">My connections</Link></div></PageShell>;
+  const connections = useConnections("organization");
   return <PageShell>
     <PageHeader eyebrow="Administration" title="Connections" description="Organization-owned model keys, Git access, and their grants to projects, users, and roles. Secrets are write-only."
       actions={<>

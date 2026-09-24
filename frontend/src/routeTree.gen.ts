@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
@@ -53,6 +54,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -64,14 +70,14 @@ const ToolsRoute = ToolsRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/admin/',
-  path: '/admin/',
-  getParentRoute: () => rootRouteImport,
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminAuditRoute = AdminAuditRouteImport.update({
-  id: '/admin/audit',
-  path: '/admin/audit',
-  getParentRoute: () => rootRouteImport,
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AdminRoute,
 } as any)
 const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
@@ -89,41 +95,41 @@ const SetupTokenRoute = SetupTokenRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminConnectionsIndexRoute = AdminConnectionsIndexRouteImport.update({
-  id: '/admin/connections/',
-  path: '/admin/connections/',
-  getParentRoute: () => rootRouteImport,
+  id: '/connections/',
+  path: '/connections/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminConnectionsConnectionIdRoute =
   AdminConnectionsConnectionIdRouteImport.update({
-    id: '/admin/connections/$connectionId',
-    path: '/admin/connections/$connectionId',
-    getParentRoute: () => rootRouteImport,
+    id: '/connections/$connectionId',
+    path: '/connections/$connectionId',
+    getParentRoute: () => AdminRoute,
   } as any)
 const AdminConnectionsGithubAppRoute =
   AdminConnectionsGithubAppRouteImport.update({
-    id: '/admin/connections/github-app',
-    path: '/admin/connections/github-app',
-    getParentRoute: () => rootRouteImport,
+    id: '/connections/github-app',
+    path: '/connections/github-app',
+    getParentRoute: () => AdminRoute,
   } as any)
 const AdminRecipesIndexRoute = AdminRecipesIndexRouteImport.update({
-  id: '/admin/recipes/',
-  path: '/admin/recipes/',
-  getParentRoute: () => rootRouteImport,
+  id: '/recipes/',
+  path: '/recipes/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminRecipesNewRoute = AdminRecipesNewRouteImport.update({
-  id: '/admin/recipes/new',
-  path: '/admin/recipes/new',
-  getParentRoute: () => rootRouteImport,
+  id: '/recipes/new',
+  path: '/recipes/new',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
-  id: '/admin/users/',
-  path: '/admin/users/',
-  getParentRoute: () => rootRouteImport,
+  id: '/users/',
+  path: '/users/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminUsersNewRoute = AdminUsersNewRouteImport.update({
-  id: '/admin/users/new',
-  path: '/admin/users/new',
-  getParentRoute: () => rootRouteImport,
+  id: '/users/new',
+  path: '/users/new',
+  getParentRoute: () => AdminRoute,
 } as any)
 const MeConnectionsIndexRoute = MeConnectionsIndexRouteImport.update({
   id: '/me/connections/',
@@ -155,20 +161,20 @@ const ProjectsProjectIdVerificationRoute =
   } as any)
 const AdminConnectionsNewApiKeyRoute =
   AdminConnectionsNewApiKeyRouteImport.update({
-    id: '/admin/connections/new/api-key',
-    path: '/admin/connections/new/api-key',
-    getParentRoute: () => rootRouteImport,
+    id: '/connections/new/api-key',
+    path: '/connections/new/api-key',
+    getParentRoute: () => AdminRoute,
   } as any)
 const AdminConnectionsNewGitRoute = AdminConnectionsNewGitRouteImport.update({
-  id: '/admin/connections/new/git',
-  path: '/admin/connections/new/git',
-  getParentRoute: () => rootRouteImport,
+  id: '/connections/new/git',
+  path: '/connections/new/git',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminRecipesRecipeIdIndexRoute =
   AdminRecipesRecipeIdIndexRouteImport.update({
-    id: '/admin/recipes/$recipeId/',
-    path: '/admin/recipes/$recipeId/',
-    getParentRoute: () => rootRouteImport,
+    id: '/recipes/$recipeId/',
+    path: '/recipes/$recipeId/',
+    getParentRoute: () => AdminRoute,
   } as any)
 const MeConnectionsNewApiKeyRoute = MeConnectionsNewApiKeyRouteImport.update({
   id: '/me/connections/new/api-key',
@@ -231,9 +237,9 @@ const ProjectsProjectIdRunsNewRoute =
   } as any)
 const AdminRecipesRecipeIdVersionsNewRoute =
   AdminRecipesRecipeIdVersionsNewRouteImport.update({
-    id: '/admin/recipes/$recipeId/versions/new',
-    path: '/admin/recipes/$recipeId/versions/new',
-    getParentRoute: () => rootRouteImport,
+    id: '/recipes/$recipeId/versions/new',
+    path: '/recipes/$recipeId/versions/new',
+    getParentRoute: () => AdminRoute,
   } as any)
 const ProjectsProjectIdConnectionsNewApiKeyRoute =
   ProjectsProjectIdConnectionsNewApiKeyRouteImport.update({
@@ -262,6 +268,7 @@ const ProjectsProjectIdRecipesRecipeIdVersionsNewRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
@@ -343,6 +350,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
@@ -385,6 +393,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/login'
     | '/tools'
     | '/admin/audit'
@@ -465,6 +474,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/login'
     | '/tools'
     | '/admin/audit'
@@ -506,28 +516,16 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
   LoginRoute: typeof LoginRoute
   ToolsRoute: typeof ToolsRoute
-  AdminAuditRoute: typeof AdminAuditRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
   ProjectsNewRoute: typeof ProjectsNewRoute
   SetupTokenRoute: typeof SetupTokenRoute
-  AdminIndexRoute: typeof AdminIndexRoute
-  AdminConnectionsConnectionIdRoute: typeof AdminConnectionsConnectionIdRoute
-  AdminConnectionsGithubAppRoute: typeof AdminConnectionsGithubAppRoute
-  AdminRecipesNewRoute: typeof AdminRecipesNewRoute
-  AdminUsersNewRoute: typeof AdminUsersNewRoute
   MeConnectionsConnectionIdRoute: typeof MeConnectionsConnectionIdRoute
-  AdminConnectionsIndexRoute: typeof AdminConnectionsIndexRoute
-  AdminRecipesIndexRoute: typeof AdminRecipesIndexRoute
-  AdminUsersIndexRoute: typeof AdminUsersIndexRoute
   MeConnectionsIndexRoute: typeof MeConnectionsIndexRoute
-  AdminConnectionsNewApiKeyRoute: typeof AdminConnectionsNewApiKeyRoute
-  AdminConnectionsNewGitRoute: typeof AdminConnectionsNewGitRoute
   MeConnectionsNewApiKeyRoute: typeof MeConnectionsNewApiKeyRoute
   MeConnectionsNewSubscriptionRoute: typeof MeConnectionsNewSubscriptionRoute
-  AdminRecipesRecipeIdIndexRoute: typeof AdminRecipesRecipeIdIndexRoute
-  AdminRecipesRecipeIdVersionsNewRoute: typeof AdminRecipesRecipeIdVersionsNewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -537,6 +535,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -555,17 +560,17 @@ declare module '@tanstack/react-router' {
     }
     '/admin/': {
       id: '/admin/'
-      path: '/admin'
+      path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/audit': {
       id: '/admin/audit'
-      path: '/admin/audit'
+      path: '/audit'
       fullPath: '/admin/audit'
       preLoaderRoute: typeof AdminAuditRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/projects/$projectId': {
       id: '/projects/$projectId'
@@ -590,52 +595,52 @@ declare module '@tanstack/react-router' {
     }
     '/admin/connections/': {
       id: '/admin/connections/'
-      path: '/admin/connections'
+      path: '/connections'
       fullPath: '/admin/connections/'
       preLoaderRoute: typeof AdminConnectionsIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/connections/$connectionId': {
       id: '/admin/connections/$connectionId'
-      path: '/admin/connections/$connectionId'
+      path: '/connections/$connectionId'
       fullPath: '/admin/connections/$connectionId'
       preLoaderRoute: typeof AdminConnectionsConnectionIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/connections/github-app': {
       id: '/admin/connections/github-app'
-      path: '/admin/connections/github-app'
+      path: '/connections/github-app'
       fullPath: '/admin/connections/github-app'
       preLoaderRoute: typeof AdminConnectionsGithubAppRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/recipes/': {
       id: '/admin/recipes/'
-      path: '/admin/recipes'
+      path: '/recipes'
       fullPath: '/admin/recipes/'
       preLoaderRoute: typeof AdminRecipesIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/recipes/new': {
       id: '/admin/recipes/new'
-      path: '/admin/recipes/new'
+      path: '/recipes/new'
       fullPath: '/admin/recipes/new'
       preLoaderRoute: typeof AdminRecipesNewRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/users/': {
       id: '/admin/users/'
-      path: '/admin/users'
+      path: '/users'
       fullPath: '/admin/users/'
       preLoaderRoute: typeof AdminUsersIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/users/new': {
       id: '/admin/users/new'
-      path: '/admin/users/new'
+      path: '/users/new'
       fullPath: '/admin/users/new'
       preLoaderRoute: typeof AdminUsersNewRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/me/connections/': {
       id: '/me/connections/'
@@ -674,24 +679,24 @@ declare module '@tanstack/react-router' {
     }
     '/admin/connections/new/api-key': {
       id: '/admin/connections/new/api-key'
-      path: '/admin/connections/new/api-key'
+      path: '/connections/new/api-key'
       fullPath: '/admin/connections/new/api-key'
       preLoaderRoute: typeof AdminConnectionsNewApiKeyRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/connections/new/git': {
       id: '/admin/connections/new/git'
-      path: '/admin/connections/new/git'
+      path: '/connections/new/git'
       fullPath: '/admin/connections/new/git'
       preLoaderRoute: typeof AdminConnectionsNewGitRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/recipes/$recipeId/': {
       id: '/admin/recipes/$recipeId/'
-      path: '/admin/recipes/$recipeId'
+      path: '/recipes/$recipeId'
       fullPath: '/admin/recipes/$recipeId/'
       preLoaderRoute: typeof AdminRecipesRecipeIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/me/connections/new/api-key': {
       id: '/me/connections/new/api-key'
@@ -765,10 +770,10 @@ declare module '@tanstack/react-router' {
     }
     '/admin/recipes/$recipeId/versions/new': {
       id: '/admin/recipes/$recipeId/versions/new'
-      path: '/admin/recipes/$recipeId/versions/new'
+      path: '/recipes/$recipeId/versions/new'
       fullPath: '/admin/recipes/$recipeId/versions/new'
       preLoaderRoute: typeof AdminRecipesRecipeIdVersionsNewRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/projects/$projectId/connections/new/api-key': {
       id: '/projects/$projectId/connections/new/api-key'
@@ -800,6 +805,40 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AdminRouteChildren {
+  AdminAuditRoute: typeof AdminAuditRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+  AdminConnectionsConnectionIdRoute: typeof AdminConnectionsConnectionIdRoute
+  AdminConnectionsGithubAppRoute: typeof AdminConnectionsGithubAppRoute
+  AdminRecipesNewRoute: typeof AdminRecipesNewRoute
+  AdminUsersNewRoute: typeof AdminUsersNewRoute
+  AdminConnectionsIndexRoute: typeof AdminConnectionsIndexRoute
+  AdminRecipesIndexRoute: typeof AdminRecipesIndexRoute
+  AdminUsersIndexRoute: typeof AdminUsersIndexRoute
+  AdminConnectionsNewApiKeyRoute: typeof AdminConnectionsNewApiKeyRoute
+  AdminConnectionsNewGitRoute: typeof AdminConnectionsNewGitRoute
+  AdminRecipesRecipeIdIndexRoute: typeof AdminRecipesRecipeIdIndexRoute
+  AdminRecipesRecipeIdVersionsNewRoute: typeof AdminRecipesRecipeIdVersionsNewRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAuditRoute: AdminAuditRoute,
+  AdminIndexRoute: AdminIndexRoute,
+  AdminConnectionsConnectionIdRoute: AdminConnectionsConnectionIdRoute,
+  AdminConnectionsGithubAppRoute: AdminConnectionsGithubAppRoute,
+  AdminRecipesNewRoute: AdminRecipesNewRoute,
+  AdminUsersNewRoute: AdminUsersNewRoute,
+  AdminConnectionsIndexRoute: AdminConnectionsIndexRoute,
+  AdminRecipesIndexRoute: AdminRecipesIndexRoute,
+  AdminUsersIndexRoute: AdminUsersIndexRoute,
+  AdminConnectionsNewApiKeyRoute: AdminConnectionsNewApiKeyRoute,
+  AdminConnectionsNewGitRoute: AdminConnectionsNewGitRoute,
+  AdminRecipesRecipeIdIndexRoute: AdminRecipesRecipeIdIndexRoute,
+  AdminRecipesRecipeIdVersionsNewRoute: AdminRecipesRecipeIdVersionsNewRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface ProjectsProjectIdModelAccessRouteChildren {
   ProjectsProjectIdModelAccessNewRoute: typeof ProjectsProjectIdModelAccessNewRoute
@@ -862,28 +901,16 @@ const ProjectsProjectIdRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
   LoginRoute: LoginRoute,
   ToolsRoute: ToolsRoute,
-  AdminAuditRoute: AdminAuditRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
   ProjectsNewRoute: ProjectsNewRoute,
   SetupTokenRoute: SetupTokenRoute,
-  AdminIndexRoute: AdminIndexRoute,
-  AdminConnectionsConnectionIdRoute: AdminConnectionsConnectionIdRoute,
-  AdminConnectionsGithubAppRoute: AdminConnectionsGithubAppRoute,
-  AdminRecipesNewRoute: AdminRecipesNewRoute,
-  AdminUsersNewRoute: AdminUsersNewRoute,
   MeConnectionsConnectionIdRoute: MeConnectionsConnectionIdRoute,
-  AdminConnectionsIndexRoute: AdminConnectionsIndexRoute,
-  AdminRecipesIndexRoute: AdminRecipesIndexRoute,
-  AdminUsersIndexRoute: AdminUsersIndexRoute,
   MeConnectionsIndexRoute: MeConnectionsIndexRoute,
-  AdminConnectionsNewApiKeyRoute: AdminConnectionsNewApiKeyRoute,
-  AdminConnectionsNewGitRoute: AdminConnectionsNewGitRoute,
   MeConnectionsNewApiKeyRoute: MeConnectionsNewApiKeyRoute,
   MeConnectionsNewSubscriptionRoute: MeConnectionsNewSubscriptionRoute,
-  AdminRecipesRecipeIdIndexRoute: AdminRecipesRecipeIdIndexRoute,
-  AdminRecipesRecipeIdVersionsNewRoute: AdminRecipesRecipeIdVersionsNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

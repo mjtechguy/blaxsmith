@@ -6,7 +6,7 @@ import { routeTree } from "./routeTree.gen";
 import "./styles.css";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 300_000 } } });
-const router = createRouter({ routeTree, defaultPreload: "intent" });
+const router = createRouter({ routeTree, defaultPreload: "intent", context: { queryClient } });
 
 declare module "@tanstack/react-router" {
   interface Register {

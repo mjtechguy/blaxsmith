@@ -3,8 +3,8 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, RefreshCw, Search, ShieldAlert } from "lucide-react";
-import { auditActions, auditKey, isOrgAdmin, listAuditEvents } from "../admin";
+import { ArrowLeft, RefreshCw, Search } from "lucide-react";
+import { auditActions, auditKey, listAuditEvents } from "../admin";
 import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
 import type { AdminAuditEvent } from "../gen/blaxsmith/api/v1/admin_pb";
@@ -26,23 +26,21 @@ const columns: ColumnDef<typeof features, AdminAuditEvent>[] = [
 function AuditLog() {
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const org = session.data?.organizationId || "";
-  const allowed = isOrgAdmin(session.data);
   const [action, setAction] = useState("");
   const [projectId, setProjectId] = useState("");
   const [actorInput, setActorInput] = useState("");
   const [actor, setActor] = useState("");
   useEffect(() => { const timer = window.setTimeout(() => setActor(actorInput.trim()), 300); return () => window.clearTimeout(timer); }, [actorInput]);
   // ponytail: the project filter offers the first 20 projects by recency.
-  const projects = useQuery({ queryKey: ["admin-audit-projects", org], enabled: Boolean(org && allowed), queryFn: ({ signal }) => listProjects("", "", "created_at", "desc", signal) });
+  const projects = useQuery({ queryKey: ["admin-audit-projects", org], enabled: Boolean(org), queryFn: ({ signal }) => listProjects("", "", "created_at", "desc", signal) });
   const events = useInfiniteQuery({
-    queryKey: auditKey(org, action, actor, projectId), enabled: Boolean(org && allowed), initialPageParam: "",
+    queryKey: auditKey(org, action, actor, projectId), enabled: Boolean(org), initialPageParam: "",
     queryFn: ({ pageParam, signal }) => listAuditEvents(pageParam, action, actor, projectId, signal),
     getNextPageParam: (page) => page.nextPageToken || undefined,
   });
   const rows = useMemo(() => events.data?.pages.flatMap((page) => page.events) || [], [events.data]);
   const table = useTable({ features, data: rows, columns, getRowId: (row) => row.id.toString() });
 
-  if (session.data && !allowed) return <PageShell><div className="state-panel" role="alert"><ShieldAlert size={22} aria-hidden="true" /><h2>Administration is restricted</h2><p>Only organization owners and admins can read the audit log.</p><Link className="secondary-button" to="/">Back to workspace</Link></div></PageShell>;
   const denied = events.isError && ConnectError.from(events.error).code === Code.PermissionDenied;
 
   return <PageShell>

@@ -2,9 +2,8 @@ import { useId, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, RefreshCw, ShieldAlert, UserPlus } from "lucide-react";
+import { ArrowLeft, RefreshCw, UserPlus } from "lucide-react";
 import { OneTimeLink } from "../account-link";
-import { isOrgAdmin } from "../admin";
 import { currentSession, sessionQueryKey } from "../auth";
 import { TextField } from "../form-field";
 import type { AccountLink } from "../gen/blaxsmith/api/v1/users_pb";
@@ -48,7 +47,6 @@ function InviteUser() {
     },
   });
 
-  if (session.data && !isOrgAdmin(session.data)) return <PageShell><div className="state-panel" role="alert"><ShieldAlert size={22} aria-hidden="true" /><h2>Administration is restricted</h2><p>Only organization owners and admins can invite members.</p><Link className="secondary-button" to="/">Back to workspace</Link></div></PageShell>;
 
   return <PageShell>
     <PageHeader eyebrow="Administration / Users / New" title="Invite a user" description="Create a local account and get a one-time setup link to hand to them. No email is sent." />

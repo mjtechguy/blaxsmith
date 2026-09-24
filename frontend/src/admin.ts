@@ -8,6 +8,23 @@ const client = createClient(AdminService, browserTransport);
 // The server enforces owner/admin on every AdminService call; this only hides UI.
 export const isOrgAdmin = (session?: SessionIdentity | null) => session?.role === "owner" || session?.role === "admin";
 
+// Settings holds the GitHub App registration; its URL stays under Connections.
+export const adminSections = [
+  { to: "/admin", label: "Operations" },
+  { to: "/admin/users", label: "Users" },
+  { to: "/admin/connections", label: "Connections" },
+  { to: "/admin/recipes", label: "Recipes" },
+  { to: "/admin/audit", label: "Audit" },
+  { to: "/admin/connections/github-app", label: "Settings" },
+] as const;
+
+export function adminSectionFor(pathname: string): string {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  if (path.startsWith("/admin/connections/github-app")) return "/admin/connections/github-app";
+  const match = adminSections.filter((s) => s.to !== "/admin" && (path === s.to || path.startsWith(`${s.to}/`)));
+  return match[0]?.to ?? "/admin";
+}
+
 export const adminOverviewKey = (organizationId: string) => ["admin-overview", organizationId] as const;
 export const auditKey = (organizationId: string, action: string, actor: string, projectId: string) => ["admin-audit", organizationId, action, actor, projectId] as const;
 
