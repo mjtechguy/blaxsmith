@@ -14,6 +14,7 @@ export const adminSections = [
   { to: "/admin/users", label: "Users" },
   { to: "/admin/connections", label: "Connections" },
   { to: "/admin/recipes", label: "Recipes" },
+  { to: "/admin/extensions", label: "Extensions" },
   { to: "/admin/audit", label: "Audit" },
   { to: "/admin/connections/github-app", label: "Settings" },
 ] as const;
@@ -55,7 +56,7 @@ export const auditActions = [
   "identity.login", "identity.logout", "identity.refresh", "identity.refresh_reuse", "identity.user.disabled", "identity.user.enabled",
   "identity.user.invited", "identity.user.reset_link_issued", "identity.user.role_changed", "identity.user.sessions_revoked",
   "identity.user.setup_link_issued", "installation.bootstrap_owner",
-  "workflow.attempt.steered", "workflow.interaction.answered", "workflow.project.created", "workflow.project_source.set",
+  "workflow.attempt.steered", "workflow.extension.installed", "workflow.interaction.answered", "workflow.project.created", "workflow.project_source.set",
   "workflow.project_verification.set", "workflow.recipe.created", "workflow.recipe.current_set", "workflow.recipe.version_created",
   "workflow.review.presented", "workflow.review.superseded",
   "workflow.run.halted", "workflow.run.launched",
