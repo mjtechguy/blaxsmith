@@ -13,9 +13,10 @@ import (
 func TestToolTaskPinsPublicCommandWithoutCredential(t *testing.T) {
 	image := "example/runner@sha256:" + strings.Repeat("a", 64)
 	attempt := workflow.Attempt{ID: "attempt-1", OrganizationID: "org-1"}
-	request := tooladapter.Request{AttemptID: attempt.ID, Runtime: tooladapter.Runtime{Harness: "opencode", Image: image,
-		Binary: "/opt/blaxsmith/bin/opencode", BinarySHA256: strings.Repeat("b", 64), Version: "2.0.14",
-		Supported: []tooladapter.ModelEffort{{Model: "openai/gpt-6-luna", Effort: "high"}}},
+	request := tooladapter.Request{AttemptID: attempt.ID, RepositoryURL: "https://github.com/owner/repo",
+		SourceCommit: strings.Repeat("a", 40), Runtime: tooladapter.Runtime{Harness: "opencode", Image: image,
+			Binary: "/opt/blaxsmith/bin/opencode", BinarySHA256: strings.Repeat("b", 64), Version: "2.0.14",
+			Supported: []tooladapter.ModelEffort{{Model: "openai/gpt-6-luna", Effort: "high"}}},
 		Profile: recipe.Profile{Harness: "opencode", Model: "openai/gpt-6-luna", Effort: "high"},
 		Prompt:  "Implement the task", TimeoutSeconds: 60, MaxOutputBytes: 1024}
 	bridge := &Bridge{Workflow: &workflow.Store{}, AX: &fakeAX{}, Actor: fakeActor{}, Image: image,

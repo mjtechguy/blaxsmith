@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mjtechguy/blaxsmith/internal/gitfetch"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 )
 
@@ -22,6 +23,9 @@ const (
 // deliberately has no credential, connection ID, or lease token.
 type Request struct {
 	AttemptID      string         `json:"attempt_id"`
+	RepositoryURL  string         `json:"repository_url"`
+	SourceRef      string         `json:"source_ref"`
+	SourceCommit   string         `json:"source_commit"`
 	Runtime        Runtime        `json:"runtime"`
 	Profile        recipe.Profile `json:"profile"`
 	Prompt         string         `json:"prompt"`
@@ -34,6 +38,9 @@ type Request struct {
 func Command(request Request) ([]string, error) {
 	if request.AttemptID == "" || len(request.AttemptID) > 128 || strings.ContainsAny(request.AttemptID, " \t\r\n\x00") {
 		return nil, ErrBlocked
+	}
+	if err := gitfetch.Validate(request.RepositoryURL, request.SourceRef); err != nil || !gitCommit.MatchString(request.SourceCommit) {
+		return nil, fmt.Errorf("%w: invalid frozen public Git source", ErrBlocked)
 	}
 	if _, err := Prepare(request.Runtime, request.Profile, request.Prompt,
 		time.Duration(request.TimeoutSeconds)*time.Second, request.MaxOutputBytes); err != nil {
@@ -59,6 +66,11 @@ type credential struct {
 // Execute is the AX task command's pod-side entrypoint. A missing, stale, or
 // mismatched bootstrap credential prevents the CLI from starting.
 func Execute(ctx context.Context, encoded, workdir, credentialPath string) ([]byte, error) {
+	return execute(ctx, encoded, workdir, credentialPath, gitfetch.Checkout)
+}
+
+func execute(ctx context.Context, encoded, workdir, credentialPath string,
+	checkout func(context.Context, string, string, string, string) error) ([]byte, error) {
 	if len(encoded) == 0 || len(encoded) > 1<<20 {
 		return nil, ErrBlocked
 	}
@@ -78,6 +90,9 @@ func Execute(ctx context.Context, encoded, workdir, credentialPath string) ([]by
 		return nil, err
 	}
 	defer clear(key)
+	if checkout == nil || checkout(ctx, request.RepositoryURL, request.SourceRef, request.SourceCommit, workdir) != nil {
+		return nil, fmt.Errorf("%w: pinned source checkout failed", ErrBlocked)
+	}
 	in, err := Prepare(request.Runtime, request.Profile, request.Prompt,
 		time.Duration(request.TimeoutSeconds)*time.Second, request.MaxOutputBytes)
 	if err != nil {

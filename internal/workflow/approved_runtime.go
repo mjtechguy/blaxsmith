@@ -39,6 +39,30 @@ func (s *Store) GetProjectModelGrant(ctx context.Context, orgID, projectID, prov
 	return selection, err
 }
 
+// LockDispatchSelections rechecks both immutable approval identities in the
+// same transaction that reserves the attempt and binds model authority.
+func LockDispatchSelections(ctx context.Context, tx pgx.Tx, orgID, projectID, runtimeApprovalID, grantSelectionID string) error {
+	if tx == nil || !ids(orgID, projectID, runtimeApprovalID, grantSelectionID) {
+		return ErrInvalid
+	}
+	var id string
+	err := tx.QueryRow(ctx, `SELECT id FROM workflow_tool_runtime_approvals
+		WHERE id=$1 AND organization_id=$2 AND revoked_at IS NULL FOR SHARE`, runtimeApprovalID, orgID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrConflict
+	}
+	if err != nil {
+		return err
+	}
+	err = tx.QueryRow(ctx, `SELECT id FROM workflow_project_model_grants
+		WHERE id=$1 AND organization_id=$2 AND project_id=$3 AND revoked_at IS NULL FOR SHARE`,
+		grantSelectionID, orgID, projectID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrConflict
+	}
+	return err
+}
+
 func (s *Store) GetApprovedToolRuntime(ctx context.Context, orgID, harness, model, effort string) (ApprovedToolRuntime, error) {
 	if !ids(orgID) || harness == "" || model == "" || effort == "" {
 		return ApprovedToolRuntime{}, ErrInvalid

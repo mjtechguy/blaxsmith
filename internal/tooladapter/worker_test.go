@@ -23,9 +23,10 @@ func TestAXWorkerRequiresScopedCredentialBeforePinnedTool(t *testing.T) {
 		t.Fatal(err)
 	}
 	hash := sha256.Sum256(body)
-	request := Request{AttemptID: "attempt-1", Runtime: Runtime{Harness: "codex", Image: "example/tool@sha256:" + strings.Repeat("a", 64),
-		Binary: binary, BinarySHA256: hex.EncodeToString(hash[:]), Version: "0.156.1",
-		Supported: []ModelEffort{{Model: "gpt-6-luna", Effort: "xhigh"}}},
+	request := Request{AttemptID: "attempt-1", RepositoryURL: "https://github.com/owner/repo", SourceCommit: strings.Repeat("a", 40),
+		Runtime: Runtime{Harness: "codex", Image: "example/tool@sha256:" + strings.Repeat("a", 64),
+			Binary: binary, BinarySHA256: hex.EncodeToString(hash[:]), Version: "0.156.1",
+			Supported: []ModelEffort{{Model: "gpt-6-luna", Effort: "xhigh"}}},
 		Profile: recipe.Profile{Harness: "codex", Model: "gpt-6-luna", Effort: "xhigh"},
 		Prompt:  "Build this", TimeoutSeconds: 60, MaxOutputBytes: 1024}
 	command, err := Command(request)
@@ -33,7 +34,8 @@ func TestAXWorkerRequiresScopedCredentialBeforePinnedTool(t *testing.T) {
 		t.Fatalf("invalid public AX command: %q: %v", command, err)
 	}
 	credentialPath := filepath.Join(root, "credential.json")
-	if _, err := Execute(context.Background(), command[1], root, credentialPath); !errors.Is(err, ErrBlocked) {
+	checkout := func(context.Context, string, string, string, string) error { return nil }
+	if _, err := execute(context.Background(), command[1], root, credentialPath, checkout); !errors.Is(err, ErrBlocked) {
 		t.Fatalf("missing credential must block: %v", err)
 	}
 	writeCredential := func(attempt, provider string, expiry int64) {
@@ -44,16 +46,16 @@ func TestAXWorkerRequiresScopedCredentialBeforePinnedTool(t *testing.T) {
 		}
 	}
 	writeCredential("wrong-attempt", "openai", time.Now().Add(10*time.Minute).Unix())
-	if _, err := Execute(context.Background(), command[1], root, credentialPath); !errors.Is(err, ErrBlocked) {
+	if _, err := execute(context.Background(), command[1], root, credentialPath, checkout); !errors.Is(err, ErrBlocked) {
 		t.Fatalf("wrong attempt must block: %v", err)
 	}
 	writeCredential("attempt-1", "openai", time.Now().Add(-time.Minute).Unix())
-	if _, err := Execute(context.Background(), command[1], root, credentialPath); !errors.Is(err, ErrBlocked) {
+	if _, err := execute(context.Background(), command[1], root, credentialPath, checkout); !errors.Is(err, ErrBlocked) {
 		t.Fatalf("expired credential must block: %v", err)
 	}
 	writeCredential("attempt-1", "openai", time.Now().Add(10*time.Minute).Unix())
 	t.Setenv("SHOULD_NOT_LEAK", "ambient-secret")
-	output, err := Execute(context.Background(), command[1], root, credentialPath)
+	output, err := execute(context.Background(), command[1], root, credentialPath, checkout)
 	if err != nil || !strings.HasPrefix(string(output), "[redacted]|") || strings.Contains(string(output), "ambient-secret") || strings.Contains(string(output), "leased-secret") {
 		t.Fatalf("unexpected CLI execution %q: %v", output, err)
 	}
@@ -69,7 +71,7 @@ func TestAXWorkerRequiresScopedCredentialBeforePinnedTool(t *testing.T) {
 	}
 	writeCredential("attempt-1", "openai", time.Now().Add(2*time.Second).Unix())
 	start := time.Now()
-	if _, err := Execute(context.Background(), command[1], root, credentialPath); err == nil || time.Since(start) > 3*time.Second {
+	if _, err := execute(context.Background(), command[1], root, credentialPath, checkout); err == nil || time.Since(start) > 3*time.Second {
 		t.Fatalf("tool continued past credential expiry: %v", err)
 	}
 	request.Profile.Effort = "medium"

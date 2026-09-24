@@ -1,5 +1,12 @@
 -- Operator-seeded, tenant-scoped runtime approvals. Old revisions remain for
 -- audit after revocation; a recipe cannot create or edit these records.
+ALTER TABLE workflow_run_bundles
+    ADD COLUMN repository_url text,
+    ADD COLUMN git_ref text,
+    ADD CONSTRAINT workflow_bundle_public_source_pair CHECK ((repository_url IS NULL) = (git_ref IS NULL)),
+    ADD CONSTRAINT workflow_bundle_public_source_url CHECK
+        (repository_url IS NULL OR (length(repository_url) BETWEEN 1 AND 2048 AND repository_url LIKE 'https://%'));
+
 CREATE TABLE workflow_tool_runtime_approvals (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id uuid NOT NULL REFERENCES identity_organizations (id),
@@ -42,3 +49,19 @@ CREATE TABLE workflow_project_model_grants (
 CREATE UNIQUE INDEX workflow_project_model_grant_active_selection
     ON workflow_project_model_grants (organization_id,project_id,provider,model)
     WHERE revoked_at IS NULL;
+
+CREATE FUNCTION workflow_approval_revoke_only() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN
+        RAISE EXCEPTION 'approval history cannot be deleted';
+    END IF;
+    IF OLD.revoked_at IS NOT NULL OR NEW.revoked_at IS NULL OR
+       (to_jsonb(NEW)-'revoked_at') IS DISTINCT FROM (to_jsonb(OLD)-'revoked_at') THEN
+        RAISE EXCEPTION 'approval can only be revoked';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER workflow_tool_runtime_revoke_only BEFORE UPDATE OR DELETE ON workflow_tool_runtime_approvals
+    FOR EACH ROW EXECUTE FUNCTION workflow_approval_revoke_only();
+CREATE TRIGGER workflow_project_model_grant_revoke_only BEFORE UPDATE OR DELETE ON workflow_project_model_grants
+    FOR EACH ROW EXECUTE FUNCTION workflow_approval_revoke_only();

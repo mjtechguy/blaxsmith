@@ -40,6 +40,9 @@ func TestApprovedToolRuntimePostgres(t *testing.T) {
 	if _, err := store.GetApprovedToolRuntime(t.Context(), org, "codex", "gpt-6-luna", "xhigh"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("revoked approval remained active: %v", err)
 	}
+	if _, err := pool.Exec(t.Context(), `UPDATE workflow_tool_runtime_approvals SET worker_pool='pool-b' WHERE id=$1`, approvalID); err == nil {
+		t.Fatal("revoked runtime approval was editable")
+	}
 	var selectionID string
 	if err := pool.QueryRow(t.Context(), `INSERT INTO workflow_project_model_grants
 		(organization_id,project_id,provider,model,grant_id,grantee_id,approved_by)
@@ -54,5 +57,14 @@ func TestApprovedToolRuntimePostgres(t *testing.T) {
 	}
 	if _, err := store.GetProjectModelGrant(t.Context(), other, project, "openai", "gpt-6-luna"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cross-tenant grant selection: %v", err)
+	}
+	if _, err := pool.Exec(t.Context(), `UPDATE workflow_project_model_grants SET grant_id='grant-two' WHERE id=$1`, selectionID); err == nil {
+		t.Fatal("active grant selection was editable")
+	}
+	if _, err := pool.Exec(t.Context(), `UPDATE workflow_project_model_grants SET revoked_at=clock_timestamp() WHERE id=$1`, selectionID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.GetProjectModelGrant(t.Context(), org, project, "openai", "gpt-6-luna"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("revoked grant selection remained active: %v", err)
 	}
 }

@@ -24,6 +24,7 @@ import (
 var (
 	imageDigest = regexp.MustCompile(`@sha256:[0-9a-f]{64}$`)
 	sha256Hex   = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	gitCommit   = regexp.MustCompile(`^[0-9a-f]{40}([0-9a-f]{24})?$`)
 	version     = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 	selection   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$`)
 	effort      = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)

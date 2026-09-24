@@ -97,6 +97,8 @@ type FrozenTask struct {
 	RunID          string
 	TaskID         string
 	Key            string
+	RepositoryURL  string // Empty for legacy runs without a public source.
+	SourceRef      string
 	Bundle         *recipe.Bundle
 	Stage          recipe.Stage
 	Profile        recipe.Profile
@@ -111,13 +113,14 @@ func (s *Store) LoadFrozenTask(ctx context.Context, orgID, runID, taskID string)
 	var sealed bool
 	var sourceCommit, bundleSHA, verificationSHA, inputSHA string
 	var bundleJSON, verificationJSON []byte
+	var repositoryURL, sourceRef *string
 	err := s.pool.QueryRow(ctx, `SELECT r.project_id,r.graph_sealed,r.source_commit,r.bundle_sha256,r.verification_sha256,
-		t.task_key,t.input_sha256,b.bundle_json,b.verification_json
+		t.task_key,t.input_sha256,b.bundle_json,b.verification_json,b.repository_url,b.git_ref
 		FROM workflow_tasks t JOIN workflow_runs r ON r.organization_id=t.organization_id AND r.id=t.run_id
 		LEFT JOIN workflow_run_bundles b ON b.organization_id=r.organization_id AND b.run_id=r.id
 		WHERE t.organization_id=$1 AND t.run_id=$2 AND t.id=$3`, orgID, runID, taskID).
 		Scan(&task.ProjectID, &sealed, &sourceCommit, &bundleSHA, &verificationSHA,
-			&task.Key, &inputSHA, &bundleJSON, &verificationJSON)
+			&task.Key, &inputSHA, &bundleJSON, &verificationJSON, &repositoryURL, &sourceRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return FrozenTask{}, ErrNotFound
 	}
@@ -128,6 +131,9 @@ func (s *Store) LoadFrozenTask(ctx context.Context, orgID, runID, taskID string)
 		return FrozenTask{}, ErrConflict
 	}
 	task.OrganizationID, task.RunID, task.TaskID = orgID, runID, taskID
+	if repositoryURL != nil {
+		task.RepositoryURL, task.SourceRef = *repositoryURL, *sourceRef
+	}
 	return decodeFrozenTask(task, sourceCommit, bundleSHA, verificationSHA, inputSHA, bundleJSON, verificationJSON)
 }
 

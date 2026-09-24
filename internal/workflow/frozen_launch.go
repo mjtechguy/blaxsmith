@@ -154,8 +154,9 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 		return Run{}, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO workflow_run_bundles
-		(organization_id,run_id,bundle_json,verification_json) VALUES ($1,$2,$3,$4)`,
-		in.OrganizationID, run.ID, bundleJSON, policyJSON); err != nil {
+		(organization_id,run_id,bundle_json,verification_json,repository_url,git_ref)
+		VALUES ($1,$2,$3,$4,NULLIF($5,''),CASE WHEN $5='' THEN NULL ELSE $6 END)`,
+		in.OrganizationID, run.ID, bundleJSON, policyJSON, in.SourceRepositoryURL, in.SourceRef); err != nil {
 		return Run{}, err
 	}
 	stageByID := make(map[string]recipe.Stage, len(bundle.Recipe.Stages))
