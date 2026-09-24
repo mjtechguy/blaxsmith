@@ -5,6 +5,8 @@ import { AuthService, type SessionIdentity } from "./gen/blaxsmith/api/v1/auth_p
 
 export const sessionQueryKey = ["browser-session"] as const;
 export const isPublicCatalogRoute = (pathname: string): boolean => pathname === "/tools";
+// Account setup/reset links are redeemed without a session.
+export const isAccountLinkRoute = (pathname: string): boolean => /^\/setup\/[^/]+$/.test(pathname);
 const workspaceQuery = (query: { queryKey: readonly unknown[] }) => query.queryKey[0] !== sessionQueryKey[0];
 let sessionChannel: BroadcastChannel | undefined;
 

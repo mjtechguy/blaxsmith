@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRootRoute, Navigate, Outlet, useLocation } from "@tanstack/react-router";
-import { clearWorkspaceCache, currentSession, isPublicCatalogRoute, onOtherTabSessionChange, sessionQueryKey } from "../auth";
+import { clearWorkspaceCache, currentSession, isAccountLinkRoute, isPublicCatalogRoute, onOtherTabSessionChange, sessionQueryKey } from "../auth";
 import { AuthFrame, AuthUnavailable } from "../auth-frame";
 import { Shell } from "../shell";
 
@@ -44,6 +44,7 @@ function Root() {
     previousScope.current = scope;
   }, [queryClient, scope]);
 
+  if (isAccountLinkRoute(location.pathname)) return <Outlet />;
   if (isPublicCatalogRoute(location.pathname) && (session.isPending || unavailable || !session.data)) return <Shell><Outlet /></Shell>;
   if (session.isPending) return <AuthFrame><div className="auth-heading" role="status"><h2>Checking your session</h2><p>Connecting to the workspace.</p></div></AuthFrame>;
   if (unavailable) return <AuthUnavailable retry={() => void session.refetch()} />;

@@ -16,6 +16,9 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsNewRouteImport } from './routes/projects.new'
+import { Route as SetupTokenRouteImport } from './routes/setup.$token'
+import { Route as AdminUsersIndexRouteImport } from './routes/admin.users.index'
+import { Route as AdminUsersNewRouteImport } from './routes/admin.users.new'
 import { Route as ProjectsProjectIdModelAccessRouteImport } from './routes/projects.$projectId.model-access'
 import { Route as ProjectsProjectIdSourceRouteImport } from './routes/projects.$projectId.source'
 import { Route as ProjectsProjectIdVerificationRouteImport } from './routes/projects.$projectId.verification'
@@ -56,6 +59,21 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
 const ProjectsNewRoute = ProjectsNewRouteImport.update({
   id: '/projects/new',
   path: '/projects/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupTokenRoute = SetupTokenRouteImport.update({
+  id: '/setup/$token',
+  path: '/setup/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
+  id: '/admin/users/',
+  path: '/admin/users/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUsersNewRoute = AdminUsersNewRouteImport.update({
+  id: '/admin/users/new',
+  path: '/admin/users/new',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsProjectIdModelAccessRoute =
@@ -101,10 +119,13 @@ export interface FileRoutesByFullPath {
   '/admin/audit': typeof AdminAuditRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
+  '/setup/$token': typeof SetupTokenRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/users/new': typeof AdminUsersNewRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
+  '/admin/users/': typeof AdminUsersIndexRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
@@ -116,10 +137,13 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof AdminAuditRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
+  '/setup/$token': typeof SetupTokenRoute
   '/admin': typeof AdminIndexRoute
+  '/admin/users/new': typeof AdminUsersNewRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
+  '/admin/users': typeof AdminUsersIndexRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
@@ -132,10 +156,13 @@ export interface FileRoutesById {
   '/admin/audit': typeof AdminAuditRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
+  '/setup/$token': typeof SetupTokenRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/users/new': typeof AdminUsersNewRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
+  '/admin/users/': typeof AdminUsersIndexRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
@@ -149,10 +176,13 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/setup/$token'
     | '/admin/'
+    | '/admin/users/new'
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
+    | '/admin/users/'
     | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
@@ -164,10 +194,13 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/setup/$token'
     | '/admin'
+    | '/admin/users/new'
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
+    | '/admin/users'
     | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
@@ -179,10 +212,13 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/setup/$token'
     | '/admin/'
+    | '/admin/users/new'
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
+    | '/admin/users/'
     | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
@@ -195,7 +231,10 @@ export interface RootRouteChildren {
   AdminAuditRoute: typeof AdminAuditRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
   ProjectsNewRoute: typeof ProjectsNewRoute
+  SetupTokenRoute: typeof SetupTokenRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  AdminUsersNewRoute: typeof AdminUsersNewRoute
+  AdminUsersIndexRoute: typeof AdminUsersIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -247,6 +286,27 @@ declare module '@tanstack/react-router' {
       path: '/projects/new'
       fullPath: '/projects/new'
       preLoaderRoute: typeof ProjectsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup/$token': {
+      id: '/setup/$token'
+      path: '/setup/$token'
+      fullPath: '/setup/$token'
+      preLoaderRoute: typeof SetupTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/users/': {
+      id: '/admin/users/'
+      path: '/admin/users'
+      fullPath: '/admin/users/'
+      preLoaderRoute: typeof AdminUsersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/users/new': {
+      id: '/admin/users/new'
+      path: '/admin/users/new'
+      fullPath: '/admin/users/new'
+      preLoaderRoute: typeof AdminUsersNewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectId/model-access': {
@@ -335,7 +395,10 @@ const rootRouteChildren: RootRouteChildren = {
   AdminAuditRoute: AdminAuditRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
   ProjectsNewRoute: ProjectsNewRoute,
+  SetupTokenRoute: SetupTokenRoute,
   AdminIndexRoute: AdminIndexRoute,
+  AdminUsersNewRoute: AdminUsersNewRoute,
+  AdminUsersIndexRoute: AdminUsersIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
