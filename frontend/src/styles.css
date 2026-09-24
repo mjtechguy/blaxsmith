@@ -539,6 +539,19 @@ a { color: inherit; text-decoration: none; }
 .repo-suggestion { display: flex; flex-direction: column; gap: 6px; }
 .repo-suggestion .form-hint code { margin-right: 6px; }
 
+/* Setup checklists. */
+.checklist-items { display: flex; flex-direction: column; margin: 0; padding: 0 20px 16px; list-style: none; }
+.checklist-items li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.checklist-items li:first-child { border-top: 0; }
+.checklist-items li > svg { flex: none; color: var(--muted); }
+.checklist-items li.is-done > svg { color: var(--success-text); }
+.checklist-items li > span:first-of-type { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.checklist-items strong { font-size: 13px; font-weight: 650; }
+.checklist-items small { color: var(--muted); font-size: 12px; }
+.checklist-items li.is-done strong { color: var(--muted); text-decoration: line-through; }
+.checklist .table-heading h2 { display: flex; align-items: center; gap: 6px; }
+.checklist-restore { align-self: flex-start; }
+
 /* Connection health line. */
 .health-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .health-line .state-badge { flex: none; }

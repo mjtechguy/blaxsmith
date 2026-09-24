@@ -7,6 +7,7 @@ import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
 import type { Run } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
+import { ProjectSetupChecklist } from "../setup-checklist";
 import { needsYou, runStatus, type AgentStatus } from "../agent-view";
 import { listInteractions } from "../run-control";
 import { StatusPill, useAttentionTitle } from "../work-log";
@@ -85,6 +86,7 @@ function ProjectRuns() {
   return <PageShell>
     <PageHeader eyebrow="Workspace" title={project.data?.project?.name || "Workspace"} description={project.data?.project ? `Workspace URL: ${project.data.project.slug}` : "Configure a repository, model access, and run checks."} />
     <Link to="/" className="text-action"><ArrowLeft size={15} aria-hidden="true" /> All workspaces</Link>
+    {project.data?.project ? <ProjectSetupChecklist projectId={projectId} /> : null}
     {project.isError ? <div className="state-panel" role="alert"><h2>Workspace unavailable</h2><p>This workspace could not be loaded.</p><button className="secondary-button" type="button" onClick={() => void project.refetch()}>Try again</button></div> : null}
     {mayLaunch && launchAvailability.data && !launchAvailability.data.enabled ? <div className="notice" role="note"><strong>New runs are unavailable.</strong> {launchAvailability.data.reason}</div> : null}
     {mayLaunch && launchAvailability.isError ? <div className="notice" role="alert"><strong>Run availability could not be checked.</strong> <button type="button" className="text-action" onClick={() => void launchAvailability.refetch()}>Try again</button></div> : null}

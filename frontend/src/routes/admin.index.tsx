@@ -9,6 +9,7 @@ import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
 import type { AdminConnection, AdminGrant, AdminLiveAttempt, AdminOpenInteraction } from "../gen/blaxsmith/api/v1/admin_pb";
 import { PageHeader, PageShell } from "../page";
+import { OrgSetupChecklist } from "../setup-checklist";
 import { steerAttempt } from "../run-control";
 import type { AgentStatus } from "../agent-view";
 import { StatusPill, useAttentionTitle } from "../work-log";
@@ -152,6 +153,7 @@ function AdminOverview() {
   return <PageShell>
     <PageHeader eyebrow="Administration" title="Operations" description="What is running, what is waiting on a person, and connection health across every project in this organization."
       actions={<><Link className="secondary-button" to="/admin/users"><Users size={15} aria-hidden="true" /> Users</Link><Link className="secondary-button" to="/admin/recipes"><BookCopy size={15} aria-hidden="true" /> Recipes</Link><Link className="secondary-button" to="/admin/audit"><ScrollText size={15} aria-hidden="true" /> Audit log</Link></>} />
+    {denied ? null : <OrgSetupChecklist />}
     {overview.isPending ? <div className="state-panel" role="status"><RefreshCw className="spin" size={22} aria-hidden="true" /><h2>Loading operations</h2></div> : null}
     {overview.isError ? <div className="state-panel" role="alert"><h2>{denied ? "Administration is restricted" : "Operations unavailable"}</h2><p>{denied ? "Your session is not an organization owner or admin." : "The admin overview could not be loaded."}</p>{denied ? null : <button className="secondary-button" type="button" onClick={() => void overview.refetch()}>Try again</button>}</div> : null}
     {data ? <>
