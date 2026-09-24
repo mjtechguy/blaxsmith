@@ -43,8 +43,9 @@ function RunEditor({ projectId, org, source, verification }: { projectId: string
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
+  const [launchKey] = useState(() => `run-${new Date().toISOString().slice(0, 19).replaceAll(":", "-")}-${crypto.randomUUID().slice(0, 8)}`);
   const form = useForm({
-    defaultValues: { launchKey: `run-${new Date().toISOString().slice(0, 19).replaceAll(":", "-")}-${crypto.randomUUID().slice(0, 8)}`, recipePath: "", specPath: "", transcriptPath: "", scope: "." },
+    defaultValues: { launchKey, recipePath: "", specPath: "", transcriptPath: "", scope: "." },
     onSubmit: async ({ value }) => {
       setError("");
       const fields = { launchKey: value.launchKey.trim(), recipePath: value.recipePath.trim(), specPath: value.specPath.trim(), transcriptPath: value.transcriptPath.trim(), scope: value.scope.trim() };
