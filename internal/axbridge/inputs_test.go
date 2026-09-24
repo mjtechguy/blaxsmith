@@ -94,7 +94,7 @@ func TestOpenCodeGoGatewayAllowsOnlyOpenCodeHost(t *testing.T) {
 		t.Fatalf("OpenCode Go egress host: %q", providerHost("opencode-go"))
 	}
 	for provider, want := range map[string]bool{"opencode-go": true, "opencode": true, "openai": false, "opencode-zen": false} {
-		err := bridge.checkGateway(t.Context(), gateway, "public-egress", space, "https://github.com/owner/repo", provider)
+		err := bridge.checkGateway(t.Context(), gateway, "public-egress", space, "https://github.com/owner/repo", bridge.modelEgressHost(provider))
 		if (err == nil) != want {
 			t.Fatalf("%s gateway check = %v, want pass %t", provider, err, want)
 		}
