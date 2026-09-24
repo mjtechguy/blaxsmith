@@ -49,6 +49,8 @@ type Request struct {
 	MaxOutputBytes    int `json:"max_output_bytes"`
 	// Extension is set for an embedded extension stage template.
 	Extension *ExtensionMount `json:"extension,omitempty"`
+	// Gateway is set for brokered_gateway attempts (gateway.go).
+	Gateway *Gateway `json:"gateway,omitempty"`
 }
 
 // ArtifactDigest binds prompt context to regular files in the pinned checkout.
@@ -87,6 +89,9 @@ func Command(request Request) ([]string, error) {
 		if err := request.Extension.validate(request.Profile.Harness); err != nil {
 			return nil, err
 		}
+	}
+	if err := request.Gateway.validate(); err != nil {
+		return nil, err
 	}
 	body, err := json.Marshal(request)
 	if err != nil || len(body) > maxTaskArg {
@@ -170,10 +175,13 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 	}
 	in.base = request.SourceCommit
 	in.maxRuntime = time.Duration(request.MaxRuntimeSeconds) * time.Second
-	variable := CredentialEnv(provider) + "="
+	env := []string{CredentialEnv(provider) + "=" + string(key)}
+	if request.Gateway != nil {
+		env, in.gatewayBaseURL = gatewayCredentialEnv(request.Gateway, request.Profile.Harness, provider, key), request.Gateway.BaseURL
+	}
 	leaseContext, cancel := watchLease(ctx, expiry)
 	defer cancel()
-	output, err := Run(leaseContext, in, sourcePath, []string{variable + string(key)})
+	output, err := Run(leaseContext, in, sourcePath, env)
 	return bytes.ReplaceAll(output, key, []byte("[redacted]")), err
 }
 
