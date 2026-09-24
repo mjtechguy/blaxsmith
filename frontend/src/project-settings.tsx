@@ -237,7 +237,7 @@ export function VerificationEditor({ projectId, org, current, mode }: { projectI
   return <form className="settings-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
     <section className="editor-card" aria-labelledby="checks-heading">
       <div className="editor-card-heading"><span className="project-symbol"><ShieldCheck size={18} aria-hidden="true" /></span><div><h2 id="checks-heading">Checks</h2>
-        <p>{current ? `Version ${current.version.toString()} · updated ${new Date(current.updatedAt).toLocaleString()}. ` : "At least one check is required to launch a run. "}Enter the executable and each argument separately; shell syntax is not parsed.</p></div></div>
+        <p>{current ? `Version ${current.version.toString()}${current.updatedAt ? ` · updated ${new Date(current.updatedAt).toLocaleString()}` : ""}. ` : "At least one check is required to launch a run. "}Enter the executable and each argument separately; shell syntax is not parsed.</p></div></div>
       <div className="editor-form">
         <form.Field name="checks" mode="array">{(checksField) => <>
           {checksField.state.value.map((check, checkIndex) => <div className="verification-check" key={checkIndex}>
