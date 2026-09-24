@@ -33,17 +33,21 @@ kernel is PostgreSQL/fake-AX tested, but no long-running connector invokes it
 yet. A missing task remains an operator-resolution case because AX cannot prove
 that an uncertain upsert will never arrive.
 
-The dispatcher now requires an activator before it will reserve work. After
-AX/Substrate readback, it re-reads the bound Workspace and Gateway while the
-runner is still held behind the bootstrap gate, then passes the persisted
-runtime binding and exact model grant to the activation callback. A changed
-input fences the actor without releasing credentials. This catches edits made
-between initial admission and activation; shared AX resource names are still
-mutable and this readback does not prove the Substrate dataplane. It reports
-`started` only after the bootstrap gate and model lease have been opened. An
-activation error fences the already-launched attempt as unresolved. The
-callback is still not composed in the application or a connector process, so
-product launch remains disabled.
+The dispatcher now requires an activator before it will reserve work. It copies
+the validated Gateway's narrow egress allowlist into an attempt-named Gateway,
+reads that definition back, and binds it alongside the attempt Workspace before
+creating the Task. After AX/Substrate readback, it re-reads both bound resources
+while the runner is still held behind the bootstrap gate, then passes the
+persisted runtime binding and exact model grant to the activation callback. A
+changed input fences the actor without releasing credentials. This removes the
+shared-name dependency for a running attempt, but AX still permits privileged
+writers to mutate those attempt resources and the readback does not prove the
+Substrate dataplane. It reports `started` only after the bootstrap gate and
+model lease have been opened. Stop removes the Workspace and Gateway only after
+AX Task absence and Substrate actor absence are proved. An activation error
+fences the already-launched attempt as unresolved. The callback is still not
+composed in the application or a connector process, so product launch remains
+disabled.
 
 `dispatch.ModelActivator` is the concrete model path: it creates a durable
 bootstrap owner for the observed actor, builds the attempt-scoped

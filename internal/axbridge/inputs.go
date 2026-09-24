@@ -59,14 +59,24 @@ type InputReader interface {
 	GetGateway(context.Context, string, string) (Gateway, error)
 }
 
-type WorkspaceManager interface {
+type AttemptResourceManager interface {
 	InputReader
 	ApplyWorkspace(context.Context, Workspace) error
 	DeleteWorkspace(context.Context, string, string) error
+	ApplyGateway(context.Context, Gateway) error
+	DeleteGateway(context.Context, string, string) error
 }
 
 func AttemptWorkspaceName(attemptID string) string {
 	name := "source-" + strings.ReplaceAll(attemptID, "-", "")
+	if !axResourceName.MatchString(name) {
+		return ""
+	}
+	return name
+}
+
+func AttemptGatewayName(attemptID string) string {
+	name := "egress-" + strings.ReplaceAll(attemptID, "-", "")
 	if !axResourceName.MatchString(name) {
 		return ""
 	}
@@ -120,6 +130,32 @@ func sourceWorkspaceMatches(workspace Workspace, space, name string, request too
 	}
 }
 
+func attemptGateway(template Gateway, space, name string) Gateway {
+	hosts := append([]GatewayHostRule(nil), template.Spec.Egress.Allowlist.Hosts...)
+	return Gateway{APIVersion: "ax.io/v1alpha1", Kind: "Gateway",
+		Metadata: TaskMetadata{Name: name, Atespace: space},
+		Spec:     GatewaySpec{Egress: &GatewayEgress{Allowlist: &GatewayAllowlist{Hosts: hosts}}}}
+}
+
+func attemptGatewayMatches(gateway, expected Gateway) bool {
+	if gateway.APIVersion != expected.APIVersion || gateway.Kind != expected.Kind ||
+		gateway.Metadata != expected.Metadata || len(gateway.Spec.Listeners) != 0 || len(gateway.Spec.Other) != 0 ||
+		gateway.Spec.Egress == nil || len(gateway.Spec.Egress.Other) != 0 ||
+		gateway.Spec.Egress.Allowlist == nil || len(gateway.Spec.Egress.Allowlist.Other) != 0 {
+		return false
+	}
+	got, want := gateway.Spec.Egress.Allowlist.Hosts, expected.Spec.Egress.Allowlist.Hosts
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i].Host != want[i].Host || got[i].Port != want[i].Port || len(got[i].Other) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // CheckToolInputs validates the preflight Workspace or exact per-attempt Git
 // Workspace and narrow CIDR Gateway. This is configuration inspection, not a
 // dataplane measurement.
@@ -128,20 +164,7 @@ func (b *Bridge) CheckToolInputs(ctx context.Context, organizationID, repository
 		return ErrInputs
 	}
 	reader, ok := b.AX.(InputReader)
-	if !ok || gitfetch.Validate(repositoryURL, "") != nil {
-		return ErrInputs
-	}
-	source, err := url.Parse(repositoryURL)
-	if err != nil {
-		return ErrInputs
-	}
-	providerHost := ""
-	switch provider {
-	case "openai":
-		providerHost = "api.openai.com"
-	case "anthropic":
-		providerHost = "api.anthropic.com"
-	default:
+	if !ok {
 		return ErrInputs
 	}
 	space := Space(organizationID)
@@ -156,12 +179,50 @@ func (b *Bridge) CheckToolInputs(ctx context.Context, organizationID, repository
 	if !workspaceOK {
 		return ErrInputs
 	}
+	return b.CheckGateway(ctx, organizationID, repositoryURL, provider)
+}
+
+// CheckGateway verifies the exact CIDR configuration for public Git and the
+// selected model provider. This inspects AX configuration; it is not a live
+// dataplane measurement.
+func (b *Bridge) CheckGateway(ctx context.Context, organizationID, repositoryURL, provider string) error {
+	if b == nil || !axResourceName.MatchString(b.Gateway) {
+		return ErrInputs
+	}
+	reader, ok := b.AX.(InputReader)
+	if !ok {
+		return ErrInputs
+	}
+	space := Space(organizationID)
 	gateway, err := reader.GetGateway(ctx, space, b.Gateway)
-	if err != nil || gateway.APIVersion != "ax.io/v1alpha1" || gateway.Kind != "Gateway" ||
-		gateway.Metadata.Name != b.Gateway || gateway.Metadata.Atespace != space ||
+	if err != nil {
+		return ErrInputs
+	}
+	return b.checkGateway(ctx, gateway, b.Gateway, space, repositoryURL, provider)
+}
+
+func (b *Bridge) checkGateway(ctx context.Context, gateway Gateway, name, space, repositoryURL, provider string) error {
+	if gateway.APIVersion != "ax.io/v1alpha1" || gateway.Kind != "Gateway" ||
+		gateway.Metadata.Name != name || gateway.Metadata.Atespace != space ||
 		len(gateway.Spec.Listeners) != 0 || len(gateway.Spec.Other) != 0 ||
 		gateway.Spec.Egress == nil || len(gateway.Spec.Egress.Other) != 0 ||
 		gateway.Spec.Egress.Allowlist == nil || len(gateway.Spec.Egress.Allowlist.Other) != 0 {
+		return ErrInputs
+	}
+	if gitfetch.Validate(repositoryURL, "") != nil {
+		return ErrInputs
+	}
+	source, err := url.Parse(repositoryURL)
+	if err != nil {
+		return ErrInputs
+	}
+	providerHost := ""
+	switch provider {
+	case "openai":
+		providerHost = "api.openai.com"
+	case "anthropic":
+		providerHost = "api.anthropic.com"
+	default:
 		return ErrInputs
 	}
 	lookup := b.LookupIPv4

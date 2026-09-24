@@ -162,7 +162,9 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 	request.SourceDirectory = "source"
 	bridge := *d.Bridge // the per-attempt tool selection is never shared across launches.
 	bridge.Workspace = axbridge.AttemptWorkspaceName(attempt.ID)
-	if bridge.Workspace == "" {
+	bridge.GatewayTemplate = d.Bridge.Gateway
+	bridge.Gateway = axbridge.AttemptGatewayName(attempt.ID)
+	if bridge.Workspace == "" || bridge.Gateway == "" || bridge.GatewayTemplate == "" {
 		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, axbridge.ErrInputs)
 		return outcome
 	}

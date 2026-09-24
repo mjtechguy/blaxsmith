@@ -134,3 +134,21 @@ func TestPerAttemptWorkspaceMatchesOnlyFrozenGitInput(t *testing.T) {
 		t.Fatal("empty ref changed the exact commit Workspace input")
 	}
 }
+
+func TestPerAttemptGatewayCopiesOnlyApprovedEgress(t *testing.T) {
+	template := Gateway{APIVersion: "ax.io/v1alpha1", Kind: "Gateway",
+		Metadata: TaskMetadata{Name: "public-egress", Atespace: "shared"},
+		Spec: GatewaySpec{Egress: &GatewayEgress{Allowlist: &GatewayAllowlist{Hosts: []GatewayHostRule{
+			{Host: "140.82.114.3/32"}, {Host: "104.18.33.45/32"},
+		}}}}}
+	name := AttemptGatewayName("attempt-1234")
+	got := attemptGateway(template, "space", name)
+	if name != "egress-attempt1234" || got.Metadata != (TaskMetadata{Name: name, Atespace: "space"}) ||
+		!attemptGatewayMatches(got, attemptGateway(template, "space", name)) {
+		t.Fatalf("attempt Gateway identity/config: %+v", got)
+	}
+	got.Spec.Egress.Allowlist.Hosts[0].Host = "0.0.0.0/0"
+	if attemptGatewayMatches(got, attemptGateway(template, "space", name)) {
+		t.Fatal("mutated attempt Gateway matched the approved template")
+	}
+}

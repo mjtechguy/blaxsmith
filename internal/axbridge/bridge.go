@@ -57,17 +57,18 @@ type Inspector interface {
 }
 
 type Bridge struct {
-	Workflow   *workflow.Store
-	AX         Client
-	Actor      Inspector
-	Image      string // exact digest-pinned AX runner image
-	Pool       string
-	Signer     string                                              // enrolled bootstrap public key, base64
-	Storage    string                                              // approved data-only snapshot location
-	Tool       *tooladapter.Request                                // frozen, public CLI selection; nil runs the synthetic probe
-	Workspace  string                                              // approved AX Workspace bound at /workspace for tool tasks
-	Gateway    string                                              // approved AX Gateway with exact public-IP egress rules
-	LookupIPv4 func(context.Context, string) ([]netip.Addr, error) // nil uses system DNS
+	Workflow        *workflow.Store
+	AX              Client
+	Actor           Inspector
+	Image           string // exact digest-pinned AX runner image
+	Pool            string
+	Signer          string                                              // enrolled bootstrap public key, base64
+	Storage         string                                              // approved data-only snapshot location
+	Tool            *tooladapter.Request                                // frozen, public CLI selection; nil runs the synthetic probe
+	Workspace       string                                              // approved AX Workspace bound at /workspace for tool tasks
+	Gateway         string                                              // attempt-scoped AX Gateway with exact public-IP egress rules
+	GatewayTemplate string                                              // statically configured Gateway copied after validation
+	LookupIPv4      func(context.Context, string) ([]netip.Addr, error) // nil uses system DNS
 	// RevokeOwner must fence the bootstrap owner and any access lease before
 	// deletion. A nil revoker fails closed.
 	RevokeOwner func(context.Context, workflow.Attempt) error
@@ -160,6 +161,9 @@ func (b *Bridge) launch(ctx context.Context, a workflow.Attempt) (bootstrap.Runt
 	if err := b.ensureWorkspace(ctx, a); err != nil {
 		return bootstrap.Runtime{}, err
 	}
+	if err := b.ensureGateway(ctx, a); err != nil {
+		return bootstrap.Runtime{}, err
+	}
 	got, err := b.AX.Get(ctx, want.Metadata.Atespace, want.Metadata.Name)
 	if errors.Is(err, ErrNotFound) {
 		if err = b.AX.Apply(ctx, want); err != nil {
@@ -178,7 +182,7 @@ func (b *Bridge) ensureWorkspace(ctx context.Context, attempt workflow.Attempt) 
 		return nil
 	}
 	name := AttemptWorkspaceName(attempt.ID)
-	manager, ok := b.AX.(WorkspaceManager)
+	manager, ok := b.AX.(AttemptResourceManager)
 	if name == "" || b.Workspace != name || !ok {
 		return b.uncertain(attempt, ErrInputs)
 	}
@@ -206,6 +210,67 @@ func (b *Bridge) ensureWorkspace(ctx context.Context, attempt workflow.Attempt) 
 		return b.uncertain(attempt, errors.Join(ErrMismatch, err))
 	}
 	return nil
+}
+
+func (b *Bridge) ensureGateway(ctx context.Context, attempt workflow.Attempt) error {
+	if b.Tool == nil || b.Tool.SourceDirectory == "" {
+		return nil
+	}
+	name := AttemptGatewayName(attempt.ID)
+	manager, ok := b.AX.(AttemptResourceManager)
+	if name == "" || b.Gateway != name || b.GatewayTemplate == "" || !ok {
+		return b.uncertain(attempt, ErrInputs)
+	}
+	provider := toolProvider(*b.Tool)
+	if provider == "" {
+		return b.uncertain(attempt, ErrInputs)
+	}
+	space, _ := Name(attempt)
+	template, err := manager.GetGateway(ctx, space, b.GatewayTemplate)
+	if err != nil {
+		return b.uncertain(attempt, err)
+	}
+	if err := b.checkGateway(ctx, template, b.GatewayTemplate, space, b.Tool.RepositoryURL, provider); err != nil {
+		return b.uncertain(attempt, err)
+	}
+	expected := attemptGateway(template, space, name)
+	current, err := manager.GetGateway(ctx, space, name)
+	if err == nil {
+		if !attemptGatewayMatches(current, expected) {
+			return b.uncertain(attempt, ErrMismatch)
+		}
+		return nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return b.uncertain(attempt, err)
+	}
+	if err := manager.ApplyGateway(ctx, expected); err != nil {
+		current, readErr := manager.GetGateway(ctx, space, name)
+		if readErr == nil && attemptGatewayMatches(current, expected) {
+			return nil
+		}
+		return b.uncertain(attempt, errors.Join(err, readErr))
+	}
+	current, err = manager.GetGateway(ctx, space, name)
+	if err != nil || !attemptGatewayMatches(current, expected) {
+		return b.uncertain(attempt, errors.Join(ErrMismatch, err))
+	}
+	return nil
+}
+
+func toolProvider(request tooladapter.Request) string {
+	switch request.Profile.Harness {
+	case "codex":
+		return "openai"
+	case "claude-code":
+		return "anthropic"
+	case "opencode":
+		provider, _, ok := strings.Cut(request.Profile.Model, "/")
+		if ok && (provider == "openai" || provider == "anthropic") {
+			return provider
+		}
+	}
+	return ""
 }
 
 // ReconcileUnknown never writes an AX task. A missing task cannot prove that
@@ -381,11 +446,17 @@ func (b *Bridge) stopKnown(ctx context.Context, a workflow.Attempt) error {
 		return ErrPending
 	}
 	if b.Tool != nil && b.Tool.SourceDirectory != "" {
-		manager, ok := b.AX.(WorkspaceManager)
+		manager, ok := b.AX.(AttemptResourceManager)
 		if !ok || b.Workspace != AttemptWorkspaceName(a.ID) {
 			return ErrInputs
 		}
 		if err := manager.DeleteWorkspace(ctx, want.Metadata.Atespace, b.Workspace); err != nil && !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		if b.Gateway != AttemptGatewayName(a.ID) {
+			return ErrInputs
+		}
+		if err := manager.DeleteGateway(ctx, want.Metadata.Atespace, b.Gateway); err != nil && !errors.Is(err, ErrNotFound) {
 			return err
 		}
 	}

@@ -58,6 +58,14 @@ removes it after stop proves the actor is gone. Private-repository binding
 selection from the product is still missing; the encrypted AX bootstrap
 capability is not yet exposed by project settings or dispatch.
 
+The dispatcher also copies the validated public-Git/model CIDR allowlist into
+an attempt-named Gateway before it creates the Task. The Task references this
+per-attempt Gateway, and the bridge checks its readback before launch and again
+before credential release. Both attempt resources are removed after actor
+absence is proved. This narrows shared-name races; AX does not make the
+definitions immutable, and these reads do not prove the effective network
+dataplane. P1-27 still needs live route and revocation evidence.
+
 ## Substrate connector authority
 
 At the pinned Substrate revision, `kubectl-ate --endpoint` still loads

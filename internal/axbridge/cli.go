@@ -102,6 +102,20 @@ func (c CLI) GetGateway(ctx context.Context, space, name string) (Gateway, error
 	return gateway, nil
 }
 
+func (c CLI) ApplyGateway(ctx context.Context, gateway Gateway) error {
+	manifest, err := yaml.Marshal(gateway)
+	if err != nil {
+		return err
+	}
+	_, err = c.ax(ctx, manifest, "apply", "-f", "-")
+	return err
+}
+
+func (c CLI) DeleteGateway(ctx context.Context, space, name string) error {
+	_, err := c.ax(ctx, nil, "delete", "gateway", name, "--atespace", space)
+	return err
+}
+
 func (c CLI) Apply(ctx context.Context, task Task) error {
 	manifest, err := yaml.Marshal(struct {
 		APIVersion string         `yaml:"apiVersion"`

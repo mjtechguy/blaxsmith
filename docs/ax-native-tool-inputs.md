@@ -7,13 +7,22 @@ empty Workspace at `/workspace`; its worker fetches and checks out the frozen
 public Git commit after bootstrap. The empty AX Workspace avoids an unpinned
 second Git checkout, MCP server, skill mount, or bootstrap goal.
 
-Before reservation, `Bridge.CheckToolInputs` reads both resources in the
-organization's `blaxsmith-<uuid-without-hyphens>` atespace. The Gateway must
-have no listeners and exactly the current public IPv4 `/32` DNS answers for
-the Git host and `api.openai.com` or `api.anthropic.com`. Wildcards, broad
-CIDRs, private addresses, ports, extra destinations, missing resources, and
-unavailable DNS block dispatch. The Task carries the validated resource names,
-and AX resolves them again when reconciling the Task.
+Before reservation, `Bridge.CheckToolInputs` reads the configured Workspace
+and Gateway in the organization's `blaxsmith-<uuid-without-hyphens>` atespace.
+The Gateway must have no listeners and exactly the current public IPv4 `/32`
+DNS answers for the Git host and `api.openai.com` or `api.anthropic.com`.
+Wildcards, broad CIDRs, private addresses, ports, extra destinations, missing
+resources, and unavailable DNS block dispatch.
+
+After reservation, the dispatcher copies only that validated egress allowlist
+into a Gateway named for the attempt. It reads the attempt Gateway back and
+checks the exact definition before creating the AX Task. The Task binds that
+Gateway and the matching attempt Workspace. The bridge re-reads and validates
+both definitions again while the actor is held behind the bootstrap gate,
+immediately before credential release. Stop deletes them only after AX reports
+the Task absent and Substrate proves the actor is gone. A privileged AX writer
+can still edit a live attempt resource; readback is not a server-enforced
+immutable object or dataplane measurement.
 
 This is configuration validation, not a measured network proof. The pinned
 Substrate gateway enforces IP/CIDR rules rather than DNS names or TLS SNI;
