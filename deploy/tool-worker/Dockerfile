@@ -5,8 +5,8 @@ USER root
 # The dated Debian archive fixes the Git dependency set at build time. The
 # final image contains no package manager invocation during task execution.
 RUN printf '%s\n' \
-      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20260901T000000Z/ bookworm main' \
-      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20260901T000000Z/ bookworm-security main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260901T000000Z/ bookworm main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260901T000000Z/ bookworm-security main' \
       > /etc/apt/sources.list \
     && rm -f /etc/apt/sources.list.d/debian.sources \
     && apt-get update \

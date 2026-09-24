@@ -21,7 +21,7 @@ test "${target##*:}" = "${local_tag##*:}" || {
   echo 'registry tag must match the proved local tag' >&2
   exit 2
 }
-local_digest=$(buildah inspect --type image "$local_tag" --format '{{.FromImageDigest}}')
+local_digest=$(buildah inspect --type image --format '{{.FromImageDigest}}' "$local_tag")
 python3 - "$output" "$local_digest" <<'PY'
 import json, pathlib, sys
 proof = json.loads((pathlib.Path(sys.argv[1]) / 'proof.json').read_text())

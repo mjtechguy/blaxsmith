@@ -73,6 +73,8 @@ an authorized provider lease before the command runs. Private Git plus a
 provider key in one bootstrap release remains blocked by the one-lease schema.
 
 The APT source follows the [Debian snapshot format](https://snapshot.debian.org/)
-with `check-valid-until=no`; the build records the final digest using
+with `check-valid-until=no`. It uses HTTP for the initial package metadata
+because the slim base image lacks a CA bundle; APT still validates Debian's
+signed `InRelease` and package hashes. The build records the final digest using
 [Buildx metadata](https://docs.docker.com/reference/cli/docker/buildx/build/)
 or Buildah image inspection.

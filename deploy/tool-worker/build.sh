@@ -83,10 +83,10 @@ if [ "${3:-}" = --buildah ]; then
   buildah run --network none "$buildah_container" -- node /opt/blaxsmith/manifest.mjs > "$output/cli-manifest.json"
   buildah rm "$buildah_container" >/dev/null
   buildah_container=
-  buildah inspect --type image "$runtime_image" --format '{{.FromImageID}}' > "$output/runtime-image-id.txt"
-  buildah inspect --type image "$worker_image" --format '{{.FromImageID}}' > "$output/worker-image-id.txt"
-  buildah inspect --type image "$runtime_image" --format '{{.FromImageDigest}}' > "$output/runtime-buildah-digest.txt"
-  buildah inspect --type image "$worker_image" --format '{{.FromImageDigest}}' > "$output/worker-buildah-digest.txt"
+  buildah inspect --type image --format '{{.FromImageID}}' "$runtime_image" > "$output/runtime-image-id.txt"
+  buildah inspect --type image --format '{{.FromImageID}}' "$worker_image" > "$output/worker-image-id.txt"
+  buildah inspect --type image --format '{{.FromImageDigest}}' "$runtime_image" > "$output/runtime-buildah-digest.txt"
+  buildah inspect --type image --format '{{.FromImageDigest}}' "$worker_image" > "$output/worker-buildah-digest.txt"
   python3 - "$output" <<'PY'
 import json, pathlib, sys
 output = pathlib.Path(sys.argv[1])
