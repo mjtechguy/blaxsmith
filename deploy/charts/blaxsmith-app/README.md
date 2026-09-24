@@ -5,10 +5,10 @@ This chart stages the authenticated API and built web workspace from one
 The application checks PostgreSQL on `/healthz`, serves `/livez` independently,
 and applies/verifies migrations before binding. In `ha.enabled` mode, app pods
 only verify that every embedded migration has already been applied; a missing,
-unknown, or edited migration blocks readiness. No AX connector or agent
-workers are installed by this chart.
-Run creation is deliberately unavailable; no chart value can enable it before
-the separate connector and durable dispatch/reconciliation loops are wired.
+unknown, or edited migration blocks readiness. AX dispatch is disabled by
+default. When enabled, the chart copies pinned AX and Substrate CLIs from a
+separate tools image, projects dispatch credentials, and adds a loopback AX
+tunnel sidecar. It does not grant the app pod Kubernetes API access.
 
 Supply an immutable `repository@sha256:<manifest digest>` app image and three
 existing namespace Secrets: a `kubernetes.io/tls` Secret with `tls.crt` and
@@ -29,6 +29,119 @@ public key while the old signer is active, roll to the new signer while trusting
 the old public key, then remove that trust after the access-token lifetime and
 rollout/clock margin. Each step requires a rollout; use the same Secret versions
 across replicas.
+
+## Optional AX dispatch
+
+The chart keeps dispatch off unless `dispatch.enabled=true`. Dispatch needs an
+immutable `dispatch.tools.image` containing `/usr/local/bin/ax`,
+`/usr/local/bin/kubectl-ate`, and `socat` in `PATH`. An init container copies
+the two CLIs into a pod-local `emptyDir`; the app mounts that directory
+read-only at `/opt/blaxsmith/dispatch-tools`. Their lowercase SHA-256 values
+are checked by `serve-app` at startup. This lets the current app image run
+without rebuilding it to add AX/Substrate tools. The app image also needs the
+existing 32-byte `accessKeySecretName` Secret for encrypted credential
+storage.
+
+On the dev node, the existing setup instructions build `/usr/local/bin/ax`
+and `/usr/local/bin/kubectl-ate`. Copy those binaries into an image build
+context and make an immutable tools image, for example:
+
+```dockerfile
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+RUN apk add --no-cache socat
+COPY --chmod=0555 ax /usr/local/bin/ax
+COPY --chmod=0555 kubectl-ate /usr/local/bin/kubectl-ate
+```
+
+```sh
+mkdir -p /opt/blaxsmith-dev/dispatch-tools
+cp /usr/local/bin/ax /opt/blaxsmith-dev/dispatch-tools/ax
+cp /usr/local/bin/kubectl-ate /opt/blaxsmith-dev/dispatch-tools/kubectl-ate
+cd /opt/blaxsmith-dev/dispatch-tools
+cat > Dockerfile <<'EOF'
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+RUN apk add --no-cache socat
+COPY --chmod=0555 ax /usr/local/bin/ax
+COPY --chmod=0555 kubectl-ate /usr/local/bin/kubectl-ate
+EOF
+buildah bud --platform linux/amd64 -t 127.0.0.1:5001/blaxsmith-dispatch-tools:dev .
+buildah push --tls-verify=false \
+  --digestfile /opt/blaxsmith-dev/dispatch-tools-digest.txt \
+  127.0.0.1:5001/blaxsmith-dispatch-tools:dev \
+  docker://127.0.0.1:5001/blaxsmith-dispatch-tools:dev
+```
+
+Use the published registry reference ending in the digest from
+`/opt/blaxsmith-dev/dispatch-tools-digest.txt` as `dispatch.tools.image`. Set
+`dispatch.ax.cliSHA256` and `dispatch.substrate.cliSHA256` to `sha256sum` of
+the exact input binaries.
+
+Create `dispatch.credentialsSecretName` separately with these exact keys:
+
+| Key | Contents |
+| --- | --- |
+| `substrate-token` | Substrate API token |
+| `substrate-ca.pem` | PEM CA bundle for the Substrate API |
+| `router-ca.pem` | PEM CA bundle for the HTTPS bootstrap router |
+| `actor-ca.pem` | PEM CA bundle for AX actor attestation |
+| `bootstrap-token` | Short-lived bootstrap-router token |
+| `bootstrap-signer` | Raw 32-byte Ed25519 seed |
+
+The chart projects these as read-only mode `0440` files for UID/GID 65532.
+The same namespace must contain the configured access-key Secret with raw
+32-byte value under `key`. None of these values belongs in Helm values or
+command-line `--set` arguments.
+
+The dispatch pod runs `socat` from the same tools image. It listens on the
+configured loopback port (18443 by default) in the shared pod network namespace
+and forwards to the configured AX service, defaulting to
+`ax-server.ax-system.svc.cluster.local:8080` from the AX chart. Supply an
+immutable tools image containing `socat`; no ServiceAccount token or
+Kubernetes port-forward permission is needed. Both the AX service and the
+Substrate/router endpoints must be reachable from the app namespace.
+
+Example values (replace all example digests and IDs with the pinned values
+for the target dev cluster):
+
+```yaml
+accessKeySecretName: app-access-key
+dispatch:
+  enabled: true
+  egressMode: exact
+  credentialsSecretName: app-dispatch-runtime
+  tools:
+    image: REGISTRY/blaxsmith-dispatch-tools@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  tunnel:
+    targetHost: ax-server.ax-system.svc.cluster.local
+    targetPort: 8080
+    localPort: 18443
+  ax:
+    cliSHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  substrate:
+    cliSHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    endpoint: api.ate-system.svc:443
+  bootstrap:
+    routerURL: https://router.ate-system.svc:443
+  clusterID: dev-cluster
+  leaseTTL: 10m
+  workerImage: REGISTRY/blaxsmith-tool-worker@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  workerPool: blaxsmith-pool
+  snapshotStorage: blaxsmith-snapshots
+  workspace: blaxsmith-workspaces
+  gateway: blaxsmith-egress
+```
+
+The normal setting `egressMode: exact` retains the attempt-scoped host
+allowlist. For a development cluster that must reach arbitrary model and Git
+endpoints, use `egressMode: open-dev` and explicitly set
+`dev.allowOpenEgress: true`; the chart then passes both the `open-dev` env
+value and `--allow-open-egress-dev` flag. The app rejects open mode if either
+part is absent. This creates an AX Gateway with `host: "*"`; treat it as a
+development-only configuration, and leave this switch false for production.
+
+The tunnel forwards unencrypted AX HTTP inside the cluster network because
+the pinned AX CLI client only supports loopback HTTP. Use a trusted cluster
+network; do not expose the tunnel port through a Service or ingress.
 
 ```sh
 helm upgrade --install app deploy/charts/blaxsmith-app \
@@ -107,9 +220,11 @@ the Barman Cloud plugin, and AX Redis remain separately operated per
 requires restore and failover tests plus operation reconciliation after a
 scheduled migration; mixed-version schema compatibility has not been established.
 
-Run `deploy/charts/blaxsmith-app/test.sh` to lint and render both modes. The
-app image is built in packaging CI. This is a staging foundation, not a
-real-user production installation: no external L4 exposure or trusted client
-address design, key-rotation rollout, RBAC-protected project APIs, or AX
-connector is packaged yet. The plaintext public preview remains a separate
-chart; do not expose it as the authenticated product.
+Run `deploy/charts/blaxsmith-app/test.sh` to lint and render the default and
+dispatch-enabled modes. The app image is built in packaging CI. This is a
+staging foundation, not a real-user production installation: external L4
+exposure and trusted client address design, key-rotation rollout, and
+RBAC-protected project APIs remain deployment work. The chart does not build
+or publish the app/CLI/tunnel images or create dispatch credentials. The
+plaintext public preview remains a separate chart; do not expose it as the
+authenticated product.

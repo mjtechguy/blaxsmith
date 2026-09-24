@@ -15,6 +15,35 @@
 {{- if and .Values.ha.enabled (not (semverCompare ">=1.30.0-0" .Capabilities.KubeVersion.Version)) -}}
 {{- fail "ha.enabled requires Kubernetes 1.30+ for topologySpreadConstraints.minDomains" -}}
 {{- end -}}
+{{- if .Values.dispatch.enabled -}}
+{{- $d := .Values.dispatch -}}
+{{- range $value := list $d.credentialsSecretName $.Values.accessKeySecretName $d.tools.image $d.tunnel.targetHost $d.ax.cliSHA256 $d.substrate.cliSHA256 $d.substrate.endpoint $d.bootstrap.routerURL $d.clusterID $d.leaseTTL $d.workerImage $d.workerPool $d.snapshotStorage $d.workspace $d.gateway -}}
+{{- if not $value -}}
+{{- fail "dispatch.enabled requires every dispatch setting, accessKeySecretName, and credentialsSecretName" -}}
+{{- end -}}
+{{- end -}}
+{{- if or (not (regexMatch "^[0-9a-f]{64}$" $d.ax.cliSHA256)) (not (regexMatch "^[0-9a-f]{64}$" $d.substrate.cliSHA256)) -}}
+{{- fail "dispatch CLI SHA-256 values must be 64 lowercase hex characters" -}}
+{{- end -}}
+{{- if not (regexMatch "^.+@sha256:[a-f0-9]{64}$" $d.tools.image) -}}
+{{- fail "dispatch.tools.image must be an immutable repository@sha256:<64 hex> reference" -}}
+{{- end -}}
+{{- if not (regexMatch "^.+@sha256:[a-f0-9]{64}$" $d.workerImage) -}}
+{{- fail "dispatch.workerImage must be an immutable repository@sha256:<64 hex> reference" -}}
+{{- end -}}
+{{- if or (lt (int $d.tunnel.localPort) 1024) (gt (int $d.tunnel.localPort) 65535) (lt (int $d.tunnel.targetPort) 1) (gt (int $d.tunnel.targetPort) 65535) -}}
+{{- fail "dispatch tunnel ports are outside their valid TCP ranges" -}}
+{{- end -}}
+{{- if and (ne $d.egressMode "exact") (ne $d.egressMode "open-dev") -}}
+{{- fail "dispatch.egressMode must be exact or open-dev" -}}
+{{- end -}}
+{{- if and (eq $d.egressMode "open-dev") (not $d.dev.allowOpenEgress) -}}
+{{- fail "dispatch.egressMode=open-dev requires dispatch.dev.allowOpenEgress=true" -}}
+{{- end -}}
+{{- if and $d.dev.allowOpenEgress (ne $d.egressMode "open-dev") -}}
+{{- fail "dispatch.dev.allowOpenEgress=true requires dispatch.egressMode=open-dev" -}}
+{{- end -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -55,6 +84,26 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.dispatch.enabled }}
+      initContainers:
+        - name: copy-dispatch-tools
+          image: {{ .Values.dispatch.tools.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - test -x /usr/local/bin/ax; test -x /usr/local/bin/kubectl-ate; cp /usr/local/bin/ax /dispatch-tools/ax; cp /usr/local/bin/kubectl-ate /dispatch-tools/kubectl-ate; chmod 0555 /dispatch-tools/ax /dispatch-tools/kubectl-ate
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: dispatch-tools
+              mountPath: /dispatch-tools
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -69,6 +118,12 @@ spec:
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - serve-app
+            {{- if .Values.dispatch.enabled }}
+            - --enable-dispatch
+            {{- if .Values.dispatch.dev.allowOpenEgress }}
+            - --allow-open-egress-dev
+            {{- end }}
+            {{- end }}
             {{- if .Values.ha.enabled }}
             - --migrations
             - verify
@@ -98,6 +153,50 @@ spec:
             {{- if .Values.accessKeySecretName }}
             - name: BLAXSMITH_ACCESS_KEY_FILE
               value: /run/blaxsmith/access-key/key
+            {{- end }}
+            {{- if .Values.dispatch.enabled }}
+            - name: BLAXSMITH_DISPATCH_AX_SERVER
+              value: {{ printf "http://127.0.0.1:%v" .Values.dispatch.tunnel.localPort | quote }}
+            - name: BLAXSMITH_DISPATCH_AX_CLI
+              value: /opt/blaxsmith/dispatch-tools/ax
+            - name: BLAXSMITH_DISPATCH_AX_CLI_SHA256
+              value: {{ .Values.dispatch.ax.cliSHA256 | quote }}
+            - name: BLAXSMITH_DISPATCH_SUBSTRATE_CLI
+              value: /opt/blaxsmith/dispatch-tools/kubectl-ate
+            - name: BLAXSMITH_DISPATCH_SUBSTRATE_CLI_SHA256
+              value: {{ .Values.dispatch.substrate.cliSHA256 | quote }}
+            - name: BLAXSMITH_DISPATCH_SUBSTRATE_ENDPOINT
+              value: {{ .Values.dispatch.substrate.endpoint | quote }}
+            - name: BLAXSMITH_DISPATCH_SUBSTRATE_TOKEN_FILE
+              value: /run/blaxsmith/dispatch/substrate-token
+            - name: BLAXSMITH_DISPATCH_SUBSTRATE_CA_FILE
+              value: /run/blaxsmith/dispatch/substrate-ca.pem
+            - name: BLAXSMITH_DISPATCH_BOOTSTRAP_ROUTER_URL
+              value: {{ .Values.dispatch.bootstrap.routerURL | quote }}
+            - name: BLAXSMITH_DISPATCH_BOOTSTRAP_ROUTER_CA_FILE
+              value: /run/blaxsmith/dispatch/router-ca.pem
+            - name: BLAXSMITH_DISPATCH_BOOTSTRAP_ACTOR_CA_FILE
+              value: /run/blaxsmith/dispatch/actor-ca.pem
+            - name: BLAXSMITH_DISPATCH_BOOTSTRAP_TOKEN_FILE
+              value: /run/blaxsmith/dispatch/bootstrap-token
+            - name: BLAXSMITH_DISPATCH_BOOTSTRAP_SIGNER_FILE
+              value: /run/blaxsmith/dispatch/bootstrap-signer
+            - name: BLAXSMITH_DISPATCH_CLUSTER_ID
+              value: {{ .Values.dispatch.clusterID | quote }}
+            - name: BLAXSMITH_DISPATCH_LEASE_TTL
+              value: {{ .Values.dispatch.leaseTTL | quote }}
+            - name: BLAXSMITH_DISPATCH_WORKER_IMAGE
+              value: {{ .Values.dispatch.workerImage | quote }}
+            - name: BLAXSMITH_DISPATCH_WORKER_POOL
+              value: {{ .Values.dispatch.workerPool | quote }}
+            - name: BLAXSMITH_DISPATCH_SNAPSHOT_STORAGE
+              value: {{ .Values.dispatch.snapshotStorage | quote }}
+            - name: BLAXSMITH_DISPATCH_WORKSPACE
+              value: {{ .Values.dispatch.workspace | quote }}
+            - name: BLAXSMITH_DISPATCH_GATEWAY
+              value: {{ .Values.dispatch.gateway | quote }}
+            - name: BLAXSMITH_DISPATCH_EGRESS_MODE
+              value: {{ .Values.dispatch.egressMode | quote }}
             {{- end }}
           ports:
             - name: https
@@ -152,6 +251,37 @@ spec:
               mountPath: /run/blaxsmith/previous-signer
               readOnly: true
             {{- end }}
+            {{- if .Values.dispatch.enabled }}
+            - name: dispatch-tools
+              mountPath: /opt/blaxsmith/dispatch-tools
+              readOnly: true
+            - name: dispatch-credentials
+              mountPath: /run/blaxsmith/dispatch
+              readOnly: true
+            {{- end }}
+        {{- if .Values.dispatch.enabled }}
+        - name: ax-tunnel
+          image: {{ .Values.dispatch.tools.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["socat"]
+          args:
+            - {{ printf "TCP-LISTEN:%v,bind=127.0.0.1,reuseaddr,fork" .Values.dispatch.tunnel.localPort | quote }}
+            - {{ printf "TCP:%s:%v" .Values.dispatch.tunnel.targetHost .Values.dispatch.tunnel.targetPort | quote }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+        {{- end }}
       volumes:
         - name: scratch
           emptyDir:
@@ -164,6 +294,10 @@ spec:
           secret:
             secretName: {{ .Values.signerSecretName | quote }}
             defaultMode: 288
+        {{- if .Values.dispatch.enabled }}
+        - name: dispatch-tools
+          emptyDir: {}
+        {{- end }}
         {{- if .Values.accessKeySecretName }}
         - name: access-key
           secret:
@@ -187,4 +321,23 @@ spec:
           secret:
             secretName: {{ .Values.previousSignerPublicSecretName | quote }}
             defaultMode: 288
+        {{- end }}
+        {{- if .Values.dispatch.enabled }}
+        - name: dispatch-credentials
+          secret:
+            secretName: {{ .Values.dispatch.credentialsSecretName | quote }}
+            defaultMode: 288
+            items:
+              - key: substrate-token
+                path: substrate-token
+              - key: substrate-ca.pem
+                path: substrate-ca.pem
+              - key: router-ca.pem
+                path: router-ca.pem
+              - key: actor-ca.pem
+                path: actor-ca.pem
+              - key: bootstrap-token
+                path: bootstrap-token
+              - key: bootstrap-signer
+                path: bootstrap-signer
         {{- end }}

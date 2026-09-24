@@ -13,6 +13,32 @@ previousSignerPublicSecretName: "" # Optional Secret with a 32-byte public key u
 databaseSecretName: "" # Existing Secret with PostgreSQL URL under key url; verified TLS required.
 databaseCASecretName: "" # Optional existing Secret with ca.crt; set for a private PostgreSQL CA.
 accessKeySecretName: "" # Optional existing Secret with a 32-byte raw encryption key under key key.
+dispatch:
+  enabled: false # Requires the packaged AX/Substrate CLIs and a pod-local AX tunnel.
+  egressMode: exact # exact is default; open-dev requires dev.allowOpenEgress=true.
+  dev:
+    allowOpenEgress: false # Explicit development-only switch for an unrestricted AX Gateway.
+  credentialsSecretName: "" # Existing Secret with substrate-token, substrate-ca.pem, router-ca.pem, actor-ca.pem, bootstrap-token, bootstrap-signer.
+  tools:
+    image: "" # Immutable image with ax, kubectl-ate, and socat; CLIs copied by init container.
+  tunnel:
+    targetHost: ax-server.ax-system.svc.cluster.local
+    targetPort: 8080
+    localPort: 18443
+  ax:
+    cliSHA256: "" # SHA-256 of /usr/local/bin/ax in tools.image.
+  substrate:
+    cliSHA256: "" # SHA-256 of /usr/local/bin/kubectl-ate in tools.image.
+    endpoint: ""
+  bootstrap:
+    routerURL: "" # HTTPS origin for the AX bootstrap router.
+  clusterID: ""
+  leaseTTL: "" # Go duration, positive and <= 1h.
+  workerImage: "" # Immutable AX task-runner image reference.
+  workerPool: ""
+  snapshotStorage: ""
+  workspace: ""
+  gateway: ""
 resources:
   requests:
     cpu: 100m

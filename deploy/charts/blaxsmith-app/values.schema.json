@@ -10,6 +10,72 @@
       "additionalProperties": false
     },
     "databaseCASecretName": { "type": "string" },
+    "dispatch": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "egressMode": { "type": "string", "enum": ["exact", "open-dev"] },
+        "dev": {
+          "type": "object",
+          "properties": { "allowOpenEgress": { "type": "boolean" } },
+          "required": ["allowOpenEgress"],
+          "additionalProperties": false
+        },
+        "credentialsSecretName": { "type": "string" },
+        "tools": {
+          "type": "object",
+          "properties": { "image": { "type": "string" } },
+          "required": ["image"],
+          "additionalProperties": false
+        },
+        "tunnel": {
+          "type": "object",
+          "properties": {
+            "targetHost": { "type": "string" },
+            "targetPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "localPort": { "type": "integer", "minimum": 1024, "maximum": 65535 }
+          },
+          "required": ["targetHost", "targetPort", "localPort"],
+          "additionalProperties": false
+        },
+        "ax": {
+          "type": "object",
+          "properties": {
+            "cliSHA256": { "type": "string", "pattern": "^[0-9a-f]{64}$|^$" }
+          },
+          "required": ["cliSHA256"],
+          "additionalProperties": false
+        },
+        "substrate": {
+          "type": "object",
+          "properties": {
+            "cliSHA256": { "type": "string", "pattern": "^[0-9a-f]{64}$|^$" },
+            "endpoint": { "type": "string" }
+          },
+          "required": ["cliSHA256", "endpoint"],
+          "additionalProperties": false
+        },
+        "bootstrap": {
+          "type": "object",
+          "properties": { "routerURL": { "type": "string" } },
+          "required": ["routerURL"],
+          "additionalProperties": false
+        },
+        "clusterID": { "type": "string" },
+        "leaseTTL": { "type": "string" },
+        "workerImage": { "type": "string" },
+        "workerPool": { "type": "string" },
+        "snapshotStorage": { "type": "string" },
+        "workspace": { "type": "string" },
+        "gateway": { "type": "string" }
+      },
+      "required": [
+        "enabled", "egressMode", "dev", "credentialsSecretName", "tools", "tunnel", "ax",
+        "substrate", "bootstrap", "clusterID", "leaseTTL", "workerImage",
+        "workerPool", "snapshotStorage", "workspace", "gateway"
+      ],
+      "additionalProperties": false
+    },
     "migrationJob": {
       "type": "object",
       "properties": { "name": { "type": "string", "maxLength": 63, "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" } },
@@ -17,5 +83,5 @@
       "additionalProperties": false
     }
   },
-  "required": ["replicaCount", "ha", "migrationJob"]
+  "required": ["replicaCount", "ha", "migrationJob", "dispatch"]
 }
