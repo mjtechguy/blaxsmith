@@ -125,3 +125,32 @@ the current compiler preserves selected bytes and is not a secret scanner.
 Recipe experiments will use the same frozen project/spec/check inputs, with
 separately versioned profile or stage changes. Quality comparisons, isolated
 execution, and the final human gate belong to the platform, not Git hooks.
+
+## Managed recipe library
+
+Recipes can also live in PostgreSQL (`RecipeService`, migration
+`0060_recipe_library.sql`). A recipe is organization-scoped or project-scoped;
+each version is immutable validated JSON stored as exact bytes with its SHA-256,
+author, and a repository-relative *frozen path label*. A trigger rejects any
+update or delete of a version, and a check constraint ties the digest to the
+bytes. One version per recipe is marked current; changing it affects only new
+runs.
+
+Launching from a version freezes its bytes under the path label exactly as a
+committed file at that path would be frozen (`recipe.Input.RecipeData`), so the
+bundle digest and downstream engine are unchanged. Prompts, skills, the spec,
+the transcript, and `AGENTS.md` still come from the project's commit. The run
+also records `workflow_runs.recipe_version_id`. The seeded "Guild engineering"
+recipe uses the label `examples/guild/recipe.json`, so it freezes to the same
+digest as the committed example.
+
+Seeding happens in the migration: existing organizations are seeded when it
+runs and an `identity_organizations` insert trigger seeds new ones (including
+first-owner bootstrap after startup). The per-scope unique name makes it
+idempotent. A startup seed would miss organizations created while running.
+
+Any organization role reads recipes. Owners and admins edit organization
+recipes and, since there are no project-level roles, project recipes too. A
+project sees its own recipes plus organization recipes that `CanUse` allows;
+until lane U's `access.CanUse` is wired in, every organization recipe is usable
+by every project in the organization.

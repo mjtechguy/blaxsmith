@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useMatchRoute } from "@tanstack/react-router";
 import { rowSortingFeature, tableFeatures, useTable, type ColumnDef, type SortingState } from "@tanstack/react-table";
-import { ArrowLeft, ArrowRight, GitBranch, Plus, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookCopy, GitBranch, Plus, RefreshCw, Search } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
 import type { Run } from "../gen/blaxsmith/api/v1/workflow_pb";
@@ -31,7 +31,8 @@ function ProjectRuns() {
   const modelAccessSettings = useMatchRoute()({ to: "/projects/$projectId/model-access" });
   const newModelAccess = useMatchRoute()({ to: "/projects/$projectId/model-access/new" });
   const newRun = useMatchRoute()({ to: "/projects/$projectId/runs/new" });
-  const childPage = Boolean(runDetail || sourceSettings || verificationSettings || modelAccessSettings || newModelAccess || newRun);
+  const recipesPage = useMatchRoute()({ to: "/projects/$projectId/recipes", fuzzy: true });
+  const childPage = Boolean(runDetail || sourceSettings || verificationSettings || modelAccessSettings || newModelAccess || newRun || recipesPage);
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const org = session.data?.organizationId || "";
   const project = useQuery({ queryKey: ["project", org, projectId], enabled: Boolean(org && !childPage), queryFn: ({ signal }) => getProject(projectId, signal) });
@@ -87,6 +88,10 @@ function ProjectRuns() {
       {verification.isPending ? <div className="source-summary" role="status">Loading checks…</div> : null}
       {verification.isError ? <div className="source-summary" role="alert">Verification could not be loaded. <button type="button" className="text-action" onClick={() => void verification.refetch()}>Try again</button></div> : null}
       {verification.isSuccess ? <div className="source-summary">{verification.data ? <><strong>{verification.data.checks.length} checks · Version {verification.data.version.toString()}</strong>{verification.data.checks.map((check) => <span key={check.id}><strong>{check.id}</strong> <code>{JSON.stringify(check.command)}</code></span>)}</> : <><strong>Setup needed</strong><span>An owner or admin must add at least one verification check before creating a run.</span></>}</div> : null}
+    </section> : null}
+    {project.data?.project ? <section className="table-section" aria-labelledby="recipes-link-heading">
+      <div className="table-heading"><div><h2 id="recipes-link-heading">Recipes</h2><p>Project recipes and organization recipes granted to this project. New runs pick a version from this library.</p></div>
+        <Link className="secondary-button" to="/projects/$projectId/recipes" params={{ projectId }}><BookCopy size={15} aria-hidden="true" /> Recipes</Link></div>
     </section> : null}
     {project.data?.project ? <section className="table-section" aria-labelledby="run-setup-heading">
       <div className="table-heading"><div><h2 id="run-setup-heading">4. Start a run</h2><p>Runs use recipe, spec, transcript, and code already committed to the selected repository.</p></div>

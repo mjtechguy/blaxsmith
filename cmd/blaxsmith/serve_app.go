@@ -306,6 +306,9 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	adminPath, adminHandler := apiv1connect.NewAdminServiceHandler(newAdminService(guard, store, dispatchConfig.workerPool),
 		connect.WithReadMaxBytes(1<<16))
 	mux.Handle("/api"+adminPath, http.StripPrefix("/api", guard.Wrap(adminHandler)))
+	recipePath, recipeHandler := apiv1connect.NewRecipeServiceHandler(&recipeService{guard: guard, store: store, workflow: service},
+		connect.WithReadMaxBytes(2<<20))
+	mux.Handle("/api"+recipePath, http.StripPrefix("/api", guard.Wrap(recipeHandler)))
 	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity}))
 	mux.Handle("/api/terminal/attempts/{attemptID}", guard.Wrap(newTerminalHandler(guard, origin, store, guests, terminals)))
 	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(&catalogService{client: &http.Client{Timeout: 30 * time.Second}})

@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package blaxsmith.api.v1;
+
+// Managed recipe library. A recipe is organization-scoped (empty project_id)
+// or project-scoped; each version is immutable, validated JSON with its exact
+// SHA-256. Prompt and skill files a version references stay repository paths,
+// resolved against the project's commit when a run is launched.
+//
+// Any organization role may read. Organization owners/admins edit organization
+// recipes; project admins (organization owners/admins) edit project
+// recipes. A project sees organization recipes it has been granted.
+
+message LibraryRecipe {
+  string id = 1;
+  string project_id = 2; // Empty: organization scope.
+  string name = 3;
+  string description = 4;
+  string current_version_id = 5;
+  int32 current_version = 6; // 0 when no version is current.
+  int32 version_count = 7;
+  string created_at = 8; // RFC 3339.
+  string updated_at = 9;
+}
+
+message RecipeVersion {
+  string id = 1;
+  string recipe_id = 2;
+  int32 version = 3;
+  string recipe_json = 4; // Exact bytes; empty in version lists.
+  string sha256 = 5;
+  string frozen_path = 6; // Repository-relative label recorded in the run bundle.
+  string author_principal_id = 7; // Empty for the installation seed.
+  string author_username = 8;
+  string created_at = 9;
+}
+
+// A validation failure at a JSON path such as "stages[3].loop"; "$" is the document.
+message RecipeValidationError {
+  string path = 1;
+  string message = 2;
+}
+
+message ListRecipesRequest { string project_id = 1; } // Empty: organization recipes.
+message ListRecipesResponse { repeated LibraryRecipe recipes = 1; }
+
+message GetRecipeRequest { string recipe_id = 1; }
+message GetRecipeResponse {
+  LibraryRecipe recipe = 1;
+  repeated RecipeVersion versions = 2; // Newest first, without JSON.
+}
+
+message GetRecipeVersionRequest { string version_id = 1; }
+message GetRecipeVersionResponse { RecipeVersion version = 1; }
+
+message ValidateRecipeRequest {
+  string recipe_json = 1;
+  string frozen_path = 2; // Optional.
+}
+message ValidateRecipeResponse {
+  repeated RecipeValidationError errors = 1; // Empty when valid.
+  repeated string stage_order = 2; // Topological order when valid.
+}
+
+message CreateRecipeRequest {
+  string project_id = 1; // Empty: organization scope.
+  string name = 2;
+  string description = 3;
+  string recipe_json = 4;
+  string frozen_path = 5; // Empty: .blaxsmith/recipes/<recipe name>.json.
+}
+message CreateRecipeResponse {
+  LibraryRecipe recipe = 1;
+  RecipeVersion version = 2;
+  repeated RecipeValidationError errors = 3; // Set, with no recipe, when invalid.
+}
+
+message CreateRecipeVersionRequest {
+  string recipe_id = 1;
+  string recipe_json = 2;
+  string frozen_path = 3;
+  bool make_current = 4;
+}
+message CreateRecipeVersionResponse {
+  RecipeVersion version = 1;
+  repeated RecipeValidationError errors = 2; // Set, with no version, when invalid.
+}
+
+message SetCurrentRecipeVersionRequest {
+  string recipe_id = 1;
+  string version_id = 2;
+}
+message SetCurrentRecipeVersionResponse { LibraryRecipe recipe = 1; }
+
+message CloneRecipeRequest {
+  string source_version_id = 1;
+  string project_id = 2; // Target scope; empty for organization.
+  string name = 3;
+  string description = 4;
+}
+message CloneRecipeResponse {
+  LibraryRecipe recipe = 1;
+  RecipeVersion version = 2;
+}
+
+// Editor choices. Harness efforts are the adapter-documented values. Model
+// connections list active organization model connections and their models;
+// the recipe records only harness/model/effort, and launch binds a granted
+// connection.
+message RecipeHarnessOption {
+  string harness = 1;
+  string provider = 2; // openai or anthropic; empty for opencode (provider/model).
+  repeated string efforts = 3;
+}
+message RecipeModelConnection {
+  string id = 1;
+  string provider = 2;
+  string account = 3;
+  repeated string models = 4;
+}
+message GetRecipeEditorOptionsRequest {}
+message GetRecipeEditorOptionsResponse {
+  repeated RecipeHarnessOption harnesses = 1;
+  repeated string stage_kinds = 2;
+  repeated RecipeModelConnection connections = 3;
+}
+
+// Files at the project's configured ref, for skill and prompt pickers.
+message ListProjectRecipeFilesRequest { string project_id = 1; }
+message ListProjectRecipeFilesResponse {
+  string commit = 1;
+  repeated string skill_paths = 2; // Files named SKILL.md.
+  repeated string prompt_paths = 3; // Markdown files, bounded.
+}
+
+service RecipeService {
+  rpc ListRecipes(ListRecipesRequest) returns (ListRecipesResponse);
+  rpc GetRecipe(GetRecipeRequest) returns (GetRecipeResponse);
+  rpc GetRecipeVersion(GetRecipeVersionRequest) returns (GetRecipeVersionResponse);
+  rpc ValidateRecipe(ValidateRecipeRequest) returns (ValidateRecipeResponse);
+  rpc CreateRecipe(CreateRecipeRequest) returns (CreateRecipeResponse);
+  rpc CreateRecipeVersion(CreateRecipeVersionRequest) returns (CreateRecipeVersionResponse);
+  rpc SetCurrentRecipeVersion(SetCurrentRecipeVersionRequest) returns (SetCurrentRecipeVersionResponse);
+  rpc CloneRecipe(CloneRecipeRequest) returns (CloneRecipeResponse);
+  rpc GetRecipeEditorOptions(GetRecipeEditorOptionsRequest) returns (GetRecipeEditorOptionsResponse);
+  rpc ListProjectRecipeFiles(ListProjectRecipeFilesRequest) returns (ListProjectRecipeFilesResponse);
+}

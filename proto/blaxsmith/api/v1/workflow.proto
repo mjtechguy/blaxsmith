@@ -137,6 +137,9 @@ message LaunchRunRequest {
   string spec_path = 4; // Committed repository path.
   string transcript_path = 5; // Committed repository path.
   string scope = 6; // Repository-relative code scope.
+  // Library recipe version to freeze instead of recipe_path. Its bytes are
+  // frozen under the version's path label; prompts and skills come from Git.
+  string recipe_version_id = 7;
 }
 message LaunchRunResponse { Run run = 1; }
 message GetLaunchAvailabilityRequest { string project_id = 1; }

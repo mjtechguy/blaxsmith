@@ -36,7 +36,8 @@ export const auditActions = [
   "access.git_connection.created", "access.grant.revoked", "access.project_model.created", "access.project_model.revoked",
   "identity.login", "identity.logout", "identity.refresh", "identity.refresh_reuse", "installation.bootstrap_owner",
   "workflow.attempt.steered", "workflow.interaction.answered", "workflow.project.created", "workflow.project_source.set",
-  "workflow.project_verification.set", "workflow.review.presented", "workflow.review.superseded",
+  "workflow.project_verification.set", "workflow.recipe.created", "workflow.recipe.current_set", "workflow.recipe.version_created",
+  "workflow.review.presented", "workflow.review.superseded",
   "workflow.run.halted", "workflow.run.launched",
 ];
 

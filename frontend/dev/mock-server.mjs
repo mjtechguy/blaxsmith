@@ -4,6 +4,7 @@
 // docs/interactive-sessions.md. The scenario: a Forge-style interview and an approval gate on
 // `plan`, plus a 3-cycle verify loop that hits its cap and escalates. Answering the
 // escalation moves the run to human review.
+import { readFileSync } from "node:fs";
 import { createServer as createHttp } from "node:http";
 import { WebSocketServer } from "ws";
 import { createServer as createVite } from "vite";
@@ -177,6 +178,24 @@ const rpc = {
     emit(tasks.find((t) => t.activeAttemptId === attemptId)?.key, "attempt.control");
     return {};
   },
+  // RecipeService: an in-memory library seeded with the Guild recipe. The
+  // mock only checks JSON syntax; the real server runs internal/recipe validation.
+  ListRecipes: ({ projectId: project = "" }) => ({ recipes: recipes.filter((r) => !r.projectId || r.projectId === project).map(recipeSummary) }),
+  GetRecipe: ({ recipeId }) => { const r = recipes.find((x) => x.id === recipeId); return r ? { recipe: recipeSummary(r), versions: [...r.versions].reverse().map(({ recipeJson, ...v }) => v) } : connectError(404, "not_found", "workflow resource not found"); },
+  GetRecipeVersion: ({ versionId }) => { const v = recipes.flatMap((r) => r.versions).find((x) => x.id === versionId); return v ? { version: v } : connectError(404, "not_found", "workflow resource not found"); },
+  ValidateRecipe: ({ recipeJson = "" }) => { try { const doc = JSON.parse(recipeJson); return { errors: [], stageOrder: (doc.stages || []).map((x) => x.id) }; } catch (e) { return { errors: [{ path: "$", message: String(e.message) }], stageOrder: [] }; } },
+  CreateRecipe: ({ projectId: project = "", name, description = "", recipeJson, frozenPath = "" }) => { const r = { id: `recipe-${recipes.length + 1}`, projectId: project, name, description, createdAt: now(), versions: [] }; recipes.push(r); addVersion(r, recipeJson, frozenPath, true); return { recipe: recipeSummary(r), version: r.versions[0] }; },
+  CreateRecipeVersion: ({ recipeId, recipeJson, frozenPath = "", makeCurrent = false }) => { const r = recipes.find((x) => x.id === recipeId); return { version: addVersion(r, recipeJson, frozenPath, makeCurrent) }; },
+  SetCurrentRecipeVersion: ({ recipeId, versionId }) => { const r = recipes.find((x) => x.id === recipeId); r.current = versionId; return { recipe: recipeSummary(r) }; },
+  CloneRecipe: ({ sourceVersionId, projectId: project = "", name, description = "" }) => { const v = recipes.flatMap((r) => r.versions).find((x) => x.id === sourceVersionId); return rpc.CreateRecipe({ projectId: project, name, description, recipeJson: v.recipeJson, frozenPath: v.frozenPath }); },
+  GetRecipeEditorOptions: () => ({
+    harnesses: [{ harness: "claude-code", provider: "anthropic", efforts: ["low", "medium", "high", "xhigh", "max"] }, { harness: "codex", provider: "openai", efforts: ["minimal", "low", "medium", "high", "xhigh"] }, { harness: "opencode", provider: "", efforts: ["provider-default", "low", "medium", "high"] }],
+    stageKinds: ["plan", "interview", "research", "implement", "review", "verify", "integrate", "ui_review", "documentation", "architect_review", "human_review"],
+    connections: [{ id: "conn-openai", provider: "openai", account: "platform-team", models: ["gpt-5.6-luna", "gpt-5.6"] }, { id: "conn-anthropic", provider: "anthropic", account: "eng", models: ["opus", "sonnet"] }],
+  }),
+  ListProjectRecipeFiles: () => ({ commit: run.sourceCommit, skillPaths: ["examples/guild/skills/evidence/SKILL.md", "skills/security/SKILL.md"],
+    promptPaths: ["examples/guild/prompts/plan.md", "examples/guild/prompts/implement.md", "examples/guild/prompts/review.md", "examples/guild/prompts/verify.md", "examples/guild/prompts/architect-review.md"] }),
+  ListTools: () => ({ tools: ["codex", "claude-code", "opencode"].map((tool) => ({ tool, package: tool, source: "mock", fetchedAt: now(), latestStable: "1.0.0", releases: [] })), stale: false }),
   // AdminService: derived from the scenario above plus a second, stuck run.
   GetAdminOverview: () => {
     const project = { projectId, projectName: "Demo project", runId, runLaunchKey: run.launchKey };
@@ -220,6 +239,25 @@ const rpc = {
     return { grantId };
   },
 };
+
+const recipes = [];
+function addVersion(r, recipeJson, frozenPath, makeCurrent) {
+  const doc = (() => { try { return JSON.parse(recipeJson); } catch { return {}; } })();
+  const v = { id: `${r.id}-v${r.versions.length + 1}`, recipeId: r.id, version: r.versions.length + 1, recipeJson, sha256: [...recipeJson].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(16).padStart(64, "0"),
+    frozenPath: frozenPath || `.blaxsmith/recipes/${doc.name || "recipe"}.json`, authorPrincipalId: principalId, authorUsername: "you", createdAt: now() };
+  r.versions.push(v);
+  if (makeCurrent) r.current = v.id;
+  r.updatedAt = now();
+  return v;
+}
+const recipeSummary = (r) => ({ id: r.id, projectId: r.projectId, name: r.name, description: r.description, currentVersionId: r.current || "",
+  currentVersion: r.versions.find((v) => v.id === r.current)?.version || 0, versionCount: r.versions.length, createdAt: r.createdAt, updatedAt: r.updatedAt || r.createdAt });
+{
+  const seed = { id: "recipe-guild", projectId: "", name: "Guild engineering", description: "Plan, implement, review, verify with a bounded correction loop, architect review, then human review.", createdAt: minutesAgo(60 * 24 * 20), versions: [] };
+  recipes.push(seed);
+  addVersion(seed, readFileSync(new URL("../../examples/guild/recipe.json", import.meta.url), "utf8"), "examples/guild/recipe.json", true);
+  seed.versions[0].authorUsername = ""; seed.versions[0].authorPrincipalId = "";
+}
 
 function minutesAgo(n) { return new Date(Date.now() - n * 60_000).toISOString(); }
 const adminHalted = new Set();

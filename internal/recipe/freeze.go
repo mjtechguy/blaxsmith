@@ -23,6 +23,10 @@ type Input struct {
 	Spec       string
 	Transcript string
 	Scope      string
+	// RecipeData, when set, is a library recipe version frozen under the
+	// Recipe path label instead of reading that path from the commit. Its
+	// prompts, skills, spec, transcript, and AGENTS.md still come from Git.
+	RecipeData []byte
 }
 
 type Source struct {
@@ -92,7 +96,14 @@ func Freeze(ctx context.Context, in Input) (*Bundle, error) {
 		files[name] = data
 		return nil
 	}
-	if err := add(in.Recipe); err != nil {
+	if in.RecipeData != nil {
+		if !validPath(in.Recipe) || !utf8.Valid(in.RecipeData) || strings.ContainsRune(string(in.RecipeData), 0) ||
+			len(in.RecipeData) < 1 || len(in.RecipeData) > maxArtifactBytes {
+			return nil, fmt.Errorf("library recipe needs a repository-relative path label and 1–%d bytes of UTF-8 text", maxArtifactBytes)
+		}
+		files[in.Recipe] = slices.Clone(in.RecipeData)
+		total += len(in.RecipeData)
+	} else if err := add(in.Recipe); err != nil {
 		return nil, err
 	}
 	r, err := parse(files[in.Recipe])
@@ -120,6 +131,9 @@ func Freeze(ctx context.Context, in Input) (*Bundle, error) {
 		}
 	}
 	slices.Sort(paths)
+	if in.RecipeData != nil && slices.Contains(paths, in.Recipe) {
+		return nil, fmt.Errorf("library recipe path label %q collides with a frozen input file", in.Recipe)
+	}
 	for _, name := range paths {
 		if err := add(name); err != nil {
 			return nil, err

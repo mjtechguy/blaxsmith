@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -48,6 +49,23 @@ func openGit(ctx context.Context, repo, ref string) (gitSource, error) {
 		g.files[name] = gitFile{mode: fields[0], object: fields[2]}
 	}
 	return g, nil
+}
+
+// ListFiles resolves ref once and returns the commit and its regular files,
+// sorted, for editor pickers. It reads no file contents.
+func ListFiles(ctx context.Context, repo, ref string) (string, []string, error) {
+	g, err := openGit(ctx, repo, ref)
+	if err != nil {
+		return "", nil, err
+	}
+	names := make([]string, 0, len(g.files))
+	for name, f := range g.files {
+		if (f.mode == "100644" || f.mode == "100755") && validPath(name) {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	return g.commit, names, nil
 }
 
 func (g gitSource) read(ctx context.Context, name string) ([]byte, error) {

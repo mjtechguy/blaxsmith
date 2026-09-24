@@ -11,9 +11,10 @@ import { CatalogService, type ListToolsResponse, type ToolRelease } from "./gen/
 type Row = ToolRelease & { tool: string; package: string; isLatest: boolean; publisherStable?: string };
 const catalogClient = createClient(CatalogService, createConnectTransport({ baseUrl: `${window.location.origin}/api` }));
 
-async function fetchCatalog(signal: AbortSignal): Promise<ListToolsResponse> {
+export async function listTools(signal?: AbortSignal): Promise<ListToolsResponse> {
   return catalogClient.listTools({}, { signal });
 }
+const fetchCatalog = listTools;
 
 const names: Record<string, string> = { codex: "Codex", "claude-code": "Claude Code", opencode: "OpenCode" };
 const versionOrder = new Intl.Collator(undefined, { numeric: true });

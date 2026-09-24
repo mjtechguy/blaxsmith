@@ -16,12 +16,20 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsNewRouteImport } from './routes/projects.new'
+import { Route as AdminRecipesIndexRouteImport } from './routes/admin.recipes.index'
+import { Route as AdminRecipesNewRouteImport } from './routes/admin.recipes.new'
 import { Route as ProjectsProjectIdModelAccessRouteImport } from './routes/projects.$projectId.model-access'
 import { Route as ProjectsProjectIdSourceRouteImport } from './routes/projects.$projectId.source'
 import { Route as ProjectsProjectIdVerificationRouteImport } from './routes/projects.$projectId.verification'
+import { Route as AdminRecipesRecipeIdIndexRouteImport } from './routes/admin.recipes.$recipeId.index'
 import { Route as ProjectsProjectIdModelAccessNewRouteImport } from './routes/projects.$projectId.model-access.new'
+import { Route as ProjectsProjectIdRecipesIndexRouteImport } from './routes/projects.$projectId.recipes.index'
+import { Route as ProjectsProjectIdRecipesNewRouteImport } from './routes/projects.$projectId.recipes.new'
 import { Route as ProjectsProjectIdRunsRunIdRouteImport } from './routes/projects.$projectId.runs.$runId'
 import { Route as ProjectsProjectIdRunsNewRouteImport } from './routes/projects.$projectId.runs.new'
+import { Route as AdminRecipesRecipeIdVersionsNewRouteImport } from './routes/admin.recipes.$recipeId.versions.new'
+import { Route as ProjectsProjectIdRecipesRecipeIdIndexRouteImport } from './routes/projects.$projectId.recipes.$recipeId.index'
+import { Route as ProjectsProjectIdRecipesRecipeIdVersionsNewRouteImport } from './routes/projects.$projectId.recipes.$recipeId.versions.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,6 +66,16 @@ const ProjectsNewRoute = ProjectsNewRouteImport.update({
   path: '/projects/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRecipesIndexRoute = AdminRecipesIndexRouteImport.update({
+  id: '/admin/recipes/',
+  path: '/admin/recipes/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRecipesNewRoute = AdminRecipesNewRouteImport.update({
+  id: '/admin/recipes/new',
+  path: '/admin/recipes/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsProjectIdModelAccessRoute =
   ProjectsProjectIdModelAccessRouteImport.update({
     id: '/model-access',
@@ -75,11 +93,29 @@ const ProjectsProjectIdVerificationRoute =
     path: '/verification',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const AdminRecipesRecipeIdIndexRoute =
+  AdminRecipesRecipeIdIndexRouteImport.update({
+    id: '/admin/recipes/$recipeId/',
+    path: '/admin/recipes/$recipeId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ProjectsProjectIdModelAccessNewRoute =
   ProjectsProjectIdModelAccessNewRouteImport.update({
     id: '/new',
     path: '/new',
     getParentRoute: () => ProjectsProjectIdModelAccessRoute,
+  } as any)
+const ProjectsProjectIdRecipesIndexRoute =
+  ProjectsProjectIdRecipesIndexRouteImport.update({
+    id: '/recipes/',
+    path: '/recipes/',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdRecipesNewRoute =
+  ProjectsProjectIdRecipesNewRouteImport.update({
+    id: '/recipes/new',
+    path: '/recipes/new',
+    getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
 const ProjectsProjectIdRunsRunIdRoute =
   ProjectsProjectIdRunsRunIdRouteImport.update({
@@ -93,6 +129,24 @@ const ProjectsProjectIdRunsNewRoute =
     path: '/runs/new',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const AdminRecipesRecipeIdVersionsNewRoute =
+  AdminRecipesRecipeIdVersionsNewRouteImport.update({
+    id: '/admin/recipes/$recipeId/versions/new',
+    path: '/admin/recipes/$recipeId/versions/new',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ProjectsProjectIdRecipesRecipeIdIndexRoute =
+  ProjectsProjectIdRecipesRecipeIdIndexRouteImport.update({
+    id: '/recipes/$recipeId/',
+    path: '/recipes/$recipeId/',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdRecipesRecipeIdVersionsNewRoute =
+  ProjectsProjectIdRecipesRecipeIdVersionsNewRouteImport.update({
+    id: '/recipes/$recipeId/versions/new',
+    path: '/recipes/$recipeId/versions/new',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -102,12 +156,20 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/recipes/new': typeof AdminRecipesNewRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
+  '/admin/recipes/': typeof AdminRecipesIndexRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
+  '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/admin/recipes/$recipeId/': typeof AdminRecipesRecipeIdIndexRoute
+  '/projects/$projectId/recipes/': typeof ProjectsProjectIdRecipesIndexRoute
+  '/admin/recipes/$recipeId/versions/new': typeof AdminRecipesRecipeIdVersionsNewRoute
+  '/projects/$projectId/recipes/$recipeId/': typeof ProjectsProjectIdRecipesRecipeIdIndexRoute
+  '/projects/$projectId/recipes/$recipeId/versions/new': typeof ProjectsProjectIdRecipesRecipeIdVersionsNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -117,12 +179,20 @@ export interface FileRoutesByTo {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
   '/admin': typeof AdminIndexRoute
+  '/admin/recipes/new': typeof AdminRecipesNewRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
+  '/admin/recipes': typeof AdminRecipesIndexRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
+  '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/admin/recipes/$recipeId': typeof AdminRecipesRecipeIdIndexRoute
+  '/projects/$projectId/recipes': typeof ProjectsProjectIdRecipesIndexRoute
+  '/admin/recipes/$recipeId/versions/new': typeof AdminRecipesRecipeIdVersionsNewRoute
+  '/projects/$projectId/recipes/$recipeId': typeof ProjectsProjectIdRecipesRecipeIdIndexRoute
+  '/projects/$projectId/recipes/$recipeId/versions/new': typeof ProjectsProjectIdRecipesRecipeIdVersionsNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -133,12 +203,20 @@ export interface FileRoutesById {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/recipes/new': typeof AdminRecipesNewRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
+  '/admin/recipes/': typeof AdminRecipesIndexRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
+  '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/admin/recipes/$recipeId/': typeof AdminRecipesRecipeIdIndexRoute
+  '/projects/$projectId/recipes/': typeof ProjectsProjectIdRecipesIndexRoute
+  '/admin/recipes/$recipeId/versions/new': typeof AdminRecipesRecipeIdVersionsNewRoute
+  '/projects/$projectId/recipes/$recipeId/': typeof ProjectsProjectIdRecipesRecipeIdIndexRoute
+  '/projects/$projectId/recipes/$recipeId/versions/new': typeof ProjectsProjectIdRecipesRecipeIdVersionsNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -150,12 +228,20 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/projects/new'
     | '/admin/'
+    | '/admin/recipes/new'
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
+    | '/admin/recipes/'
     | '/projects/$projectId/model-access/new'
+    | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/admin/recipes/$recipeId/'
+    | '/projects/$projectId/recipes/'
+    | '/admin/recipes/$recipeId/versions/new'
+    | '/projects/$projectId/recipes/$recipeId/'
+    | '/projects/$projectId/recipes/$recipeId/versions/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -165,12 +251,20 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/projects/new'
     | '/admin'
+    | '/admin/recipes/new'
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
+    | '/admin/recipes'
     | '/projects/$projectId/model-access/new'
+    | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/admin/recipes/$recipeId'
+    | '/projects/$projectId/recipes'
+    | '/admin/recipes/$recipeId/versions/new'
+    | '/projects/$projectId/recipes/$recipeId'
+    | '/projects/$projectId/recipes/$recipeId/versions/new'
   id:
     | '__root__'
     | '/'
@@ -180,12 +274,20 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/projects/new'
     | '/admin/'
+    | '/admin/recipes/new'
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
+    | '/admin/recipes/'
     | '/projects/$projectId/model-access/new'
+    | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/admin/recipes/$recipeId/'
+    | '/projects/$projectId/recipes/'
+    | '/admin/recipes/$recipeId/versions/new'
+    | '/projects/$projectId/recipes/$recipeId/'
+    | '/projects/$projectId/recipes/$recipeId/versions/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -196,6 +298,10 @@ export interface RootRouteChildren {
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
   ProjectsNewRoute: typeof ProjectsNewRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  AdminRecipesNewRoute: typeof AdminRecipesNewRoute
+  AdminRecipesIndexRoute: typeof AdminRecipesIndexRoute
+  AdminRecipesRecipeIdIndexRoute: typeof AdminRecipesRecipeIdIndexRoute
+  AdminRecipesRecipeIdVersionsNewRoute: typeof AdminRecipesRecipeIdVersionsNewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -249,6 +355,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/recipes/': {
+      id: '/admin/recipes/'
+      path: '/admin/recipes'
+      fullPath: '/admin/recipes/'
+      preLoaderRoute: typeof AdminRecipesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/recipes/new': {
+      id: '/admin/recipes/new'
+      path: '/admin/recipes/new'
+      fullPath: '/admin/recipes/new'
+      preLoaderRoute: typeof AdminRecipesNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects/$projectId/model-access': {
       id: '/projects/$projectId/model-access'
       path: '/model-access'
@@ -270,12 +390,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdVerificationRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/admin/recipes/$recipeId/': {
+      id: '/admin/recipes/$recipeId/'
+      path: '/admin/recipes/$recipeId'
+      fullPath: '/admin/recipes/$recipeId/'
+      preLoaderRoute: typeof AdminRecipesRecipeIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects/$projectId/model-access/new': {
       id: '/projects/$projectId/model-access/new'
       path: '/new'
       fullPath: '/projects/$projectId/model-access/new'
       preLoaderRoute: typeof ProjectsProjectIdModelAccessNewRouteImport
       parentRoute: typeof ProjectsProjectIdModelAccessRoute
+    }
+    '/projects/$projectId/recipes/': {
+      id: '/projects/$projectId/recipes/'
+      path: '/recipes'
+      fullPath: '/projects/$projectId/recipes/'
+      preLoaderRoute: typeof ProjectsProjectIdRecipesIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/recipes/new': {
+      id: '/projects/$projectId/recipes/new'
+      path: '/recipes/new'
+      fullPath: '/projects/$projectId/recipes/new'
+      preLoaderRoute: typeof ProjectsProjectIdRecipesNewRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
     }
     '/projects/$projectId/runs/$runId': {
       id: '/projects/$projectId/runs/$runId'
@@ -289,6 +430,27 @@ declare module '@tanstack/react-router' {
       path: '/runs/new'
       fullPath: '/projects/$projectId/runs/new'
       preLoaderRoute: typeof ProjectsProjectIdRunsNewRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/admin/recipes/$recipeId/versions/new': {
+      id: '/admin/recipes/$recipeId/versions/new'
+      path: '/admin/recipes/$recipeId/versions/new'
+      fullPath: '/admin/recipes/$recipeId/versions/new'
+      preLoaderRoute: typeof AdminRecipesRecipeIdVersionsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$projectId/recipes/$recipeId/': {
+      id: '/projects/$projectId/recipes/$recipeId/'
+      path: '/recipes/$recipeId'
+      fullPath: '/projects/$projectId/recipes/$recipeId/'
+      preLoaderRoute: typeof ProjectsProjectIdRecipesRecipeIdIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/recipes/$recipeId/versions/new': {
+      id: '/projects/$projectId/recipes/$recipeId/versions/new'
+      path: '/recipes/$recipeId/versions/new'
+      fullPath: '/projects/$projectId/recipes/$recipeId/versions/new'
+      preLoaderRoute: typeof ProjectsProjectIdRecipesRecipeIdVersionsNewRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
   }
@@ -312,8 +474,12 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdModelAccessRoute: typeof ProjectsProjectIdModelAccessRouteWithChildren
   ProjectsProjectIdSourceRoute: typeof ProjectsProjectIdSourceRoute
   ProjectsProjectIdVerificationRoute: typeof ProjectsProjectIdVerificationRoute
+  ProjectsProjectIdRecipesNewRoute: typeof ProjectsProjectIdRecipesNewRoute
   ProjectsProjectIdRunsRunIdRoute: typeof ProjectsProjectIdRunsRunIdRoute
   ProjectsProjectIdRunsNewRoute: typeof ProjectsProjectIdRunsNewRoute
+  ProjectsProjectIdRecipesIndexRoute: typeof ProjectsProjectIdRecipesIndexRoute
+  ProjectsProjectIdRecipesRecipeIdIndexRoute: typeof ProjectsProjectIdRecipesRecipeIdIndexRoute
+  ProjectsProjectIdRecipesRecipeIdVersionsNewRoute: typeof ProjectsProjectIdRecipesRecipeIdVersionsNewRoute
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
@@ -321,8 +487,14 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
     ProjectsProjectIdModelAccessRouteWithChildren,
   ProjectsProjectIdSourceRoute: ProjectsProjectIdSourceRoute,
   ProjectsProjectIdVerificationRoute: ProjectsProjectIdVerificationRoute,
+  ProjectsProjectIdRecipesNewRoute: ProjectsProjectIdRecipesNewRoute,
   ProjectsProjectIdRunsRunIdRoute: ProjectsProjectIdRunsRunIdRoute,
   ProjectsProjectIdRunsNewRoute: ProjectsProjectIdRunsNewRoute,
+  ProjectsProjectIdRecipesIndexRoute: ProjectsProjectIdRecipesIndexRoute,
+  ProjectsProjectIdRecipesRecipeIdIndexRoute:
+    ProjectsProjectIdRecipesRecipeIdIndexRoute,
+  ProjectsProjectIdRecipesRecipeIdVersionsNewRoute:
+    ProjectsProjectIdRecipesRecipeIdVersionsNewRoute,
 }
 
 const ProjectsProjectIdRouteWithChildren =
@@ -336,6 +508,10 @@ const rootRouteChildren: RootRouteChildren = {
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
   ProjectsNewRoute: ProjectsNewRoute,
   AdminIndexRoute: AdminIndexRoute,
+  AdminRecipesNewRoute: AdminRecipesNewRoute,
+  AdminRecipesIndexRoute: AdminRecipesIndexRoute,
+  AdminRecipesRecipeIdIndexRoute: AdminRecipesRecipeIdIndexRoute,
+  AdminRecipesRecipeIdVersionsNewRoute: AdminRecipesRecipeIdVersionsNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

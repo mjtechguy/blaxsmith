@@ -75,9 +75,10 @@ export async function revokeProjectModelAccess(accessId: string) {
   return client.revokeProjectModelAccess({ accessId }, { headers: { "X-Blaxsmith-CSRF": token } });
 }
 
-export async function launchRun(projectId: string, launchKey: string, recipePath: string, specPath: string, transcriptPath: string, scope: string) {
+// A library recipeVersionId replaces recipePath; send exactly one of them.
+export async function launchRun(projectId: string, launchKey: string, recipePath: string, specPath: string, transcriptPath: string, scope: string, recipeVersionId = "") {
   const token = await csrfToken();
-  return client.launchRun({ projectId, launchKey, recipePath, specPath, transcriptPath, scope }, { headers: { "X-Blaxsmith-CSRF": token } });
+  return client.launchRun({ projectId, launchKey, recipePath, specPath, transcriptPath, scope, recipeVersionId }, { headers: { "X-Blaxsmith-CSRF": token } });
 }
 
 export async function getLaunchAvailability(projectId: string, signal?: AbortSignal) {

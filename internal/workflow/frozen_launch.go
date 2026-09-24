@@ -39,13 +39,17 @@ type FrozenRunInput struct {
 	SourceRepositoryURL string
 	SourceRef           string
 	VerificationVersion int64
+	// RecipeVersionID names the library version whose bytes are
+	// Source.RecipeData; admission rechecks it with the caller's access.
+	RecipeVersionID string
 }
 
 // CreateFrozenRun compiles committed inputs, then atomically persists their
 // exact bytes, the dependency graph, and a dispatch seal. It does not grant
 // access, start workers, or approve results; its caller must authorize first.
 func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, error) {
-	if !ids(in.OrganizationID, in.ProjectID) || len(in.LaunchKey) < 1 || len(in.LaunchKey) > 128 {
+	if !ids(in.OrganizationID, in.ProjectID) || len(in.LaunchKey) < 1 || len(in.LaunchKey) > 128 ||
+		(in.RecipeVersionID != "" && (!ids(in.RecipeVersionID) || in.Caller == nil || in.Source.RecipeData == nil)) {
 		return Run{}, ErrInvalid
 	}
 	bundle, err := recipe.Freeze(ctx, in.Source)
@@ -122,13 +126,22 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 		if err != nil || version != in.VerificationVersion || !bytes.Equal(canonical, policyJSON) {
 			return Run{}, ErrConflict
 		}
+		if in.RecipeVersionID != "" {
+			library, err := s.launchableVersion(ctx, tx, caller, in.ProjectID, in.RecipeVersionID)
+			if err != nil {
+				return Run{}, err
+			}
+			if library.SHA256 != sha(in.Source.RecipeData) || library.FrozenPath != in.Source.Recipe {
+				return Run{}, ErrConflict
+			}
+		}
 	}
 	var runID string
 	err = tx.QueryRow(ctx, `INSERT INTO workflow_runs
-		(organization_id,project_id,launch_key,source_commit,bundle_sha256,verification_sha256)
-		VALUES ($1,$2,$3,$4,$5,$6)
+		(organization_id,project_id,launch_key,source_commit,bundle_sha256,verification_sha256,recipe_version_id)
+		VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,'')::uuid)
 		ON CONFLICT (organization_id,project_id,launch_key) DO NOTHING RETURNING id`,
-		in.OrganizationID, in.ProjectID, in.LaunchKey, bundle.Source.Commit, bundle.Digest, policySHA).Scan(&runID)
+		in.OrganizationID, in.ProjectID, in.LaunchKey, bundle.Source.Commit, bundle.Digest, policySHA, in.RecipeVersionID).Scan(&runID)
 	created := err == nil
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Run{}, fmt.Errorf("create frozen run: %w", err)

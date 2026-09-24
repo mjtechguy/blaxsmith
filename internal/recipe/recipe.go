@@ -115,62 +115,83 @@ func uniqueKeys(d *json.Decoder) error {
 // validate returns a stable topological order, using declaration order for ties.
 func (r Recipe) validate() ([]string, error) {
 	if r.SchemaVersion != Schema || !identifier.MatchString(r.Name) {
-		return nil, fmt.Errorf("recipe requires schema_version %q and a valid name", Schema)
+		path := "schema_version"
+		if r.SchemaVersion == Schema {
+			path = "name"
+		}
+		return nil, fieldErr(path, "recipe requires schema_version %q and a valid name", Schema)
 	}
 	if r.Limits.MaxCorrectionCycles < 1 || r.Limits.MaxCorrectionCycles > 10 || r.Limits.TimeoutSeconds < 1 || r.Limits.TimeoutSeconds > 86400 ||
 		r.Limits.MaxRuntimeSeconds < 0 || r.Limits.MaxRuntimeSeconds > MaxRuntimeCap {
-		return nil, fmt.Errorf("limits require 1–10 correction cycles, a 1–86400 second idle timeout, and a 0–%d second max runtime", MaxRuntimeCap)
+		return nil, fieldErr("limits", "limits require 1–10 correction cycles, a 1–86400 second idle timeout, and a 0–%d second max runtime", MaxRuntimeCap)
 	}
 	if len(r.RequiredChecks) == 0 || len(r.Profiles) == 0 || len(r.Stages) > 64 {
-		return nil, fmt.Errorf("require checks, profiles, and at most 64 stages")
+		path := "stages"
+		if len(r.RequiredChecks) == 0 {
+			path = "required_checks"
+		} else if len(r.Profiles) == 0 {
+			path = "profiles"
+		}
+		return nil, fieldErr(path, "require checks, profiles, and at most 64 stages")
 	}
 	seenChecks := map[string]bool{}
-	for _, check := range r.RequiredChecks {
+	for i, check := range r.RequiredChecks {
 		if !identifier.MatchString(check) || seenChecks[check] {
-			return nil, fmt.Errorf("invalid or duplicate required check %q", check)
+			return nil, fieldErr(fmt.Sprintf("required_checks[%d]", i), "invalid or duplicate required check %q", check)
 		}
 		seenChecks[check] = true
 	}
 	for _, name := range sortedKeys(r.Profiles) {
 		p := r.Profiles[name]
 		if !identifier.MatchString(name) || (p.Harness != "claude-code" && p.Harness != "codex" && p.Harness != "opencode") || strings.TrimSpace(p.Model) == "" || strings.TrimSpace(p.Effort) == "" {
-			return nil, fmt.Errorf("profile %q requires an explicit Claude Code/Codex/OpenCode harness, model, and effort", name)
+			return nil, fieldErr("profiles."+name, "profile %q requires an explicit Claude Code/Codex/OpenCode harness, model, and effort", name)
 		}
 		if p.Harness == "opencode" {
 			provider, model, ok := strings.Cut(p.Model, "/")
 			if !ok || strings.TrimSpace(provider) == "" || strings.TrimSpace(model) == "" {
-				return nil, fmt.Errorf("OpenCode profile %q requires a provider/model identifier", name)
+				return nil, fieldErr("profiles."+name+".model", "OpenCode profile %q requires a provider/model identifier", name)
 			}
 		}
-		for _, file := range append(slices.Clone(p.Instructions), p.Skills...) {
+		for i, file := range append(slices.Clone(p.Instructions), p.Skills...) {
 			if !validPath(file) {
-				return nil, fmt.Errorf("profile %q has invalid file path %q", name, file)
+				field := fmt.Sprintf("profiles.%s.instructions[%d]", name, i)
+				if i >= len(p.Instructions) {
+					field = fmt.Sprintf("profiles.%s.skills[%d]", name, i-len(p.Instructions))
+				}
+				return nil, fieldErr(field, "profile %q has invalid file path %q", name, file)
 			}
 		}
 	}
 	stages := map[string]Stage{}
 	kinds := map[string][]string{}
-	for _, s := range r.Stages {
+	index := map[string]int{}
+	for i, s := range r.Stages {
+		at := fmt.Sprintf("stages[%d]", i)
 		if !identifier.MatchString(s.ID) || stages[s.ID].ID != "" {
-			return nil, fmt.Errorf("invalid or duplicate stage ID %q", s.ID)
+			return nil, fieldErr(at+".id", "invalid or duplicate stage ID %q", s.ID)
 		}
 		switch s.Kind {
 		case "plan", "interview", "implement", "review", "verify", "architect_review", "research", "integrate", "ui_review", "documentation":
 			if _, ok := r.Profiles[s.Profile]; !ok || !validPath(s.Prompt) {
-				return nil, fmt.Errorf("stage %q requires a known profile and prompt file", s.ID)
+				field := at + ".prompt"
+				if _, ok := r.Profiles[s.Profile]; !ok {
+					field = at + ".profile"
+				}
+				return nil, fieldErr(field, "stage %q requires a known profile and prompt file", s.ID)
 			}
 		case "human_review":
 			if s.Profile != "" || s.Prompt != "" {
-				return nil, fmt.Errorf("human review %q cannot have an agent profile or prompt", s.ID)
+				return nil, fieldErr(at, "human review %q cannot have an agent profile or prompt", s.ID)
 			}
 		default:
-			return nil, fmt.Errorf("stage %q has unsupported kind %q", s.ID, s.Kind)
+			return nil, fieldErr(at+".kind", "stage %q has unsupported kind %q", s.ID, s.Kind)
 		}
 		if s.Loop != nil && (s.Kind != "review" && s.Kind != "verify" || s.Loop.Until != "pass" ||
 			s.Loop.MaxCycles < 1 || s.Loop.MaxCycles > 10) {
-			return nil, fmt.Errorf("stage %q loop needs a review/verify stage, until \"pass\", and 1–10 cycles", s.ID)
+			return nil, fieldErr(at+".loop", "stage %q loop needs a review/verify stage, until \"pass\", and 1–10 cycles", s.ID)
 		}
 		stages[s.ID] = s
+		index[s.ID] = i
 		kind := s.Kind
 		if kind == "interview" {
 			kind = "plan" // An interview is a plan the architect runs with a human.
@@ -179,17 +200,17 @@ func (r Recipe) validate() ([]string, error) {
 	}
 	for _, k := range []string{"plan", "implement", "review", "verify", "architect_review", "human_review"} {
 		if len(kinds[k]) == 0 {
-			return nil, fmt.Errorf("missing mandatory %s stage", k)
+			return nil, fieldErr("stages", "missing mandatory %s stage", k)
 		}
 	}
 	if len(kinds["human_review"]) != 1 || len(kinds["architect_review"]) != 1 {
-		return nil, fmt.Errorf("require exactly one final architect review and one human review")
+		return nil, fieldErr("stages", "require exactly one final architect review and one human review")
 	}
-	for _, s := range r.Stages {
+	for i, s := range r.Stages {
 		seen := map[string]bool{}
-		for _, dep := range s.DependsOn {
+		for j, dep := range s.DependsOn {
 			if _, ok := stages[dep]; !ok || dep == s.ID || seen[dep] {
-				return nil, fmt.Errorf("stage %q has invalid or duplicate dependency %q", s.ID, dep)
+				return nil, fieldErr(fmt.Sprintf("stages[%d].depends_on[%d]", i, j), "stage %q has invalid or duplicate dependency %q", s.ID, dep)
 			}
 			seen[dep] = true
 		}
@@ -220,19 +241,19 @@ func (r Recipe) validate() ([]string, error) {
 			}
 		}
 		if len(order) == before {
-			return nil, fmt.Errorf("stage dependencies contain a cycle")
+			return nil, fieldErr("stages", "stage dependencies contain a cycle")
 		}
 	}
 	human, architect := kinds["human_review"][0], kinds["architect_review"][0]
 	for _, s := range r.Stages {
 		if s.Loop != nil && (!ancestors[s.ID][s.Loop.With] || stages[s.Loop.With].Kind == "human_review") {
-			return nil, fmt.Errorf("stage %q loop target %q must be an upstream agent stage", s.ID, s.Loop.With)
+			return nil, fieldErr(stagePath(index, s.ID)+".loop.with", "stage %q loop target %q must be an upstream agent stage", s.ID, s.Loop.With)
 		}
 		if s.ID != human && !ancestors[human][s.ID] {
-			return nil, fmt.Errorf("stage %q must precede final human review", s.ID)
+			return nil, fieldErr(stagePath(index, s.ID)+".depends_on", "stage %q must precede final human review", s.ID)
 		}
 		if s.ID != human && s.ID != architect && !ancestors[architect][s.ID] {
-			return nil, fmt.Errorf("stage %q must precede final architect review", s.ID)
+			return nil, fieldErr(stagePath(index, s.ID)+".depends_on", "stage %q must precede final architect review", s.ID)
 		}
 		if s.Kind == "implement" {
 			planned, reviewed, verified := false, false, false
@@ -246,7 +267,7 @@ func (r Recipe) validate() ([]string, error) {
 				verified = verified || ancestors[id][s.ID]
 			}
 			if !planned || !reviewed || !verified {
-				return nil, fmt.Errorf("implementation %q needs prior planning and subsequent review and verification", s.ID)
+				return nil, fieldErr(stagePath(index, s.ID)+".depends_on", "implementation %q needs prior planning and subsequent review and verification", s.ID)
 			}
 		}
 	}
