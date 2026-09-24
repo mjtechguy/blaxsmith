@@ -25,7 +25,8 @@ message WorkspaceRun {
   string created_at = 7; // RFC 3339.
   // Agent status rollup: needs_approval (open approval or undecided review),
   // awaiting_input (other open interaction or escalated stage), working,
-  // failed, done, or empty.
+  // failed, done, then the run state when no stage says more: queued,
+  // cancel_requested, or cancelled. Every run has a status.
   string status = 8;
   int32 open_interactions = 9;
   bool review_waiting = 10;

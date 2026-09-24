@@ -231,7 +231,8 @@ func (s *Store) workspaceRuns(ctx context.Context, page string, args ...any) ([]
 			WHEN COALESCE(i.open,0)>0 OR COALESCE(t.escalated,false) THEN 'awaiting_input'
 			WHEN COALESCE(t.working,false) OR r.state='active' THEN 'working'
 			WHEN r.state='failed' OR COALESCE(t.blocked,false) THEN 'failed'
-			WHEN r.state='succeeded' THEN 'done' ELSE '' END,
+			WHEN r.state='succeeded' THEN 'done'
+			WHEN r.state IN ('queued','cancel_requested','cancelled') THEN r.state ELSE '' END,
 		COALESCE(i.open,0),rv.waiting,COALESCE(t.stages,0),COALESCE(t.succeeded,0)
 		FROM (`+page+`) r
 		LEFT JOIN LATERAL (SELECT count(*)::integer AS stages,count(*) FILTER (WHERE x.state='succeeded')::integer AS succeeded,

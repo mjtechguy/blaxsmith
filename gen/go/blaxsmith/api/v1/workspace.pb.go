@@ -34,7 +34,8 @@ type WorkspaceRun struct {
 	CreatedAt    string                 `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // RFC 3339.
 	// Agent status rollup: needs_approval (open approval or undecided review),
 	// awaiting_input (other open interaction or escalated stage), working,
-	// failed, done, or empty.
+	// failed, done, then the run state when no stage says more: queued,
+	// cancel_requested, or cancelled. Every run has a status.
 	Status           string `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
 	OpenInteractions int32  `protobuf:"varint,9,opt,name=open_interactions,json=openInteractions,proto3" json:"open_interactions,omitempty"`
 	ReviewWaiting    bool   `protobuf:"varint,10,opt,name=review_waiting,json=reviewWaiting,proto3" json:"review_waiting,omitempty"`

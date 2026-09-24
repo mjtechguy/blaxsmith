@@ -70,6 +70,17 @@ test("status rollup prefers approval over input over work over plan ready", () =
   assert.equal(view.rollup([null, undefined]), null);
   assert.equal(view.runStatus("active", tasks, open), "needs_approval");
   assert.equal(view.runStatus("succeeded", [task("a", "succeeded")], []), "done");
+  // No stage signal: the run state is the pill, so queued and halted runs never show "—".
+  assert.equal(view.runStatus("queued", [task("a", "pending")], []), "queued");
+  assert.equal(view.runStatus("cancel_requested", [task("a", "pending")], []), "cancel_requested");
+  assert.equal(view.runStatus("cancelled", [task("a", "cancelled")], []), "cancelled");
+  assert.equal(view.runStatus("cancelled", [task("a", "succeeded")], []), "cancelled");
+  // Stage signals still outrank the fallback, which ranks below done.
+  assert.equal(view.runStatus("cancelled", [task("a", "blocked")], []), "failed");
+  assert.equal(view.runStatus("cancel_requested", [task("a", "running")], []), "working");
+  assert.deepEqual(view.statusOrder, ["needs_approval", "awaiting_input", "working", "plan_ready", "failed", "done", "cancel_requested", "cancelled", "queued"]);
+  assert.equal(view.rollup(["queued", "done"]), "done");
+  for (const status of view.statusOrder) assert.ok(view.statusLabels[status], status);
   // A plan stage whose dependents started is just done; a presented review needs approval.
   const started = [task("plan", "succeeded", { kind: "plan" }), task("implement", "running", { dependsOn: ["plan"] }), task("human-review", "pending", { kind: "human_review" })];
   assert.equal(view.stageStatus(started[0], [], started), "done");

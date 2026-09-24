@@ -90,11 +90,15 @@ export function planProgress(plan: PlanItem[]): { done: number; total: number; c
 
 export const formatDuration = (ms?: number) => ms === undefined ? "" : ms < 1_000 ? `${ms} ms` : ms < 60_000 ? `${(ms / 1_000).toFixed(1)} s` : `${Math.floor(ms / 60_000)} m ${Math.round((ms % 60_000) / 1_000)} s`;
 
-// Status pills, highest priority first.
-export const statusOrder = ["needs_approval", "awaiting_input", "working", "plan_ready", "failed", "done"] as const;
+// Status pills, highest priority first. The last three are run-state
+// fallbacks for a run whose stages say nothing (queued, stopping, halted), so
+// every run has a pill; stages never produce them.
+export const statusOrder = ["needs_approval", "awaiting_input", "working", "plan_ready", "failed", "done", "cancel_requested", "cancelled", "queued"] as const;
+export const runStateStatuses: readonly AgentStatus[] = ["queued", "cancel_requested", "cancelled"];
 export type AgentStatus = typeof statusOrder[number];
 export const statusLabels: Record<AgentStatus, string> = {
   needs_approval: "Needs approval", awaiting_input: "Awaiting input", working: "Working", plan_ready: "Plan ready", failed: "Failed", done: "Done",
+  cancel_requested: "Cancelling", cancelled: "Cancelled", queued: "Queued",
 };
 export const needsYou = (status: AgentStatus | null) => status === "needs_approval" || status === "awaiting_input";
 
@@ -131,7 +135,9 @@ export function runStatus(runState: string, tasks: StageLike[], interactions: Op
   if (stages && stages !== "done") return stages;
   if (runState === "succeeded") return "done";
   if (runState === "failed") return "failed";
-  return runState === "active" && interactions.some((item) => item.state === "open") ? "awaiting_input" : stages;
+  if (runState === "active" && interactions.some((item) => item.state === "open")) return "awaiting_input";
+  // A queued, stopping, or halted run whose stages are merely done shows its state.
+  return runStateStatuses.includes(runState as AgentStatus) ? runState as AgentStatus : stages;
 }
 
 // attentionTitle is the browser tab title: "(2) Blaxsmith" while things need you.

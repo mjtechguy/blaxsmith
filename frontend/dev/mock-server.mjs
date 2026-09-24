@@ -461,14 +461,17 @@ const staticRuns = [
   ["offline-cache", "proj-mobile", "succeeded", 60 * 30, "done", 0, 5, 5],
   ["dark-mode-audit", "proj-mobile", "cancelled", 60 * 50, "", 0, 2, 5],
   ["schema-drift-check", "proj-data", "queued", 4, "", 0, 0, 5],
+  ["reindex-halt", "proj-data", "cancel_requested", 12, "", 0, 1, 5],
   ["backfill-partitions", "proj-data", "succeeded", 60 * 26, "done", 0, 4, 4],
   ["export-retention", projectId, "succeeded", 60 * 72, "done", 0, 6, 6],
   ["csv-header-fix", projectId, "failed", 60 * 96, "failed", 0, 2, 6],
   ...Array.from({ length: 14 }, (_, i) => [`nightly-refresh-${String(i + 1).padStart(2, "0")}`, "proj-data", i % 5 === 3 ? "failed" : "succeeded", 60 * (100 + i * 20), i % 5 === 3 ? "failed" : "done", 0, 4, 4]),
-].map(([launchKey, pid, state, minutes, status, open, done, count], i) => ({ id: `run-${launchKey}`, projectId: pid, projectName: projectName(pid), launchKey, sourceCommit: sha(i + 3), state, createdAt: minutesAgo(minutes), status, openInteractions: open, reviewWaiting: status === "needs_approval" && state === "succeeded", stageCount: count, stagesSucceeded: done }));
+].map(([launchKey, pid, state, minutes, status, open, done, count], i) => ({ id: `run-${launchKey}`, projectId: pid, projectName: projectName(pid), launchKey, sourceCommit: sha(i + 3), state, createdAt: minutesAgo(minutes), status: status || stateStatus(state), openInteractions: open, reviewWaiting: status === "needs_approval" && state === "succeeded", stageCount: count, stagesSucceeded: done }));
+// The server's rollup falls back to the run state when no stage says more.
+function stateStatus(state) { return ["queued", "cancel_requested", "cancelled"].includes(state) ? state : ""; }
 function liveRun() {
   const open = interactions.filter((i) => i.state === "open");
-  const status = open.some((i) => i.kind === "approval") || (reviewPackage && !reviewPackage.decision) ? "needs_approval" : open.length ? "awaiting_input" : run.state === "active" ? "working" : run.state === "succeeded" ? "done" : "";
+  const status = open.some((i) => i.kind === "approval") || (reviewPackage && !reviewPackage.decision) ? "needs_approval" : open.length ? "awaiting_input" : run.state === "active" ? "working" : run.state === "succeeded" ? "done" : stateStatus(run.state);
   return { ...run, projectName: projectName(projectId), status, openInteractions: open.length, reviewWaiting: Boolean(reviewPackage && !reviewPackage.decision), stageCount: tasks.length, stagesSucceeded: tasks.filter((t) => t.state === "succeeded").length };
 }
 const allRuns = () => [liveRun(), ...staticRuns];

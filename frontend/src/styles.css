@@ -351,6 +351,8 @@ a { color: inherit; text-decoration: none; }
 .status-plan_ready { color: var(--latest-text); background: var(--latest-soft); }
 .status-failed { color: var(--danger-text); background: var(--hover); }
 .status-done { color: var(--success-text); background: var(--success-soft); }
+.status-queued, .status-cancel_requested { color: var(--muted); background: var(--hover); }
+.status-cancelled { color: var(--danger-text); background: var(--hover); }
 .status-none { padding: 0; color: var(--muted); }
 .status-none::before { display: none; }
 

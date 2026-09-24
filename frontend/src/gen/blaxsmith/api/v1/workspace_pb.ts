@@ -63,7 +63,8 @@ export type WorkspaceRun = Message<"blaxsmith.api.v1.WorkspaceRun"> & {
   /**
    * Agent status rollup: needs_approval (open approval or undecided review),
    * awaiting_input (other open interaction or escalated stage), working,
-   * failed, done, or empty.
+   * failed, done, then the run state when no stage says more: queued,
+   * cancel_requested, or cancelled. Every run has a status.
    *
    * @generated from field: string status = 8;
    */

@@ -296,3 +296,56 @@ func TestWorkspaceViewsAreScopedRoleAwareAndPaged(t *testing.T) {
 		t.Fatalf("outsider home: %+v %v", home, err)
 	}
 }
+
+// Runs whose stages say nothing still get a status: the run state.
+func TestWorkspaceRunStatusFallsBackToRunState(t *testing.T) {
+	pool := testPool(t)
+	ctx := t.Context()
+	store, err := New(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	org := organization(t, pool, "workspace-fallback")
+	member := reviewer(t, pool, org, "member", "ws-fallback-member")
+	project, err := store.CreateProject(ctx, org, "fallback-proj", "Fallback project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	newRun := func(key, state, taskState string) {
+		t.Helper()
+		input := RunInput{OrganizationID: org, ProjectID: project, LaunchKey: key,
+			SourceCommit: strings.Repeat("a", 40), BundleSHA256: strings.Repeat("b", 64), VerificationSHA256: strings.Repeat("c", 64)}
+		run, err := store.CreateRun(ctx, input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		task, err := store.AddTask(ctx, org, run.ID, "build", input.BundleSHA256, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE workflow_tasks SET state=$3 WHERE organization_id=$1 AND id=$2`, org, task, taskState); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET state=$3 WHERE organization_id=$1 AND id=$2`, org, run.ID, state); err != nil {
+			t.Fatal(err)
+		}
+	}
+	newRun("run-queued", "queued", "pending")
+	newRun("run-cancelling", "cancel_requested", "pending")
+	newRun("run-cancelled", "cancelled", "cancelled")
+	// Stage signals still outrank the fallback: a halted run with a blocked
+	// stage reads failed, and an escalated stage still reads awaiting input.
+	newRun("run-cancelled-blocked", "cancelled", "blocked")
+	newRun("run-cancelling-escalated", "cancel_requested", "escalated")
+	want := map[string]string{"run-queued": "queued", "run-cancelling": "cancel_requested", "run-cancelled": "cancelled",
+		"run-cancelled-blocked": "failed", "run-cancelling-escalated": "awaiting_input"}
+	runs, total, err := store.ListWorkspaceRuns(ctx, member, RunFilter{})
+	if err != nil || total != int32(len(want)) {
+		t.Fatalf("runs: %+v %d %v", runs, total, err)
+	}
+	for _, r := range runs {
+		if r.Status != want[r.LaunchKey] {
+			t.Fatalf("run %s (%s): status %q, want %q", r.LaunchKey, r.State, r.Status, want[r.LaunchKey])
+		}
+	}
+}
