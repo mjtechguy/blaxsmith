@@ -62,3 +62,9 @@ provides enforced scoping. This connector identity does not replace a user or
 provider Connection, Grant, Binding, or Access Lease. The [pinned Substrate
 authentication contract](https://github.com/agent-substrate/substrate/blob/672533541dbfcd29084e4de2475267088bda3651/docs/authentication.md)
 states the current whole-control-plane authorization limit.
+
+The AX overlay build now also compiles and records the pinned `ax` CLI for the
+future connector image. Its non-loopback, plaintext API constraint means the
+connector still needs an explicitly managed local tunnel to a private AX API;
+it must never fall back to a workstation kubeconfig. This CLI packaging check
+does not yet provide the connector deployment or the tunnel itself.

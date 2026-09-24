@@ -60,9 +60,12 @@ bash integrations/ax/build.sh ../reference/ax /tmp/blaxsmith-ax-build
 
 The script exports committed source into a temporary directory, applies all eleven
 patches without changing the checkout, runs the full AX test suite and `go vet`,
-and builds the server, controller and runner. It records source/patch/binary hashes in
-`provenance.json`. Changing the upstream revision fails before building; update
-the patch intentionally and repeat the runtime probes when adopting a new AX pin.
+and builds the CLI, server, controller and runner. It records source/patch/binary
+hashes in `provenance.json`. The pinned `ax` CLI is for the isolated connector
+image; configure it with an explicit local tunnel endpoint so it never discovers
+a workstation or pod kubeconfig. Changing the upstream revision fails before
+building; update the patch intentionally and repeat the runtime probes when
+adopting a new AX pin.
 The [initial provenance](provenance.json), [egress follow-up
 provenance](provenance-egress.json), [bootstrap-gate provenance](provenance-bootstrap.json),
 [platform-key provenance](provenance-platform-key.json), [encrypted-Git

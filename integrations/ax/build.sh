@@ -44,7 +44,7 @@ git apply --check --whitespace=error-all "$integration/task-resources.patch"
 git apply "$integration/task-resources.patch"
 go test ./...
 go vet ./...
-for component in ax-server ax-controller ax-task-runner; do
+for component in ax ax-server ax-controller ax-task-runner; do
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
     -ldflags='-s -w' -o "$output/$component" "./cmd/$component"
 done
@@ -68,7 +68,7 @@ record = {
     'askpass_sha256': sha(askpass),
     'go_version': subprocess.check_output(['go', 'version'], text=True).strip(),
     'platform': 'linux/amd64',
-    'binaries': {name: sha(output / name) for name in ['ax-server', 'ax-controller', 'ax-task-runner']},
+    'binaries': {name: sha(output / name) for name in ['ax', 'ax-server', 'ax-controller', 'ax-task-runner']},
 }
 (output / 'provenance.json').write_text(json.dumps(record, indent=2) + '\n')
 PY
