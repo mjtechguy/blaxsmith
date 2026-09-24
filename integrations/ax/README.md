@@ -9,7 +9,7 @@ through the existing overlay stack; the build fails if the checkout differs.
 `platform-bootstrap-key.patch`, `encrypted-git-bootstrap.patch`,
 `command-exit-readback.patch`, `task-tombstones.patch`, `redis-ha.patch`,
 `consumer-recovery.patch`, `provider-credential.patch`, `post-ready-model.patch`,
-and `task-resources.patch` change the files named in their
+`task-resources.patch`, and `opencode-provider.patch` change the files named in their
 diffs; the reference checkout stays untouched. This is a temporary integration overlay, not a claim that AX
 has accepted these changes or that secure bootstrap is finished.
 
@@ -148,7 +148,11 @@ actor-attested model challenge and releases only the selected model binding.
 The phase is signed and included in envelope associated data, and leases are
 reserved only for their matching phase. The AX runner requires the exact
 `/usr/local/bin/blaxsmith-tool-worker` command for model keys, matches the
-encrypted attempt and provider to its public selection, and writes the model
+encrypted attempt and provider to its public selection (`openai` for Codex,
+`anthropic` for Claude Code, and the `provider/` prefix of an OpenCode model,
+which `opencode-provider.patch` allows to be `openai`, `anthropic`, or
+`opencode` for an OpenCode Zen API key; other OpenCode providers stay
+rejected), and writes the model
 key only after setup to `/run/blaxsmith/agent-credential.json` (0600) in a
 pre-owned private directory. The runner removes that file on command exit.
 The product must supply a combined immutable runner/CLI/worker image and
