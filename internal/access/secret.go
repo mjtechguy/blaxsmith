@@ -29,9 +29,10 @@ type SecretStore struct {
 }
 
 type Secret struct {
-	Version int64
-	KeyID   string
-	Bytes   []byte
+	Version   int64
+	KeyID     string
+	Bytes     []byte
+	ExpiresAt *time.Time
 }
 
 func (s *Secret) Clear() { clear(s.Bytes) }
@@ -168,7 +169,7 @@ func (s *SecretStore) ReadCurrent(ctx context.Context, tx pgx.Tx, organizationID
 	if err != nil || len(data) == 0 || len(data) > maxSecretBytes {
 		return Secret{}, ErrDenied
 	}
-	return Secret{Version: *version, KeyID: keyID, Bytes: data}, nil
+	return Secret{Version: *version, KeyID: keyID, Bytes: data, ExpiresAt: expiresAt}, nil
 }
 
 func secretAAD(organizationID, connectionID string, version int64, keyID string) []byte {

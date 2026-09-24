@@ -4,8 +4,8 @@ Upstream: `github.com/google/ax`, commit
 `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601`, Apache-2.0 (see LICENSE).
 `fail-closed.patch`, `egress-policy.patch`, `bootstrap-gate.patch`,
 `platform-bootstrap-key.patch`, `encrypted-git-bootstrap.patch`,
-`command-exit-readback.patch`, `task-tombstones.patch`, `redis-ha.patch`, and
-`consumer-recovery.patch` change the files named in their
+`command-exit-readback.patch`, `task-tombstones.patch`, `redis-ha.patch`,
+`consumer-recovery.patch`, and `provider-credential.patch` change the files named in their
 diffs; the reference checkout stays untouched. This is a temporary integration overlay, not a claim that AX
 has accepted these changes or that secure bootstrap is finished.
 
@@ -51,7 +51,7 @@ it ran on the Linux development node.
 bash integrations/ax/build.sh ../reference/ax /tmp/blaxsmith-ax-build
 ```
 
-The script exports committed source into a temporary directory, applies all nine
+The script exports committed source into a temporary directory, applies all ten
 patches without changing the checkout, runs the full AX test suite and `go vet`,
 and builds the server, controller and runner. It records source/patch/binary hashes in
 `provenance.json`. Changing the upstream revision fails before building; update
@@ -108,6 +108,17 @@ The [live private-Git probe](../../docs/bootstrap-private-git-probe.json) and
 [bounded secret scan](../../docs/bootstrap-private-git-secret-scan.json) pass.
 Product grants, complete egress, full-snapshot behavior, and revocation remain
 open; do not use this slice for sensitive work.
+
+The provider credential overlay accepts a separate `model_api_key` payload
+through the same signed X25519 envelope. It requires the exact
+`/usr/local/bin/blaxsmith-tool-worker` task command, matches the encrypted
+attempt and provider to its public selection, and writes only
+`/run/blaxsmith/agent-credential.json` (0600) in a pre-owned private directory.
+The runner removes that file on command exit. The product must supply a
+combined immutable runner/CLI/worker image and current model grant, binding,
+secret and lease callbacks. The existing one-lease-per-challenge schema blocks
+simultaneous private Git and provider-key delivery. Revocation after a raw key
+has entered the pod must stop that actor and rotate the provider key if needed.
 
 The initial launch regression tests were also run against unmodified upstream
 production code. They failed on template fallback, policy failure, hidden stop failure,

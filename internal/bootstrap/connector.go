@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -43,7 +44,7 @@ func (r Runtime) DataOnlySnapshots() bool {
 }
 
 // Connector opens the pre-workspace gate and can deliver one authorized Git
-// setup credential. The caller must authenticate the scheduler assignment and
+// setup or model credential. The caller must authenticate the scheduler assignment and
 // implement Current and Authorize against trusted control-plane/policy state.
 type Connector struct {
 	Ledger    *Ledger
@@ -63,6 +64,9 @@ type Connector struct {
 	// GitSetup runs only after proof, owner fencing, runtime check, and policy.
 	// The returned token byte slice is consumed and cleared by Open.
 	GitSetup func(context.Context, pgx.Tx, Runtime) (GitSetup, error)
+	// ModelCredential is mutually exclusive with GitSetup until the durable
+	// lease schema can record multiple capabilities per challenge.
+	ModelCredential func(context.Context, pgx.Tx, Runtime) (ModelCredential, error)
 }
 
 type GitSetup struct {
@@ -70,6 +74,13 @@ type GitSetup struct {
 	Commit   string
 	Username string
 	Token    []byte
+}
+
+type ModelCredential struct {
+	AttemptID string
+	Provider  string
+	ExpiresAt time.Time
+	APIKey    []byte
 }
 
 func validGitCommit(commit string) bool {
@@ -83,8 +94,9 @@ func validGitCommit(commit string) bool {
 func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) error {
 	if c.Ledger == nil || c.Client == nil || c.Token == nil || c.Roots == nil ||
 		len(c.Signer) != ed25519.PrivateKeySize || c.Current == nil || c.Authorize == nil ||
-		(c.GitSetup != nil && (c.Reserve == nil || c.Delivered == nil)) ||
-		(c.GitSetup == nil && (c.Reserve != nil || c.Delivered != nil)) ||
+		(c.GitSetup != nil && c.ModelCredential != nil) ||
+		((c.GitSetup != nil || c.ModelCredential != nil) != (c.Reserve != nil && c.Delivered != nil)) ||
+		((c.Reserve == nil) != (c.Delivered == nil)) ||
 		expected.Actor.Atespace == "" || expected.Actor.Name == "" || expected.Actor.UID == "" ||
 		expected.TemplateUID == "" || expected.Image == "" || expected.SandboxClass == "" || expected.BootstrapPublicKey == "" ||
 		expected.WorkerPod == "" || expected.WorkerPodUID == "" || expected.WorkerPool == "" || !expected.DataOnlySnapshots() {
@@ -157,6 +169,19 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 				return err
 			}
 			envelope = &sealed
+		} else if c.ModelCredential != nil {
+			credential, err := c.ModelCredential(sendCtx, tx, current)
+			if err != nil {
+				return err
+			}
+			defer clear(credential.APIKey)
+			sealed, err := sealModelCredential(challenge, redeemed.Scope.AttemptID, credential)
+			if err != nil {
+				return err
+			}
+			envelope = &sealed
+		}
+		if envelope != nil {
 			encoded, _ := json.Marshal(envelope)
 			digest := sha256.Sum256(encoded)
 			message = []byte("blaxsmith/bootstrap/release/v2\n" + challenge.Nonce + "\n" +
@@ -185,6 +210,29 @@ func (c *Connector) Open(ctx context.Context, scope Scope, expected Runtime) err
 		return nil
 	})
 	return err
+}
+
+func sealModelCredential(challenge Challenge, attemptID string, credential ModelCredential) (Envelope, error) {
+	now := time.Now()
+	if credential.AttemptID != attemptID ||
+		(credential.Provider != "openai" && credential.Provider != "anthropic") ||
+		!credential.ExpiresAt.After(now) || credential.ExpiresAt.After(now.Add(time.Hour)) ||
+		len(credential.APIKey) == 0 || len(credential.APIKey) > 8192 ||
+		strings.ContainsAny(string(credential.APIKey), "\r\n\x00") {
+		return Envelope{}, ErrDenied
+	}
+	payload, err := json.Marshal(struct {
+		Kind      string `json:"kind"`
+		AttemptID string `json:"attempt_id"`
+		Provider  string `json:"provider"`
+		ExpiresAt int64  `json:"expires_at"`
+		APIKey    string `json:"api_key"`
+	}{"model_api_key", credential.AttemptID, credential.Provider, credential.ExpiresAt.Unix(), string(credential.APIKey)})
+	if err != nil {
+		return Envelope{}, err
+	}
+	defer clear(payload)
+	return Seal(challenge, payload)
 }
 
 func (c *Connector) request(ctx context.Context, router *url.URL, offer Offer, method, path string, body []byte) ([]byte, []byte, []byte, error) {

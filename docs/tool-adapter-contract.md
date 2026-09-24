@@ -48,11 +48,24 @@ passed to the CLI. The worker passes the key only to the actual tool process,
 redacts direct occurrences from output, and exits nonzero on absent or invalid
 credential, binary/hash/version mismatch, unsupported selection, or tool error.
 
-The current AX bootstrap envelope carries **Git setup only**. Before enabling
-this path, extend its attested, signed release to deliver the attempt-scoped
-provider credential into that private file, bind it to current policy and
-revocation, and ship a combined immutable image. Neither the web API nor the
-scheduler currently chooses `Bridge.Tool`. A CLI exit only proves process
+The attested AX release now accepts one provider credential as an alternative
+to Git setup. `access.PreflightModelInvoke` checks an exact `model.invoke`
+grant and encrypted secret before attempt reservation; `BindModelInvoke`
+freezes the grant/policy versions on the attempt. At release,
+`AuthorizeModelInvoke` rechecks connection, grant, binding, project policy and
+provider under locks, while `ReserveModelLease`, `MarkLeaseAttempt`, and
+`MarkLeaseDelivered` record the delivery. The signed encrypted envelope binds
+the key to the live actor challenge. The AX runner rejects a mismatched tool
+command and writes only the worker's private credential file, then removes it
+on command exit. No raw key goes into AX Task metadata.
+
+The lease table still permits **one capability per challenge**. A run needing
+both private Git setup and a provider credential remains blocked until the
+schema and envelope support both. A recorded revocation fences future
+delivery; an already issued raw provider key remains usable until provider
+rotation, expiry, or actor termination. The scheduler must stop the actor on
+grant/connection revocation. A combined immutable AX runner+CLI+worker image
+and product connector callbacks are still required before live use. A CLI exit only proves process
 exit; evidence collection, actual model identification, and a trusted
 supervisor boundary remain required before crediting work or enabling
 untrusted repositories.

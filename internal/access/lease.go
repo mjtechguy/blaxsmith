@@ -29,6 +29,65 @@ type LeaseRequest struct {
 	GuestExpiresAt  time.Time
 }
 
+// ModelLeaseRequest is prepared for a single provider credential in an
+// attested bootstrap release. The current schema permits only one lease per
+// challenge, so model and private-Git credentials cannot share a release.
+type ModelLeaseRequest struct {
+	OrganizationID  string
+	BindingID       string
+	ChallengeID     string
+	ClusterID       string
+	AttemptID       string
+	OwnerGeneration int64
+	ActorUID        string
+	Provider        string
+	Model           string
+	ExpiresAt       time.Time
+}
+
+func ReserveModelLease(ctx context.Context, tx pgx.Tx, request ModelLeaseRequest) (string, error) {
+	if tx == nil || request.OrganizationID == "" || request.BindingID == "" || request.ChallengeID == "" ||
+		request.ClusterID == "" || request.AttemptID == "" || request.OwnerGeneration <= 0 || request.ActorUID == "" ||
+		modelOrigin(request.Provider) == "" || !modelName.MatchString(request.Model) || request.ExpiresAt.IsZero() ||
+		!request.ExpiresAt.After(time.Now()) || request.ExpiresAt.After(time.Now().Add(time.Hour)) {
+		return "", ErrDenied
+	}
+	var id [16]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return "", err
+	}
+	leaseID := base64.RawURLEncoding.EncodeToString(id[:])
+	err := tx.QueryRow(ctx, `INSERT INTO access_leases
+		(organization_id,id,binding_id,connection_id,bootstrap_challenge_id,
+		 cluster_id,attempt_id,owner_generation,actor_uid,capability,resource,audience,expires_at)
+		SELECT $1,$2,b.id,g.connection_id,c.id,c.cluster_id,c.attempt_id,c.owner_generation,
+		       c.actor_uid,'model.invoke',b.resource,$3,$4
+		FROM bootstrap_challenges c
+		JOIN access_bindings b ON b.organization_id=$1 AND b.id=$5 AND b.attempt_id=c.attempt_id
+		JOIN access_grants g ON g.organization_id=b.organization_id AND g.id=b.grant_id
+		JOIN access_project_policies p ON p.organization_id=b.organization_id AND p.project_id=b.project_id
+		JOIN access_connections ac ON ac.organization_id=g.organization_id AND ac.id=g.connection_id
+		JOIN access_secret_versions sv ON sv.organization_id=ac.organization_id AND sv.connection_id=ac.id
+			AND sv.version=ac.active_secret_version
+		WHERE c.id=$6 AND c.cluster_id=$7 AND c.attempt_id=$8 AND c.owner_generation=$9
+		AND c.actor_uid=$10 AND c.consumed_at IS NOT NULL AND c.release_attempted_at IS NOT NULL
+		AND c.cancelled_at IS NULL AND c.superseded_at IS NULL AND c.released_at IS NULL
+		AND c.expires_at>clock_timestamp() AND $4::timestamptz>clock_timestamp()
+		AND $4::timestamptz<=clock_timestamp()+interval '1 hour'
+		AND b.capability='model.invoke' AND b.resource=$11 AND b.input_commit IS NULL
+		AND g.capability=b.capability AND g.resource=b.resource AND g.revoked_at IS NULL
+		AND g.version=b.grant_version AND p.version=b.policy_version AND g.project_id=b.project_id
+		AND (g.expires_at IS NULL OR g.expires_at>=$4::timestamptz)
+		AND ac.state='active' AND (sv.expires_at IS NULL OR sv.expires_at>=$4::timestamptz)
+		RETURNING id`, request.OrganizationID, leaseID, modelOrigin(request.Provider), request.ExpiresAt,
+		request.BindingID, request.ChallengeID, request.ClusterID, request.AttemptID,
+		request.OwnerGeneration, request.ActorUID, request.Provider+"/"+request.Model).Scan(&leaseID)
+	if err != nil {
+		return "", deniedOrError("model lease reservation", err)
+	}
+	return leaseID, nil
+}
+
 // ReserveGitLease runs in the same transaction that commits bootstrap release
 // intent, before any network send. A crash after send can then be reconciled
 // against the durable attempted challenge even if delivery status is unknown.
