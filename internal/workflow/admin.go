@@ -83,36 +83,11 @@ func (s *Store) AdminOverview(ctx context.Context, caller identity.Caller) (Admi
 	}
 	org := caller.OrganizationID
 	out := AdminOverview{RunStates: map[string]int32{}}
-	// Stage kind, harness, and model come from the run's frozen recipe.
-	rows, err := s.pool.Query(ctx, `SELECT a.id,a.run_id,r.project_id,p.name,r.launch_key,t.task_key,
-		COALESCE(st.s->>'kind',''),COALESCE(b.bundle_json->'recipe'->'profiles'->(st.s->>'profile')->>'harness',''),
-		COALESCE(b.bundle_json->'recipe'->'profiles'->(st.s->>'profile')->>'model',''),a.state,
-		COALESCE(a.control_holder_principal_id::text,''),COALESCE(ip.username,''),a.created_at,
-		(SELECT e.occurred_at FROM workflow_events e WHERE e.organization_id=a.organization_id
-			AND e.attempt_id=a.id ORDER BY e.id DESC LIMIT 1)
-		FROM workflow_attempts a
-		JOIN workflow_tasks t ON t.organization_id=a.organization_id AND t.id=a.task_id AND t.active_attempt_id=a.id
-		JOIN workflow_runs r ON r.organization_id=a.organization_id AND r.id=a.run_id
-		JOIN workflow_projects p ON p.organization_id=r.organization_id AND p.id=r.project_id
-		LEFT JOIN workflow_run_bundles b ON b.organization_id=r.organization_id AND b.run_id=r.id
-		LEFT JOIN LATERAL (SELECT s FROM jsonb_array_elements(b.bundle_json->'recipe'->'stages') s
-			WHERE s->>'id'=t.task_key LIMIT 1) st ON true
-		LEFT JOIN identity_principals ip ON ip.id=a.control_holder_principal_id
-		WHERE a.organization_id=$1 AND a.state IN ('reserved','starting','running','reconciling')
-		ORDER BY a.created_at,a.id LIMIT $2`, org, adminLimit)
-	if err != nil {
+	var err error
+	if out.LiveAttempts, err = s.liveAttempts(ctx, org, adminLimit); err != nil {
 		return AdminOverview{}, err
 	}
-	out.LiveAttempts, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (AdminLiveAttempt, error) {
-		var a AdminLiveAttempt
-		err := row.Scan(&a.AttemptID, &a.RunID, &a.ProjectID, &a.ProjectName, &a.LaunchKey, &a.Stage, &a.Kind,
-			&a.Harness, &a.Model, &a.State, &a.ControllerID, &a.ControllerUsername, &a.StartedAt, &a.LastActivity)
-		return a, err
-	})
-	if err != nil {
-		return AdminOverview{}, err
-	}
-	rows, err = s.pool.Query(ctx, `SELECT i.id,i.run_id,r.project_id,p.name,r.launch_key,t.task_key,i.kind,
+	rows, err := s.pool.Query(ctx, `SELECT i.id,i.run_id,r.project_id,p.name,r.launch_key,t.task_key,i.kind,
 		left(COALESCE(i.payload->>'title',''),300),COALESCE((i.payload->>'blocking')::boolean,false),i.created_at
 		FROM workflow_interactions i
 		JOIN workflow_tasks t ON t.organization_id=i.organization_id AND t.id=i.task_id
@@ -211,6 +186,36 @@ func (s *Store) AdminOverview(ctx context.Context, caller identity.Caller) (Admi
 		return AdminOverview{}, err
 	}
 	return out, nil
+}
+
+// liveAttempts reads current attempt owners, oldest first. Stage kind,
+// harness, and model come from the run's frozen recipe.
+func (s *Store) liveAttempts(ctx context.Context, org string, limit int) ([]AdminLiveAttempt, error) {
+	rows, err := s.pool.Query(ctx, `SELECT a.id,a.run_id,r.project_id,p.name,r.launch_key,t.task_key,
+		COALESCE(st.s->>'kind',''),COALESCE(b.bundle_json->'recipe'->'profiles'->(st.s->>'profile')->>'harness',''),
+		COALESCE(b.bundle_json->'recipe'->'profiles'->(st.s->>'profile')->>'model',''),a.state,
+		COALESCE(a.control_holder_principal_id::text,''),COALESCE(ip.username,''),a.created_at,
+		(SELECT e.occurred_at FROM workflow_events e WHERE e.organization_id=a.organization_id
+			AND e.attempt_id=a.id ORDER BY e.id DESC LIMIT 1)
+		FROM workflow_attempts a
+		JOIN workflow_tasks t ON t.organization_id=a.organization_id AND t.id=a.task_id AND t.active_attempt_id=a.id
+		JOIN workflow_runs r ON r.organization_id=a.organization_id AND r.id=a.run_id
+		JOIN workflow_projects p ON p.organization_id=r.organization_id AND p.id=r.project_id
+		LEFT JOIN workflow_run_bundles b ON b.organization_id=r.organization_id AND b.run_id=r.id
+		LEFT JOIN LATERAL (SELECT s FROM jsonb_array_elements(b.bundle_json->'recipe'->'stages') s
+			WHERE s->>'id'=t.task_key LIMIT 1) st ON true
+		LEFT JOIN identity_principals ip ON ip.id=a.control_holder_principal_id
+		WHERE a.organization_id=$1 AND a.state IN ('reserved','starting','running','reconciling')
+		ORDER BY a.created_at,a.id LIMIT $2`, org, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (AdminLiveAttempt, error) {
+		var a AdminLiveAttempt
+		err := row.Scan(&a.AttemptID, &a.RunID, &a.ProjectID, &a.ProjectName, &a.LaunchKey, &a.Stage, &a.Kind,
+			&a.Harness, &a.Model, &a.State, &a.ControllerID, &a.ControllerUsername, &a.StartedAt, &a.LastActivity)
+		return a, err
+	})
 }
 
 // ListAuditEvents pages the organization's audit log newest first.

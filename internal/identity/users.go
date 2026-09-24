@@ -170,6 +170,96 @@ func (u *UserAdmin) ListMembers(ctx context.Context, caller Caller) ([]Member, e
 	})
 }
 
+// MemberFilter pages the member directory with a 1-based Page; zero values
+// take defaults (page 1, 25 rows, role order ascending).
+type MemberFilter struct {
+	Page, PageSize        int
+	Search                string
+	Roles, Statuses       []string
+	SortBy, SortDirection string
+}
+
+var memberSorts = map[string]string{
+	"role":       "array_position(ARRAY['owner','admin','member','viewer'],role)",
+	"username":   "username",
+	"last_login": "last_login",
+	"created_at": "created_at",
+}
+
+// ListMembersPage is the paged, filtered form of ListMembers with the same
+// status, session, and last-login semantics, plus the filtered total.
+func (u *UserAdmin) ListMembersPage(ctx context.Context, caller Caller, f MemberFilter) ([]Member, int32, error) {
+	if err := userAdminRole(caller); err != nil {
+		return nil, 0, err
+	}
+	if f.Page == 0 {
+		f.Page = 1
+	}
+	if f.PageSize == 0 {
+		f.PageSize = 25
+	}
+	if f.SortBy == "" {
+		f.SortBy = "role"
+	}
+	if f.SortDirection == "" {
+		f.SortDirection = "asc"
+	}
+	f.Search = strings.TrimSpace(f.Search)
+	order, ok := memberSorts[f.SortBy]
+	if !ok || f.Page < 1 || f.PageSize < 1 || f.PageSize > 100 || (f.Page-1)*f.PageSize > 10000 ||
+		len(f.Search) > 120 || (f.SortDirection != "asc" && f.SortDirection != "desc") ||
+		len(f.Roles) > len(memberRoles) || len(f.Statuses) > 3 {
+		return nil, 0, ErrUserInvalid
+	}
+	for _, role := range f.Roles {
+		if !memberRoles[role] {
+			return nil, 0, ErrUserInvalid
+		}
+	}
+	for _, status := range f.Statuses {
+		if status != "invited" && status != "active" && status != "disabled" {
+			return nil, 0, ErrUserInvalid
+		}
+	}
+	roles, statuses := append([]string{}, f.Roles...), append([]string{}, f.Statuses...)
+	order += " " + f.SortDirection
+	if f.SortBy == "role" {
+		order += ",username " + f.SortDirection
+	} else if f.SortBy == "last_login" {
+		order += " NULLS LAST"
+	}
+	const filtered = `WITH members AS (SELECT p.id,p.username,p.display_name,m.role,
+		CASE WHEN m.state='disabled' OR p.state='disabled' THEN 'disabled'
+			WHEN p.password_hash IS NULL THEN 'invited' ELSE 'active' END AS status,
+		(SELECT count(*)::integer FROM identity_sessions s WHERE s.organization_id=m.organization_id
+			AND s.principal_id=m.principal_id AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()) AS sessions,
+		(SELECT max(s.created_at) FROM identity_sessions s WHERE s.organization_id=m.organization_id
+			AND s.principal_id=m.principal_id) AS last_login,
+		m.created_at
+		FROM identity_memberships m JOIN identity_principals p ON p.id=m.principal_id
+		WHERE m.organization_id=$1 AND (cardinality($2::text[])=0 OR m.role=ANY($2::text[]))
+		AND ($3='' OR position(lower($3) in lower(p.username||' '||p.display_name))>0)),
+	filtered AS (SELECT * FROM members WHERE cardinality($4::text[])=0 OR status=ANY($4::text[]))`
+	args := []any{caller.OrganizationID, roles, f.Search, statuses}
+	var total int32
+	if err := u.db.QueryRow(ctx, filtered+` SELECT count(*)::integer FROM filtered`, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := u.db.Query(ctx, filtered+` SELECT id,username,display_name,role,status,sessions,last_login,created_at
+		FROM filtered ORDER BY `+order+`,id `+f.SortDirection+` LIMIT $5 OFFSET $6`,
+		append(args, f.PageSize, (f.Page-1)*f.PageSize)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	members, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Member, error) {
+		var m Member
+		err := row.Scan(&m.PrincipalID, &m.Username, &m.DisplayName, &m.Role, &m.Status, &m.ActiveSessions,
+			&m.LastLogin, &m.CreatedAt)
+		return m, err
+	})
+	return members, total, err
+}
+
 func validDisplayName(name string) bool {
 	return utf8.ValidString(name) && utf8.RuneCountInString(name) <= 160 && !strings.ContainsFunc(name, unicode.IsControl)
 }
