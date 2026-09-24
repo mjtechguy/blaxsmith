@@ -43,3 +43,29 @@ test("connection mutations send CSRF and write-only secrets to ConnectionService
     globalThis.fetch = previousFetch;
   }
 });
+
+test("effort choices follow the chosen model and preselect its default", async () => {
+  const previousWindow = globalThis.window;
+  globalThis.window = { location: { origin: "https://blaxsmith.test" } };
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const m = await server.ssrLoadModule("/src/connections.ts");
+    const harness = ["low", "medium", "high", "xhigh", "max"];
+    const opus46 = { efforts: ["low", "medium", "high", "max"], defaultEffort: "high" };
+    assert.deepEqual(m.effortChoices(opus46, harness), ["low", "medium", "high", "max"]);
+    assert.deepEqual(m.effortChoices({ efforts: [] }, harness), harness);
+    assert.deepEqual(m.effortChoices(undefined, harness), harness);
+    assert.equal(m.effortForModel(opus46, harness, "xhigh"), "high");
+    assert.equal(m.effortForModel({ efforts: ["low", "max"], defaultEffort: "" }, harness, "max"), "max");
+    assert.equal(m.effortForModel({ efforts: ["low", "max"], defaultEffort: "" }, harness, "xhigh"), "low");
+    assert.equal(m.effortForModel(undefined, harness, "high"), "high");
+    const health = (reason) => ({ reason });
+    assert.deepEqual(m.healthFix({ scope: "project", ownerId: "p1", health: health("key_rejected") }), { label: "Replace key", to: "/projects/p1/connections/new/api-key" });
+    assert.equal(m.healthFix({ scope: "organization", ownerId: "o", health: health("key_rejected") }).to, "/admin/connections/new/api-key");
+    assert.equal(m.healthFix({ scope: "personal", ownerId: "u", health: health("needs_sign_in") }).to, "/me/connections/new/subscription");
+    assert.equal(m.healthFix({ scope: "personal", ownerId: "u", health: health("") }), null);
+  } finally {
+    await server.close();
+    globalThis.window = previousWindow;
+  }
+});

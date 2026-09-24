@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package blaxsmith.api.v1;
+
+// Setup helpers: why a resource is (not) usable, and what a repository
+// suggests for verification and recipes. Reads only; nothing here saves.
+
+// One link of an access chain, closest to the principal first:
+// project_grant, user_grant, or role_grant; then organization_connection,
+// project_connection, personal_connection, organization_recipe, or
+// project_recipe; then recipe_version for recipes.
+message AccessStep {
+  string kind = 1;
+  string label = 2;
+  string id = 3;
+}
+
+message ExplainAccessRequest {
+  string project_id = 1;
+  string resource_kind = 2; // connection or recipe.
+  string resource_id = 3;
+  // Empty: the caller. Organization owners and admins may name any member.
+  string principal_id = 4;
+}
+message ExplainAccessResponse {
+  bool usable = 1;
+  repeated AccessStep steps = 2;
+  string reason = 3; // Why not, when not usable.
+  string grant_id = 4; // The resource grant CanUse matched, if any.
+  string principal_label = 5; // Username of the principal explained.
+}
+
+// One suggested check or setup step: an exact argv, no shell.
+message RepositoryCommand {
+  string id = 1;
+  repeated string command = 2;
+}
+
+// Reads the project's Git source at its pinned commit through the same fetch
+// path as runs (the project's Git connection for private sources). A valid
+// .blaxsmith.json (docs/project-file.md) wins; otherwise root manifests are
+// detected. Suggestions only: the caller confirms before anything is saved.
+message InspectRepositoryRequest { string project_id = 1; }
+message InspectRepositoryResponse {
+  string commit = 1;
+  string source = 2; // file, detected, or none.
+  string file_error = 3; // Why .blaxsmith.json was ignored; empty if valid or absent.
+  repeated RepositoryCommand verification = 4;
+  repeated RepositoryCommand setup = 5;
+  string recipe = 6; // Suggested library recipe name.
+  repeated string evidence = 7; // What the suggestion is based on, e.g. "go.mod".
+}
+
+service SetupService {
+  rpc ExplainAccess(ExplainAccessRequest) returns (ExplainAccessResponse);
+  rpc InspectRepository(InspectRepositoryRequest) returns (InspectRepositoryResponse);
+}

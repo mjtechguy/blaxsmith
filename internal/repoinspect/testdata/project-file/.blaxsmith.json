@@ -1,0 +1,31 @@
+{
+  "$schema": "https://github.com/mjtechguy/blaxsmith/docs/project-file.schema.json",
+  "version": 1,
+  "verification": [
+    {
+      "id": "unit",
+      "command": [
+        "make",
+        "unit"
+      ]
+    },
+    {
+      "id": "e2e",
+      "command": [
+        "npm",
+        "run",
+        "e2e"
+      ]
+    }
+  ],
+  "setup": [
+    {
+      "id": "deps",
+      "command": [
+        "make",
+        "deps"
+      ]
+    }
+  ],
+  "recipe": "Guild engineering"
+}

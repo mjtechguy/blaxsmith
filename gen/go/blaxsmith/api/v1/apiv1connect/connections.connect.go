@@ -72,6 +72,9 @@ const (
 	// ConnectionServiceRevokeConnectionProcedure is the fully-qualified name of the ConnectionService's
 	// RevokeConnection RPC.
 	ConnectionServiceRevokeConnectionProcedure = "/blaxsmith.api.v1.ConnectionService/RevokeConnection"
+	// ConnectionServiceSetRecommendedModelsProcedure is the fully-qualified name of the
+	// ConnectionService's SetRecommendedModels RPC.
+	ConnectionServiceSetRecommendedModelsProcedure = "/blaxsmith.api.v1.ConnectionService/SetRecommendedModels"
 	// ConnectionServiceListGitRepositoriesProcedure is the fully-qualified name of the
 	// ConnectionService's ListGitRepositories RPC.
 	ConnectionServiceListGitRepositoriesProcedure = "/blaxsmith.api.v1.ConnectionService/ListGitRepositories"
@@ -104,6 +107,7 @@ type ConnectionServiceClient interface {
 	AddConnectionUse(context.Context, *connect.Request[v1.AddConnectionUseRequest]) (*connect.Response[v1.AddConnectionUseResponse], error)
 	RemoveConnectionUse(context.Context, *connect.Request[v1.RemoveConnectionUseRequest]) (*connect.Response[v1.RemoveConnectionUseResponse], error)
 	RevokeConnection(context.Context, *connect.Request[v1.RevokeConnectionRequest]) (*connect.Response[v1.RevokeConnectionResponse], error)
+	SetRecommendedModels(context.Context, *connect.Request[v1.SetRecommendedModelsRequest]) (*connect.Response[v1.SetRecommendedModelsResponse], error)
 	ListGitRepositories(context.Context, *connect.Request[v1.ListGitRepositoriesRequest]) (*connect.Response[v1.ListGitRepositoriesResponse], error)
 	ListGitBranches(context.Context, *connect.Request[v1.ListGitBranchesRequest]) (*connect.Response[v1.ListGitBranchesResponse], error)
 	GetGitHubApp(context.Context, *connect.Request[v1.GetGitHubAppRequest]) (*connect.Response[v1.GetGitHubAppResponse], error)
@@ -200,6 +204,12 @@ func NewConnectionServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(connectionServiceMethods.ByName("RevokeConnection")),
 			connect.WithClientOptions(opts...),
 		),
+		setRecommendedModels: connect.NewClient[v1.SetRecommendedModelsRequest, v1.SetRecommendedModelsResponse](
+			httpClient,
+			baseURL+ConnectionServiceSetRecommendedModelsProcedure,
+			connect.WithSchema(connectionServiceMethods.ByName("SetRecommendedModels")),
+			connect.WithClientOptions(opts...),
+		),
 		listGitRepositories: connect.NewClient[v1.ListGitRepositoriesRequest, v1.ListGitRepositoriesResponse](
 			httpClient,
 			baseURL+ConnectionServiceListGitRepositoriesProcedure,
@@ -248,6 +258,7 @@ type connectionServiceClient struct {
 	addConnectionUse         *connect.Client[v1.AddConnectionUseRequest, v1.AddConnectionUseResponse]
 	removeConnectionUse      *connect.Client[v1.RemoveConnectionUseRequest, v1.RemoveConnectionUseResponse]
 	revokeConnection         *connect.Client[v1.RevokeConnectionRequest, v1.RevokeConnectionResponse]
+	setRecommendedModels     *connect.Client[v1.SetRecommendedModelsRequest, v1.SetRecommendedModelsResponse]
 	listGitRepositories      *connect.Client[v1.ListGitRepositoriesRequest, v1.ListGitRepositoriesResponse]
 	listGitBranches          *connect.Client[v1.ListGitBranchesRequest, v1.ListGitBranchesResponse]
 	getGitHubApp             *connect.Client[v1.GetGitHubAppRequest, v1.GetGitHubAppResponse]
@@ -320,6 +331,11 @@ func (c *connectionServiceClient) RevokeConnection(ctx context.Context, req *con
 	return c.revokeConnection.CallUnary(ctx, req)
 }
 
+// SetRecommendedModels calls blaxsmith.api.v1.ConnectionService.SetRecommendedModels.
+func (c *connectionServiceClient) SetRecommendedModels(ctx context.Context, req *connect.Request[v1.SetRecommendedModelsRequest]) (*connect.Response[v1.SetRecommendedModelsResponse], error) {
+	return c.setRecommendedModels.CallUnary(ctx, req)
+}
+
 // ListGitRepositories calls blaxsmith.api.v1.ConnectionService.ListGitRepositories.
 func (c *connectionServiceClient) ListGitRepositories(ctx context.Context, req *connect.Request[v1.ListGitRepositoriesRequest]) (*connect.Response[v1.ListGitRepositoriesResponse], error) {
 	return c.listGitRepositories.CallUnary(ctx, req)
@@ -360,6 +376,7 @@ type ConnectionServiceHandler interface {
 	AddConnectionUse(context.Context, *connect.Request[v1.AddConnectionUseRequest]) (*connect.Response[v1.AddConnectionUseResponse], error)
 	RemoveConnectionUse(context.Context, *connect.Request[v1.RemoveConnectionUseRequest]) (*connect.Response[v1.RemoveConnectionUseResponse], error)
 	RevokeConnection(context.Context, *connect.Request[v1.RevokeConnectionRequest]) (*connect.Response[v1.RevokeConnectionResponse], error)
+	SetRecommendedModels(context.Context, *connect.Request[v1.SetRecommendedModelsRequest]) (*connect.Response[v1.SetRecommendedModelsResponse], error)
 	ListGitRepositories(context.Context, *connect.Request[v1.ListGitRepositoriesRequest]) (*connect.Response[v1.ListGitRepositoriesResponse], error)
 	ListGitBranches(context.Context, *connect.Request[v1.ListGitBranchesRequest]) (*connect.Response[v1.ListGitBranchesResponse], error)
 	GetGitHubApp(context.Context, *connect.Request[v1.GetGitHubAppRequest]) (*connect.Response[v1.GetGitHubAppResponse], error)
@@ -452,6 +469,12 @@ func NewConnectionServiceHandler(svc ConnectionServiceHandler, opts ...connect.H
 		connect.WithSchema(connectionServiceMethods.ByName("RevokeConnection")),
 		connect.WithHandlerOptions(opts...),
 	)
+	connectionServiceSetRecommendedModelsHandler := connect.NewUnaryHandler(
+		ConnectionServiceSetRecommendedModelsProcedure,
+		svc.SetRecommendedModels,
+		connect.WithSchema(connectionServiceMethods.ByName("SetRecommendedModels")),
+		connect.WithHandlerOptions(opts...),
+	)
 	connectionServiceListGitRepositoriesHandler := connect.NewUnaryHandler(
 		ConnectionServiceListGitRepositoriesProcedure,
 		svc.ListGitRepositories,
@@ -510,6 +533,8 @@ func NewConnectionServiceHandler(svc ConnectionServiceHandler, opts ...connect.H
 			connectionServiceRemoveConnectionUseHandler.ServeHTTP(w, r)
 		case ConnectionServiceRevokeConnectionProcedure:
 			connectionServiceRevokeConnectionHandler.ServeHTTP(w, r)
+		case ConnectionServiceSetRecommendedModelsProcedure:
+			connectionServiceSetRecommendedModelsHandler.ServeHTTP(w, r)
 		case ConnectionServiceListGitRepositoriesProcedure:
 			connectionServiceListGitRepositoriesHandler.ServeHTTP(w, r)
 		case ConnectionServiceListGitBranchesProcedure:
@@ -579,6 +604,10 @@ func (UnimplementedConnectionServiceHandler) RemoveConnectionUse(context.Context
 
 func (UnimplementedConnectionServiceHandler) RevokeConnection(context.Context, *connect.Request[v1.RevokeConnectionRequest]) (*connect.Response[v1.RevokeConnectionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.ConnectionService.RevokeConnection is not implemented"))
+}
+
+func (UnimplementedConnectionServiceHandler) SetRecommendedModels(context.Context, *connect.Request[v1.SetRecommendedModelsRequest]) (*connect.Response[v1.SetRecommendedModelsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.ConnectionService.SetRecommendedModels is not implemented"))
 }
 
 func (UnimplementedConnectionServiceHandler) ListGitRepositories(context.Context, *connect.Request[v1.ListGitRepositoriesRequest]) (*connect.Response[v1.ListGitRepositoriesResponse], error) {

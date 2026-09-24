@@ -5,7 +5,8 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, ArrowRight, BookCopy, Check, CopyPlus, FileJson, GitFork, ListTree, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { currentSession, sessionQueryKey } from "./auth";
-import { ModelSelect, ResourceGrants } from "./connection-ui";
+import { ModelSelect, ResourceGrants, useConnectionModels } from "./connection-ui";
+import { effortChoices, effortForModel } from "./connections";
 import { DataTable } from "./data-table";
 import { TextField } from "./form-field";
 import type { LibraryRecipe, RecipeModelConnection, RecipeValidationError, RecipeVersion } from "./gen/blaxsmith/api/v1/recipes_pb";
@@ -186,6 +187,7 @@ export function RecipeDetailPage({ projectId, recipeId, library }: { projectId?:
       description="Each grant names one project, one user, or a minimum role that may use this recipe from any project. Owners and admins get no implicit use; viewers never. Project recipes need no grant."
       revokeNote="New runs can no longer launch it there; runs already launched keep the bytes they froze."
       grant={(kind, project, grantee) => grantRecipe(recipeId, project, kind, grantee)} revoke={revokeRecipeGrant}
+      explain={{ kind: "recipe", resourceId: recipeId }}
       onChanged={() => Promise.all([queryClient.invalidateQueries({ queryKey: recipeKey(org, recipeId) }), queryClient.invalidateQueries({ queryKey: ["recipes", org] })])} /> : null}
   </DetailLayout>;
 }
@@ -404,7 +406,16 @@ function ProfileCard({ id, profile, errors, harnesses, allHarnesses, connections
   // OpenCode records provider/model; the connection lists provider-native ids.
   const prefix = profile.harness === "opencode" && connection ? `${connection.provider}/` : "";
   const shownModel = prefix && profile.model.startsWith(prefix) ? profile.model.slice(prefix.length) : profile.model;
-  const setModel = (model: string) => onChange({ ...profile, model: prefix && model && !model.includes("/") ? prefix + model : model });
+  // The effort list is the chosen model's (manifest or provider), else the harness's.
+  const models = useConnectionModels(connectionId, harness ? profile.harness : "");
+  const modelInfo = (id: string) => models.data?.models.find((m) => m.id === id);
+  const efforts = effortChoices(modelInfo(shownModel), harness?.efforts || []);
+  const setModel = (model: string, chosen = connectionId, info = modelInfo(model)) => {
+    const provider = eligible.find((c) => c.id === chosen)?.provider;
+    const pre = profile.harness === "opencode" && provider ? `${provider}/` : "";
+    if (chosen !== connectionId) setConnectionId(chosen);
+    onChange({ ...profile, model: pre && model && !model.includes("/") ? pre + model : model, effort: effortForModel(info, harness?.efforts || [], profile.effort) });
+  };
   const skills = profile.skills || [];
   const at = `profiles.${id}`;
   return <div className="verification-check">
@@ -414,10 +425,10 @@ function ProfileCard({ id, profile, errors, harnesses, allHarnesses, connections
     <div className="recipe-grid">
       <Select label="Harness" value={profile.harness} choices={harnesses.map((h) => [h.harness, h.harness])}
         onChange={(value) => onChange({ ...profile, harness: value, effort: allHarnesses.find((h) => h.harness === value)?.efforts.includes(profile.effort) ? profile.effort : allHarnesses.find((h) => h.harness === value)?.efforts[0] || profile.effort })} />
-      <Select label="Connection" value={connectionId} choices={eligible.map((c) => [c.id, `${c.provider} · ${c.account}`])} onChange={setConnectionId} />
-      <Select label="Effort" value={profile.effort} choices={(harness?.efforts || []).map((e) => [e, e])} onChange={(effort) => onChange({ ...profile, effort })} />
+      <Select label="Effort" value={profile.effort} choices={efforts.map((e) => [e, e === modelInfo(shownModel)?.defaultEffort ? `${e} (model default)` : e])} onChange={(effort) => onChange({ ...profile, effort })} />
     </div>
-    <ModelSelect connectionId={connectionId} harness={harness ? profile.harness : ""} fieldId={`${at}-model`} value={shownModel} onChange={setModel} error={fieldError(errors, `${at}.model`)} />
+    <ModelSelect connectionId={connectionId} connections={eligible.map((c) => ({ id: c.id, label: `${c.provider} · ${c.account}`, provider: c.provider }))}
+      harness={harness ? profile.harness : ""} fieldId={`${at}-model`} value={shownModel} onChange={(model, chosen, info) => setModel(model, chosen || connectionId, info)} error={fieldError(errors, `${at}.model`)} />
     {!eligible.length ? <p className="form-hint">No active {harness?.provider || "model"} connection lists models yet; type the model ID under Advanced.</p> : null}
     {skillPaths ? <fieldset className="recipe-fieldset"><legend>Skills</legend>
       {[...new Set([...skillPaths, ...skills])].map((path) => <label key={path} className="recipe-check"><input type="checkbox" checked={skills.includes(path)}

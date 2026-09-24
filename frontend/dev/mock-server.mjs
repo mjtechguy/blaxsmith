@@ -162,9 +162,24 @@ let deviceStarted = 0;
 let gitHubApp = { clientId: "", configured: false };
 function hubAdd(fields) {
   const connection = { id: `conn-${hub.length + 1}`, ownerName: "", label: "", state: "active", grants: [], uses: [], lastUsedAt: "", createdAt: now(), modelCount: 0, modelsCheckedAt: "", modelsError: "", canManage: true, ...fields };
+  connection.health = { state: "ready", auth: fields.kind === "git" ? "unknown" : "authenticated", identity: connection.kind === "api_key" ? connection.label : connection.account,
+    checkedAt: connection.kind === "git" ? "" : now(), reason: "", message: "", harness: "", pinnedVersion: "", latestVersion: "", ...fields.health };
   hub.push(connection);
   return { connection };
 }
+// Seeded hub: one healthy granted key, one rejected key, a stale-runtime key, Git, and a personal login that needs sign-in.
+hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "demo", kind: "api_key", provider: "anthropic", label: "Anthropic prod", modelCount: 7, modelsCheckedAt: minutesAgo(42),
+  grants: [{ id: "grant-seed-project", projectId, projectName: "Demo project", granteeKind: "project", granteeId: "", granteeName: "", createdAt: minutesAgo(600) }],
+  uses: [{ id: "use-seed", projectId, projectName: "Demo project", model: "claude-opus-5", granteeKind: "workload", createdAt: minutesAgo(500) }],
+  health: { checkedAt: minutesAgo(42), harness: "claude-code", pinnedVersion: "2.1.10", latestVersion: "2.1.10" } });
+hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "demo", kind: "api_key", provider: "openai", label: "OpenAI sandbox", modelsCheckedAt: minutesAgo(5), modelsError: "the provider rejected this API key",
+  grants: [{ id: "grant-seed-role", projectId: "", projectName: "", granteeKind: "role", granteeId: "member", granteeName: "", createdAt: minutesAgo(900) }],
+  health: { state: "error", auth: "unauthenticated", reason: "key_rejected", message: "The provider rejected this API key; replace it.", checkedAt: minutesAgo(5), harness: "codex" } });
+hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "demo", kind: "api_key", provider: "opencode", label: "Zen team", modelCount: 12, modelsCheckedAt: minutesAgo(180),
+  health: { state: "warning", reason: "harness_behind", message: "Pinned opencode 0.9.2 is behind the catalog's latest 1.0.0.", checkedAt: minutesAgo(180), harness: "opencode", pinnedVersion: "0.9.2", latestVersion: "1.0.0" } });
+hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "demo", kind: "git", provider: "github", account: "blaxsmith-bot" });
+hubAdd({ scope: "personal", ownerId: principalId, ownerName: "you", kind: "subscription", provider: "codex", account: "acct-7f3c2e", state: "reconnect_required", modelCount: 3,
+  health: { state: "error", auth: "unauthenticated", reason: "needs_sign_in", message: "The saved sign-in stopped working; sign in again.", checkedAt: minutesAgo(60 * 26), harness: "codex" } });
 const rpc = {
   GetCsrf: () => ({ token: "A".repeat(43) }),
   CurrentSession: () => ({ session: { organizationId: "org-demo", principalId, role: "owner", accessExpiresAt: new Date(Date.now() + 3_600_000).toISOString() } }),
@@ -290,7 +305,9 @@ const rpc = {
   CreateCodexSubscription: () => hubAdd({ scope: "personal", ownerId: principalId, kind: "subscription", provider: "codex", account: "acct-demo", modelCount: 2, modelsCheckedAt: now() }),
   StartCodexDeviceLogin: () => { deviceStarted = Date.now(); return { loginId: "login-1", verificationUrl: "https://auth.openai.com/codex/device", userCode: "ABCD-1234", intervalSeconds: 2, expiresAt: new Date(Date.now() + 900_000).toISOString() }; },
   PollCodexDeviceLogin: () => Date.now() - deviceStarted < 6_000 ? { state: "pending" } : { state: "connected", connection: rpc.CreateCodexSubscription().connection },
-  ListConnectionModels: ({ harness = "" }) => ({ checkedAt: now(), models: [{ id: "gpt-5.6-luna", displayName: "GPT 5.6 Luna", contextTokens: 400000, harnesses: ["codex", "opencode"] }, { id: "claude-opus-5-5", displayName: "Claude Opus 5.5", contextTokens: 200000, harnesses: ["claude-code", "opencode"] }].filter((m) => !harness || m.harnesses.includes(harness)) }),
+  ListConnectionModels: ({ connectionId, harness = "" }) => ({ checkedAt: now(), models: mockModels.filter((m) => !harness || m.harnesses.includes(harness))
+    .map((m) => ({ ...m, recommended: (recommended.get(connectionId) ?? ["claude-opus-5"]).includes(m.id), efforts: harness === "codex" ? m.efforts.filter((e) => e !== "max") : m.efforts })) }),
+  SetRecommendedModels: ({ connectionId, models = [] }) => { recommended.set(connectionId, models); return { models }; },
   RefreshConnectionModels: () => ({ valid: true, modelCount: 2, checkedAt: now() }),
   GrantConnection: ({ connectionId, projectId: pid = "", granteeKind, granteeId = "" }) => { const grant = { id: `grant-${hub.length}-${Date.now()}`, projectId: pid, projectName: pid ? "Demo project" : "", granteeKind, granteeId, createdAt: now() }; hub.find((c) => c.id === connectionId)?.grants.push(grant); return { grant }; },
   RevokeConnectionGrant: ({ grantId }) => { for (const c of hub) c.grants = c.grants.filter((g) => g.id !== grantId); return {}; },
@@ -301,9 +318,50 @@ const rpc = {
   ListGitBranches: () => ({ branches: ["main", "develop", "release/1.0"] }),
   GetGitHubApp: () => ({ clientId: gitHubApp.clientId, configured: gitHubApp.configured, callbackUrl: "http://localhost:5173/oauth/github/callback" }),
   SetGitHubApp: ({ clientId, clientSecret = "" }) => { gitHubApp = { clientId, configured: gitHubApp.configured || Boolean(clientSecret) }; return gitHubApp; },
+  ListOrgMembers: () => ({ members: [{ principalId, username: "you", displayName: "You", role: "owner", state: "active", createdAt: minutesAgo(60 * 24 * 30) },
+    { principalId: "p-mara", username: "mara", displayName: "Mara Lin", role: "member", state: "active", createdAt: minutesAgo(60 * 24 * 3) }] }),
+  ListProjectModelAccess: () => ({ access: [] }),
+  InspectRepository: () => ({ commit: run.sourceCommit, source: "file", fileError: "", recipe: "Guild engineering", evidence: [".blaxsmith.json"],
+    verification: [{ id: "go-test", command: ["go", "test", "./..."] }, { id: "go-vet", command: ["go", "vet", "./..."] }, { id: "lint", command: ["make", "lint"] }],
+    setup: [{ id: "go-mod-download", command: ["go", "mod", "download"] }] }),
+  // SetupService: a simplified grant walk; the server runs access.MatchingGrant.
+  ExplainAccess: ({ projectId: pid, resourceKind, resourceId, principalId: who = "" }) => {
+    const reach = { member: "members and above", admin: "admins and owners", owner: "owners only" };
+    const chain = (grants, resource) => {
+      const g = grants.find((x) => x.projectId === pid) || grants.find((x) => x.granteeKind === "user" && (!who || x.granteeId === who)) || grants.find((x) => x.granteeKind === "role");
+      if (!g) return { usable: false, steps: [], reason: "No grant for this project, user, or role; ask an organization admin.", principalLabel: who ? "teammate" : "you" };
+      const kind = `${g.granteeKind}_grant`;
+      return { usable: true, grantId: g.id, principalLabel: who ? "teammate" : "you", steps: [{ kind, label: g.granteeKind === "project" ? g.projectName : g.granteeKind === "role" ? reach[g.granteeId] : "teammate", id: g.id }, resource] };
+    };
+    if (resourceKind === "recipe") {
+      const r = recipes.find((x) => x.id === resourceId);
+      if (!r) return connectError(404, "not_found", "workflow resource not found");
+      const version = { kind: "recipe_version", label: `v${recipeSummary(r).currentVersion} (current)`, id: r.current };
+      if (r.projectId) return { usable: r.projectId === pid, steps: [{ kind: "project_recipe", label: r.name, id: r.id }, version], reason: "It belongs to another project." };
+      const out = chain(r.grants || [], { kind: "organization_recipe", label: r.name, id: r.id });
+      if (out.usable) out.steps.push(version);
+      return out;
+    }
+    const c = hub.find((x) => x.id === resourceId);
+    if (!c) return connectError(404, "not_found", "workflow resource not found");
+    if (c.scope === "personal") return { usable: !who, steps: who ? [] : [{ kind: "personal_connection", label: c.label || c.provider, id: c.id }], reason: "Personal connections serve only runs their owner launches." };
+    if (c.scope === "project") return { usable: c.ownerId === pid, steps: [{ kind: "project_connection", label: c.label || c.provider, id: c.id }], reason: "It belongs to another project." };
+    return chain(c.grants, { kind: "organization_connection", label: c.label || c.provider, id: c.id });
+  },
   StartGitHubConnect: ({ returnTo = "/admin/connections" }) => { hubAdd({ scope: "organization", ownerId: "org-demo", kind: "git", provider: "github", account: "octocat" }); return { authorizeUrl: `${returnTo}?github=connected` }; },
 };
 
+const mockModel = (id, displayName, harnesses, efforts, defaultEffort, extra = {}) => ({ id, displayName, contextTokens: 400000, harnesses, efforts, defaultEffort, isDefault: false, legacy: false, badge: "", ...extra });
+const mockModels = [
+  mockModel("gpt-6-sol", "GPT-6 Sol", ["codex", "opencode"], ["low", "medium", "high", "xhigh"], "medium", { badge: "new" }),
+  mockModel("gpt-6-luna", "GPT-6 Luna", ["codex", "opencode"], ["low", "medium", "high", "xhigh"], "medium", { isDefault: true }),
+  mockModel("gpt-5", "GPT-5", ["codex", "opencode"], ["minimal", "low", "medium", "high"], "medium", { legacy: true }),
+  mockModel("claude-opus-5-5", "Claude Opus 5.5", ["claude-code", "opencode"], ["low", "medium", "high", "xhigh", "max"], "medium", { badge: "new" }),
+  mockModel("claude-opus-5", "Claude Opus 5", ["claude-code", "opencode"], ["low", "medium", "high", "xhigh", "max"], "high", { isDefault: true }),
+  mockModel("claude-opus-4-6", "Claude Opus 4.6", ["claude-code", "opencode"], ["low", "medium", "high", "max"], "high", { legacy: true }),
+  mockModel("claude-haiku-4-5", "Claude Haiku 4.5", ["claude-code", "opencode"], [], "", { legacy: true, contextTokens: 200000 }),
+];
+const recommended = new Map();
 const recipes = [];
 function addVersion(r, recipeJson, frozenPath, makeCurrent) {
   const doc = (() => { try { return JSON.parse(recipeJson); } catch { return {}; } })();

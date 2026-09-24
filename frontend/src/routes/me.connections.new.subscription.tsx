@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, Ban, ExternalLink, KeyRound, LogIn, Plus, RefreshCw, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ban, KeyRound, LogIn, Plus, UserRound } from "lucide-react";
 import { failure, useOrg } from "../connection-ui";
 import { CLAUDE_SUBSCRIPTION_REASON, createCodexSubscription, pollCodexDeviceLogin, startCodexDeviceLogin } from "../connections";
 import { TextField } from "../form-field";
-import type { StartCodexDeviceLoginResponse } from "../gen/blaxsmith/api/v1/connections_pb";
 import { PageHeader, PageShell } from "../page";
+import { SignInStatus, useSignIn } from "../sign-in-flow";
 
 export const Route = createFileRoute("/me/connections/new/subscription")({ component: NewSubscription });
 
@@ -14,7 +14,9 @@ function NewSubscription() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { org } = useOrg();
-  const [login, setLogin] = useState<StartCodexDeviceLoginResponse | null>(null);
+  const [signIn, dispatch] = useSignIn();
+  const [loginId, setLoginId] = useState("");
+  const [interval, setIntervalSeconds] = useState(5);
   const [error, setError] = useState("");
   const [authJson, setAuthJson] = useState("");
   const done = async (connectionId: string) => {
@@ -23,18 +25,29 @@ function NewSubscription() {
   };
   const start = useMutation({
     mutationFn: startCodexDeviceLogin,
-    onSuccess: (r) => { setError(""); setLogin(r); },
-    onError: (cause) => setError(failure(cause, "ChatGPT sign-in could not start. Please try again.")),
+    onMutate: () => dispatch({ type: "start" }),
+    onSuccess: (r) => {
+      setError(""); setLoginId(r.loginId); setIntervalSeconds(r.intervalSeconds);
+      dispatch({ type: "started", device: { verificationUrl: r.verificationUrl, userCode: r.userCode, expiresAt: r.expiresAt } });
+    },
+    onError: (cause) => dispatch({ type: "fail", error: failure(cause, "ChatGPT sign-in could not start. Please try again.") }),
   });
+  // Polls only while waiting: cancelling or expiring stops it, and a late
+  // answer cannot move a cancelled flow (see sign-in.ts).
   const poll = useQuery({
-    queryKey: ["codex-device-login", org, login?.loginId ?? ""], enabled: Boolean(login),
-    queryFn: ({ signal }) => pollCodexDeviceLogin(login!.loginId, signal),
-    refetchInterval: (query) => query.state.data && query.state.data.state !== "pending" ? false : Math.max(login?.intervalSeconds ?? 5, 2) * 1000,
+    queryKey: ["codex-device-login", org, loginId, signIn.attempt], enabled: Boolean(loginId) && signIn.phase === "waiting",
+    queryFn: ({ signal }) => pollCodexDeviceLogin(loginId, signal),
+    refetchInterval: (query) => query.state.data && query.state.data.state !== "pending" ? false : Math.max(interval, 2) * 1000,
     retry: false, gcTime: 0,
   });
-  const state = poll.data?.state ?? "pending";
-  const connectedId = poll.data?.state === "connected" ? poll.data.connection?.id ?? "" : "";
-  useEffect(() => { if (connectedId) void done(connectedId); }, [connectedId]);
+  const result = poll.data?.state;
+  const connectedId = result === "connected" ? poll.data?.connection?.id ?? "" : "";
+  useEffect(() => {
+    if (result === "connected") { dispatch({ type: "verify" }); dispatch({ type: "succeed" }); if (connectedId) void done(connectedId); }
+    if (result === "expired") dispatch({ type: "expire" });
+    if (result === "failed") dispatch({ type: "fail", error: poll.data?.error || "ChatGPT sign-in failed." });
+  }, [result, connectedId]);
+  useEffect(() => { if (poll.isError) dispatch({ type: "fail", error: "The sign-in status could not be checked." }); }, [poll.isError]);
   const paste = useMutation({
     mutationFn: (value: string) => createCodexSubscription(value),
     onSuccess: async (c) => { if (c) await done(c.id); },
@@ -48,17 +61,12 @@ function NewSubscription() {
       <section className="editor-card" aria-labelledby="codex-heading">
         <div className="editor-card-heading"><span className="project-symbol"><UserRound size={18} aria-hidden="true" /></span><div><h2 id="codex-heading">Codex (ChatGPT plan)</h2><p>Sign in with your ChatGPT account. The platform keeps the refresh token and gives each run a short-lived access token.</p></div></div>
         <div className="editor-form">
-          {!login ? <button type="button" className="primary-button" disabled={start.isPending} onClick={() => start.mutate()}>
-            {start.isPending ? <RefreshCw size={15} className="spin" aria-hidden="true" /> : <LogIn size={15} aria-hidden="true" />} Sign in with ChatGPT</button> : null}
-          {login && state === "pending" ? <div className="device-login" role="status" aria-live="polite">
-            <p>1. Open <a className="text-action" href={login.verificationUrl} target="_blank" rel="noreferrer">{login.verificationUrl} <ExternalLink size={13} aria-hidden="true" /></a> and sign in.</p>
-            <p>2. Enter this one-time code{login.expiresAt ? ` before ${new Date(login.expiresAt).toLocaleTimeString()}` : ""}:</p>
-            <code className="device-code">{login.userCode}</code>
-            <p className="admin-note"><RefreshCw size={12} className="spin" aria-hidden="true" /> Waiting for approval… Continue only if you started this sign-in here.</p>
-          </div> : null}
-          {login && (state === "expired" || state === "failed" || poll.isError) ? <div className="notice" role="alert"><strong>{state === "expired" ? "The code expired." : "Sign-in failed."}</strong> {poll.data?.error}
-            <button type="button" className="text-action" onClick={() => { setLogin(null); start.mutate(); }}>Start again</button></div> : null}
-          {state === "connected" ? <p className="notice" role="status">Connected. Opening the connection…</p> : null}
+          {signIn.phase === "idle" ? <button type="button" className="primary-button" onClick={() => start.mutate()}>
+            <LogIn size={15} aria-hidden="true" /> Sign in with ChatGPT</button> : null}
+          <SignInStatus state={signIn} onCancel={() => dispatch({ type: "cancel" })} onExpire={() => dispatch({ type: "expire" })}
+            onRetry={() => { dispatch({ type: "retry" }); setLoginId(""); }}
+            labels={{ starting: "Requesting a sign-in code…", waiting: "Waiting for approval… Continue only if you started this sign-in here.",
+              verifying: "Storing the sign-in…", succeeded: "Connected. Opening the connection…" }} />
           {error ? <p className="auth-alert" role="alert">{error}</p> : null}
         </div>
         <details className="advanced-disclosure"><summary>Advanced: paste auth.json</summary>

@@ -48,6 +48,22 @@ message Connection {
   string models_checked_at = 15; // RFC 3339; empty before the first check.
   string models_error = 16; // Last provider error; empty when valid.
   bool can_manage = 17; // The caller may grant, refresh, or revoke it.
+  ConnectionHealth health = 18;
+}
+
+// The health line on every connection card and detail page.
+message ConnectionHealth {
+  string state = 1; // ready, warning, error, or disabled.
+  string auth = 2; // authenticated, unauthenticated, or unknown.
+  string identity = 3; // Non-secret account or key label; the UI blurs it until clicked.
+  string checked_at = 4; // RFC 3339; empty when never checked.
+  // key_rejected, needs_sign_in, token_expiring, provider_error, not_checked,
+  // harness_behind, revoked, or empty when ready.
+  string reason = 5;
+  string message = 6;
+  string harness = 7; // The pinned harness this connection mainly serves.
+  string pinned_version = 8; // Newest approved runtime version; empty if none.
+  string latest_version = 9; // Tools catalog latest stable, when the catalog knows.
 }
 
 message ListConnectionsRequest {
@@ -105,6 +121,15 @@ message ConnectionModel {
   int32 context_tokens = 4; // 0 if unknown.
   string capabilities_json = 5; // Provider capability object, when returned.
   repeated string harnesses = 6; // Pinned harnesses that accept this model.
+  // Provider-reported metadata overlaid with the bundled model manifest.
+  bool is_default = 7; // The provider's (or manifest's) default model.
+  bool legacy = 8; // Superseded; pickers hide it behind a toggle.
+  string badge = 9; // "new" or empty.
+  // Reasoning efforts this model accepts, low to high, limited to the
+  // harness filter when one is given. Empty: unknown, use the harness list.
+  repeated string efforts = 10;
+  string default_effort = 11; // Empty when unknown.
+  bool recommended = 12; // Pinned by the connection's managers; pickers list it first.
 }
 message ListConnectionModelsRequest {
   string connection_id = 1;
@@ -144,6 +169,14 @@ message AddConnectionUseRequest {
 message AddConnectionUseResponse { ConnectionUse use = 1; }
 message RemoveConnectionUseRequest { string use_id = 1; }
 message RemoveConnectionUseResponse {}
+
+// Replace a connection's recommended models (in order, at most 50). Allowed
+// to whoever manages the connection.
+message SetRecommendedModelsRequest {
+  string connection_id = 1;
+  repeated string models = 2;
+}
+message SetRecommendedModelsResponse { repeated string models = 1; }
 
 message RevokeConnectionRequest { string connection_id = 1; }
 message RevokeConnectionResponse {}
@@ -203,6 +236,7 @@ service ConnectionService {
   rpc AddConnectionUse(AddConnectionUseRequest) returns (AddConnectionUseResponse);
   rpc RemoveConnectionUse(RemoveConnectionUseRequest) returns (RemoveConnectionUseResponse);
   rpc RevokeConnection(RevokeConnectionRequest) returns (RevokeConnectionResponse);
+  rpc SetRecommendedModels(SetRecommendedModelsRequest) returns (SetRecommendedModelsResponse);
   rpc ListGitRepositories(ListGitRepositoriesRequest) returns (ListGitRepositoriesResponse);
   rpc ListGitBranches(ListGitBranchesRequest) returns (ListGitBranchesResponse);
   rpc GetGitHubApp(GetGitHubAppRequest) returns (GetGitHubAppResponse);

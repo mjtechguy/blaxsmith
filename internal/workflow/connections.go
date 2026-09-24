@@ -12,7 +12,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/recipe"
 )
+
+func manifestName(provider, model string) string {
+	for _, m := range access.ManifestModels(provider) {
+		if m.Slug == model {
+			return m.Name
+		}
+	}
+	return ""
+}
 
 // Connections hub (plan §10.2–10.3). Organization connections are managed by
 // org owners/admins and reach projects only through standing grants; project
@@ -48,6 +58,11 @@ type Connection struct {
 	ModelCount                                                           int32
 	ModelsError                                                          string
 	CanManage                                                            bool
+	// Health inputs: the subscription refresh state and the organization's
+	// pinned (approved) harness versions, newest per harness.
+	ReconnectReason string
+	RefreshedAt     *time.Time
+	PinnedVersions  map[string]string
 }
 
 type ConnectionModel struct {
@@ -56,6 +71,8 @@ type ConnectionModel struct {
 	ContextTokens   int32
 	Capabilities    string
 	Harnesses       []string
+	Recommended     bool // Pinned by the connection's managers.
+	access.ModelMeta
 }
 
 // ponytail: which models each pinned harness accepts is a static rule table.
@@ -162,6 +179,7 @@ func commitAudited(ctx context.Context, tx pgx.Tx, caller identity.Caller, actio
 }
 
 var catalogModelID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+var effortName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 
 func knownHarness(harness string) bool {
 	for _, rule := range harnessRules {
@@ -347,9 +365,25 @@ func replaceModels(ctx context.Context, tx pgx.Tx, orgID, connectionID string, m
 			if len(m.Capabilities) > 0 && len(m.Capabilities) < 16<<10 && json.Valid(m.Capabilities) {
 				capabilities = m.Capabilities
 			}
+			efforts := slices.DeleteFunc(slices.Clone(m.Meta.Efforts), func(e string) bool { return !effortName.MatchString(e) })
+			if len(efforts) > 16 {
+				efforts = efforts[:16]
+			}
+			if efforts == nil {
+				efforts = []string{}
+			}
+			var badge, defaultEffort *string
+			if m.Meta.Badge == "new" {
+				badge = &m.Meta.Badge
+			}
+			if slices.Contains(efforts, m.Meta.DefaultEffort) {
+				defaultEffort = &m.Meta.DefaultEffort
+			}
 			if _, err := tx.Exec(ctx, `INSERT INTO access_connection_models
-				(organization_id,connection_id,model_id,display_name,released_at,context_tokens,capabilities)
-				VALUES ($1,$2,$3,$4,$5,$6,$7)`, orgID, connectionID, m.ID, name, m.ReleasedAt, context, capabilities); err != nil {
+				(organization_id,connection_id,model_id,display_name,released_at,context_tokens,capabilities,
+				is_default,legacy,badge,efforts,default_effort)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, orgID, connectionID, m.ID, name, m.ReleasedAt, context, capabilities,
+				m.Meta.IsDefault, m.Meta.Legacy, badge, efforts, defaultEffort); err != nil {
 				return err
 			}
 		}
@@ -472,7 +506,8 @@ const connectionColumns = `c.id,c.owner_kind,c.owner_id,
 	CASE WHEN c.state<>'active' THEN c.state WHEN os.reconnect_reason IS NOT NULL THEN 'reconnect_required' ELSE 'active' END,
 	(SELECT max(l.reserved_at) FROM access_leases l WHERE l.organization_id=c.organization_id AND l.connection_id=c.id),
 	c.created_at,c.models_checked_at,COALESCE(c.models_error,''),
-	(SELECT count(*)::integer FROM access_connection_models m WHERE m.organization_id=c.organization_id AND m.connection_id=c.id)
+	(SELECT count(*)::integer FROM access_connection_models m WHERE m.organization_id=c.organization_id AND m.connection_id=c.id),
+	COALESCE(os.reconnect_reason,''),os.refreshed_at
 	FROM access_connections c
 	JOIN access_provider_registrations p ON p.organization_id=c.organization_id AND p.id=c.provider_registration_id
 	LEFT JOIN access_oauth_sessions os ON os.organization_id=c.organization_id AND os.connection_id=c.id
@@ -484,7 +519,7 @@ func scanConnection(row pgx.Row) (Connection, error) {
 	var c Connection
 	var ownerKind, authMethod, provider, origin string
 	err := row.Scan(&c.ID, &ownerKind, &c.OwnerID, &c.OwnerName, &authMethod, &provider, &origin, &c.Account, &c.Label,
-		&c.State, &c.LastUsed, &c.CreatedAt, &c.ModelsCheckedAt, &c.ModelsError, &c.ModelCount)
+		&c.State, &c.LastUsed, &c.CreatedAt, &c.ModelsCheckedAt, &c.ModelsError, &c.ModelCount, &c.ReconnectReason, &c.RefreshedAt)
 	if err != nil {
 		return c, err
 	}
@@ -550,8 +585,13 @@ func (s *Store) ListConnectionsAs(ctx context.Context, caller identity.Caller, s
 	if err != nil {
 		return nil, err
 	}
+	pinned, err := pinnedHarnessVersions(ctx, tx, org)
+	if err != nil {
+		return nil, err
+	}
 	out := items[:0]
 	for _, c := range items {
+		c.PinnedVersions = pinned
 		if scope == ScopeProjectAvailable {
 			ok, err := s.authz.CanUse(ctx, tx, caller, projectID, access.ResourceConnection, c.ID)
 			if err != nil {
@@ -565,6 +605,24 @@ func (s *Store) ListConnectionsAs(ctx context.Context, caller identity.Caller, s
 		out = append(out, c)
 	}
 	return out, s.attachGrantsAndUses(ctx, tx, org, scope, projectID, out)
+}
+
+// pinnedHarnessVersions is the newest approved runtime version per harness.
+func pinnedHarnessVersions(ctx context.Context, tx pgx.Tx, org string) (map[string]string, error) {
+	rows, err := tx.Query(ctx, `SELECT DISTINCT harness,version FROM workflow_tool_runtime_approvals
+		WHERE organization_id::text=$1 AND revoked_at IS NULL LIMIT 500`, org)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	var harness, version string
+	_, err = pgx.ForEachRow(rows, []any{&harness, &version}, func() error {
+		if out[harness] == "" || versionLess(out[harness], version) {
+			out[harness] = version
+		}
+		return nil
+	})
+	return out, err
 }
 
 func (s *Store) attachGrantsAndUses(ctx context.Context, tx pgx.Tx, org, scope, projectID string, items []Connection) error {
@@ -724,14 +782,19 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 		return nil, nil, "", err
 	}
 	var rows pgx.Rows
-	if r.AuthMethod == access.CodexSubscriptionAuth {
-		// A ChatGPT plan has no public model list; offer the models the
-		// organization approved for the pinned Codex runtime.
-		rows, err = s.pool.Query(ctx, `SELECT DISTINCT model,model,NULL::timestamptz,NULL::integer,''
+	subscription := r.AuthMethod == access.CodexSubscriptionAuth
+	if subscription {
+		// A ChatGPT plan has no public model list, and `codex app-server`
+		// model/list would need the login materialized outside custody. Offer
+		// the models the organization approved for the pinned Codex runtime,
+		// then the manifest's OpenAI models.
+		rows, err = s.pool.Query(ctx, `SELECT DISTINCT model,model,NULL::timestamptz,NULL::integer,'',
+			false,false,''::text,'{}'::text[],''::text
 			FROM workflow_tool_runtime_approvals WHERE organization_id=$1 AND harness='codex' AND revoked_at IS NULL
 			ORDER BY 1`, caller.OrganizationID)
 	} else {
-		rows, err = s.pool.Query(ctx, `SELECT model_id,display_name,released_at,context_tokens,COALESCE(capabilities::text,'')
+		rows, err = s.pool.Query(ctx, `SELECT model_id,display_name,released_at,context_tokens,COALESCE(capabilities::text,''),
+			is_default,legacy,COALESCE(badge,''),efforts,COALESCE(default_effort,'')
 			FROM access_connection_models WHERE organization_id=$1 AND connection_id=$2
 			ORDER BY released_at DESC NULLS LAST,model_id`, caller.OrganizationID, connectionID)
 	}
@@ -741,7 +804,8 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 	all, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ConnectionModel, error) {
 		var m ConnectionModel
 		var context *int32
-		err := row.Scan(&m.ID, &m.DisplayName, &m.ReleasedAt, &context, &m.Capabilities)
+		err := row.Scan(&m.ID, &m.DisplayName, &m.ReleasedAt, &context, &m.Capabilities,
+			&m.IsDefault, &m.Legacy, &m.Badge, &m.Efforts, &m.DefaultEffort)
 		if context != nil {
 			m.ContextTokens = *context
 		}
@@ -750,12 +814,33 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 	if err != nil {
 		return nil, nil, "", err
 	}
+	if subscription {
+		for _, entry := range access.ManifestModels(r.Provider) {
+			if !slices.ContainsFunc(all, func(m ConnectionModel) bool { return m.ID == entry.Slug }) {
+				all = append(all, ConnectionModel{ID: entry.Slug, DisplayName: entry.Name})
+			}
+		}
+	}
+	recommended, err := s.recommendedModels(ctx, caller.OrganizationID, connectionID)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	var harnessEfforts []string
+	if harness != "" {
+		harnessEfforts = recipe.Efforts[harness]
+	}
 	out := all[:0]
 	for _, m := range all {
 		m.Harnesses = HarnessesFor(r.Provider, m.ID)
-		if harness == "" || slices.Contains(m.Harnesses, harness) {
-			out = append(out, m)
+		if harness != "" && !slices.Contains(m.Harnesses, harness) {
+			continue
 		}
+		m.ModelMeta = access.ResolveModel(r.Provider, m.ID, m.ModelMeta, harnessEfforts)
+		m.Recommended = slices.Contains(recommended, m.ID)
+		if name := manifestName(r.Provider, m.ID); name != "" && m.DisplayName == m.ID {
+			m.DisplayName = name
+		}
+		out = append(out, m)
 	}
 	return out, checked, modelsErr, nil
 }

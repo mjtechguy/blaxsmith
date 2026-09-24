@@ -1,6 +1,6 @@
 import { createClient } from "@connectrpc/connect";
 import { browserTransport, csrfToken } from "./auth";
-import { ConnectionService, type Connection } from "./gen/blaxsmith/api/v1/connections_pb";
+import { ConnectionService, type Connection, type ConnectionModel } from "./gen/blaxsmith/api/v1/connections_pb";
 
 const client = createClient(ConnectionService, browserTransport);
 const csrf = async () => ({ headers: { "X-Blaxsmith-CSRF": await csrfToken() } });
@@ -37,13 +37,45 @@ export function modelsSummary(c: Pick<Connection, "kind" | "modelCount" | "model
   return `valid, ${c.modelCount} ${c.modelCount === 1 ? "model" : "models"}`;
 }
 
+// The one-click fix for a health reason: where to replace a rejected key,
+// sign in again, or compare runtime versions. Null when nothing helps.
+export function healthFix(c: Pick<Connection, "scope" | "ownerId" | "health">): { to: string; label: string } | null {
+  switch (c.health?.reason) {
+    case "key_rejected":
+      return { label: "Replace key", to: c.scope === "organization" ? "/admin/connections/new/api-key"
+        : c.scope === "project" ? `/projects/${c.ownerId}/connections/new/api-key` : "/me/connections/new/api-key" };
+    case "needs_sign_in":
+    case "token_expiring":
+      return { label: "Sign in again", to: "/me/connections/new/subscription" };
+    case "harness_behind":
+      return { label: "Compare runtimes", to: "/tools" };
+  }
+  return null;
+}
+
+export const authLabel = (auth: string) => auth === "authenticated" ? "Signed in" : auth === "unauthenticated" ? "Not signed in" : "Sign-in not verified";
+
+// Efforts the chosen model accepts (the server already limited them to the
+// harness); an unknown model falls back to the harness's own list.
+export function effortChoices(model: Pick<ConnectionModel, "efforts"> | undefined, harnessEfforts: readonly string[]): string[] {
+  return model?.efforts.length ? [...model.efforts] : [...harnessEfforts];
+}
+
+// The effort after choosing a model: its default, else the current effort
+// when still allowed, else the first allowed one.
+export function effortForModel(model: Pick<ConnectionModel, "efforts" | "defaultEffort"> | undefined, harnessEfforts: readonly string[], current: string): string {
+  const choices = effortChoices(model, harnessEfforts);
+  if (model?.defaultEffort && choices.includes(model.defaultEffort)) return model.defaultEffort;
+  return choices.includes(current) ? current : choices[0] ?? current;
+}
+
 export async function listConnections(scope: ListScope, projectId = "", signal?: AbortSignal) {
   return (await client.listConnections({ scope, projectId }, { signal })).connections;
 }
 
 // Secrets are write-only: sent once, never returned.
-export async function createApiKeyConnection(scope: Scope, projectId: string, provider: string, apiKey: string, label: string) {
-  return (await client.createApiKeyConnection({ scope, projectId, provider, apiKey, label }, await csrf())).connection;
+export async function createApiKeyConnection(scope: Scope, projectId: string, provider: string, apiKey: string, label: string, signal?: AbortSignal) {
+  return (await client.createApiKeyConnection({ scope, projectId, provider, apiKey, label }, { ...(await csrf()), signal })).connection;
 }
 
 export async function createGitTokenConnection(scope: Scope, projectId: string, host: string, username: string, token: string) {
@@ -84,6 +116,10 @@ export async function addConnectionUse(connectionId: string, projectId: string, 
 
 export async function removeConnectionUse(useId: string) {
   return client.removeConnectionUse({ useId }, await csrf());
+}
+
+export async function setRecommendedModels(connectionId: string, models: string[]) {
+  return client.setRecommendedModels({ connectionId, models }, await csrf());
 }
 
 export async function revokeConnection(connectionId: string) {

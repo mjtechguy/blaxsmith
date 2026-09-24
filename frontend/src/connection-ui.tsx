@@ -3,20 +3,27 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { GitBranch, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { ArrowRight, GitBranch, KeyRound, Pin, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { ago } from "./admin";
 import { currentSession, sessionQueryKey } from "./auth";
 import {
-  addConnectionUse, apiKeyProviders, connectionModelsKey, connectionsKey, createApiKeyConnection, createGitTokenConnection,
-  getGitHubApp, gitHubAppKey, grantConnection, kindLabel, listConnectionModels, listConnections, modelsSummary, providerLabel,
-  refreshConnectionModels, removeConnectionUse, revokeConnection, revokeConnectionGrant, scopeLabel, startGitHubConnect,
+  addConnectionUse, apiKeyProviders, authLabel, connectionModelsKey, connectionsKey, createApiKeyConnection, createGitTokenConnection,
+  getGitHubApp, gitHubAppKey, grantConnection, healthFix, kindLabel, listConnectionModels, listConnections, modelsSummary, providerLabel,
+  refreshConnectionModels, removeConnectionUse, revokeConnection, setRecommendedModels, revokeConnectionGrant, scopeLabel, startGitHubConnect,
   type ListScope, type Scope,
 } from "./connections";
 import { DataTable } from "./data-table";
 import { CreateFlow, type FlowStep } from "./layouts";
 import { Disclosure } from "./ui";
 import { TextField } from "./form-field";
-import type { Connection, ConnectionGrant, ConnectionUse } from "./gen/blaxsmith/api/v1/connections_pb";
+import { AccessCheck, AccessExplanation } from "./access-explain";
+import { ModelSelect } from "./model-select";
+
+export { ModelSelect };
+import { isBusy, type SignInState } from "./sign-in";
+import { SignInStatus, useSignIn } from "./sign-in-flow";
+import type { Connection, ConnectionGrant, ConnectionModel, ConnectionUse } from "./gen/blaxsmith/api/v1/connections_pb";
 import { listProjects } from "./workflow";
 
 export function useOrg() {
@@ -35,6 +42,32 @@ export function failure(cause: unknown, fallback: string): string {
 export function StateBadge({ state }: { state: string }) {
   const tone = state === "active" ? "state-succeeded" : state === "reconnect_required" ? "state-waiting" : "state-failed";
   return <span className={`state-badge ${tone}`}>{state.replaceAll("_", " ")}</span>;
+}
+
+// A non-secret identity (account id, username, key label) stays blurred
+// until clicked, so a shared screen does not show it by default.
+export function RedactedText({ text, label }: { text: string; label: string }) {
+  const [shown, setShown] = useState(false);
+  if (!text) return null;
+  return <button type="button" className={shown ? "redacted is-shown" : "redacted"} aria-pressed={shown}
+    aria-label={shown ? `${label}: ${text}. Hide` : `Reveal ${label}`} onClick={() => setShown(!shown)}>
+    <span aria-hidden="true">{text}</span></button>;
+}
+
+const healthTone: Record<string, string> = { ready: "state-succeeded", warning: "state-waiting", error: "state-failed", disabled: "state-blocked" };
+
+// State, sign-in and identity, last check, and the reason with its fix.
+export function HealthLine({ connection, compact = false }: { connection: Connection; compact?: boolean }) {
+  const h = connection.health;
+  if (!h) return <StateBadge state={connection.state} />;
+  const fix = healthFix(connection);
+  return <span className={compact ? "health-line health-compact" : "health-line"}>
+    <span className={`state-badge ${healthTone[h.state] ?? ""}`}>{h.state}</span>
+    {!compact ? <span>{authLabel(h.auth)}{h.identity ? <> · <RedactedText text={h.identity} label="identity" /></> : null}</span> : null}
+    {!compact ? <span>{h.checkedAt ? <>Checked <time dateTime={h.checkedAt}>{ago(h.checkedAt)}</time></> : "Never checked"}</span> : null}
+    {h.message ? <span className={h.state === "error" ? "form-field-error" : undefined}>{h.message}</span> : null}
+    {fix ? <Link className="text-action" to={fix.to as "/"}>{fix.label} <ArrowRight size={13} aria-hidden="true" /></Link> : null}
+  </span>;
 }
 
 export function Loading({ label }: { label: string }) {
@@ -65,19 +98,22 @@ export function ConfirmDialog({ title, body, confirmLabel, busy, error, onConfir
 
 const features = tableFeatures({});
 
-export function ConnectionTable({ connections, label, empty, manage }: {
-  connections: Connection[]; label: string; empty: string; manage: (c: Connection) => ReactNode;
+// explainIn adds a "Where from" column: the access chain in that project.
+export function ConnectionTable({ connections, label, empty, manage, explainIn }: {
+  connections: Connection[]; label: string; empty: string; manage: (c: Connection) => ReactNode; explainIn?: string;
 }) {
   const columns = useMemo<ColumnDef<typeof features, Connection>[]>(() => [
     { id: "provider", header: "Provider", cell: ({ row }) => <span className="task-stage"><strong>{providerLabel(row.original.provider)}</strong><small>{kindLabel(row.original.kind)}{row.original.label ? ` · ${row.original.label}` : ""}</small></span> },
     { id: "scope", header: "Scope / owner", cell: ({ row }) => <span className="task-stage"><strong>{scopeLabel(row.original.scope)}</strong><small>{row.original.ownerName || row.original.ownerId.slice(0, 8)}</small></span> },
-    { id: "account", header: "Account", cell: ({ row }) => <span className="mono admin-wrap">{row.original.account || "—"}</span> },
-    { id: "state", header: "State", cell: ({ row }) => <StateBadge state={row.original.state} /> },
+    { id: "account", header: "Account", cell: ({ row }) => row.original.account ? <span className="mono admin-wrap"><RedactedText text={row.original.account} label="account" /></span> : "—" },
+    { id: "state", header: "Health", cell: ({ row }) => <HealthLine connection={row.original} compact /> },
     { id: "models", header: "Models", cell: ({ row }) => <span className={row.original.modelsError ? "form-field-error" : undefined}>{modelsSummary(row.original)}</span> },
     { id: "grants", header: "Grants / uses", cell: ({ row }) => `${row.original.grants.length} / ${row.original.uses.length}` },
     { id: "used", header: "Last used", cell: ({ row }) => row.original.lastUsedAt ? <time dateTime={row.original.lastUsedAt}>{ago(row.original.lastUsedAt)}</time> : "Never" },
+    ...(explainIn ? [{ id: "source", header: "Where from", cell: ({ row }: { row: { original: Connection } }) =>
+      <AccessExplanation projectId={explainIn} kind="connection" resourceId={row.original.id} /> } satisfies ColumnDef<typeof features, Connection>] : []),
     { id: "actions", header: "Actions", cell: ({ row }) => manage(row.original) },
-  ], [manage]);
+  ], [manage, explainIn]);
   const table = useTable({ features, data: connections, columns, getRowId: (c) => c.id });
   return <DataTable table={table} label={label} empty={empty} />;
 }
@@ -88,59 +124,23 @@ export function useConnections(scope: ListScope, projectId = "", enabled = true)
     queryFn: ({ signal }) => listConnections(scope, projectId, signal) });
 }
 
-const harnesses = [["", "Any harness"], ["codex", "Codex"], ["claude-code", "Claude Code"], ["opencode", "OpenCode"]] as const;
-const modelId = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/;
-
-// Models the connection can actually use; free text only under Advanced.
-// harness fixes the harness filter (a recipe profile already chose one);
-// without a connection only the Advanced free-text field is offered. fieldId
-// keeps element ids unique when several selects share a connection.
-export function ModelSelect({ connectionId, value, onChange, harness: fixedHarness, fieldId, error }: {
-  connectionId: string; value: string; onChange: (model: string) => void; harness?: string; fieldId?: string; error?: string;
-}) {
+// One connection's models for a harness; shared by pickers and effort lists.
+export function useConnectionModels(connectionId: string, harness: string) {
   const { org } = useOrg();
-  const [chosenHarness, setHarness] = useState("");
-  const harness = fixedHarness ?? chosenHarness;
-  const [search, setSearch] = useState("");
-  const models = useQuery({ queryKey: connectionModelsKey(org, connectionId, harness), enabled: Boolean(org && connectionId),
+  return useQuery({ queryKey: connectionModelsKey(org, connectionId, harness), enabled: Boolean(org && connectionId),
     queryFn: ({ signal }) => listConnectionModels(connectionId, harness, signal) });
-  const list = connectionId ? models.data?.models ?? [] : [];
-  const needle = search.trim().toLowerCase();
-  const shown = needle ? list.filter((m) => m.id.toLowerCase().includes(needle) || m.displayName.toLowerCase().includes(needle)) : list;
-  const listed = list.some((m) => m.id === value);
-  const id = fieldId || connectionId || "none";
-  return <div className="editor-form">
-    {connectionId && fixedHarness === undefined ? <div className="form-field"><label htmlFor={`harness-${id}`}>Harness</label>
-      <select id={`harness-${id}`} value={harness} onChange={(event) => setHarness(event.target.value)}>
-        {harnesses.map(([hid, name]) => <option key={hid} value={hid}>{name}</option>)}
-      </select></div> : null}
-    {list.length > 12 ? <TextField label="Search models" name={`model-search-${id}`} autoComplete="off" placeholder="Filter by id or name" value={search} onChange={setSearch} onBlur={() => {}} required={false} /> : null}
-    {connectionId ? <div className="form-field"><label htmlFor={`model-${id}`}>Model</label>
-      <select id={`model-${id}`} value={listed ? value : ""} onChange={(event) => onChange(event.target.value)} disabled={models.isPending} aria-invalid={error ? true : undefined}>
-        <option value="">{models.isPending ? "Loading models…" : list.length ? "Choose a model" : "No models available"}</option>
-        {shown.map((m) => <option key={m.id} value={m.id}>{m.displayName && m.displayName !== m.id ? `${m.displayName} (${m.id})` : m.id}{m.contextTokens ? ` · ${Math.round(m.contextTokens / 1000)}k` : ""}</option>)}
-      </select>
-      {models.data?.error ? <span className="form-field-error">{models.data.error}</span> : null}
-      {models.isError ? <span className="form-field-error">Models could not be loaded.</span> : null}
-      {error && listed ? <span className="form-field-error">{error}</span> : null}
-    </div> : null}
-    <Disclosure key={connectionId || "none"} summary="Advanced: type a model id" defaultOpen={!connectionId || (Boolean(value) && !listed && !models.isPending)}>
-      <TextField label="Model id" name={`model-free-text-${id}`} autoComplete="off" placeholder="Exact provider model id" value={listed ? "" : value} onChange={onChange} onBlur={() => {}} required={false}
-        error={value && !listed && !modelId.test(value) ? "Use up to 128 letters, numbers, periods, underscores, slashes, or hyphens." : !listed ? error : undefined} />
-    </Disclosure>
-  </div>;
 }
 
-export function ProjectSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+export function ProjectSelect({ value, onChange, idPrefix = "project" }: { value: string; onChange: (id: string) => void; idPrefix?: string }) {
   const { org } = useOrg();
   const [search, setSearch] = useState("");
   const [submitted, setSubmitted] = useState("");
   useEffect(() => { const t = window.setTimeout(() => setSubmitted(search.trim()), 250); return () => window.clearTimeout(t); }, [search]);
   const projects = useQuery({ queryKey: ["projects", org, submitted, "picker"], enabled: Boolean(org), queryFn: ({ signal }) => listProjects("", submitted, "created_at", "desc", signal) });
   return <>
-    <TextField label="Find project" name="project-search" autoComplete="off" placeholder="Search projects" value={search} onChange={setSearch} onBlur={() => {}} required={false} />
-    <div className="form-field"><label htmlFor="project-select">Project</label>
-      <select id="project-select" value={value} onChange={(event) => onChange(event.target.value)}>
+    <TextField label="Find project" name={`${idPrefix}-search`} autoComplete="off" placeholder="Search projects" value={search} onChange={setSearch} onBlur={() => {}} required={false} />
+    <div className="form-field"><label htmlFor={`${idPrefix}-select`}>Project</label>
+      <select id={`${idPrefix}-select`} value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">Choose a project</option>
         {(projects.data?.projects ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select></div>
@@ -166,6 +166,8 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone, flow }: { sco
   const { org } = useOrg();
   const [error, setError] = useState("");
   const [created, setCreated] = useState<Connection | null>(null);
+  const [signIn, dispatch] = useSignIn();
+  const abort = useRef<AbortController | null>(null);
   const form = useForm({
     defaultValues: { provider: "anthropic", apiKey: "", label: "" },
     onSubmit: async ({ value }) => {
@@ -176,15 +178,24 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone, flow }: { sco
         return;
       }
       form.setFieldValue("apiKey", "");
+      dispatch({ type: "start" });
+      dispatch({ type: "verify" });
+      abort.current = new AbortController();
       try {
-        const connection = await createApiKeyConnection(scope, projectId, value.provider, apiKey, value.label.trim());
+        const connection = await createApiKeyConnection(scope, projectId, value.provider, apiKey, value.label.trim(), abort.current.signal);
         await queryClient.invalidateQueries({ queryKey: ["connections", org] });
+        dispatch({ type: "succeed" });
         if (connection) setCreated(connection);
       } catch (cause) {
-        setError(failure(cause, "The API key could not be added. Please try again."));
+        dispatch({ type: "fail", error: failure(cause, "The API key could not be added. Please try again.") });
       }
     },
   });
+  const cancelCheck = () => {
+    dispatch({ type: "cancel" });
+    abort.current?.abort();
+    void queryClient.invalidateQueries({ queryKey: ["connections", org] }); // The server may have stored it already.
+  };
   const summary = <><h2>Summary</h2><p className="form-hint">{scopeNote(scope)} The key is sent once, checked with the provider, and never returned.</p>
     <p className="form-hint">OpenCode Zen and OpenCode Go are OpenCode’s own providers; OpenCode Go is its subscription and also uses an API key.</p></>;
   if (created) return <CreateFlow {...flow} steps={connectionSteps(flow, scope, true)} summary={summary}><section className="editor-card" aria-labelledby="api-key-created-heading">
@@ -195,7 +206,9 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone, flow }: { sco
   return <CreateFlow {...flow} steps={connectionSteps(flow, scope, false)} summary={summary}>
     <section className="editor-card" aria-labelledby="api-key-heading">
       <div className="editor-card-heading"><span className="project-symbol"><KeyRound size={18} aria-hidden="true" /></span><div><h2 id="api-key-heading">Provider API key</h2><p>The platform checks the key with the provider and loads the models it can use.</p></div></div>
-      <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
+      <SignInStatus state={signIn} onCancel={cancelCheck} onRetry={() => dispatch({ type: "retry" })}
+        labels={{ starting: "Sending the key…", verifying: "Validating the key with the provider…", succeeded: "Key accepted." }} />
+      {isBusy(signIn.phase) ? null : <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
         <form.Field name="provider">{(field) => <div className="form-field"><label htmlFor="api-key-provider">Provider</label>
           <select id="api-key-provider" name={field.name} value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} onBlur={field.handleBlur}>
             {apiKeyProviders.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
@@ -206,7 +219,7 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone, flow }: { sco
         <div className="editor-actions">{cancel}<form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
           {([canSubmit, submitting]) => <button className="primary-button" type="submit" disabled={!canSubmit || submitting}>{submitting ? <RefreshCw size={15} className="spin" aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}{submitting ? "Checking…" : "Add API key"}</button>}
         </form.Subscribe></div>
-      </form>
+      </form>}
     </section>
   </CreateFlow>;
 }
@@ -216,10 +229,13 @@ export function NewGit({ scope, projectId = "", returnTo, cancel, onDone, flow }
   const { org } = useOrg();
   const app = useQuery({ queryKey: gitHubAppKey(org), enabled: Boolean(org), queryFn: ({ signal }) => getGitHubApp(signal) });
   const [error, setError] = useState("");
+  const [signIn, dispatch] = useSignIn();
   const connect = useMutation({
     mutationFn: () => startGitHubConnect(scope, projectId, returnTo),
-    onSuccess: (url) => { if (url) window.location.assign(url); },
-    onError: (cause) => setError(failure(cause, "GitHub sign-in could not start. Please try again.")),
+    onMutate: () => dispatch({ type: "start" }),
+    // The callback returns to returnTo with ?github=…; GitHubReturnNotice shows the outcome.
+    onSuccess: (url) => { dispatch({ type: "started" }); if (url) window.location.assign(url); },
+    onError: (cause) => dispatch({ type: "fail", error: failure(cause, "GitHub sign-in could not start. Please try again.") }),
   });
   const form = useForm({
     defaultValues: { host: "github.com", username: "x-access-token", token: "" },
@@ -247,8 +263,10 @@ export function NewGit({ scope, projectId = "", returnTo, cancel, onDone, flow }
     <section className="editor-card" aria-labelledby="git-heading">
       <div className="editor-card-heading"><span className="project-symbol"><GitBranch size={18} aria-hidden="true" /></span><div><h2 id="git-heading">Connect Git</h2><p>Sign in with GitHub, then pick repositories and branches on the project source page.</p></div></div>
       <div className="editor-form">
-        <button type="button" className="primary-button" disabled={!configured || connect.isPending} onClick={() => { setError(""); connect.mutate(); }}>
-          <GitBranch size={15} aria-hidden="true" /> {connect.isPending ? "Opening GitHub…" : "Connect GitHub"}</button>
+        {signIn.phase === "idle" ? <button type="button" className="primary-button" disabled={!configured} onClick={() => { setError(""); connect.mutate(); }}>
+          <GitBranch size={15} aria-hidden="true" /> Connect GitHub</button> : null}
+        <SignInStatus state={signIn} onRetry={() => dispatch({ type: "retry" })}
+          labels={{ starting: "Preparing GitHub sign-in…", waiting: "Opening GitHub…", verifying: "Finishing sign-in…", succeeded: "GitHub connected." }} />
         {app.isSuccess && !configured ? <p className="admin-note">An organization owner or admin must register the GitHub OAuth App under Admin → Connections → GitHub App first.</p> : null}
         {error ? <p className="auth-alert" role="alert">{error}</p> : null}
       </div>
@@ -305,31 +323,63 @@ export function ConnectionDetail({ connection, scope, projectId = "", onRevoked 
   return <>
     <section className="table-section" aria-labelledby="connection-summary-heading">
       <div className="table-heading"><div><h2 id="connection-summary-heading">{providerLabel(connection.provider)} · {kindLabel(connection.kind)}</h2>
-        <p>{scopeLabel(connection.scope)} connection{connection.ownerName ? ` owned by ${connection.ownerName}` : ""}. Account <span className="mono">{connection.account || "—"}</span>. Credentials are never shown.</p></div>
+        <p>{scopeLabel(connection.scope)} connection{connection.ownerName ? ` owned by ${connection.ownerName}` : ""}. Account {connection.account ? <RedactedText text={connection.account} label="account" /> : "—"}. Credentials are never shown.</p></div>
         <span className="admin-actions">
           {connection.kind !== "git" && connection.canManage ? <button type="button" className="secondary-button" disabled={refresh.isPending} onClick={() => refresh.mutate()}><RefreshCw size={15} className={refresh.isPending ? "spin" : undefined} aria-hidden="true" /> Refresh models</button> : null}
           {connection.canManage && connection.state !== "revoked" ? <button type="button" className="secondary-button" onClick={() => { setError(""); setPending({ kind: "connection" }); }}><Trash2 size={15} aria-hidden="true" /> Revoke</button> : null}
         </span></div>
-      <div className="source-summary"><strong><StateBadge state={connection.state} /></strong>
+      <div className="source-summary"><HealthLine connection={connection} />
         <span className={connection.modelsError ? "form-field-error" : undefined}>Models: {refreshNote || modelsSummary(connection)}{connection.modelsCheckedAt ? ` · checked ${ago(connection.modelsCheckedAt)}` : ""}</span>
-        <span>Last used: {connection.lastUsedAt ? ago(connection.lastUsedAt) : "never"}</span></div>
+        <span>Last used: {connection.lastUsedAt ? ago(connection.lastUsedAt) : "never"}</span>
+        {projectId ? <AccessExplanation projectId={projectId} kind="connection" resourceId={connection.id} /> : null}</div>
     </section>
     {connection.kind !== "git" ? <section className="table-section" aria-labelledby="connection-uses-heading">
       <div className="table-heading"><div><h2 id="connection-uses-heading">Model uses</h2><p>{connection.scope === "personal" ? "Projects where your own runs use this connection." : "Models project runs may use through this connection."}</p></div><span className="fetched-time">{uses.length} uses</span></div>
       <DataTable table={useTableModel} label="Model uses" empty="Not used by any project yet." />
       {connection.state === "active" ? <AddUse connection={connection} projectId={projectId} /> : null}
     </section> : null}
+    {connection.kind !== "git" && connection.canManage && connection.state === "active" ? <RecommendedModels connection={connection} /> : null}
     {scope === "organization" && connection.scope === "organization" ? <ResourceGrants grants={connection.grants} label="Connection grants"
       canManage={connection.canManage} canAdd={connection.canManage && connection.state === "active"}
       description="Each grant names one project, one user, or a minimum role. Owners and admins get no implicit use; viewers never. A project grant lets that project's admins attach it to runs."
       revokeNote="Revoking a project grant also removes that project's model uses of this connection."
-      grant={(kind, project, grantee) => grantConnection(connection.id, project, kind, grantee)} revoke={revokeConnectionGrant} onChanged={invalidate} /> : null}
+      grant={(kind, project, grantee) => grantConnection(connection.id, project, kind, grantee)} revoke={revokeConnectionGrant} onChanged={invalidate}
+      explain={{ kind: "connection", resourceId: connection.id }} /> : null}
     {pending ? <ConfirmDialog busy={act.isPending} error={error} onClose={() => setPending(null)} onConfirm={() => act.mutate(pending)}
       title={pending.kind === "use" ? "Remove model use" : "Revoke connection"}
       confirmLabel={pending.kind === "use" ? "Remove" : "Revoke"}
       body={pending.kind === "use" ? <>Stop <strong>{pending.use.projectName}</strong> from using <strong className="mono">{pending.use.model}</strong> through this connection? Future attempts lose it; a running actor may still hold a delivered credential until stopped.</>
           : <>Revoke this {providerLabel(connection.provider)} connection? Every grant, use, and lease is revoked. Rotate the credential at the provider to invalidate copies already delivered.</>} /> : null}
   </>;
+}
+
+// Managers pin recommended models; every picker lists them first.
+function RecommendedModels({ connection }: { connection: Connection }) {
+  const queryClient = useQueryClient();
+  const { org } = useOrg();
+  const models = useConnectionModels(connection.id, "");
+  const [error, setError] = useState("");
+  const pinned = (models.data?.models ?? []).filter((m) => m.recommended).map((m) => m.id);
+  const save = useMutation({
+    mutationFn: (next: string[]) => setRecommendedModels(connection.id, next),
+    onSuccess: async () => { setError(""); await queryClient.invalidateQueries({ queryKey: ["connection-models", org, connection.id] }); },
+    onError: (cause) => setError(failure(cause, "Recommended models could not be saved.")),
+  });
+  const columns = useMemo<ColumnDef<typeof features, ConnectionModel>[]>(() => [
+    { id: "model", header: "Model", cell: ({ row }) => <span className="task-stage"><strong>{row.original.displayName || row.original.id}</strong><small className="mono">{row.original.id}</small></span> },
+    { id: "flags", header: "Status", cell: ({ row }) => [row.original.recommended ? "Recommended" : "", row.original.isDefault ? "Provider default" : "", row.original.legacy ? "Legacy" : "", row.original.badge].filter(Boolean).join(" · ") || "—" },
+    { id: "efforts", header: "Efforts", cell: ({ row }) => row.original.efforts.length ? <span className="mono">{row.original.efforts.join(", ")}</span> : "Harness default" },
+    { id: "actions", header: "Actions", cell: ({ row }) => <button type="button" className="text-action" disabled={save.isPending} aria-pressed={row.original.recommended}
+      onClick={() => save.mutate(row.original.recommended ? pinned.filter((id) => id !== row.original.id) : [...pinned, row.original.id])}>
+      <Pin size={13} aria-hidden="true" /> {row.original.recommended ? "Unpin" : "Recommend"}</button> },
+  ], [pinned.join(","), save.isPending]);
+  const table = useTable({ features, data: models.data?.models ?? [], columns, getRowId: (m) => m.id });
+  return <section className="table-section" aria-labelledby="recommended-models-heading">
+    <div className="table-heading"><div><h2 id="recommended-models-heading">Models</h2><p>Recommend models to list them first in every model picker. Legacy models stay hidden behind a toggle there.</p></div>
+      <span className="fetched-time">{pinned.length} recommended</span></div>
+    {error ? <p className="auth-alert" role="alert">{error}</p> : null}
+    <DataTable table={table} label="Connection models" empty={models.isPending ? undefined : "No models listed yet. Refresh models."} />
+  </section>;
 }
 
 export function AddUse({ connection, projectId }: { connection: Connection; projectId: string }) {
@@ -358,8 +408,9 @@ export type ResourceGrant = Pick<ConnectionGrant, "id" | "projectId" | "projectN
 // Grants on one organization resource (a connection or a recipe): list,
 // add (project, user, or minimum role), and revoke behind a confirmation.
 // The server audits both through GrantResource/RevokeResourceGrant.
-export function ResourceGrants({ grants, label, description, canManage, canAdd, revokeNote = "", grant, revoke, onChanged }: {
+export function ResourceGrants({ grants, label, description, canManage, canAdd, revokeNote = "", grant, revoke, onChanged, explain }: {
   grants: ResourceGrant[]; label: string; description: ReactNode; canManage: boolean; canAdd: boolean; revokeNote?: string;
+  explain?: { kind: "connection" | "recipe"; resourceId: string };
   grant: (kind: string, projectId: string, granteeId: string) => Promise<unknown>; revoke: (grantId: string) => Promise<unknown>; onChanged: () => Promise<unknown>;
 }) {
   const [pending, setPending] = useState<ResourceGrant | null>(null);
@@ -382,6 +433,8 @@ export function ResourceGrants({ grants, label, description, canManage, canAdd, 
     <div className="table-heading"><div><h2 id="resource-grants-heading">Grants</h2><p>{description}</p></div><span className="fetched-time">{grants.length} grants</span></div>
     <DataTable table={table} label={label} empty="Not granted to any project, user, or role." />
     {canAdd ? <AddGrant grant={grant} onChanged={onChanged} /> : null}
+    {explain ? <AccessCheck kind={explain.kind} resourceId={explain.resourceId}
+      projectPicker={(value, onChange) => <ProjectSelect value={value} onChange={onChange} idPrefix="explain" />} /> : null}
     {pending ? <ConfirmDialog busy={remove.isPending} error={error} onClose={() => setPending(null)} onConfirm={() => remove.mutate(pending)}
       title="Revoke grant" confirmLabel="Revoke"
       body={<>Revoke this grant for <strong>{pending.granteeKind === "project" ? pending.projectName || pending.projectId : pending.granteeName || pending.granteeId}</strong>?{revokeNote ? ` ${revokeNote}` : ""}</>} /> : null}
@@ -416,8 +469,12 @@ function AddGrant({ grant, onChanged }: { grant: (kind: string, projectId: strin
 }
 
 // ?github=connected|error&message=… is set by the /oauth/github/callback redirect.
+// It ends the OAuth sign-in state machine started by NewGit's Connect GitHub.
 export function GitHubReturnNotice({ search }: { search: Record<string, unknown> }) {
-  if (search.github === "connected") return <div className="notice" role="status"><strong>GitHub connected.</strong> Pick repositories on a project's source page.</div>;
-  if (search.github === "error") return <div className="notice" role="alert"><strong>GitHub connection failed.</strong> {typeof search.message === "string" ? search.message : "Please try again."}</div>;
-  return null;
+  const navigate = useNavigate();
+  const state: SignInState | null = search.github === "connected" ? { phase: "succeeded", attempt: 1 }
+    : search.github === "error" ? { phase: "failed", attempt: 1, error: typeof search.message === "string" ? search.message : "Please try again." } : null;
+  if (!state) return null;
+  return <SignInStatus state={state} onRetry={() => void navigate({ to: ".", search: {} as never, replace: true })}
+    labels={{ starting: "", verifying: "", succeeded: "GitHub connected." }} done="Pick repositories on a project's source page." />;
 }
