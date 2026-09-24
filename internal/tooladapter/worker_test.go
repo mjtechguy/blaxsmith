@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -77,6 +78,82 @@ func TestAXWorkerRequiresScopedCredentialBeforePinnedTool(t *testing.T) {
 	request.Profile.Effort = "medium"
 	if _, err := Command(request); !errors.Is(err, ErrBlocked) {
 		t.Fatalf("unapproved effort must block: %v", err)
+	}
+}
+
+func TestAXWorkspaceSourceMustMatchFrozenRepositoryAndCommit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is required for workspace source verification")
+	}
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	if err := os.Mkdir(source, 0700); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) []byte {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", source}, args...)...)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, output)
+		} else {
+			return output
+		}
+		return nil
+	}
+	run("init", "--quiet")
+	run("config", "user.name", "Workspace test")
+	run("config", "user.email", "workspace@example.invalid")
+	if err := os.WriteFile(filepath.Join(source, "README.md"), []byte("pinned\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "README.md")
+	run("commit", "--quiet", "-m", "pinned source")
+	run("config", "remote.origin.url", "https://github.com/owner/repo")
+	commit := strings.TrimSpace(string(run("rev-parse", "HEAD^{commit}")))
+	path, err := workspaceSourcePath(root, "source")
+	if err != nil || verifyWorkspaceCheckout(t.Context(), path, "https://github.com/owner/repo", commit) != nil {
+		t.Fatalf("valid AX workspace source rejected: %q %v", path, err)
+	}
+	if verifyWorkspaceCheckout(t.Context(), path, "https://github.com/owner/other", commit) == nil ||
+		verifyWorkspaceCheckout(t.Context(), path, "https://github.com/owner/repo", strings.Repeat("0", 40)) == nil {
+		t.Fatal("changed repository or commit accepted")
+	}
+	if _, err := workspaceSourcePath(root, "../source"); err == nil {
+		t.Fatal("workspace path traversal accepted")
+	}
+	if err := os.Symlink(source, filepath.Join(root, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspaceSourcePath(root, "linked"); err == nil {
+		t.Fatal("workspace symlink accepted")
+	}
+	binary := filepath.Join(root, "codex")
+	body := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'codex-cli 0.156.1'; else printf '%s' \"$PWD\"; fi\n")
+	if err := os.WriteFile(binary, body, 0700); err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.Sum256(body)
+	request := Request{AttemptID: "attempt-a", RepositoryURL: "https://github.com/owner/repo",
+		SourceCommit: commit, SourceDirectory: "source", Runtime: Runtime{Harness: "codex",
+			Image: "example/tool@sha256:" + strings.Repeat("a", 64), Binary: binary,
+			BinarySHA256: hex.EncodeToString(hash[:]), Version: "0.156.1",
+			Supported: []ModelEffort{{Model: "gpt-6-luna", Effort: "xhigh"}}},
+		Profile: recipe.Profile{Harness: "codex", Model: "gpt-6-luna", Effort: "xhigh"},
+		Prompt:  "Use the AX workspace", TimeoutSeconds: 60, MaxOutputBytes: 1024}
+	command, err := Command(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentialPath := filepath.Join(root, "credential.json")
+	credentialData, _ := json.Marshal(credential{AttemptID: "attempt-a", Provider: "openai",
+		ExpiresAt: time.Now().Add(time.Minute).Unix(), APIKey: "leased-key"})
+	if err := os.WriteFile(credentialPath, credentialData, 0600); err != nil {
+		t.Fatal(err)
+	}
+	checkout := func(context.Context, string, string, string, string) error { return errors.New("unexpected checkout") }
+	output, err := execute(t.Context(), command[1], root, credentialPath, checkout)
+	if err != nil || string(output) != path {
+		t.Fatalf("worker did not run in the verified AX source directory: %q %v", output, err)
 	}
 }
 

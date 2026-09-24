@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -35,6 +36,7 @@ type Request struct {
 	RepositoryURL   string           `json:"repository_url"`
 	SourceRef       string           `json:"source_ref"`
 	SourceCommit    string           `json:"source_commit"`
+	SourceDirectory string           `json:"source_directory,omitempty"`
 	Runtime         Runtime          `json:"runtime"`
 	Profile         recipe.Profile   `json:"profile"`
 	Prompt          string           `json:"prompt"`
@@ -56,7 +58,9 @@ func Command(request Request) ([]string, error) {
 	if request.AttemptID == "" || len(request.AttemptID) > 128 || strings.ContainsAny(request.AttemptID, " \t\r\n\x00") {
 		return nil, ErrBlocked
 	}
-	if err := gitfetch.Validate(request.RepositoryURL, request.SourceRef); err != nil || !gitCommit.MatchString(request.SourceCommit) {
+	if err := gitfetch.Validate(request.RepositoryURL, request.SourceRef); err != nil || !gitCommit.MatchString(request.SourceCommit) ||
+		request.SourceDirectory != "" && (request.SourceDirectory == "." || request.SourceDirectory == ".." ||
+			strings.ContainsAny(request.SourceDirectory, "/\\\r\n\x00")) {
 		return nil, fmt.Errorf("%w: invalid frozen public Git source", ErrBlocked)
 	}
 	profile, err := frozenProfile(request)
@@ -111,10 +115,19 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 		return nil, err
 	}
 	defer clear(key)
-	if checkout == nil || checkout(ctx, request.RepositoryURL, request.SourceRef, request.SourceCommit, workdir) != nil {
-		return nil, fmt.Errorf("%w: pinned source checkout failed", ErrBlocked)
+	sourcePath := workdir
+	if request.SourceDirectory == "" {
+		if checkout == nil || checkout(ctx, request.RepositoryURL, request.SourceRef, request.SourceCommit, sourcePath) != nil {
+			return nil, fmt.Errorf("%w: pinned source checkout failed", ErrBlocked)
+		}
+	} else {
+		var err error
+		sourcePath, err = workspaceSourcePath(workdir, request.SourceDirectory)
+		if err != nil || verifyWorkspaceCheckout(ctx, sourcePath, request.RepositoryURL, request.SourceCommit) != nil {
+			return nil, fmt.Errorf("%w: AX workspace source does not match the frozen input", ErrBlocked)
+		}
 	}
-	if err := verifyFrozenArtifacts(workdir, request.FrozenArtifacts); err != nil {
+	if err := verifyFrozenArtifacts(sourcePath, request.FrozenArtifacts); err != nil {
 		return nil, err
 	}
 	profile, err := frozenProfile(request)
@@ -133,8 +146,62 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 	}
 	leaseContext, cancel := context.WithDeadline(ctx, expiry)
 	defer cancel()
-	output, err := Run(leaseContext, in, workdir, []string{variable + string(key)})
+	output, err := Run(leaseContext, in, sourcePath, []string{variable + string(key)})
 	return bytes.ReplaceAll(output, key, []byte("[redacted]")), err
+}
+
+func workspaceSourcePath(root, name string) (string, error) {
+	if !filepath.IsAbs(root) || name == "" || name == "." || name == ".." ||
+		strings.ContainsAny(name, "/\\\r\n\x00") {
+		return "", ErrBlocked
+	}
+	root, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", ErrBlocked
+	}
+	source := filepath.Join(root, name)
+	info, err := os.Lstat(source)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return "", ErrBlocked
+	}
+	resolved, err := filepath.EvalSymlinks(source)
+	if err != nil || filepath.Dir(resolved) != root {
+		return "", ErrBlocked
+	}
+	return resolved, nil
+}
+
+func verifyWorkspaceCheckout(ctx context.Context, workdir, repositoryURL, commit string) error {
+	if gitfetch.Validate(repositoryURL, "") != nil || !gitCommit.MatchString(commit) {
+		return ErrBlocked
+	}
+	gitDir := filepath.Join(workdir, ".git")
+	info, err := os.Lstat(gitDir)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return ErrBlocked
+	}
+	env := []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_NOSYSTEM=1",
+		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_TERMINAL_PROMPT=0", "GIT_ALLOW_PROTOCOL=https",
+		"GIT_NO_REPLACE_OBJECTS=1", "GIT_NO_LAZY_FETCH=1", "GIT_OPTIONAL_LOCKS=0"}
+	run := func(args ...string) (string, error) {
+		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", workdir}, args...)...)
+		cmd.Env = env
+		out, err := cmd.Output()
+		return strings.TrimSpace(string(out)), err
+	}
+	root, err := run("rev-parse", "--show-toplevel")
+	if err != nil || filepath.Clean(root) != filepath.Clean(workdir) {
+		return ErrBlocked
+	}
+	origin, err := run("config", "--local", "--get", "remote.origin.url")
+	if err != nil || origin != repositoryURL {
+		return ErrBlocked
+	}
+	got, err := run("rev-parse", "--verify", "HEAD^{commit}")
+	if err != nil || got != commit {
+		return ErrBlocked
+	}
+	return nil
 }
 
 func frozenProfile(request Request) (recipe.Profile, error) {

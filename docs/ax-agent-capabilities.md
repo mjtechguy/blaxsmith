@@ -47,6 +47,13 @@ configuration, and revocation proof. Hooks remain unsupported until they have
 an explicit lifecycle and execution policy. The adapter stays pinned and
 noninteractive, and launch stays disabled until end-to-end AX verification.
 
+The tool worker can optionally use a single child directory from the AX mount
+as its source. It rejects symlink/path traversal and verifies the checkout's
+origin URL and `HEAD` against the frozen public repository and commit before
+launching a CLI. The dispatcher does not yet set this option or create a
+per-attempt Git Workspace, so normal dispatch still uses the worker's own
+pinned checkout.
+
 ## Substrate connector authority
 
 At the pinned Substrate revision, `kubectl-ate --endpoint` still loads
