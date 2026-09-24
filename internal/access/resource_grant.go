@@ -44,15 +44,30 @@ func validResource(kind, id string) bool {
 // Unknown kinds and malformed IDs deny (false, nil). resourceKind is
 // ResourceConnection ("connection") or ResourceRecipe ("recipe").
 func CanUse(ctx context.Context, tx pgx.Tx, principal identity.Caller, projectID, resourceKind, resourceID string) (bool, error) {
+	_, ok, err := MatchingGrant(ctx, tx, principal, projectID, resourceKind, resourceID)
+	return ok, err
+}
+
+// GrantMatch is the grant that satisfied CanUse. Via is project, user, or
+// role; Role is the grant's minimum role for a role grant.
+type GrantMatch struct{ GrantID, Via, Role string }
+
+// MatchingGrant is CanUse's single implementation: it returns the grant that
+// authorizes the use, preferring a project grant, then a user grant, then the
+// narrowest role grant, so an explanation names the most specific reason.
+func MatchingGrant(ctx context.Context, tx pgx.Tx, principal identity.Caller, projectID, resourceKind, resourceID string) (GrantMatch, bool, error) {
 	if tx == nil {
-		return false, ErrDenied
+		return GrantMatch{}, false, ErrDenied
 	}
 	if !uuidPattern.MatchString(principal.OrganizationID) || !uuidPattern.MatchString(principal.PrincipalID) ||
 		(projectID != "" && !uuidPattern.MatchString(projectID)) || !validResource(resourceKind, resourceID) {
-		return false, nil
+		return GrantMatch{}, false, nil
 	}
-	var grantID string
-	err := tx.QueryRow(ctx, `SELECT g.id FROM identity_memberships m
+	var m GrantMatch
+	err := tx.QueryRow(ctx, `SELECT g.id,
+		CASE WHEN g.grantee_project_id IS NOT NULL THEN 'project' WHEN g.grantee_principal_id IS NOT NULL THEN 'user' ELSE 'role' END,
+		COALESCE(g.grantee_role,'')
+		FROM identity_memberships m
 		JOIN identity_principals p ON p.id=m.principal_id
 		JOIN access_resource_grants g ON g.organization_id=m.organization_id
 		WHERE m.organization_id=$1 AND m.principal_id=$2 AND m.state='active' AND p.state='active' AND m.role<>'viewer'
@@ -60,11 +75,14 @@ func CanUse(ctx context.Context, tx pgx.Tx, principal identity.Caller, projectID
 		AND (g.grantee_principal_id=m.principal_id
 			OR g.grantee_project_id=NULLIF($3,'')::uuid
 			OR array_position(ARRAY['member','admin','owner'],m.role)>=array_position(ARRAY['member','admin','owner'],g.grantee_role))
-		LIMIT 1 FOR SHARE OF m,g`, principal.OrganizationID, principal.PrincipalID, projectID, resourceKind, resourceID).Scan(&grantID)
+		ORDER BY g.grantee_project_id IS NULL, g.grantee_principal_id IS NULL,
+			array_position(ARRAY['member','admin','owner'],g.grantee_role) DESC NULLS LAST, g.created_at, g.id
+		LIMIT 1 FOR SHARE OF m,g`, principal.OrganizationID, principal.PrincipalID, projectID, resourceKind, resourceID).
+		Scan(&m.GrantID, &m.Via, &m.Role)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
+		return GrantMatch{}, false, nil
 	}
-	return err == nil, err
+	return m, err == nil, err
 }
 
 // Grantee names exactly one recipient of a resource grant: a project in the

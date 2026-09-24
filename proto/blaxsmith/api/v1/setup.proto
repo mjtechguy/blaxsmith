@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package blaxsmith.api.v1;
+
+// Setup helpers: why a resource is (not) usable, and what a repository
+// suggests for verification and recipes. Reads only; nothing here saves.
+
+// One link of an access chain, closest to the principal first:
+// project_grant, user_grant, or role_grant; then organization_connection,
+// project_connection, personal_connection, organization_recipe, or
+// project_recipe; then recipe_version for recipes.
+message AccessStep {
+  string kind = 1;
+  string label = 2;
+  string id = 3;
+}
+
+message ExplainAccessRequest {
+  string project_id = 1;
+  string resource_kind = 2; // connection or recipe.
+  string resource_id = 3;
+  // Empty: the caller. Organization owners and admins may name any member.
+  string principal_id = 4;
+}
+message ExplainAccessResponse {
+  bool usable = 1;
+  repeated AccessStep steps = 2;
+  string reason = 3; // Why not, when not usable.
+  string grant_id = 4; // The resource grant CanUse matched, if any.
+  string principal_label = 5; // Username of the principal explained.
+}
+
+service SetupService {
+  rpc ExplainAccess(ExplainAccessRequest) returns (ExplainAccessResponse);
+}

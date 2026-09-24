@@ -145,6 +145,7 @@ export function RecipeDetailPage({ projectId, recipeId }: { projectId?: string; 
       description="Each grant names one project, one user, or a minimum role that may use this recipe from any project. Owners and admins get no implicit use; viewers never. Project recipes need no grant."
       revokeNote="New runs can no longer launch it there; runs already launched keep the bytes they froze."
       grant={(kind, project, grantee) => grantRecipe(recipeId, project, kind, grantee)} revoke={revokeRecipeGrant}
+      explain={{ kind: "recipe", resourceId: recipeId }}
       onChanged={() => Promise.all([queryClient.invalidateQueries({ queryKey: recipeKey(org, recipeId) }), queryClient.invalidateQueries({ queryKey: ["recipes", org] })])} /> : null}
     {version.data?.version ? <StageDag doc={doc} order={validation.data?.stageOrder} title={`Stage graph · v${version.data.version.version}`} /> : null}
     {version.data?.version ? <details className="recipe-source"><summary><FileJson size={14} aria-hidden="true" /> JSON · v{version.data.version.version}</summary><pre className="mono">{version.data.version.recipeJson}</pre></details> : null}

@@ -529,6 +529,13 @@ a { color: inherit; text-decoration: none; }
 .sign-in-status p { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; }
 .sign-in-code { gap: 10px !important; }
 
+/* Where this comes from. */
+.access-chain { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.access-chain svg { flex: none; margin-top: 1px; color: var(--success-text); }
+.access-chain.is-blocked svg { color: var(--warning-text); }
+.access-chain strong { color: var(--text); font-weight: 650; }
+.access-check-title { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; }
+
 /* Connection health line. */
 .health-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .health-line .state-badge { flex: none; }

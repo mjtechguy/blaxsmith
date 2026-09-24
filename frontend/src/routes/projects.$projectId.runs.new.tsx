@@ -7,6 +7,7 @@ import { ArrowLeft, BookCopy, GitBranch, Plus, RefreshCw } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
 import { TextField } from "../form-field";
 import type { ProjectSource, ProjectVerification } from "../gen/blaxsmith/api/v1/workflow_pb";
+import { AccessExplanation } from "../access-explain";
 import { PageHeader, PageShell } from "../page";
 import { StageDag } from "../recipe-pages";
 import { getRecipe, getRecipeVersion, listRecipes, parseRecipe, recipeKey, recipesKey, recipeVersionKey, validateRecipe } from "../recipes";
@@ -107,6 +108,7 @@ function RunEditor({ projectId, org, source, verification }: { projectId: string
               {recipe.data?.versions.map((v) => <option key={v.id} value={v.id}>v{v.version}{v.id === recipe.data?.recipe?.currentVersionId ? " · current" : ""} · {v.sha256.slice(0, 10)}</option>)}
             </select></label>
         </div>
+        {recipeId ? <AccessExplanation projectId={projectId} kind="recipe" resourceId={recipeId} /> : null}
         {version.data?.version ? <p className="form-hint">Freezes v{version.data.version.version} (<code>{version.data.version.sha256.slice(0, 12)}</code>) as <code>{version.data.version.frozenPath}</code>. Its prompts and skills are read from the repository commit.</p> : null}
         <p className="form-hint"><Link className="text-action" to="/projects/$projectId/recipes" params={{ projectId }}><BookCopy size={14} aria-hidden="true" /> Manage recipes</Link></p>
         <details className="recipe-advanced"><summary>Advanced: use a committed recipe file</summary>

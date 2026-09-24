@@ -15,6 +15,7 @@ import {
 } from "./connections";
 import { DataTable } from "./data-table";
 import { TextField } from "./form-field";
+import { AccessCheck, AccessExplanation } from "./access-explain";
 import { isBusy, type SignInState } from "./sign-in";
 import { SignInStatus, useSignIn } from "./sign-in-flow";
 import type { Connection, ConnectionGrant, ConnectionUse } from "./gen/blaxsmith/api/v1/connections_pb";
@@ -92,8 +93,9 @@ export function ConfirmDialog({ title, body, confirmLabel, busy, error, onConfir
 
 const features = tableFeatures({});
 
-export function ConnectionTable({ connections, label, empty, manage }: {
-  connections: Connection[]; label: string; empty: string; manage: (c: Connection) => ReactNode;
+// explainIn adds a "Where from" column: the access chain in that project.
+export function ConnectionTable({ connections, label, empty, manage, explainIn }: {
+  connections: Connection[]; label: string; empty: string; manage: (c: Connection) => ReactNode; explainIn?: string;
 }) {
   const columns = useMemo<ColumnDef<typeof features, Connection>[]>(() => [
     { id: "provider", header: "Provider", cell: ({ row }) => <span className="task-stage"><strong>{providerLabel(row.original.provider)}</strong><small>{kindLabel(row.original.kind)}{row.original.label ? ` · ${row.original.label}` : ""}</small></span> },
@@ -103,8 +105,10 @@ export function ConnectionTable({ connections, label, empty, manage }: {
     { id: "models", header: "Models", cell: ({ row }) => <span className={row.original.modelsError ? "form-field-error" : undefined}>{modelsSummary(row.original)}</span> },
     { id: "grants", header: "Grants / uses", cell: ({ row }) => `${row.original.grants.length} / ${row.original.uses.length}` },
     { id: "used", header: "Last used", cell: ({ row }) => row.original.lastUsedAt ? <time dateTime={row.original.lastUsedAt}>{ago(row.original.lastUsedAt)}</time> : "Never" },
+    ...(explainIn ? [{ id: "source", header: "Where from", cell: ({ row }: { row: { original: Connection } }) =>
+      <AccessExplanation projectId={explainIn} kind="connection" resourceId={row.original.id} /> } satisfies ColumnDef<typeof features, Connection>] : []),
     { id: "actions", header: "Actions", cell: ({ row }) => manage(row.original) },
-  ], [manage]);
+  ], [manage, explainIn]);
   const table = useTable({ features, data: connections, columns, getRowId: (c) => c.id });
   return <DataTable table={table} label={label} empty={empty} />;
 }
@@ -167,16 +171,16 @@ export function ModelSelect({ connectionId, value, onChange, harness: fixedHarne
   </div>;
 }
 
-export function ProjectSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+export function ProjectSelect({ value, onChange, idPrefix = "project" }: { value: string; onChange: (id: string) => void; idPrefix?: string }) {
   const { org } = useOrg();
   const [search, setSearch] = useState("");
   const [submitted, setSubmitted] = useState("");
   useEffect(() => { const t = window.setTimeout(() => setSubmitted(search.trim()), 250); return () => window.clearTimeout(t); }, [search]);
   const projects = useQuery({ queryKey: ["projects", org, submitted, "picker"], enabled: Boolean(org), queryFn: ({ signal }) => listProjects("", submitted, "created_at", "desc", signal) });
   return <>
-    <TextField label="Find project" name="project-search" autoComplete="off" placeholder="Search projects" value={search} onChange={setSearch} onBlur={() => {}} required={false} />
-    <div className="form-field"><label htmlFor="project-select">Project</label>
-      <select id="project-select" value={value} onChange={(event) => onChange(event.target.value)}>
+    <TextField label="Find project" name={`${idPrefix}-search`} autoComplete="off" placeholder="Search projects" value={search} onChange={setSearch} onBlur={() => {}} required={false} />
+    <div className="form-field"><label htmlFor={`${idPrefix}-select`}>Project</label>
+      <select id={`${idPrefix}-select`} value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">Choose a project</option>
         {(projects.data?.projects ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select></div>
@@ -351,7 +355,8 @@ export function ConnectionDetail({ connection, scope, projectId = "", onRevoked 
         </span></div>
       <div className="source-summary"><HealthLine connection={connection} />
         <span className={connection.modelsError ? "form-field-error" : undefined}>Models: {refreshNote || modelsSummary(connection)}{connection.modelsCheckedAt ? ` · checked ${ago(connection.modelsCheckedAt)}` : ""}</span>
-        <span>Last used: {connection.lastUsedAt ? ago(connection.lastUsedAt) : "never"}</span></div>
+        <span>Last used: {connection.lastUsedAt ? ago(connection.lastUsedAt) : "never"}</span>
+        {projectId ? <AccessExplanation projectId={projectId} kind="connection" resourceId={connection.id} /> : null}</div>
     </section>
     {connection.kind !== "git" ? <section className="table-section" aria-labelledby="connection-uses-heading">
       <div className="table-heading"><div><h2 id="connection-uses-heading">Model uses</h2><p>{connection.scope === "personal" ? "Projects where your own runs use this connection." : "Models project runs may use through this connection."}</p></div><span className="fetched-time">{uses.length} uses</span></div>
@@ -362,7 +367,8 @@ export function ConnectionDetail({ connection, scope, projectId = "", onRevoked 
       canManage={connection.canManage} canAdd={connection.canManage && connection.state === "active"}
       description="Each grant names one project, one user, or a minimum role. Owners and admins get no implicit use; viewers never. A project grant lets that project's admins attach it to runs."
       revokeNote="Revoking a project grant also removes that project's model uses of this connection."
-      grant={(kind, project, grantee) => grantConnection(connection.id, project, kind, grantee)} revoke={revokeConnectionGrant} onChanged={invalidate} /> : null}
+      grant={(kind, project, grantee) => grantConnection(connection.id, project, kind, grantee)} revoke={revokeConnectionGrant} onChanged={invalidate}
+      explain={{ kind: "connection", resourceId: connection.id }} /> : null}
     {pending ? <ConfirmDialog busy={act.isPending} error={error} onClose={() => setPending(null)} onConfirm={() => act.mutate(pending)}
       title={pending.kind === "use" ? "Remove model use" : "Revoke connection"}
       confirmLabel={pending.kind === "use" ? "Remove" : "Revoke"}
@@ -397,8 +403,9 @@ export type ResourceGrant = Pick<ConnectionGrant, "id" | "projectId" | "projectN
 // Grants on one organization resource (a connection or a recipe): list,
 // add (project, user, or minimum role), and revoke behind a confirmation.
 // The server audits both through GrantResource/RevokeResourceGrant.
-export function ResourceGrants({ grants, label, description, canManage, canAdd, revokeNote = "", grant, revoke, onChanged }: {
+export function ResourceGrants({ grants, label, description, canManage, canAdd, revokeNote = "", grant, revoke, onChanged, explain }: {
   grants: ResourceGrant[]; label: string; description: ReactNode; canManage: boolean; canAdd: boolean; revokeNote?: string;
+  explain?: { kind: "connection" | "recipe"; resourceId: string };
   grant: (kind: string, projectId: string, granteeId: string) => Promise<unknown>; revoke: (grantId: string) => Promise<unknown>; onChanged: () => Promise<unknown>;
 }) {
   const [pending, setPending] = useState<ResourceGrant | null>(null);
@@ -421,6 +428,8 @@ export function ResourceGrants({ grants, label, description, canManage, canAdd, 
     <div className="table-heading"><div><h2 id="resource-grants-heading">Grants</h2><p>{description}</p></div><span className="fetched-time">{grants.length} grants</span></div>
     <DataTable table={table} label={label} empty="Not granted to any project, user, or role." />
     {canAdd ? <AddGrant grant={grant} onChanged={onChanged} /> : null}
+    {explain ? <AccessCheck kind={explain.kind} resourceId={explain.resourceId}
+      projectPicker={(value, onChange) => <ProjectSelect value={value} onChange={onChange} idPrefix="explain" />} /> : null}
     {pending ? <ConfirmDialog busy={remove.isPending} error={error} onClose={() => setPending(null)} onConfirm={() => remove.mutate(pending)}
       title="Revoke grant" confirmLabel="Revoke"
       body={<>Revoke this grant for <strong>{pending.granteeKind === "project" ? pending.projectName || pending.projectId : pending.granteeName || pending.granteeId}</strong>?{revokeNote ? ` ${revokeNote}` : ""}</>} /> : null}

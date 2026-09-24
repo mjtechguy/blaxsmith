@@ -324,6 +324,9 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	recipePath, recipeHandler := apiv1connect.NewRecipeServiceHandler(&recipeService{guard: guard, store: store, workflow: service},
 		connect.WithReadMaxBytes(2<<20))
 	mux.Handle("/api"+recipePath, http.StripPrefix("/api", guard.Wrap(recipeHandler)))
+	setupPath, setupHandler := apiv1connect.NewSetupServiceHandler(&setupService{guard: guard, store: store, workflow: service},
+		connect.WithReadMaxBytes(1<<14))
+	mux.Handle("/api"+setupPath, http.StripPrefix("/api", guard.Wrap(setupHandler)))
 	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity}))
 	mux.Handle("/api/terminal/attempts/{attemptID}", guard.Wrap(newTerminalHandler(guard, origin, store, guests, terminals)))
 	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(tools)

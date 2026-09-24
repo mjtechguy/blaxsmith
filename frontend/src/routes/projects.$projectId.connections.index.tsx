@@ -34,7 +34,7 @@ function ProjectConnections() {
     {available.isError ? <LoadError label="Organization connections unavailable" retry={() => void available.refetch()} /> : null}
     {available.data ? <section className="table-section" aria-labelledby="available-connections-heading">
       <div className="table-heading"><div><h2 id="available-connections-heading">Use an organization connection</h2><p>Only organization connections granted to this project are listed. Pick a model to attach one.</p></div><span className="fetched-time">{available.data.length} granted</span></div>
-      <ConnectionTable connections={available.data} label="Granted organization connections" empty="No organization connections are granted to this project. Ask an organization admin." manage={manage("Use")} />
+      <ConnectionTable connections={available.data} label="Granted organization connections" empty="No organization connections are granted to this project. Ask an organization admin." manage={manage("Use")} explainIn={projectId} />
     </section> : null}
     <p className="admin-note">Personal subscriptions and keys are added under <Link to="/me/connections" className="text-action">My connections</Link> and serve only runs their owner launches.</p>
   </PageShell>;

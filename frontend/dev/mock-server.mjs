@@ -317,6 +317,30 @@ const rpc = {
   ListGitBranches: () => ({ branches: ["main", "develop", "release/1.0"] }),
   GetGitHubApp: () => ({ clientId: gitHubApp.clientId, configured: gitHubApp.configured, callbackUrl: "http://localhost:5173/oauth/github/callback" }),
   SetGitHubApp: ({ clientId, clientSecret = "" }) => { gitHubApp = { clientId, configured: gitHubApp.configured || Boolean(clientSecret) }; return gitHubApp; },
+  // SetupService: a simplified grant walk; the server runs access.MatchingGrant.
+  ExplainAccess: ({ projectId: pid, resourceKind, resourceId, principalId: who = "" }) => {
+    const reach = { member: "members and above", admin: "admins and owners", owner: "owners only" };
+    const chain = (grants, resource) => {
+      const g = grants.find((x) => x.projectId === pid) || grants.find((x) => x.granteeKind === "user" && (!who || x.granteeId === who)) || grants.find((x) => x.granteeKind === "role");
+      if (!g) return { usable: false, steps: [], reason: "No grant for this project, user, or role; ask an organization admin.", principalLabel: who ? "teammate" : "you" };
+      const kind = `${g.granteeKind}_grant`;
+      return { usable: true, grantId: g.id, principalLabel: who ? "teammate" : "you", steps: [{ kind, label: g.granteeKind === "project" ? g.projectName : g.granteeKind === "role" ? reach[g.granteeId] : "teammate", id: g.id }, resource] };
+    };
+    if (resourceKind === "recipe") {
+      const r = recipes.find((x) => x.id === resourceId);
+      if (!r) return connectError(404, "not_found", "workflow resource not found");
+      const version = { kind: "recipe_version", label: `v${recipeSummary(r).currentVersion} (current)`, id: r.current };
+      if (r.projectId) return { usable: r.projectId === pid, steps: [{ kind: "project_recipe", label: r.name, id: r.id }, version], reason: "It belongs to another project." };
+      const out = chain(r.grants || [], { kind: "organization_recipe", label: r.name, id: r.id });
+      if (out.usable) out.steps.push(version);
+      return out;
+    }
+    const c = hub.find((x) => x.id === resourceId);
+    if (!c) return connectError(404, "not_found", "workflow resource not found");
+    if (c.scope === "personal") return { usable: !who, steps: who ? [] : [{ kind: "personal_connection", label: c.label || c.provider, id: c.id }], reason: "Personal connections serve only runs their owner launches." };
+    if (c.scope === "project") return { usable: c.ownerId === pid, steps: [{ kind: "project_connection", label: c.label || c.provider, id: c.id }], reason: "It belongs to another project." };
+    return chain(c.grants, { kind: "organization_connection", label: c.label || c.provider, id: c.id });
+  },
   StartGitHubConnect: ({ returnTo = "/admin/connections" }) => { hubAdd({ scope: "organization", ownerId: "org-demo", kind: "git", provider: "github", account: "octocat" }); return { authorizeUrl: `${returnTo}?github=connected` }; },
 };
 
