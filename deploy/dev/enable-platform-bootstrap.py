@@ -44,6 +44,7 @@ annotations = {
     "blaxsmith.dev/ax-bootstrap-sha256": record["bootstrap_patch_sha256"],
     "blaxsmith.dev/ax-task-resources-patch-sha256": record["task_resources_patch_sha256"],
     "blaxsmith.dev/platform-key-patch-sha256": record["platform_key_patch_sha256"],
+    "blaxsmith.dev/post-ready-model-patch-sha256": record["post_ready_model_patch_sha256"],
     "blaxsmith.dev/ax-build-provenance-sha256": hashlib.sha256((build / "provenance.json").read_bytes()).hexdigest(),
 }
 patch = {"spec": {"template": {
