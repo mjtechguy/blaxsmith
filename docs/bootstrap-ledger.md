@@ -107,11 +107,18 @@ is not decrypted in runner memory while private checkout or other Workspace
 setup runs. The pinned AX runner holds the worker command until that second
 release arrives. PostgreSQL integration tests cover phase-bound challenge
 redeem, authorization, and lease reservation; `integrations/ax/build.sh` covers
-the runner phase fence and cross-compiles the four AX binaries. The live probes
-in this document predate this protocol and prove only the setup/Git path; a live
-post-ready model release still needs a synthetic model credential and updated
-AX runner deployment. This remains ordinary runner isolation, not protection
-against a compromised runner or worker.
+the runner phase fence and cross-compiles the four AX binaries. The live
+[phase-forward report](bootstrap-phase-forward-probe.json) now proves the
+setup/Git path on the development cluster: a current-owner lease released the
+synthetic Git credential, the runner checked out the frozen commit, and the
+workspace survived a data-only snapshot resume with a fresh setup challenge.
+The [secret scan](bootstrap-phase-forward-secret-scan.json) found no token in
+evidence, AX Redis, runtime logs, PostgreSQL, or fixture logs. The probe uses a
+non-model synthetic task, so it does not request `phase=model` or prove the
+post-ready model release against a selected provider credential. That still
+needs a model-worker image and an end-to-end product dispatcher run. This
+remains ordinary runner isolation, not protection against a compromised
+runner or worker.
 
 The focused test uses a real PostgreSQL instance. Set
 `BLAXSMITH_TEST_DATABASE_URL` to a disposable database where the test user can

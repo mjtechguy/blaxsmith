@@ -1,0 +1,101 @@
+{
+  "atespace": "blaxsmith-gate-91cc0c7fbb",
+  "image": "127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:b7609897537db913ff8e8a9bd88b9d28868f91032e8b50b78021f34d41f025db",
+  "debug_task": true,
+  "checks": [
+    "task-signer-override blocked before actor launch",
+    "unapproved-runner blocked before actor launch",
+    "stale actor UID denied before challenge",
+    "workspace blocked before release",
+    "signed release starts workspace",
+    "AX resources reached Substrate placement and gVisor sandbox cgroups",
+    "private Git checkout matched pinned commit without token in Git config or command environment",
+    "suspended actor persisted a data-only external snapshot",
+    "data-snapshot resume requires fresh release; replay denied",
+    "pinned private checkout survived data-snapshot resume without token in Git config",
+    "suspended actor persisted a data-only external snapshot"
+  ],
+  "git_commit": "d3c056d87a20d6a6b9ec3c979122058a6647abf4",
+  "ledger_releases": [
+    {
+      "access_connection": "blaxsmith-gate-91cc0c7fbb/private-git",
+      "access_lease": "DvakHfXpXH8Famou4UMNXg",
+      "actor_uid": "313092a7-599c-4f58-bba3-265cff218d91",
+      "attempt_id": "blaxsmith-gate-91cc0c7fbb/gated-runner",
+      "cluster_id": "dev-cluster",
+      "opened": true,
+      "owner_generation": 1,
+      "snapshot_scope": "SNAPSHOT_CONTENT_SCOPE_DATA",
+      "template_uid": "d24dc5d1-6cd0-4a6c-8402-096be6162809",
+      "worker_pool": "blaxsmith-smoke"
+    },
+    {
+      "access_connection": "blaxsmith-gate-91cc0c7fbb/private-git",
+      "access_lease": "zV6w6oua2IiqCcLZIa6FkA",
+      "actor_uid": "313092a7-599c-4f58-bba3-265cff218d91",
+      "attempt_id": "blaxsmith-gate-91cc0c7fbb/gated-runner",
+      "cluster_id": "dev-cluster",
+      "opened": true,
+      "owner_generation": 2,
+      "snapshot_scope": "SNAPSHOT_CONTENT_SCOPE_DATA",
+      "template_uid": "d24dc5d1-6cd0-4a6c-8402-096be6162809",
+      "worker_pool": "blaxsmith-smoke"
+    }
+  ],
+  "access_seed": {
+    "binding_id": "blaxsmith-gate-91cc0c7fbb/gated-runner/git-read",
+    "organization_id": "synthetic-org",
+    "project_id": "blaxsmith-gate-91cc0c7fbb",
+    "secret_version": 1
+  },
+  "access_leases": [
+    {
+      "id": "DvakHfXpXH8Famou4UMNXg",
+      "owner_generation": 1,
+      "actor_uid": "313092a7-599c-4f58-bba3-265cff218d91",
+      "secret_version": 1,
+      "delivered": true
+    },
+    {
+      "id": "zV6w6oua2IiqCcLZIa6FkA",
+      "owner_generation": 2,
+      "actor_uid": "313092a7-599c-4f58-bba3-265cff218d91",
+      "secret_version": 1,
+      "delivered": true
+    }
+  ],
+  "resources": {
+    "task": {
+      "requests": {
+        "cpu": "1",
+        "memory": "1Gi"
+      },
+      "limits": {
+        "cpu": "1",
+        "memory": "1Gi"
+      }
+    },
+    "substrate_placement": {
+      "cpu": "1",
+      "memory": "1Gi"
+    },
+    "task_container_oci_limits": {
+      "cpu": "1",
+      "memory": "1Gi"
+    },
+    "worker_pool": "blaxsmith-smoke",
+    "worker_pod": "blaxsmith-smoke-68448cd9ff-pcttc",
+    "worker_pod_uid": "87651af4-1584-40e5-81c6-803a8a51aab7",
+    "sandbox_cgroup": {
+      "path": "/_pause",
+      "read_source": "Node cgroup v2, resolved from the WorkerPod ateom process; guest does not mount cgroupfs.",
+      "cpu.max": "100000 100000",
+      "memory.max": "1073741824"
+    }
+  },
+  "final_phase": "Suspended",
+  "owner_cleanup": {
+    "deactivated": true,
+    "fenced_generation": 3
+  }
+}

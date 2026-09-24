@@ -23,6 +23,15 @@ bash integrations/substrate/build.sh ../reference/substrate /tmp/blaxsmith-subst
 The build exports the pinned commit, applies all seven patches, runs focused tests
 and `go vet`, builds Linux/AMD64 `atenet`, `ateom-gvisor`, and `kubectl-ate`,
 and records source/patch/binary hashes.
+The [phase-forward Linux provenance](provenance-bootstrap-phase.json) records
+the worker build with `bootstrap-phase-route.patch`. The
+[live setup-phase probe](../../docs/bootstrap-phase-forward-probe.json) passed
+through the deployed worker: the actor tunnel preserved the signed `setup`
+challenge phase, private Git setup completed, and data-snapshot resume required
+a new challenge. The [bounded scan](../../docs/bootstrap-phase-forward-secret-scan.json)
+found no synthetic token in the checked control-plane and evidence surfaces.
+The live probe does not request a model challenge; model-phase forwarding is
+covered by the atunnel tests but still needs an end-to-end model-worker run.
 On the prepared development node, `deploy/dev/publish-atenet.sh` adds that binary
 to a pinned Alpine image. The first egress deployment used its digest in the
 `atenet-egress` `ext-proc` container with `/usr/local/bin/atenet` as command.

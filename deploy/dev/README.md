@@ -373,12 +373,14 @@ written to the report or repository.
 ## Probe the PostgreSQL-backed synthetic connector
 
 On the dedicated node, PostgreSQL 18 listens only on its Unix socket. The
-`blaxsmith_dev` database and limited peer-authenticated `root` role hold the
-six `db/migrations` files. The fourth adds non-secret access-authority records,
-the fifth adds versioned encrypted secret rows, and the sixth records delivery
-leases;
-the database is synthetic evidence, not product
-storage. Run with a new output directory each time:
+`blaxsmith_dev` database and limited peer-authenticated `root` role hold only
+the synthetic bootstrap/access schema. It applies migrations 0001-0006,
+0019, 0027, and 0028 directly; it has no `blaxsmith_schema_migrations` ledger
+and is not the application database. A fresh probe database must use a fresh
+database and the same migration subset in order. The fourth migration adds
+non-secret access-authority records, the fifth adds versioned encrypted secret
+rows, and the sixth records delivery leases. Run with a new output directory
+each time:
 
 ```sh
 cd /opt/blaxsmith-dev/blaxsmith
@@ -413,9 +415,17 @@ cd /opt/blaxsmith-dev/blaxsmith
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 fixture=/opt/blaxsmith-dev/private-git-fixture-$(date +%s)
 python3 deploy/dev/private-git-fixture.py prepare "$fixture"
-unit=blaxsmith-private-git-fixture-$(date +%s)
+unit=blaxsmith-private-git-fixture
+systemctl stop "$unit" 2>/dev/null || true
+systemctl reset-failed "$unit" 2>/dev/null || true
 systemd-run --unit="$unit" --property=RuntimeMaxSec=900 \
   /usr/bin/python3 /opt/blaxsmith-dev/blaxsmith/deploy/dev/private-git-fixture.py serve "$fixture"
+substrate_built=/opt/blaxsmith-dev/substrate-bootstrap-phase-$(date +%s)
+bash integrations/substrate/build.sh /opt/blaxsmith-dev/substrate "$substrate_built"
+bash deploy/dev/publish-ateom.sh "$substrate_built" "$(cat /opt/blaxsmith-dev/worker-image.txt)"
+kubectl -n ax-system patch workerpool blaxsmith-smoke --type=merge \
+  -p "{\"spec\":{\"workerImage\":\"$(cat "$substrate_built/ateom-gvisor.image")\"}}"
+kubectl -n ax-system rollout status deployment/blaxsmith-smoke --timeout=120s
 built=/opt/blaxsmith-dev/ax-private-git-build-$(date +%s)
 bash integrations/ax/build.sh /opt/blaxsmith-dev/ax "$built"
 bash deploy/dev/publish-ax.sh "$built" "$fixture/ca.pem"
@@ -446,9 +456,18 @@ Each release reserves a lease with its durable release intent, then records
 the secret version and acknowledged delivery in the send transaction. The
 probe checks both lease rows after initial setup and resume.
 
-The [passing live report](../../docs/bootstrap-private-git-probe.json) and
-[bounded secret scan](../../docs/bootstrap-private-git-secret-scan.json) used
-runner image `sha256:32e908293a10e176a4b69f3e12d1a7789418dcda57ac9d732f2c1f7de3d60e81`.
+The [passing live report](../../docs/bootstrap-phase-forward-probe.json) and
+[bounded secret scan](../../docs/bootstrap-phase-forward-secret-scan.json) use
+runner image `sha256:b7609897537db913ff8e8a9bd88b9d28868f91032e8b50b78021f34d41f025db`
+and worker image `sha256:6d86f9488ec2331cc679be069874821953b878d5f525117243e2be7777528466`.
+The report proves the `setup` phase through the worker's actor tunnel, the
+frozen private checkout, and a fresh setup challenge after data-snapshot resume.
+The companion scan found no synthetic token in evidence, AX Redis, runtime
+logs, PostgreSQL, or fixture logs. The task does not request a model credential;
+live `model`-phase delivery remains unproved. Generate a fresh fixture and CA
+for each run because the synthetic certificate expires. The probe turns AX
+`debug` on only so its test code can read back the checkout; normal product
+Tasks remain debug-off.
 The current rerun checks the trusted template's data-only pause/commit and
 golden-image resume settings before release, pins the dev snapshot bucket,
 and confirms the suspended actor's external snapshot is data-only. The
