@@ -56,6 +56,7 @@ func (a *dispatchAX) Apply(_ context.Context, task axbridge.Task) error {
 		}
 	}
 	task.Status.Phase, task.Status.Actor = "Running", task.Metadata.Name
+	task.Status.Conditions = []axbridge.TaskCondition{{Type: "WorkspaceReady", Status: "True", Reason: "SetupComplete"}}
 	a.task = &task
 	return nil
 }

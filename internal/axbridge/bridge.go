@@ -18,8 +18,9 @@ import (
 )
 
 var (
-	ErrPending  = errors.New("AX launch outcome is not yet proven")
-	ErrMismatch = errors.New("AX task or runtime differs from frozen attempt")
+	ErrPending        = errors.New("AX launch outcome is not yet proven")
+	ErrMismatch       = errors.New("AX task or runtime differs from frozen attempt")
+	ErrWorkspaceSetup = errors.New("AX Workspace setup failed")
 )
 
 const syntheticShellCommand = "printf 'blaxsmith-ax-smoke-ok\\n' > /workspace/result.txt"
@@ -33,9 +34,16 @@ type Task struct {
 	Metadata   TaskMetadata   `yaml:"metadata"`
 	Spec       map[string]any `yaml:"spec"`
 	Status     struct {
-		Phase string `yaml:"phase"`
-		Actor string `yaml:"actor"`
+		Phase      string          `yaml:"phase"`
+		Actor      string          `yaml:"actor"`
+		Conditions []TaskCondition `yaml:"conditions"`
 	} `yaml:"status,omitempty"`
+}
+
+type TaskCondition struct {
+	Type   string `yaml:"type"`
+	Status string `yaml:"status"`
+	Reason string `yaml:"reason"`
 }
 
 type TaskMetadata struct {
@@ -387,6 +395,82 @@ func (b *Bridge) validRuntime(r bootstrap.Runtime, want Task) bool {
 		r.TemplateUID != "" && r.Image == b.Image && r.WorkerPool == b.Pool && r.WorkerPod != "" && r.WorkerPodUID != "" &&
 		r.SandboxClass == "SANDBOX_CLASS_GVISOR" && r.BootstrapPublicKey == b.Signer &&
 		r.DataOnlySnapshots() && r.SnapshotStorage == b.Storage
+}
+
+// WaitWorkspaceReady confirms AX observed the runner's successful Workspace
+// setup and that the same fenced actor/runtime still owns the attempt.
+func (b *Bridge) WaitWorkspaceReady(ctx context.Context, a workflow.Attempt) error {
+	if b == nil || b.Workflow == nil || b.AX == nil || b.Actor == nil {
+		return workflow.ErrInvalid
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	want, err := b.task(a)
+	if err != nil {
+		return err
+	}
+	for {
+		run, state, sealed, err := b.Workflow.CurrentAttempt(ctx, a)
+		if err != nil {
+			return err
+		}
+		if run != "active" || state != "running" || !sealed {
+			return workflow.ErrFenced
+		}
+		got, err := b.AX.Get(ctx, want.Metadata.Atespace, want.Metadata.Name)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		if err == nil {
+			if !sameTask(got, want) || (got.Status.Actor != "" && got.Status.Actor != want.Metadata.Name) {
+				return ErrMismatch
+			}
+			if got.Status.Phase == "Failed" || got.Status.Phase == "Terminating" {
+				return ErrWorkspaceSetup
+			}
+			if got.Status.Phase == "Running" && got.Status.Actor == want.Metadata.Name && workspaceSetupComplete(got) {
+				runtime, err := b.Actor.Current(ctx, want.Metadata.Atespace, want.Metadata.Name)
+				if err != nil && !errors.Is(err, ErrPending) && !errors.Is(err, ErrNotFound) {
+					return err
+				}
+				if err == nil {
+					if !b.validRuntime(runtime, want) {
+						return ErrMismatch
+					}
+					binding, err := b.Workflow.GetRuntimeBinding(ctx, a)
+					if err != nil {
+						return err
+					}
+					if binding.ActorUID != runtime.Actor.UID || binding.TemplateUID != runtime.TemplateUID ||
+						binding.Image != runtime.Image || binding.WorkerPool != runtime.WorkerPool {
+						return ErrMismatch
+					}
+					run, state, sealed, err = b.Workflow.CurrentAttempt(ctx, a)
+					if err != nil {
+						return err
+					}
+					if run != "active" || state != "running" || !sealed {
+						return workflow.ErrFenced
+					}
+					return nil
+				}
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return errors.Join(ErrPending, ctx.Err())
+		case <-time.After(time.Second):
+		}
+	}
+}
+
+func workspaceSetupComplete(task Task) bool {
+	for _, condition := range task.Status.Conditions {
+		if condition.Type == "WorkspaceReady" && condition.Status == "True" && condition.Reason == "SetupComplete" {
+			return true
+		}
+	}
+	return false
 }
 
 func sameTask(got, want Task) bool {

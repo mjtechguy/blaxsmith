@@ -18,6 +18,23 @@ creates the path; it does not resolve registries, validate content, or wire
 those servers into Codex, Claude Code, or OpenCode. Workspace planning can
 mention MCP configuration, but does not make it a CLI capability.
 
+| Capability | AX/Substrate provides | Blaxsmith must provide |
+|---|---|---|
+| Sandboxed execution | AX Task reconciliation and actor lifecycle; Substrate gVisor, placement, and observed worker runtime | Approved image/model/resource selection, policy checks, durable attempt ownership, credentials, result acceptance, and human review |
+| Workspaces | AX Workspace definitions, Git setup, mounted paths, and readiness reporting | Frozen repository/commit, per-attempt names and writable isolation, private-Git grant/lease, verified checkout, instruction materialization, and attributable changes |
+| Networking | AX Gateway attachment and Substrate policy application for supported flows | Destination authorization, DNS/redirect resolution, narrow CIDR policy, effective-route measurement, policy-change fencing, and revocation evidence |
+| MCP servers | Workspace schema fields for declaring servers | Server identity and grants, endpoint/egress policy, scoped credentials, each harness's native configuration, call auditing, and revocation |
+| Skills and instructions | Workspace skill-path setup; it does not resolve selected content or configure the coding CLIs | Resolve and hash approved `SKILL.md` support files and scoped `AGENTS.md`, freeze provenance, materialize only selected inputs into each CLI's discovery path, disable ambient/delegated tools, and show effective inputs in the UI |
+| Agent lifecycle | AX Task/actor state, suspend/resume, worker assignment, and startup/setup status | Workflow stages, fair dispatch, owner fences, connection leases, steering/stop, trusted exit/readback, artifacts/checks, architect validation, audit, and final human approval |
+| Human workspace | No product UI or user authorization model | Tenant/RBAC-aware workspace, durable Q&A and activity, SSE replay, review, configuration, audit, and operational controls |
+
+After bootstrap activation, dispatch now waits for AX's exact
+`WorkspaceReady=True/SetupComplete` condition and rechecks the actor against
+the frozen runtime binding before reporting `started`. This closes the
+premature-status path; the live attempt-input probe deliberately stayed behind
+the bootstrap gate, so the authenticated startup/readiness transition still
+needs a live proof.
+
 Blaxsmith delivers declared `instructions`, applicable `AGENTS.md`, Forge
 specification, decision transcript, and stage prompt as bounded instruction
 text in the AX Task command. Selected `SKILL.md` files and explicitly declared

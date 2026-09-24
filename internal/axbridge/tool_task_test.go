@@ -58,3 +58,18 @@ func TestToolTaskPinsPublicCommandWithoutCredential(t *testing.T) {
 		t.Fatal("tool task without AX gateway was accepted")
 	}
 }
+
+func TestWorkspaceSetupCompletionRequiresAXSuccessCondition(t *testing.T) {
+	task := Task{}
+	if workspaceSetupComplete(task) {
+		t.Fatal("missing WorkspaceReady condition was accepted")
+	}
+	task.Status.Conditions = []TaskCondition{{Type: "WorkspaceReady", Status: "True", Reason: "Initializing"}}
+	if workspaceSetupComplete(task) {
+		t.Fatal("initializing Workspace was accepted")
+	}
+	task.Status.Conditions[0].Reason = "SetupComplete"
+	if !workspaceSetupComplete(task) {
+		t.Fatal("AX SetupComplete condition was not accepted")
+	}
+}

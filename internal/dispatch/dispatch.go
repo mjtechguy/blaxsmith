@@ -198,6 +198,10 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
 		return outcome
 	}
+	if err := bridge.WaitWorkspaceReady(ctx, attempt); err != nil {
+		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
+		return outcome
+	}
 	outcome.State = "started"
 	return outcome
 }
