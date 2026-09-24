@@ -69,6 +69,10 @@ func TestLedgerPostgres(t *testing.T) {
 	if err != nil || owner.OwnerGeneration != 1 {
 		t.Fatalf("initial owner: %+v, %v", owner, err)
 	}
+	currentScope, currentActor, active, exists, err := ledger.CurrentOwner(ctx, owner.ClusterID, owner.AttemptID)
+	if err != nil || !exists || !active || currentScope != owner || currentActor != actor {
+		t.Fatalf("current owner lookup: %+v %+v active=%t exists=%t err=%v", currentScope, currentActor, active, exists, err)
+	}
 	if _, err := ledger.Assign(ctx, owner.ClusterID, owner.AttemptID, 0, actor); !errors.Is(err, ErrDenied) {
 		t.Fatalf("duplicate initial assignment: %v", err)
 	}
@@ -332,6 +336,10 @@ func TestLedgerPostgres(t *testing.T) {
 	inactive, err := ledger.Deactivate(ctx, newOwner)
 	if err != nil || inactive.OwnerGeneration != 3 {
 		t.Fatalf("deactivate owner: %+v, %v", inactive, err)
+	}
+	currentScope, currentActor, active, exists, err = ledger.CurrentOwner(ctx, newOwner.ClusterID, newOwner.AttemptID)
+	if err != nil || !exists || active || currentScope != inactive || currentActor.UID != "uid-b" {
+		t.Fatalf("inactive owner lookup: %+v %+v active=%t exists=%t err=%v", currentScope, currentActor, active, exists, err)
 	}
 	denied(newOwner, current, currentProof, currentRoots)
 	if _, err := ledger.Deactivate(ctx, newOwner); !errors.Is(err, ErrDenied) {

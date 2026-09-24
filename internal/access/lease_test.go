@@ -189,6 +189,14 @@ func TestConnectionRevocationFencesDeliveryPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := RevokeAttemptLeases(ctx, pool, "cluster", "attempt"); err != nil {
+		t.Fatal(err)
+	}
+	var attemptRevoked bool
+	if err := pool.QueryRow(ctx, `SELECT revoked_at IS NOT NULL FROM access_leases
+		WHERE organization_id='org-a' AND id='lease'`).Scan(&attemptRevoked); err != nil || !attemptRevoked {
+		t.Fatalf("attempt revocation did not invalidate its lease: %t %v", attemptRevoked, err)
+	}
 	read, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)

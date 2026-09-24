@@ -198,6 +198,7 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		orgID, run.ID).Scan(&unreserved); err != nil || unreserved != 0 {
 		t.Fatalf("missing route reserved attempt: %d, %v", unreserved, err)
 	}
+	activationPreflights := 0
 	dispatcher := Dispatcher{Workflow: store, DB: pool, Secrets: secretStore, Bridge: bridge,
 		PreflightWorker: func(_ context.Context, approval workflow.ApprovedToolRuntime, sourceURL, provider string) error {
 			if approval.WorkerPool != "pool-a" || sourceURL != "https://github.com/owner/repo" || provider != "openai" {
@@ -205,6 +206,7 @@ func TestDispatchBatchPostgres(t *testing.T) {
 			}
 			return nil
 		},
+		PreflightActivation: func(context.Context) error { activationPreflights++; return nil },
 		Activate: func(_ context.Context, attempt workflow.Attempt, runtime bootstrap.Runtime, binding workflow.RuntimeBinding, invoke access.ModelInvoke) error {
 			if attempt.ID == "" || runtime.Actor.UID != "actor-uid" || invoke.AttemptID != attempt.ID ||
 				binding.ActorUID != runtime.Actor.UID || binding.CommandSHA256 == "" || invoke.BindingID == "" ||
@@ -235,7 +237,7 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		Hosts: []axbridge.GatewayHostRule{{Host: "140.82.114.3/32"}, {Host: "104.18.33.45/32"}}}}
 	batch, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
 	if err != nil || len(batch.Outcomes) != 1 || batch.Outcomes[0].State != "started" ||
-		batch.Outcomes[0].AttemptID == "" || batch.Outcomes[0].BindingID == "" || ax.task == nil {
+		batch.Outcomes[0].AttemptID == "" || batch.Outcomes[0].BindingID == "" || ax.task == nil || activationPreflights != 1 {
 		t.Fatalf("dispatch batch: %+v, %v", batch, err)
 	}
 	var taskState, attemptState string
@@ -267,7 +269,7 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		return errors.New("bootstrap release outcome uncertain")
 	}
 	unresolved, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
-	if err != nil || len(unresolved.Outcomes) != 1 || unresolved.Outcomes[0].State != "unresolved" {
+	if err != nil || len(unresolved.Outcomes) != 1 || unresolved.Outcomes[0].State != "unresolved" || activationPreflights != 2 {
 		t.Fatalf("activation failure was reported as started: %+v, %v", unresolved, err)
 	}
 	if err := pool.QueryRow(ctx, `SELECT t.state,a.state FROM workflow_tasks t

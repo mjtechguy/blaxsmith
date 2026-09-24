@@ -106,6 +106,27 @@ func (l *Ledger) Deactivate(ctx context.Context, scope Scope) (Scope, error) {
 	return scope, nil
 }
 
+// CurrentOwner reads the durable owner needed to revoke access after a
+// connector restart. A missing row is distinct from an inactive owner.
+func (l *Ledger) CurrentOwner(ctx context.Context, clusterID, attemptID string) (Scope, Actor, bool, bool, error) {
+	if l == nil || l.db == nil || clusterID == "" || attemptID == "" {
+		return Scope{}, Actor{}, false, false, ErrDenied
+	}
+	scope := Scope{ClusterID: clusterID, AttemptID: attemptID}
+	var actor Actor
+	var active bool
+	err := l.db.QueryRow(ctx, `SELECT owner_generation,actor_atespace,actor_name,actor_uid,active
+		FROM bootstrap_owners WHERE cluster_id=$1 AND attempt_id=$2`, clusterID, attemptID).
+		Scan(&scope.OwnerGeneration, &actor.Atespace, &actor.Name, &actor.UID, &active)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Scope{}, Actor{}, false, false, nil
+	}
+	if err != nil {
+		return Scope{}, Actor{}, false, false, fmt.Errorf("read bootstrap owner: %w", err)
+	}
+	return scope, actor, active, true, nil
+}
+
 // Issue returns a fresh connector nonce for the current execution owner.
 // Only its SHA-256 digest is persisted; a new offer cancels the old one.
 func (l *Ledger) Issue(ctx context.Context, scope Scope) (Offer, error) {

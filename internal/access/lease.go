@@ -162,6 +162,21 @@ func MarkLeaseDelivered(ctx context.Context, tx pgx.Tx, organizationID, leaseID 
 	return nil
 }
 
+// RevokeAttemptLeases invalidates platform authorization for every capability
+// delivered to this cluster/attempt. Stopping the actor is still required to
+// destroy any raw provider credential already copied into its memory.
+func RevokeAttemptLeases(ctx context.Context, db *pgxpool.Pool, clusterID, attemptID string) error {
+	if db == nil || clusterID == "" || attemptID == "" {
+		return ErrDenied
+	}
+	_, err := db.Exec(ctx, `UPDATE access_leases SET revoked_at=clock_timestamp()
+		WHERE cluster_id=$1 AND attempt_id=$2 AND revoked_at IS NULL`, clusterID, attemptID)
+	if err != nil {
+		return fmt.Errorf("revoke attempt leases: %w", err)
+	}
+	return nil
+}
+
 // RevokeGrant blocks future decisions and marks its recorded leases revoked.
 // It does not invalidate a bearer token already copied into a sandbox.
 func RevokeGrant(ctx context.Context, db *pgxpool.Pool, organizationID, grantID string) error {

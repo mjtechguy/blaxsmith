@@ -29,6 +29,9 @@ type Dispatcher struct {
 	// provider egress routes required by the frozen task. AX's default
 	// deny-all gateway makes an absent preflight a hard admission failure.
 	PreflightWorker func(context.Context, workflow.ApprovedToolRuntime, string, string) error
+	// PreflightActivation verifies connector-side bootstrap transport and
+	// credential availability before an attempt is reserved.
+	PreflightActivation func(context.Context) error
 	// Activate opens the AX bootstrap gate and releases the bound model lease.
 	// A launched but unreleased tool task is not a started dispatch outcome.
 	Activate func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error
@@ -53,7 +56,7 @@ type Batch struct {
 func (d *Dispatcher) DispatchBatch(ctx context.Context, afterOrganizationID string, organizationLimit, taskLimit int) (Batch, error) {
 	if d == nil || d.Workflow == nil || d.DB == nil || d.Secrets == nil || d.Bridge == nil ||
 		d.Bridge.AX == nil || d.Bridge.Actor == nil || d.Bridge.Signer == "" || d.Bridge.Storage == "" ||
-		d.PreflightWorker == nil || d.Activate == nil {
+		d.PreflightWorker == nil || d.PreflightActivation == nil || d.Activate == nil {
 		return Batch{}, ErrNotReady
 	}
 	organizations, err := d.Workflow.ListReadyOrganizationIDs(ctx, afterOrganizationID, organizationLimit)
@@ -121,6 +124,10 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		return outcome
 	}
 	if err := d.PreflightWorker(ctx, approved, frozen.RepositoryURL, provider); err != nil {
+		outcome.Err = err
+		return outcome
+	}
+	if err := d.PreflightActivation(ctx); err != nil {
 		outcome.Err = err
 		return outcome
 	}
