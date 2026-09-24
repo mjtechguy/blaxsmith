@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -19,6 +20,8 @@ import (
 )
 
 const exitReadbackSchema = "blaxsmith.command-exit/v1alpha1"
+
+var ErrVerificationPending = errors.New("signed command exit has no independently verified evidence")
 
 type exitReadback struct {
 	Schema          string `json:"schema"`
@@ -98,8 +101,8 @@ func (r *CommandExitReader) read(ctx context.Context, actor bootstrap.Actor) (ex
 }
 
 // CommandExitConnector signs only an authenticated current-actor observation
-// whose nonce matches the latest durable bootstrap release. It does not finish
-// the task or certify evidence produced by the guest.
+// whose nonce matches the latest durable bootstrap release. A clean exit does
+// not certify evidence produced by the guest.
 type CommandExitConnector struct {
 	Bridge     *Bridge
 	Reader     *CommandExitReader
@@ -112,20 +115,77 @@ type CommandExitConnector struct {
 }
 
 func (c *CommandExitConnector) Collect(ctx context.Context, a workflow.Attempt) error {
+	_, err := c.collect(ctx, a)
+	return err
+}
+
+// Reconcile retries failed commands only after revocation and actor-gone proof.
+// A clean exit remains running until an independent verifier can certify the
+// frozen checks and evidence; the exit receipt alone is insufficient.
+func (c *CommandExitConnector) Reconcile(ctx context.Context, a workflow.Attempt) error {
+	if c == nil || c.Bridge == nil || c.Bridge.Workflow == nil || c.Collector.Store != c.Bridge.Workflow ||
+		c.Collector.WorkerPool != c.Bridge.Pool {
+		return workflow.ErrInvalid
+	}
+	run, state, sealed, err := c.Bridge.Workflow.CurrentAttempt(ctx, a)
+	if err != nil {
+		return err
+	}
+	if state != "running" || !sealed {
+		return workflow.ErrFenced
+	}
+	if run == "cancel_requested" {
+		if c.Bridge.RevokeOwner == nil {
+			return workflow.ErrInvalid
+		}
+		return c.Bridge.StopKnown(ctx, a)
+	}
+	if run != "active" {
+		return workflow.ErrFenced
+	}
+	want, err := c.Bridge.task(a)
+	if err != nil {
+		return err
+	}
+	command, err := c.Bridge.command(a)
+	if err != nil {
+		return err
+	}
+	report, binding, err := c.Collector.Load(ctx, a)
+	if errors.Is(err, workflow.ErrNotFound) {
+		report, err = c.collect(ctx, a)
+	} else if err == nil && (binding.Image != c.Bridge.Image || binding.WorkerPool != c.Bridge.Pool ||
+		binding.AXAtespace != want.Metadata.Atespace || binding.AXTask != want.Metadata.Name ||
+		binding.CommandSHA256 != runnerexit.CommandSHA256(command)) {
+		return ErrMismatch
+	}
+	if err != nil {
+		return err
+	}
+	if report.ExitCode == 0 && report.Signal == 0 && !report.Interrupted {
+		return ErrVerificationPending
+	}
+	if c.Bridge.RevokeOwner == nil {
+		return workflow.ErrInvalid
+	}
+	return c.Bridge.StopKnown(ctx, a)
+}
+
+func (c *CommandExitConnector) collect(ctx context.Context, a workflow.Attempt) (runnerexit.ExitReport, error) {
 	if c == nil || c.Bridge == nil || c.Reader == nil || c.Activation == nil || c.ClusterID == "" ||
 		len(c.Signer) != ed25519.PrivateKeySize || c.Collector.Store != c.Bridge.Workflow ||
 		!c.Signer.Public().(ed25519.PublicKey).Equal(c.Collector.PublicKey) ||
 		c.Collector.WorkerPool != c.Bridge.Pool {
-		return workflow.ErrInvalid
+		return runnerexit.ExitReport{}, workflow.ErrInvalid
 	}
 	b := c.Bridge
 	want, err := b.task(a)
 	if err != nil {
-		return err
+		return runnerexit.ExitReport{}, err
 	}
 	command, err := b.command(a)
 	if err != nil {
-		return err
+		return runnerexit.ExitReport{}, err
 	}
 	check := func() (bootstrap.Runtime, error) {
 		run, state, sealed, err := b.Workflow.CurrentAttempt(ctx, a)
@@ -144,26 +204,26 @@ func (c *CommandExitConnector) Collect(ctx context.Context, a workflow.Attempt) 
 	}
 	runtime, err := check()
 	if err != nil {
-		return err
+		return runnerexit.ExitReport{}, err
 	}
 	observation, err := c.Reader.read(ctx, runtime.Actor)
 	if err != nil {
-		return err
+		return runnerexit.ExitReport{}, err
 	}
 	if observation.Schema != exitReadbackSchema || observation.AXAtespace != want.Metadata.Atespace ||
 		observation.AXTask != want.Metadata.Name || observation.CommandSHA256 != runnerexit.CommandSHA256(command) ||
 		observation.Sequence != 1 || observation.ExitCode < -1 || observation.ExitCode > 255 ||
 		observation.Signal < 0 || observation.Signal > 64 || observation.ObservedAt < 1 ||
 		(observation.ExitCode == -1) != (observation.Signal != 0) {
-		return ErrMismatch
+		return runnerexit.ExitReport{}, ErrMismatch
 	}
 	if err := c.Activation.VerifyActivation(ctx, bootstrap.Scope{ClusterID: c.ClusterID,
 		AttemptID: a.ID, OwnerGeneration: a.OwnerGeneration}, runtime, observation.ActivationNonce); err != nil {
-		return err
+		return runnerexit.ExitReport{}, err
 	}
 	current, err := check()
 	if err != nil || current != runtime {
-		return workflow.ErrFenced
+		return runnerexit.ExitReport{}, workflow.ErrFenced
 	}
 	// No evidence was collected by this readback; the empty digest is explicit.
 	empty := sha256.Sum256(nil)
@@ -176,7 +236,10 @@ func (c *CommandExitConnector) Collect(ctx context.Context, a workflow.Attempt) 
 		Sequence: observation.Sequence, EvidenceSHA256: hex.EncodeToString(empty[:]), ObservedAt: observation.ObservedAt}
 	signed, err := runnerexit.Sign(report, c.Signer)
 	if err != nil {
-		return err
+		return runnerexit.ExitReport{}, err
 	}
-	return c.Collector.Record(ctx, signed)
+	if err := c.Collector.Record(ctx, signed); err != nil {
+		return runnerexit.ExitReport{}, err
+	}
+	return report, nil
 }

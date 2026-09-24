@@ -13,7 +13,8 @@ func (s *Store) CurrentAttempt(ctx context.Context, a Attempt) (runState, attemp
 	if !validAttempt(a) {
 		return "", "", false, ErrInvalid
 	}
-	var taskState, activeID, token string
+	var taskState, token string
+	var activeID *string
 	var generation int64
 	err = s.pool.QueryRow(ctx, `SELECT r.state,r.graph_sealed,t.state,t.active_attempt_id,a.state,a.fence_token,a.generation
 		FROM workflow_runs r JOIN workflow_tasks t ON (t.organization_id=r.organization_id AND t.run_id=r.id)
@@ -27,7 +28,7 @@ func (s *Store) CurrentAttempt(ctx context.Context, a Attempt) (runState, attemp
 	if err != nil {
 		return "", "", false, err
 	}
-	if activeID != a.ID || token != a.FenceToken || generation != a.OwnerGeneration || taskState != attemptState {
+	if activeID == nil || *activeID != a.ID || token != a.FenceToken || generation != a.OwnerGeneration || taskState != attemptState {
 		return "", "", false, ErrFenced
 	}
 	return runState, attemptState, graphSealed, nil
