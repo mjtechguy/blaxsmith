@@ -52,18 +52,18 @@
 
 .dark {
   color-scheme: dark;
-  --surface: #11141d;
-  --canvas: #0c0f17;
-  --sidebar: #0f121b;
+  --surface: #141414;
+  --canvas: #0a0a0a;
+  --sidebar: #0e0e0e;
   --text: #f3f4f8;
-  --muted: #a4abba;
-  --line: #292f3d;
-  --hover: #212636;
+  --muted: #a3a3a3;
+  --line: #2a2a2a;
+  --hover: #1f1f1f;
   --primary: #a7a3ff;
   --primary-soft: #27254d;
-  --action-text: #11141d;
+  --action-text: #141414;
   --action-hover: #c1beff;
-  --placeholder: #949cab;
+  --placeholder: #8f8f8f;
   --success-text: #94ddbd;
   --success-soft: #173e34;
   --danger-text: #ffb9c5;
@@ -72,7 +72,7 @@
   --latest-text: #cbc9ff;
   --latest-soft: #302c63;
   --card-shadow: none;
-  --terminal-bg: #0a0c12;
+  --terminal-bg: #050505;
   --terminal-text: #e6e8ef;
   --warning-text: #f5cf85;
   --warning-soft: #3d2f12;
