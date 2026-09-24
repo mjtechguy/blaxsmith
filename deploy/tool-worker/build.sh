@@ -2,10 +2,10 @@
 # Build one credential-free AX runner + pinned CLI image on native Linux/amd64.
 set -euo pipefail
 test "$#" -ge 2 && test "$#" -le 3 || {
-  echo 'usage: build.sh VERIFIED_AX_BUILD NEW_OUTPUT_DIRECTORY [--check]' >&2
+  echo 'usage: build.sh VERIFIED_AX_BUILD NEW_OUTPUT_DIRECTORY [--check|--buildah]' >&2
   exit 2
 }
-test "$#" -eq 2 || test "$3" = --check || exit 2
+test "$#" -eq 2 || test "$3" = --check || test "$3" = --buildah || exit 2
 root=$(cd "$(dirname "$0")/../.." && pwd)
 ax_build=$(cd "$1" && pwd)
 output=$2
@@ -71,16 +71,41 @@ PY
 )
 runtime_image="blaxsmith-runtime-proof:${fingerprint}"
 worker_image="blaxsmith-tool-worker:proof-${fingerprint}"
-docker buildx build --platform linux/amd64 --load --metadata-file "$output/runtime-build.json" \
-  -t "$runtime_image" -f "$root/deploy/runtime-proof/Dockerfile" "$root"
-docker buildx build --platform linux/amd64 --load --metadata-file "$output/worker-build.json" \
-  --build-arg "RUNTIME_PROOF_IMAGE=$runtime_image" \
-  --build-context "binaries=$output/bin" \
-  -t "$worker_image" -f "$root/deploy/tool-worker/Dockerfile" "$root"
-docker run --rm --network none --platform linux/amd64 --entrypoint node "$worker_image" \
-  /opt/blaxsmith/manifest.mjs > "$output/cli-manifest.json"
-docker image inspect --format '{{.Id}}' "$runtime_image" > "$output/runtime-image-id.txt"
-docker image inspect --format '{{.Id}}' "$worker_image" > "$output/worker-image-id.txt"
+if [ "${3:-}" = --buildah ]; then
+  buildah bud --format oci --arch amd64 --network host \
+    -t "$runtime_image" -f "$root/deploy/runtime-proof/Dockerfile" "$root"
+  buildah bud --format oci --arch amd64 --network host \
+    --build-arg "RUNTIME_PROOF_IMAGE=localhost/$runtime_image" \
+    --build-context "binaries=$output/bin" \
+    -t "$worker_image" -f "$root/deploy/tool-worker/Dockerfile" "$root"
+  buildah_container=$(buildah from "$worker_image")
+  trap 'if [ -n "${buildah_container:-}" ]; then buildah rm "$buildah_container" >/dev/null; fi' EXIT
+  buildah run --network none "$buildah_container" -- node /opt/blaxsmith/manifest.mjs > "$output/cli-manifest.json"
+  buildah rm "$buildah_container" >/dev/null
+  buildah_container=
+  buildah inspect --type image "$runtime_image" --format '{{.FromImageID}}' > "$output/runtime-image-id.txt"
+  buildah inspect --type image "$worker_image" --format '{{.FromImageID}}' > "$output/worker-image-id.txt"
+  buildah inspect --type image "$runtime_image" --format '{{.FromImageDigest}}' > "$output/runtime-buildah-digest.txt"
+  buildah inspect --type image "$worker_image" --format '{{.FromImageDigest}}' > "$output/worker-buildah-digest.txt"
+  python3 - "$output" <<'PY'
+import json, pathlib, sys
+output = pathlib.Path(sys.argv[1])
+for prefix in ('runtime', 'worker'):
+    digest = (output / f'{prefix}-buildah-digest.txt').read_text().strip()
+    (output / f'{prefix}-build.json').write_text(json.dumps({'containerimage.digest': digest}) + '\n')
+PY
+else
+  docker buildx build --platform linux/amd64 --load --metadata-file "$output/runtime-build.json" \
+    -t "$runtime_image" -f "$root/deploy/runtime-proof/Dockerfile" "$root"
+  docker buildx build --platform linux/amd64 --load --metadata-file "$output/worker-build.json" \
+    --build-arg "RUNTIME_PROOF_IMAGE=$runtime_image" \
+    --build-context "binaries=$output/bin" \
+    -t "$worker_image" -f "$root/deploy/tool-worker/Dockerfile" "$root"
+  docker run --rm --network none --platform linux/amd64 --entrypoint node "$worker_image" \
+    /opt/blaxsmith/manifest.mjs > "$output/cli-manifest.json"
+  docker image inspect --format '{{.Id}}' "$runtime_image" > "$output/runtime-image-id.txt"
+  docker image inspect --format '{{.Id}}' "$worker_image" > "$output/worker-image-id.txt"
+fi
 python3 - "$root" "$ax_build" "$output" "$worker_image" <<'PY'
 import hashlib, json, pathlib, subprocess, sys
 root, ax, output = map(pathlib.Path, sys.argv[1:4])
@@ -89,7 +114,7 @@ read = lambda name: json.loads((output / name).read_text())
 manifest, metadata = read('cli-manifest.json'), read('worker-build.json')
 digest = metadata.get('containerimage.digest') or metadata.get('containerimage.descriptor', {}).get('digest')
 if not isinstance(digest, str) or not digest.startswith('sha256:') or len(digest) != 71:
-    sys.exit('buildx did not report an immutable image manifest digest')
+    sys.exit('builder did not report an immutable image manifest digest')
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 if manifest['ax_runner_sha256'] != sha(ax / 'ax-task-runner') or len(manifest['tools']) != 3:
     sys.exit('image contents differ from verified AX build or CLI set')
