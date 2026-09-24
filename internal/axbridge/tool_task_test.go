@@ -8,6 +8,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
+	"gopkg.in/yaml.v3"
 )
 
 func TestToolTaskPinsPublicCommandWithoutCredential(t *testing.T) {
@@ -31,12 +32,20 @@ func TestToolTaskPinsPublicCommandWithoutCredential(t *testing.T) {
 		!reflect.DeepEqual(task.Spec["workspaces"], []any{map[string]any{"name": "source", "path": "/workspace"}}) ||
 		!reflect.DeepEqual(task.Spec["gateway"], map[string]any{"name": "public-egress"}) ||
 		!reflect.DeepEqual(task.Spec["resources"], map[string]any{
-			"requests": map[string]string{"cpu": "1", "memory": "1Gi"},
-			"limits":   map[string]string{"cpu": "1", "memory": "1Gi"},
+			"requests": map[string]any{"cpu": "1", "memory": "1Gi"},
+			"limits":   map[string]any{"cpu": "1", "memory": "1Gi"},
 		}) ||
 		task.Spec["debug"] != false ||
 		strings.Contains(command[1], "api_key") || strings.Contains(command[1], "credential") {
 		t.Fatalf("task contains unexpected command: %+v: %v", task, err)
+	}
+	encoded, err := yaml.Marshal(task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var readback Task
+	if err := yaml.Unmarshal(encoded, &readback); err != nil || !sameTask(readback, task) {
+		t.Fatalf("AX YAML readback differs from the frozen task: %v", err)
 	}
 	request.Runtime.Image = "example/other@sha256:" + strings.Repeat("a", 64)
 	if _, err := bridge.task(attempt); err == nil {
