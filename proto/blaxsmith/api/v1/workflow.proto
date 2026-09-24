@@ -91,6 +91,8 @@ message CreateProjectModelAccessRequest {
   string api_key = 4; // Write-only organization credential, max 8192 bytes.
 }
 message CreateProjectModelAccessResponse { ProjectModelAccess access = 1; }
+message RevokeProjectModelAccessRequest { string access_id = 1; }
+message RevokeProjectModelAccessResponse { string access_id = 1; }
 
 message ListProjectsRequest {
   int32 page_size = 1; // 1-100; zero selects 50.
@@ -232,6 +234,7 @@ service WorkflowService {
   rpc SetProjectVerification(SetProjectVerificationRequest) returns (SetProjectVerificationResponse);
   rpc ListProjectModelAccess(ListProjectModelAccessRequest) returns (ListProjectModelAccessResponse);
   rpc CreateProjectModelAccess(CreateProjectModelAccessRequest) returns (CreateProjectModelAccessResponse);
+  rpc RevokeProjectModelAccess(RevokeProjectModelAccessRequest) returns (RevokeProjectModelAccessResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
   rpc LaunchRun(LaunchRunRequest) returns (LaunchRunResponse);

@@ -57,6 +57,9 @@ const (
 	// WorkflowServiceCreateProjectModelAccessProcedure is the fully-qualified name of the
 	// WorkflowService's CreateProjectModelAccess RPC.
 	WorkflowServiceCreateProjectModelAccessProcedure = "/blaxsmith.api.v1.WorkflowService/CreateProjectModelAccess"
+	// WorkflowServiceRevokeProjectModelAccessProcedure is the fully-qualified name of the
+	// WorkflowService's RevokeProjectModelAccess RPC.
+	WorkflowServiceRevokeProjectModelAccessProcedure = "/blaxsmith.api.v1.WorkflowService/RevokeProjectModelAccess"
 	// WorkflowServiceListProjectsProcedure is the fully-qualified name of the WorkflowService's
 	// ListProjects RPC.
 	WorkflowServiceListProjectsProcedure = "/blaxsmith.api.v1.WorkflowService/ListProjects"
@@ -98,6 +101,7 @@ type WorkflowServiceClient interface {
 	SetProjectVerification(context.Context, *connect.Request[v1.SetProjectVerificationRequest]) (*connect.Response[v1.SetProjectVerificationResponse], error)
 	ListProjectModelAccess(context.Context, *connect.Request[v1.ListProjectModelAccessRequest]) (*connect.Response[v1.ListProjectModelAccessResponse], error)
 	CreateProjectModelAccess(context.Context, *connect.Request[v1.CreateProjectModelAccessRequest]) (*connect.Response[v1.CreateProjectModelAccessResponse], error)
+	RevokeProjectModelAccess(context.Context, *connect.Request[v1.RevokeProjectModelAccessRequest]) (*connect.Response[v1.RevokeProjectModelAccessResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	LaunchRun(context.Context, *connect.Request[v1.LaunchRunRequest]) (*connect.Response[v1.LaunchRunResponse], error)
@@ -167,6 +171,12 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			httpClient,
 			baseURL+WorkflowServiceCreateProjectModelAccessProcedure,
 			connect.WithSchema(workflowServiceMethods.ByName("CreateProjectModelAccess")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeProjectModelAccess: connect.NewClient[v1.RevokeProjectModelAccessRequest, v1.RevokeProjectModelAccessResponse](
+			httpClient,
+			baseURL+WorkflowServiceRevokeProjectModelAccessProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("RevokeProjectModelAccess")),
 			connect.WithClientOptions(opts...),
 		),
 		listProjects: connect.NewClient[v1.ListProjectsRequest, v1.ListProjectsResponse](
@@ -242,6 +252,7 @@ type workflowServiceClient struct {
 	setProjectVerification   *connect.Client[v1.SetProjectVerificationRequest, v1.SetProjectVerificationResponse]
 	listProjectModelAccess   *connect.Client[v1.ListProjectModelAccessRequest, v1.ListProjectModelAccessResponse]
 	createProjectModelAccess *connect.Client[v1.CreateProjectModelAccessRequest, v1.CreateProjectModelAccessResponse]
+	revokeProjectModelAccess *connect.Client[v1.RevokeProjectModelAccessRequest, v1.RevokeProjectModelAccessResponse]
 	listProjects             *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
 	getRun                   *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
 	launchRun                *connect.Client[v1.LaunchRunRequest, v1.LaunchRunResponse]
@@ -292,6 +303,11 @@ func (c *workflowServiceClient) ListProjectModelAccess(ctx context.Context, req 
 // CreateProjectModelAccess calls blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess.
 func (c *workflowServiceClient) CreateProjectModelAccess(ctx context.Context, req *connect.Request[v1.CreateProjectModelAccessRequest]) (*connect.Response[v1.CreateProjectModelAccessResponse], error) {
 	return c.createProjectModelAccess.CallUnary(ctx, req)
+}
+
+// RevokeProjectModelAccess calls blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess.
+func (c *workflowServiceClient) RevokeProjectModelAccess(ctx context.Context, req *connect.Request[v1.RevokeProjectModelAccessRequest]) (*connect.Response[v1.RevokeProjectModelAccessResponse], error) {
+	return c.revokeProjectModelAccess.CallUnary(ctx, req)
 }
 
 // ListProjects calls blaxsmith.api.v1.WorkflowService.ListProjects.
@@ -354,6 +370,7 @@ type WorkflowServiceHandler interface {
 	SetProjectVerification(context.Context, *connect.Request[v1.SetProjectVerificationRequest]) (*connect.Response[v1.SetProjectVerificationResponse], error)
 	ListProjectModelAccess(context.Context, *connect.Request[v1.ListProjectModelAccessRequest]) (*connect.Response[v1.ListProjectModelAccessResponse], error)
 	CreateProjectModelAccess(context.Context, *connect.Request[v1.CreateProjectModelAccessRequest]) (*connect.Response[v1.CreateProjectModelAccessResponse], error)
+	RevokeProjectModelAccess(context.Context, *connect.Request[v1.RevokeProjectModelAccessRequest]) (*connect.Response[v1.RevokeProjectModelAccessResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	LaunchRun(context.Context, *connect.Request[v1.LaunchRunRequest]) (*connect.Response[v1.LaunchRunResponse], error)
@@ -419,6 +436,12 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		WorkflowServiceCreateProjectModelAccessProcedure,
 		svc.CreateProjectModelAccess,
 		connect.WithSchema(workflowServiceMethods.ByName("CreateProjectModelAccess")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceRevokeProjectModelAccessHandler := connect.NewUnaryHandler(
+		WorkflowServiceRevokeProjectModelAccessProcedure,
+		svc.RevokeProjectModelAccess,
+		connect.WithSchema(workflowServiceMethods.ByName("RevokeProjectModelAccess")),
 		connect.WithHandlerOptions(opts...),
 	)
 	workflowServiceListProjectsHandler := connect.NewUnaryHandler(
@@ -499,6 +522,8 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 			workflowServiceListProjectModelAccessHandler.ServeHTTP(w, r)
 		case WorkflowServiceCreateProjectModelAccessProcedure:
 			workflowServiceCreateProjectModelAccessHandler.ServeHTTP(w, r)
+		case WorkflowServiceRevokeProjectModelAccessProcedure:
+			workflowServiceRevokeProjectModelAccessHandler.ServeHTTP(w, r)
 		case WorkflowServiceListProjectsProcedure:
 			workflowServiceListProjectsHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetRunProcedure:
@@ -558,6 +583,10 @@ func (UnimplementedWorkflowServiceHandler) ListProjectModelAccess(context.Contex
 
 func (UnimplementedWorkflowServiceHandler) CreateProjectModelAccess(context.Context, *connect.Request[v1.CreateProjectModelAccessRequest]) (*connect.Response[v1.CreateProjectModelAccessResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) RevokeProjectModelAccess(context.Context, *connect.Request[v1.RevokeProjectModelAccessRequest]) (*connect.Response[v1.RevokeProjectModelAccessResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess is not implemented"))
 }
 
 func (UnimplementedWorkflowServiceHandler) ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error) {

@@ -58,6 +58,11 @@ export async function createProjectModelAccess(projectId: string, provider: stri
   return client.createProjectModelAccess({ projectId, provider, model, apiKey }, { headers: { "X-Blaxsmith-CSRF": token } });
 }
 
+export async function revokeProjectModelAccess(accessId: string) {
+  const token = await csrfToken();
+  return client.revokeProjectModelAccess({ accessId }, { headers: { "X-Blaxsmith-CSRF": token } });
+}
+
 export async function launchRun(projectId: string, launchKey: string, recipePath: string, specPath: string, transcriptPath: string, scope: string) {
   const token = await csrfToken();
   return client.launchRun({ projectId, launchKey, recipePath, specPath, transcriptPath, scope }, { headers: { "X-Blaxsmith-CSRF": token } });

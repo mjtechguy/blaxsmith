@@ -1315,6 +1315,94 @@ func (x *CreateProjectModelAccessResponse) GetAccess() *ProjectModelAccess {
 	return nil
 }
 
+type RevokeProjectModelAccessRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccessId      string                 `protobuf:"bytes,1,opt,name=access_id,json=accessId,proto3" json:"access_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeProjectModelAccessRequest) Reset() {
+	*x = RevokeProjectModelAccessRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeProjectModelAccessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeProjectModelAccessRequest) ProtoMessage() {}
+
+func (x *RevokeProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeProjectModelAccessRequest.ProtoReflect.Descriptor instead.
+func (*RevokeProjectModelAccessRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *RevokeProjectModelAccessRequest) GetAccessId() string {
+	if x != nil {
+		return x.AccessId
+	}
+	return ""
+}
+
+type RevokeProjectModelAccessResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccessId      string                 `protobuf:"bytes,1,opt,name=access_id,json=accessId,proto3" json:"access_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeProjectModelAccessResponse) Reset() {
+	*x = RevokeProjectModelAccessResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeProjectModelAccessResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeProjectModelAccessResponse) ProtoMessage() {}
+
+func (x *RevokeProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeProjectModelAccessResponse.ProtoReflect.Descriptor instead.
+func (*RevokeProjectModelAccessResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *RevokeProjectModelAccessResponse) GetAccessId() string {
+	if x != nil {
+		return x.AccessId
+	}
+	return ""
+}
+
 type ListProjectsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PageSize      int32                  `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"` // 1-100; zero selects 50.
@@ -1328,7 +1416,7 @@ type ListProjectsRequest struct {
 
 func (x *ListProjectsRequest) Reset() {
 	*x = ListProjectsRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[23]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1340,7 +1428,7 @@ func (x *ListProjectsRequest) String() string {
 func (*ListProjectsRequest) ProtoMessage() {}
 
 func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[23]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1353,7 +1441,7 @@ func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{23}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListProjectsRequest) GetPageSize() int32 {
@@ -1401,7 +1489,7 @@ type ListProjectsResponse struct {
 
 func (x *ListProjectsResponse) Reset() {
 	*x = ListProjectsResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[24]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1413,7 +1501,7 @@ func (x *ListProjectsResponse) String() string {
 func (*ListProjectsResponse) ProtoMessage() {}
 
 func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[24]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1426,7 +1514,7 @@ func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{24}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListProjectsResponse) GetProjects() []*Project {
@@ -1452,7 +1540,7 @@ type GetRunRequest struct {
 
 func (x *GetRunRequest) Reset() {
 	*x = GetRunRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[25]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1464,7 +1552,7 @@ func (x *GetRunRequest) String() string {
 func (*GetRunRequest) ProtoMessage() {}
 
 func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[25]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1477,7 +1565,7 @@ func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunRequest.ProtoReflect.Descriptor instead.
 func (*GetRunRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{25}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *GetRunRequest) GetRunId() string {
@@ -1496,7 +1584,7 @@ type GetRunResponse struct {
 
 func (x *GetRunResponse) Reset() {
 	*x = GetRunResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[26]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1508,7 +1596,7 @@ func (x *GetRunResponse) String() string {
 func (*GetRunResponse) ProtoMessage() {}
 
 func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[26]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1521,7 +1609,7 @@ func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunResponse.ProtoReflect.Descriptor instead.
 func (*GetRunResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{26}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *GetRunResponse) GetRun() *Run {
@@ -1545,7 +1633,7 @@ type LaunchRunRequest struct {
 
 func (x *LaunchRunRequest) Reset() {
 	*x = LaunchRunRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[27]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1557,7 +1645,7 @@ func (x *LaunchRunRequest) String() string {
 func (*LaunchRunRequest) ProtoMessage() {}
 
 func (x *LaunchRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[27]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1570,7 +1658,7 @@ func (x *LaunchRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LaunchRunRequest.ProtoReflect.Descriptor instead.
 func (*LaunchRunRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{27}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *LaunchRunRequest) GetProjectId() string {
@@ -1624,7 +1712,7 @@ type LaunchRunResponse struct {
 
 func (x *LaunchRunResponse) Reset() {
 	*x = LaunchRunResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[28]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1636,7 +1724,7 @@ func (x *LaunchRunResponse) String() string {
 func (*LaunchRunResponse) ProtoMessage() {}
 
 func (x *LaunchRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[28]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1649,7 +1737,7 @@ func (x *LaunchRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LaunchRunResponse.ProtoReflect.Descriptor instead.
 func (*LaunchRunResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{28}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *LaunchRunResponse) GetRun() *Run {
@@ -1668,7 +1756,7 @@ type GetLaunchAvailabilityRequest struct {
 
 func (x *GetLaunchAvailabilityRequest) Reset() {
 	*x = GetLaunchAvailabilityRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[29]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1680,7 +1768,7 @@ func (x *GetLaunchAvailabilityRequest) String() string {
 func (*GetLaunchAvailabilityRequest) ProtoMessage() {}
 
 func (x *GetLaunchAvailabilityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[29]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1693,7 +1781,7 @@ func (x *GetLaunchAvailabilityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLaunchAvailabilityRequest.ProtoReflect.Descriptor instead.
 func (*GetLaunchAvailabilityRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{29}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *GetLaunchAvailabilityRequest) GetProjectId() string {
@@ -1713,7 +1801,7 @@ type GetLaunchAvailabilityResponse struct {
 
 func (x *GetLaunchAvailabilityResponse) Reset() {
 	*x = GetLaunchAvailabilityResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[30]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1725,7 +1813,7 @@ func (x *GetLaunchAvailabilityResponse) String() string {
 func (*GetLaunchAvailabilityResponse) ProtoMessage() {}
 
 func (x *GetLaunchAvailabilityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[30]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1738,7 +1826,7 @@ func (x *GetLaunchAvailabilityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLaunchAvailabilityResponse.ProtoReflect.Descriptor instead.
 func (*GetLaunchAvailabilityResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{30}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *GetLaunchAvailabilityResponse) GetEnabled() bool {
@@ -1775,7 +1863,7 @@ type RunTask struct {
 
 func (x *RunTask) Reset() {
 	*x = RunTask{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[31]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1787,7 +1875,7 @@ func (x *RunTask) String() string {
 func (*RunTask) ProtoMessage() {}
 
 func (x *RunTask) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[31]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1800,7 +1888,7 @@ func (x *RunTask) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunTask.ProtoReflect.Descriptor instead.
 func (*RunTask) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{31}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *RunTask) GetId() string {
@@ -1897,7 +1985,7 @@ type FrozenInputFile struct {
 
 func (x *FrozenInputFile) Reset() {
 	*x = FrozenInputFile{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[32]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1909,7 +1997,7 @@ func (x *FrozenInputFile) String() string {
 func (*FrozenInputFile) ProtoMessage() {}
 
 func (x *FrozenInputFile) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[32]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1922,7 +2010,7 @@ func (x *FrozenInputFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrozenInputFile.ProtoReflect.Descriptor instead.
 func (*FrozenInputFile) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{32}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *FrozenInputFile) GetPath() string {
@@ -1948,7 +2036,7 @@ type ListRunTasksRequest struct {
 
 func (x *ListRunTasksRequest) Reset() {
 	*x = ListRunTasksRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[33]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1960,7 +2048,7 @@ func (x *ListRunTasksRequest) String() string {
 func (*ListRunTasksRequest) ProtoMessage() {}
 
 func (x *ListRunTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[33]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1973,7 +2061,7 @@ func (x *ListRunTasksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListRunTasksRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{33}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ListRunTasksRequest) GetRunId() string {
@@ -1992,7 +2080,7 @@ type ListRunTasksResponse struct {
 
 func (x *ListRunTasksResponse) Reset() {
 	*x = ListRunTasksResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[34]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2004,7 +2092,7 @@ func (x *ListRunTasksResponse) String() string {
 func (*ListRunTasksResponse) ProtoMessage() {}
 
 func (x *ListRunTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[34]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2017,7 +2105,7 @@ func (x *ListRunTasksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunTasksResponse.ProtoReflect.Descriptor instead.
 func (*ListRunTasksResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{34}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ListRunTasksResponse) GetTasks() []*RunTask {
@@ -2041,7 +2129,7 @@ type ListRunsRequest struct {
 
 func (x *ListRunsRequest) Reset() {
 	*x = ListRunsRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[35]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2053,7 +2141,7 @@ func (x *ListRunsRequest) String() string {
 func (*ListRunsRequest) ProtoMessage() {}
 
 func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[35]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2066,7 +2154,7 @@ func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListRunsRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{35}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ListRunsRequest) GetProjectId() string {
@@ -2121,7 +2209,7 @@ type ListRunsResponse struct {
 
 func (x *ListRunsResponse) Reset() {
 	*x = ListRunsResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[36]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2133,7 +2221,7 @@ func (x *ListRunsResponse) String() string {
 func (*ListRunsResponse) ProtoMessage() {}
 
 func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[36]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2146,7 +2234,7 @@ func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListRunsResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{36}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ListRunsResponse) GetRuns() []*Run {
@@ -2174,7 +2262,7 @@ type EventsAfterRequest struct {
 
 func (x *EventsAfterRequest) Reset() {
 	*x = EventsAfterRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[37]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2186,7 +2274,7 @@ func (x *EventsAfterRequest) String() string {
 func (*EventsAfterRequest) ProtoMessage() {}
 
 func (x *EventsAfterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[37]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2199,7 +2287,7 @@ func (x *EventsAfterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventsAfterRequest.ProtoReflect.Descriptor instead.
 func (*EventsAfterRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{37}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *EventsAfterRequest) GetRunId() string {
@@ -2233,7 +2321,7 @@ type EventsAfterResponse struct {
 
 func (x *EventsAfterResponse) Reset() {
 	*x = EventsAfterResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[38]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2245,7 +2333,7 @@ func (x *EventsAfterResponse) String() string {
 func (*EventsAfterResponse) ProtoMessage() {}
 
 func (x *EventsAfterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[38]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2258,7 +2346,7 @@ func (x *EventsAfterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventsAfterResponse.ProtoReflect.Descriptor instead.
 func (*EventsAfterResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{38}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *EventsAfterResponse) GetEvents() []*WorkflowEvent {
@@ -2295,7 +2383,7 @@ type CommandExitObservation struct {
 
 func (x *CommandExitObservation) Reset() {
 	*x = CommandExitObservation{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[39]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2307,7 +2395,7 @@ func (x *CommandExitObservation) String() string {
 func (*CommandExitObservation) ProtoMessage() {}
 
 func (x *CommandExitObservation) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[39]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2320,7 +2408,7 @@ func (x *CommandExitObservation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandExitObservation.ProtoReflect.Descriptor instead.
 func (*CommandExitObservation) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{39}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *CommandExitObservation) GetEventId() int64 {
@@ -2411,7 +2499,7 @@ type ListCommandExitsRequest struct {
 
 func (x *ListCommandExitsRequest) Reset() {
 	*x = ListCommandExitsRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[40]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2423,7 +2511,7 @@ func (x *ListCommandExitsRequest) String() string {
 func (*ListCommandExitsRequest) ProtoMessage() {}
 
 func (x *ListCommandExitsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[40]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2436,7 +2524,7 @@ func (x *ListCommandExitsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCommandExitsRequest.ProtoReflect.Descriptor instead.
 func (*ListCommandExitsRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{40}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ListCommandExitsRequest) GetRunId() string {
@@ -2470,7 +2558,7 @@ type ListCommandExitsResponse struct {
 
 func (x *ListCommandExitsResponse) Reset() {
 	*x = ListCommandExitsResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[41]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2482,7 +2570,7 @@ func (x *ListCommandExitsResponse) String() string {
 func (*ListCommandExitsResponse) ProtoMessage() {}
 
 func (x *ListCommandExitsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[41]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2495,7 +2583,7 @@ func (x *ListCommandExitsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCommandExitsResponse.ProtoReflect.Descriptor instead.
 func (*ListCommandExitsResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{41}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ListCommandExitsResponse) GetObservations() []*CommandExitObservation {
@@ -2526,7 +2614,7 @@ type ReviewDecision struct {
 
 func (x *ReviewDecision) Reset() {
 	*x = ReviewDecision{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[42]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2538,7 +2626,7 @@ func (x *ReviewDecision) String() string {
 func (*ReviewDecision) ProtoMessage() {}
 
 func (x *ReviewDecision) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[42]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2551,7 +2639,7 @@ func (x *ReviewDecision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewDecision.ProtoReflect.Descriptor instead.
 func (*ReviewDecision) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{42}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ReviewDecision) GetId() string {
@@ -2614,7 +2702,7 @@ type ReviewPackage struct {
 
 func (x *ReviewPackage) Reset() {
 	*x = ReviewPackage{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[43]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2626,7 +2714,7 @@ func (x *ReviewPackage) String() string {
 func (*ReviewPackage) ProtoMessage() {}
 
 func (x *ReviewPackage) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[43]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2639,7 +2727,7 @@ func (x *ReviewPackage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewPackage.ProtoReflect.Descriptor instead.
 func (*ReviewPackage) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{43}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ReviewPackage) GetId() string {
@@ -2721,7 +2809,7 @@ type GetCurrentReviewRequest struct {
 
 func (x *GetCurrentReviewRequest) Reset() {
 	*x = GetCurrentReviewRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[44]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2733,7 +2821,7 @@ func (x *GetCurrentReviewRequest) String() string {
 func (*GetCurrentReviewRequest) ProtoMessage() {}
 
 func (x *GetCurrentReviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[44]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2746,7 +2834,7 @@ func (x *GetCurrentReviewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCurrentReviewRequest.ProtoReflect.Descriptor instead.
 func (*GetCurrentReviewRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{44}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *GetCurrentReviewRequest) GetRunId() string {
@@ -2765,7 +2853,7 @@ type GetCurrentReviewResponse struct {
 
 func (x *GetCurrentReviewResponse) Reset() {
 	*x = GetCurrentReviewResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[45]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2777,7 +2865,7 @@ func (x *GetCurrentReviewResponse) String() string {
 func (*GetCurrentReviewResponse) ProtoMessage() {}
 
 func (x *GetCurrentReviewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[45]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2790,7 +2878,7 @@ func (x *GetCurrentReviewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCurrentReviewResponse.ProtoReflect.Descriptor instead.
 func (*GetCurrentReviewResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{45}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *GetCurrentReviewResponse) GetPackage() *ReviewPackage {
@@ -2813,7 +2901,7 @@ type DecideReviewRequest struct {
 
 func (x *DecideReviewRequest) Reset() {
 	*x = DecideReviewRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[46]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2825,7 +2913,7 @@ func (x *DecideReviewRequest) String() string {
 func (*DecideReviewRequest) ProtoMessage() {}
 
 func (x *DecideReviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[46]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2838,7 +2926,7 @@ func (x *DecideReviewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecideReviewRequest.ProtoReflect.Descriptor instead.
 func (*DecideReviewRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{46}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *DecideReviewRequest) GetRunId() string {
@@ -2885,7 +2973,7 @@ type DecideReviewResponse struct {
 
 func (x *DecideReviewResponse) Reset() {
 	*x = DecideReviewResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[47]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2897,7 +2985,7 @@ func (x *DecideReviewResponse) String() string {
 func (*DecideReviewResponse) ProtoMessage() {}
 
 func (x *DecideReviewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[47]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2910,7 +2998,7 @@ func (x *DecideReviewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecideReviewResponse.ProtoReflect.Descriptor instead.
 func (*DecideReviewResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{47}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *DecideReviewResponse) GetDecision() *ReviewDecision {
@@ -3024,7 +3112,11 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\x05model\x18\x03 \x01(\tR\x05model\x12\x17\n" +
 	"\aapi_key\x18\x04 \x01(\tR\x06apiKey\"`\n" +
 	" CreateProjectModelAccessResponse\x12<\n" +
-	"\x06access\x18\x01 \x01(\v2$.blaxsmith.api.v1.ProjectModelAccessR\x06access\"\xa9\x01\n" +
+	"\x06access\x18\x01 \x01(\v2$.blaxsmith.api.v1.ProjectModelAccessR\x06access\">\n" +
+	"\x1fRevokeProjectModelAccessRequest\x12\x1b\n" +
+	"\taccess_id\x18\x01 \x01(\tR\baccessId\"?\n" +
+	" RevokeProjectModelAccessResponse\x12\x1b\n" +
+	"\taccess_id\x18\x01 \x01(\tR\baccessId\"\xa9\x01\n" +
 	"\x13ListProjectsRequest\x12\x1b\n" +
 	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
@@ -3156,7 +3248,7 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\x06action\x18\x04 \x01(\tR\x06action\x12\x1a\n" +
 	"\bfeedback\x18\x05 \x01(\tR\bfeedback\"T\n" +
 	"\x14DecideReviewResponse\x12<\n" +
-	"\bdecision\x18\x01 \x01(\v2 .blaxsmith.api.v1.ReviewDecisionR\bdecision2\xdc\x0e\n" +
+	"\bdecision\x18\x01 \x01(\v2 .blaxsmith.api.v1.ReviewDecisionR\bdecision2\xe0\x0f\n" +
 	"\x0fWorkflowService\x12`\n" +
 	"\rCreateProject\x12&.blaxsmith.api.v1.CreateProjectRequest\x1a'.blaxsmith.api.v1.CreateProjectResponse\x12W\n" +
 	"\n" +
@@ -3166,7 +3258,8 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\x16GetProjectVerification\x12/.blaxsmith.api.v1.GetProjectVerificationRequest\x1a0.blaxsmith.api.v1.GetProjectVerificationResponse\x12{\n" +
 	"\x16SetProjectVerification\x12/.blaxsmith.api.v1.SetProjectVerificationRequest\x1a0.blaxsmith.api.v1.SetProjectVerificationResponse\x12{\n" +
 	"\x16ListProjectModelAccess\x12/.blaxsmith.api.v1.ListProjectModelAccessRequest\x1a0.blaxsmith.api.v1.ListProjectModelAccessResponse\x12\x81\x01\n" +
-	"\x18CreateProjectModelAccess\x121.blaxsmith.api.v1.CreateProjectModelAccessRequest\x1a2.blaxsmith.api.v1.CreateProjectModelAccessResponse\x12]\n" +
+	"\x18CreateProjectModelAccess\x121.blaxsmith.api.v1.CreateProjectModelAccessRequest\x1a2.blaxsmith.api.v1.CreateProjectModelAccessResponse\x12\x81\x01\n" +
+	"\x18RevokeProjectModelAccess\x121.blaxsmith.api.v1.RevokeProjectModelAccessRequest\x1a2.blaxsmith.api.v1.RevokeProjectModelAccessResponse\x12]\n" +
 	"\fListProjects\x12%.blaxsmith.api.v1.ListProjectsRequest\x1a&.blaxsmith.api.v1.ListProjectsResponse\x12K\n" +
 	"\x06GetRun\x12\x1f.blaxsmith.api.v1.GetRunRequest\x1a .blaxsmith.api.v1.GetRunResponse\x12T\n" +
 	"\tLaunchRun\x12\".blaxsmith.api.v1.LaunchRunRequest\x1a#.blaxsmith.api.v1.LaunchRunResponse\x12x\n" +
@@ -3191,7 +3284,7 @@ func file_blaxsmith_api_v1_workflow_proto_rawDescGZIP() []byte {
 	return file_blaxsmith_api_v1_workflow_proto_rawDescData
 }
 
-var file_blaxsmith_api_v1_workflow_proto_msgTypes = make([]protoimpl.MessageInfo, 48)
+var file_blaxsmith_api_v1_workflow_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
 var file_blaxsmith_api_v1_workflow_proto_goTypes = []any{
 	(*Project)(nil),                          // 0: blaxsmith.api.v1.Project
 	(*Run)(nil),                              // 1: blaxsmith.api.v1.Run
@@ -3216,31 +3309,33 @@ var file_blaxsmith_api_v1_workflow_proto_goTypes = []any{
 	(*ListProjectModelAccessResponse)(nil),   // 20: blaxsmith.api.v1.ListProjectModelAccessResponse
 	(*CreateProjectModelAccessRequest)(nil),  // 21: blaxsmith.api.v1.CreateProjectModelAccessRequest
 	(*CreateProjectModelAccessResponse)(nil), // 22: blaxsmith.api.v1.CreateProjectModelAccessResponse
-	(*ListProjectsRequest)(nil),              // 23: blaxsmith.api.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),             // 24: blaxsmith.api.v1.ListProjectsResponse
-	(*GetRunRequest)(nil),                    // 25: blaxsmith.api.v1.GetRunRequest
-	(*GetRunResponse)(nil),                   // 26: blaxsmith.api.v1.GetRunResponse
-	(*LaunchRunRequest)(nil),                 // 27: blaxsmith.api.v1.LaunchRunRequest
-	(*LaunchRunResponse)(nil),                // 28: blaxsmith.api.v1.LaunchRunResponse
-	(*GetLaunchAvailabilityRequest)(nil),     // 29: blaxsmith.api.v1.GetLaunchAvailabilityRequest
-	(*GetLaunchAvailabilityResponse)(nil),    // 30: blaxsmith.api.v1.GetLaunchAvailabilityResponse
-	(*RunTask)(nil),                          // 31: blaxsmith.api.v1.RunTask
-	(*FrozenInputFile)(nil),                  // 32: blaxsmith.api.v1.FrozenInputFile
-	(*ListRunTasksRequest)(nil),              // 33: blaxsmith.api.v1.ListRunTasksRequest
-	(*ListRunTasksResponse)(nil),             // 34: blaxsmith.api.v1.ListRunTasksResponse
-	(*ListRunsRequest)(nil),                  // 35: blaxsmith.api.v1.ListRunsRequest
-	(*ListRunsResponse)(nil),                 // 36: blaxsmith.api.v1.ListRunsResponse
-	(*EventsAfterRequest)(nil),               // 37: blaxsmith.api.v1.EventsAfterRequest
-	(*EventsAfterResponse)(nil),              // 38: blaxsmith.api.v1.EventsAfterResponse
-	(*CommandExitObservation)(nil),           // 39: blaxsmith.api.v1.CommandExitObservation
-	(*ListCommandExitsRequest)(nil),          // 40: blaxsmith.api.v1.ListCommandExitsRequest
-	(*ListCommandExitsResponse)(nil),         // 41: blaxsmith.api.v1.ListCommandExitsResponse
-	(*ReviewDecision)(nil),                   // 42: blaxsmith.api.v1.ReviewDecision
-	(*ReviewPackage)(nil),                    // 43: blaxsmith.api.v1.ReviewPackage
-	(*GetCurrentReviewRequest)(nil),          // 44: blaxsmith.api.v1.GetCurrentReviewRequest
-	(*GetCurrentReviewResponse)(nil),         // 45: blaxsmith.api.v1.GetCurrentReviewResponse
-	(*DecideReviewRequest)(nil),              // 46: blaxsmith.api.v1.DecideReviewRequest
-	(*DecideReviewResponse)(nil),             // 47: blaxsmith.api.v1.DecideReviewResponse
+	(*RevokeProjectModelAccessRequest)(nil),  // 23: blaxsmith.api.v1.RevokeProjectModelAccessRequest
+	(*RevokeProjectModelAccessResponse)(nil), // 24: blaxsmith.api.v1.RevokeProjectModelAccessResponse
+	(*ListProjectsRequest)(nil),              // 25: blaxsmith.api.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),             // 26: blaxsmith.api.v1.ListProjectsResponse
+	(*GetRunRequest)(nil),                    // 27: blaxsmith.api.v1.GetRunRequest
+	(*GetRunResponse)(nil),                   // 28: blaxsmith.api.v1.GetRunResponse
+	(*LaunchRunRequest)(nil),                 // 29: blaxsmith.api.v1.LaunchRunRequest
+	(*LaunchRunResponse)(nil),                // 30: blaxsmith.api.v1.LaunchRunResponse
+	(*GetLaunchAvailabilityRequest)(nil),     // 31: blaxsmith.api.v1.GetLaunchAvailabilityRequest
+	(*GetLaunchAvailabilityResponse)(nil),    // 32: blaxsmith.api.v1.GetLaunchAvailabilityResponse
+	(*RunTask)(nil),                          // 33: blaxsmith.api.v1.RunTask
+	(*FrozenInputFile)(nil),                  // 34: blaxsmith.api.v1.FrozenInputFile
+	(*ListRunTasksRequest)(nil),              // 35: blaxsmith.api.v1.ListRunTasksRequest
+	(*ListRunTasksResponse)(nil),             // 36: blaxsmith.api.v1.ListRunTasksResponse
+	(*ListRunsRequest)(nil),                  // 37: blaxsmith.api.v1.ListRunsRequest
+	(*ListRunsResponse)(nil),                 // 38: blaxsmith.api.v1.ListRunsResponse
+	(*EventsAfterRequest)(nil),               // 39: blaxsmith.api.v1.EventsAfterRequest
+	(*EventsAfterResponse)(nil),              // 40: blaxsmith.api.v1.EventsAfterResponse
+	(*CommandExitObservation)(nil),           // 41: blaxsmith.api.v1.CommandExitObservation
+	(*ListCommandExitsRequest)(nil),          // 42: blaxsmith.api.v1.ListCommandExitsRequest
+	(*ListCommandExitsResponse)(nil),         // 43: blaxsmith.api.v1.ListCommandExitsResponse
+	(*ReviewDecision)(nil),                   // 44: blaxsmith.api.v1.ReviewDecision
+	(*ReviewPackage)(nil),                    // 45: blaxsmith.api.v1.ReviewPackage
+	(*GetCurrentReviewRequest)(nil),          // 46: blaxsmith.api.v1.GetCurrentReviewRequest
+	(*GetCurrentReviewResponse)(nil),         // 47: blaxsmith.api.v1.GetCurrentReviewResponse
+	(*DecideReviewRequest)(nil),              // 48: blaxsmith.api.v1.DecideReviewRequest
+	(*DecideReviewResponse)(nil),             // 49: blaxsmith.api.v1.DecideReviewResponse
 }
 var file_blaxsmith_api_v1_workflow_proto_depIdxs = []int32{
 	0,  // 0: blaxsmith.api.v1.CreateProjectResponse.project:type_name -> blaxsmith.api.v1.Project
@@ -3256,15 +3351,15 @@ var file_blaxsmith_api_v1_workflow_proto_depIdxs = []int32{
 	0,  // 10: blaxsmith.api.v1.ListProjectsResponse.projects:type_name -> blaxsmith.api.v1.Project
 	1,  // 11: blaxsmith.api.v1.GetRunResponse.run:type_name -> blaxsmith.api.v1.Run
 	1,  // 12: blaxsmith.api.v1.LaunchRunResponse.run:type_name -> blaxsmith.api.v1.Run
-	32, // 13: blaxsmith.api.v1.RunTask.instruction_files:type_name -> blaxsmith.api.v1.FrozenInputFile
-	32, // 14: blaxsmith.api.v1.RunTask.skill_files:type_name -> blaxsmith.api.v1.FrozenInputFile
-	31, // 15: blaxsmith.api.v1.ListRunTasksResponse.tasks:type_name -> blaxsmith.api.v1.RunTask
+	34, // 13: blaxsmith.api.v1.RunTask.instruction_files:type_name -> blaxsmith.api.v1.FrozenInputFile
+	34, // 14: blaxsmith.api.v1.RunTask.skill_files:type_name -> blaxsmith.api.v1.FrozenInputFile
+	33, // 15: blaxsmith.api.v1.ListRunTasksResponse.tasks:type_name -> blaxsmith.api.v1.RunTask
 	1,  // 16: blaxsmith.api.v1.ListRunsResponse.runs:type_name -> blaxsmith.api.v1.Run
 	2,  // 17: blaxsmith.api.v1.EventsAfterResponse.events:type_name -> blaxsmith.api.v1.WorkflowEvent
-	39, // 18: blaxsmith.api.v1.ListCommandExitsResponse.observations:type_name -> blaxsmith.api.v1.CommandExitObservation
-	42, // 19: blaxsmith.api.v1.ReviewPackage.decision:type_name -> blaxsmith.api.v1.ReviewDecision
-	43, // 20: blaxsmith.api.v1.GetCurrentReviewResponse.package:type_name -> blaxsmith.api.v1.ReviewPackage
-	42, // 21: blaxsmith.api.v1.DecideReviewResponse.decision:type_name -> blaxsmith.api.v1.ReviewDecision
+	41, // 18: blaxsmith.api.v1.ListCommandExitsResponse.observations:type_name -> blaxsmith.api.v1.CommandExitObservation
+	44, // 19: blaxsmith.api.v1.ReviewPackage.decision:type_name -> blaxsmith.api.v1.ReviewDecision
+	45, // 20: blaxsmith.api.v1.GetCurrentReviewResponse.package:type_name -> blaxsmith.api.v1.ReviewPackage
+	44, // 21: blaxsmith.api.v1.DecideReviewResponse.decision:type_name -> blaxsmith.api.v1.ReviewDecision
 	3,  // 22: blaxsmith.api.v1.WorkflowService.CreateProject:input_type -> blaxsmith.api.v1.CreateProjectRequest
 	5,  // 23: blaxsmith.api.v1.WorkflowService.GetProject:input_type -> blaxsmith.api.v1.GetProjectRequest
 	8,  // 24: blaxsmith.api.v1.WorkflowService.GetProjectSource:input_type -> blaxsmith.api.v1.GetProjectSourceRequest
@@ -3273,36 +3368,38 @@ var file_blaxsmith_api_v1_workflow_proto_depIdxs = []int32{
 	16, // 27: blaxsmith.api.v1.WorkflowService.SetProjectVerification:input_type -> blaxsmith.api.v1.SetProjectVerificationRequest
 	19, // 28: blaxsmith.api.v1.WorkflowService.ListProjectModelAccess:input_type -> blaxsmith.api.v1.ListProjectModelAccessRequest
 	21, // 29: blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess:input_type -> blaxsmith.api.v1.CreateProjectModelAccessRequest
-	23, // 30: blaxsmith.api.v1.WorkflowService.ListProjects:input_type -> blaxsmith.api.v1.ListProjectsRequest
-	25, // 31: blaxsmith.api.v1.WorkflowService.GetRun:input_type -> blaxsmith.api.v1.GetRunRequest
-	27, // 32: blaxsmith.api.v1.WorkflowService.LaunchRun:input_type -> blaxsmith.api.v1.LaunchRunRequest
-	29, // 33: blaxsmith.api.v1.WorkflowService.GetLaunchAvailability:input_type -> blaxsmith.api.v1.GetLaunchAvailabilityRequest
-	33, // 34: blaxsmith.api.v1.WorkflowService.ListRunTasks:input_type -> blaxsmith.api.v1.ListRunTasksRequest
-	35, // 35: blaxsmith.api.v1.WorkflowService.ListRuns:input_type -> blaxsmith.api.v1.ListRunsRequest
-	37, // 36: blaxsmith.api.v1.WorkflowService.EventsAfter:input_type -> blaxsmith.api.v1.EventsAfterRequest
-	40, // 37: blaxsmith.api.v1.WorkflowService.ListCommandExits:input_type -> blaxsmith.api.v1.ListCommandExitsRequest
-	44, // 38: blaxsmith.api.v1.WorkflowService.GetCurrentReview:input_type -> blaxsmith.api.v1.GetCurrentReviewRequest
-	46, // 39: blaxsmith.api.v1.WorkflowService.DecideReview:input_type -> blaxsmith.api.v1.DecideReviewRequest
-	4,  // 40: blaxsmith.api.v1.WorkflowService.CreateProject:output_type -> blaxsmith.api.v1.CreateProjectResponse
-	6,  // 41: blaxsmith.api.v1.WorkflowService.GetProject:output_type -> blaxsmith.api.v1.GetProjectResponse
-	9,  // 42: blaxsmith.api.v1.WorkflowService.GetProjectSource:output_type -> blaxsmith.api.v1.GetProjectSourceResponse
-	11, // 43: blaxsmith.api.v1.WorkflowService.SetProjectSource:output_type -> blaxsmith.api.v1.SetProjectSourceResponse
-	15, // 44: blaxsmith.api.v1.WorkflowService.GetProjectVerification:output_type -> blaxsmith.api.v1.GetProjectVerificationResponse
-	17, // 45: blaxsmith.api.v1.WorkflowService.SetProjectVerification:output_type -> blaxsmith.api.v1.SetProjectVerificationResponse
-	20, // 46: blaxsmith.api.v1.WorkflowService.ListProjectModelAccess:output_type -> blaxsmith.api.v1.ListProjectModelAccessResponse
-	22, // 47: blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess:output_type -> blaxsmith.api.v1.CreateProjectModelAccessResponse
-	24, // 48: blaxsmith.api.v1.WorkflowService.ListProjects:output_type -> blaxsmith.api.v1.ListProjectsResponse
-	26, // 49: blaxsmith.api.v1.WorkflowService.GetRun:output_type -> blaxsmith.api.v1.GetRunResponse
-	28, // 50: blaxsmith.api.v1.WorkflowService.LaunchRun:output_type -> blaxsmith.api.v1.LaunchRunResponse
-	30, // 51: blaxsmith.api.v1.WorkflowService.GetLaunchAvailability:output_type -> blaxsmith.api.v1.GetLaunchAvailabilityResponse
-	34, // 52: blaxsmith.api.v1.WorkflowService.ListRunTasks:output_type -> blaxsmith.api.v1.ListRunTasksResponse
-	36, // 53: blaxsmith.api.v1.WorkflowService.ListRuns:output_type -> blaxsmith.api.v1.ListRunsResponse
-	38, // 54: blaxsmith.api.v1.WorkflowService.EventsAfter:output_type -> blaxsmith.api.v1.EventsAfterResponse
-	41, // 55: blaxsmith.api.v1.WorkflowService.ListCommandExits:output_type -> blaxsmith.api.v1.ListCommandExitsResponse
-	45, // 56: blaxsmith.api.v1.WorkflowService.GetCurrentReview:output_type -> blaxsmith.api.v1.GetCurrentReviewResponse
-	47, // 57: blaxsmith.api.v1.WorkflowService.DecideReview:output_type -> blaxsmith.api.v1.DecideReviewResponse
-	40, // [40:58] is the sub-list for method output_type
-	22, // [22:40] is the sub-list for method input_type
+	23, // 30: blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess:input_type -> blaxsmith.api.v1.RevokeProjectModelAccessRequest
+	25, // 31: blaxsmith.api.v1.WorkflowService.ListProjects:input_type -> blaxsmith.api.v1.ListProjectsRequest
+	27, // 32: blaxsmith.api.v1.WorkflowService.GetRun:input_type -> blaxsmith.api.v1.GetRunRequest
+	29, // 33: blaxsmith.api.v1.WorkflowService.LaunchRun:input_type -> blaxsmith.api.v1.LaunchRunRequest
+	31, // 34: blaxsmith.api.v1.WorkflowService.GetLaunchAvailability:input_type -> blaxsmith.api.v1.GetLaunchAvailabilityRequest
+	35, // 35: blaxsmith.api.v1.WorkflowService.ListRunTasks:input_type -> blaxsmith.api.v1.ListRunTasksRequest
+	37, // 36: blaxsmith.api.v1.WorkflowService.ListRuns:input_type -> blaxsmith.api.v1.ListRunsRequest
+	39, // 37: blaxsmith.api.v1.WorkflowService.EventsAfter:input_type -> blaxsmith.api.v1.EventsAfterRequest
+	42, // 38: blaxsmith.api.v1.WorkflowService.ListCommandExits:input_type -> blaxsmith.api.v1.ListCommandExitsRequest
+	46, // 39: blaxsmith.api.v1.WorkflowService.GetCurrentReview:input_type -> blaxsmith.api.v1.GetCurrentReviewRequest
+	48, // 40: blaxsmith.api.v1.WorkflowService.DecideReview:input_type -> blaxsmith.api.v1.DecideReviewRequest
+	4,  // 41: blaxsmith.api.v1.WorkflowService.CreateProject:output_type -> blaxsmith.api.v1.CreateProjectResponse
+	6,  // 42: blaxsmith.api.v1.WorkflowService.GetProject:output_type -> blaxsmith.api.v1.GetProjectResponse
+	9,  // 43: blaxsmith.api.v1.WorkflowService.GetProjectSource:output_type -> blaxsmith.api.v1.GetProjectSourceResponse
+	11, // 44: blaxsmith.api.v1.WorkflowService.SetProjectSource:output_type -> blaxsmith.api.v1.SetProjectSourceResponse
+	15, // 45: blaxsmith.api.v1.WorkflowService.GetProjectVerification:output_type -> blaxsmith.api.v1.GetProjectVerificationResponse
+	17, // 46: blaxsmith.api.v1.WorkflowService.SetProjectVerification:output_type -> blaxsmith.api.v1.SetProjectVerificationResponse
+	20, // 47: blaxsmith.api.v1.WorkflowService.ListProjectModelAccess:output_type -> blaxsmith.api.v1.ListProjectModelAccessResponse
+	22, // 48: blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess:output_type -> blaxsmith.api.v1.CreateProjectModelAccessResponse
+	24, // 49: blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess:output_type -> blaxsmith.api.v1.RevokeProjectModelAccessResponse
+	26, // 50: blaxsmith.api.v1.WorkflowService.ListProjects:output_type -> blaxsmith.api.v1.ListProjectsResponse
+	28, // 51: blaxsmith.api.v1.WorkflowService.GetRun:output_type -> blaxsmith.api.v1.GetRunResponse
+	30, // 52: blaxsmith.api.v1.WorkflowService.LaunchRun:output_type -> blaxsmith.api.v1.LaunchRunResponse
+	32, // 53: blaxsmith.api.v1.WorkflowService.GetLaunchAvailability:output_type -> blaxsmith.api.v1.GetLaunchAvailabilityResponse
+	36, // 54: blaxsmith.api.v1.WorkflowService.ListRunTasks:output_type -> blaxsmith.api.v1.ListRunTasksResponse
+	38, // 55: blaxsmith.api.v1.WorkflowService.ListRuns:output_type -> blaxsmith.api.v1.ListRunsResponse
+	40, // 56: blaxsmith.api.v1.WorkflowService.EventsAfter:output_type -> blaxsmith.api.v1.EventsAfterResponse
+	43, // 57: blaxsmith.api.v1.WorkflowService.ListCommandExits:output_type -> blaxsmith.api.v1.ListCommandExitsResponse
+	47, // 58: blaxsmith.api.v1.WorkflowService.GetCurrentReview:output_type -> blaxsmith.api.v1.GetCurrentReviewResponse
+	49, // 59: blaxsmith.api.v1.WorkflowService.DecideReview:output_type -> blaxsmith.api.v1.DecideReviewResponse
+	41, // [41:60] is the sub-list for method output_type
+	22, // [22:41] is the sub-list for method input_type
 	22, // [22:22] is the sub-list for extension type_name
 	22, // [22:22] is the sub-list for extension extendee
 	0,  // [0:22] is the sub-list for field type_name
@@ -3319,7 +3416,7 @@ func file_blaxsmith_api_v1_workflow_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blaxsmith_api_v1_workflow_proto_rawDesc), len(file_blaxsmith_api_v1_workflow_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   48,
+			NumMessages:   50,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -164,6 +164,17 @@ func (s *workflowService) CreateProjectModelAccess(ctx context.Context, req *con
 	return connect.NewResponse(&api.CreateProjectModelAccessResponse{Access: projectModelAccessMessage(item)}), nil
 }
 
+func (s *workflowService) RevokeProjectModelAccess(ctx context.Context, req *connect.Request[api.RevokeProjectModelAccessRequest]) (*connect.Response[api.RevokeProjectModelAccessResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.store.RevokeProjectModelAccessAs(ctx, caller, req.Msg.AccessId); err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.RevokeProjectModelAccessResponse{AccessId: req.Msg.AccessId}), nil
+}
+
 func projectModelAccessMessage(item workflow.ProjectModelAccess) *api.ProjectModelAccess {
 	return &api.ProjectModelAccess{Id: item.ID, ProjectId: item.ProjectID, Provider: item.Provider,
 		Model: item.Model, ConnectionId: item.ConnectionID, GrantId: item.GrantID,

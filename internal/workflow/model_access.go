@@ -77,23 +77,7 @@ func (s *Store) CreateProjectModelAccessAs(ctx context.Context, caller identity.
 		return ProjectModelAccess{}, err
 	}
 	defer tx.Rollback(ctx)
-	var role string
-	err = tx.QueryRow(ctx, `SELECT m.role FROM identity_sessions s
-		JOIN identity_memberships m ON m.organization_id=s.organization_id AND m.principal_id=s.principal_id
-		JOIN identity_principals p ON p.id=s.principal_id
-		JOIN identity_organizations o ON o.id=s.organization_id
-		WHERE s.organization_id=$1 AND s.id=$2 AND s.principal_id=$3
-		AND m.role=$4 AND m.role IN ('owner','admin') AND $5::timestamptz>clock_timestamp()
-		AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
-		AND m.state='active' AND p.state='active'
-		AND (s.auth_method<>'local' OR o.login_policy IN ('local','mixed'))
-		AND (o.mfa_policy<>'required' OR s.mfa_level='totp')
-		FOR SHARE OF s,m,p,o`, caller.OrganizationID, caller.SessionID, caller.PrincipalID,
-		caller.Role, caller.AccessExpires).Scan(&role)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ProjectModelAccess{}, ErrFenced
-	}
-	if err != nil {
+	if err := lockProjectModelAccessAdmin(ctx, tx, caller); err != nil {
 		return ProjectModelAccess{}, err
 	}
 	var exists bool
@@ -165,4 +149,95 @@ func (s *Store) CreateProjectModelAccessAs(ctx context.Context, caller identity.
 		return ProjectModelAccess{}, err
 	}
 	return item, tx.Commit(ctx)
+}
+
+func (s *Store) RevokeProjectModelAccessAs(ctx context.Context, caller identity.Caller, accessID string) error {
+	if caller.Role != "owner" && caller.Role != "admin" {
+		return ErrProjectModelAccessDenied
+	}
+	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID) || !uuidPattern.MatchString(accessID) {
+		return ErrInvalid
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err := lockProjectModelAccessAdmin(ctx, tx, caller); err != nil {
+		return err
+	}
+	var grantID, connectionID string
+	err = tx.QueryRow(ctx, `SELECT g.id,c.id FROM workflow_project_model_grants m
+		JOIN access_grants g ON g.organization_id=m.organization_id::text AND g.id=m.grant_id
+		JOIN access_connections c ON c.organization_id=g.organization_id AND c.id=g.connection_id
+		WHERE m.organization_id=$1 AND m.id=$2 FOR UPDATE OF m,g,c`, caller.OrganizationID, accessID).
+		Scan(&grantID, &connectionID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, `UPDATE workflow_project_model_grants SET revoked_at=clock_timestamp()
+		WHERE organization_id=$1 AND id=$2 AND revoked_at IS NULL`, caller.OrganizationID, accessID)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE access_grants SET revoked_at=COALESCE(revoked_at,clock_timestamp()),
+		version=CASE WHEN revoked_at IS NULL THEN version+1 ELSE version END
+		WHERE organization_id=$1 AND id=$2`, caller.OrganizationID, grantID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE access_leases SET revoked_at=clock_timestamp()
+		WHERE organization_id=$1 AND binding_id IN
+		(SELECT id FROM access_bindings WHERE organization_id=$1 AND grant_id=$2)
+		AND revoked_at IS NULL`, caller.OrganizationID, grantID); err != nil {
+		return err
+	}
+	var activeGrants int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM access_grants
+		WHERE organization_id=$1 AND connection_id=$2 AND revoked_at IS NULL`,
+		caller.OrganizationID, connectionID).Scan(&activeGrants); err != nil {
+		return err
+	}
+	if activeGrants == 0 {
+		if _, err := tx.Exec(ctx, `UPDATE access_connections SET state='revoked'
+			WHERE organization_id=$1 AND id=$2 AND state<>'revoked'`, caller.OrganizationID, connectionID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE access_leases SET revoked_at=clock_timestamp()
+			WHERE organization_id=$1 AND connection_id=$2 AND revoked_at IS NULL`,
+			caller.OrganizationID, connectionID); err != nil {
+			return err
+		}
+	}
+	if tag.RowsAffected() > 0 {
+		if _, err := tx.Exec(ctx, `INSERT INTO identity_audit_events
+			(organization_id,actor_kind,actor_id,action,subject_id)
+			VALUES ($1,'principal',$2,'access.project_model.revoked',$3)`,
+			caller.OrganizationID, caller.PrincipalID, accessID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+func lockProjectModelAccessAdmin(ctx context.Context, tx pgx.Tx, caller identity.Caller) error {
+	var role string
+	err := tx.QueryRow(ctx, `SELECT m.role FROM identity_sessions s
+		JOIN identity_memberships m ON m.organization_id=s.organization_id AND m.principal_id=s.principal_id
+		JOIN identity_principals p ON p.id=s.principal_id
+		JOIN identity_organizations o ON o.id=s.organization_id
+		WHERE s.organization_id=$1 AND s.id=$2 AND s.principal_id=$3
+		AND m.role=$4 AND m.role IN ('owner','admin') AND $5::timestamptz>clock_timestamp()
+		AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
+		AND m.state='active' AND p.state='active'
+		AND (s.auth_method<>'local' OR o.login_policy IN ('local','mixed'))
+		AND (o.mfa_policy<>'required' OR s.mfa_level='totp')
+		FOR SHARE OF s,m,p,o`, caller.OrganizationID, caller.SessionID, caller.PrincipalID,
+		caller.Role, caller.AccessExpires).Scan(&role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrFenced
+	}
+	return err
 }
