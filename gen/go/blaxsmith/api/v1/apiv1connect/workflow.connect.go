@@ -39,6 +39,12 @@ const (
 	// WorkflowServiceGetProjectProcedure is the fully-qualified name of the WorkflowService's
 	// GetProject RPC.
 	WorkflowServiceGetProjectProcedure = "/blaxsmith.api.v1.WorkflowService/GetProject"
+	// WorkflowServiceGetProjectSourceProcedure is the fully-qualified name of the WorkflowService's
+	// GetProjectSource RPC.
+	WorkflowServiceGetProjectSourceProcedure = "/blaxsmith.api.v1.WorkflowService/GetProjectSource"
+	// WorkflowServiceSetProjectSourceProcedure is the fully-qualified name of the WorkflowService's
+	// SetProjectSource RPC.
+	WorkflowServiceSetProjectSourceProcedure = "/blaxsmith.api.v1.WorkflowService/SetProjectSource"
 	// WorkflowServiceListProjectsProcedure is the fully-qualified name of the WorkflowService's
 	// ListProjects RPC.
 	WorkflowServiceListProjectsProcedure = "/blaxsmith.api.v1.WorkflowService/ListProjects"
@@ -68,6 +74,8 @@ const (
 type WorkflowServiceClient interface {
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
+	GetProjectSource(context.Context, *connect.Request[v1.GetProjectSourceRequest]) (*connect.Response[v1.GetProjectSourceResponse], error)
+	SetProjectSource(context.Context, *connect.Request[v1.SetProjectSourceRequest]) (*connect.Response[v1.SetProjectSourceResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	ListRunTasks(context.Context, *connect.Request[v1.ListRunTasksRequest]) (*connect.Response[v1.ListRunTasksResponse], error)
@@ -99,6 +107,18 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			httpClient,
 			baseURL+WorkflowServiceGetProjectProcedure,
 			connect.WithSchema(workflowServiceMethods.ByName("GetProject")),
+			connect.WithClientOptions(opts...),
+		),
+		getProjectSource: connect.NewClient[v1.GetProjectSourceRequest, v1.GetProjectSourceResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetProjectSourceProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetProjectSource")),
+			connect.WithClientOptions(opts...),
+		),
+		setProjectSource: connect.NewClient[v1.SetProjectSourceRequest, v1.SetProjectSourceResponse](
+			httpClient,
+			baseURL+WorkflowServiceSetProjectSourceProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("SetProjectSource")),
 			connect.WithClientOptions(opts...),
 		),
 		listProjects: connect.NewClient[v1.ListProjectsRequest, v1.ListProjectsResponse](
@@ -156,6 +176,8 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 type workflowServiceClient struct {
 	createProject    *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
 	getProject       *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
+	getProjectSource *connect.Client[v1.GetProjectSourceRequest, v1.GetProjectSourceResponse]
+	setProjectSource *connect.Client[v1.SetProjectSourceRequest, v1.SetProjectSourceResponse]
 	listProjects     *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
 	getRun           *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
 	listRunTasks     *connect.Client[v1.ListRunTasksRequest, v1.ListRunTasksResponse]
@@ -174,6 +196,16 @@ func (c *workflowServiceClient) CreateProject(ctx context.Context, req *connect.
 // GetProject calls blaxsmith.api.v1.WorkflowService.GetProject.
 func (c *workflowServiceClient) GetProject(ctx context.Context, req *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error) {
 	return c.getProject.CallUnary(ctx, req)
+}
+
+// GetProjectSource calls blaxsmith.api.v1.WorkflowService.GetProjectSource.
+func (c *workflowServiceClient) GetProjectSource(ctx context.Context, req *connect.Request[v1.GetProjectSourceRequest]) (*connect.Response[v1.GetProjectSourceResponse], error) {
+	return c.getProjectSource.CallUnary(ctx, req)
+}
+
+// SetProjectSource calls blaxsmith.api.v1.WorkflowService.SetProjectSource.
+func (c *workflowServiceClient) SetProjectSource(ctx context.Context, req *connect.Request[v1.SetProjectSourceRequest]) (*connect.Response[v1.SetProjectSourceResponse], error) {
+	return c.setProjectSource.CallUnary(ctx, req)
 }
 
 // ListProjects calls blaxsmith.api.v1.WorkflowService.ListProjects.
@@ -220,6 +252,8 @@ func (c *workflowServiceClient) DecideReview(ctx context.Context, req *connect.R
 type WorkflowServiceHandler interface {
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
+	GetProjectSource(context.Context, *connect.Request[v1.GetProjectSourceRequest]) (*connect.Response[v1.GetProjectSourceResponse], error)
+	SetProjectSource(context.Context, *connect.Request[v1.SetProjectSourceRequest]) (*connect.Response[v1.SetProjectSourceResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
 	ListRunTasks(context.Context, *connect.Request[v1.ListRunTasksRequest]) (*connect.Response[v1.ListRunTasksResponse], error)
@@ -247,6 +281,18 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		WorkflowServiceGetProjectProcedure,
 		svc.GetProject,
 		connect.WithSchema(workflowServiceMethods.ByName("GetProject")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceGetProjectSourceHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetProjectSourceProcedure,
+		svc.GetProjectSource,
+		connect.WithSchema(workflowServiceMethods.ByName("GetProjectSource")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceSetProjectSourceHandler := connect.NewUnaryHandler(
+		WorkflowServiceSetProjectSourceProcedure,
+		svc.SetProjectSource,
+		connect.WithSchema(workflowServiceMethods.ByName("SetProjectSource")),
 		connect.WithHandlerOptions(opts...),
 	)
 	workflowServiceListProjectsHandler := connect.NewUnaryHandler(
@@ -303,6 +349,10 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 			workflowServiceCreateProjectHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetProjectProcedure:
 			workflowServiceGetProjectHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetProjectSourceProcedure:
+			workflowServiceGetProjectSourceHandler.ServeHTTP(w, r)
+		case WorkflowServiceSetProjectSourceProcedure:
+			workflowServiceSetProjectSourceHandler.ServeHTTP(w, r)
 		case WorkflowServiceListProjectsProcedure:
 			workflowServiceListProjectsHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetRunProcedure:
@@ -334,6 +384,14 @@ func (UnimplementedWorkflowServiceHandler) CreateProject(context.Context, *conne
 
 func (UnimplementedWorkflowServiceHandler) GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetProject is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetProjectSource(context.Context, *connect.Request[v1.GetProjectSourceRequest]) (*connect.Response[v1.GetProjectSourceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetProjectSource is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) SetProjectSource(context.Context, *connect.Request[v1.SetProjectSourceRequest]) (*connect.Response[v1.SetProjectSourceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.SetProjectSource is not implemented"))
 }
 
 func (UnimplementedWorkflowServiceHandler) ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error) {

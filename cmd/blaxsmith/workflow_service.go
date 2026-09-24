@@ -64,6 +64,30 @@ func (s *workflowService) GetProject(ctx context.Context, req *connect.Request[a
 	return connect.NewResponse(&api.GetProjectResponse{Project: projectMessage(project)}), nil
 }
 
+func (s *workflowService) GetProjectSource(ctx context.Context, req *connect.Request[api.GetProjectSourceRequest]) (*connect.Response[api.GetProjectSourceResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	source, err := s.store.GetProjectSource(ctx, caller.OrganizationID, req.Msg.ProjectId)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.GetProjectSourceResponse{Source: projectSourceMessage(source)}), nil
+}
+
+func (s *workflowService) SetProjectSource(ctx context.Context, req *connect.Request[api.SetProjectSourceRequest]) (*connect.Response[api.SetProjectSourceResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	source, err := s.store.SetProjectSourceAs(ctx, caller, req.Msg.ProjectId, req.Msg.RepositoryUrl, req.Msg.Ref)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.SetProjectSourceResponse{Source: projectSourceMessage(source)}), nil
+}
+
 func (s *workflowService) ListProjects(ctx context.Context, req *connect.Request[api.ListProjectsRequest]) (*connect.Response[api.ListProjectsResponse], error) {
 	caller, err := s.guard.Caller(ctx, req.Header(), false)
 	if err != nil {
@@ -279,6 +303,11 @@ func projectMessage(project workflow.Project) *api.Project {
 		CreatedAt: project.CreatedAt.UTC().Format(time.RFC3339Nano)}
 }
 
+func projectSourceMessage(source workflow.ProjectSource) *api.ProjectSource {
+	return &api.ProjectSource{ProjectId: source.ProjectID, RepositoryUrl: source.RepositoryURL,
+		Ref: source.Ref, UpdatedAt: source.UpdatedAt.UTC().Format(time.RFC3339Nano)}
+}
+
 func runMessage(run workflow.Run) *api.Run {
 	return &api.Run{Id: run.ID, ProjectId: run.ProjectID, LaunchKey: run.LaunchKey,
 		SourceCommit: run.SourceCommit, BundleSha256: run.BundleSHA256,
@@ -358,6 +387,10 @@ func workflowError(err error) error {
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("workflow state conflict"))
 	case errors.Is(err, workflow.ErrProjectDenied):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("project creation denied"))
+	case errors.Is(err, workflow.ErrProjectSourceDenied):
+		return connect.NewError(connect.CodePermissionDenied, errors.New("project source change denied"))
+	case errors.Is(err, workflow.ErrSourceRoute):
+		return connect.NewError(connect.CodeFailedPrecondition, errors.New("repository host has no verified public route"))
 	case errors.Is(err, workflow.ErrReviewDenied):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("human review denied"))
 	default:
