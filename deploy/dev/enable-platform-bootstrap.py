@@ -38,8 +38,16 @@ args = [arg for arg in controller["args"] if not arg.startswith((
     "--blaxsmith-bootstrap-public-key=", "--blaxsmith-runner-image=",
 ))]
 args += ["--blaxsmith-bootstrap-public-key=" + public, "--blaxsmith-runner-image=" + images[1]]
+annotations = {
+    "blaxsmith.dev/ax-patch-sha256": record["patch_sha256"],
+    "blaxsmith.dev/ax-egress-patch-sha256": record["egress_patch_sha256"],
+    "blaxsmith.dev/ax-bootstrap-sha256": record["bootstrap_patch_sha256"],
+    "blaxsmith.dev/ax-task-resources-patch-sha256": record["task_resources_patch_sha256"],
+    "blaxsmith.dev/platform-key-patch-sha256": record["platform_key_patch_sha256"],
+    "blaxsmith.dev/ax-build-provenance-sha256": hashlib.sha256((build / "provenance.json").read_bytes()).hexdigest(),
+}
 patch = {"spec": {"template": {
-    "metadata": {"annotations": {"blaxsmith.dev/platform-key-patch-sha256": record["platform_key_patch_sha256"]}},
+    "metadata": {"annotations": annotations},
     "spec": {"containers": [{"name": "controller", "image": images[0],
                             "command": ["/usr/local/bin/ax-controller"], "args": args}]},
 }}}

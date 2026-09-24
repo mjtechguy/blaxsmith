@@ -26,7 +26,7 @@ output.mkdir()
 space = "blaxsmith-gate-" + uuid.uuid4().hex[:10]
 task = "gated-runner"
 signer = Ed25519PrivateKey.from_private_bytes(pathlib.Path(os.environ["BLAXSMITH_DEV_SIGNING_KEY_FILE"]).read_bytes())
-report = {"atespace": space, "image": image, "checks": []}
+report = {"atespace": space, "image": image, "debug_task": False, "checks": []}
 ledger_mode = os.environ.get("BLAXSMITH_DEV_LEDGER") == "1"
 git_repo = os.environ.get("BLAXSMITH_DEV_GIT_REPO", "")
 git_commit = os.environ.get("BLAXSMITH_DEV_GIT_COMMIT", "")
@@ -221,6 +221,10 @@ manifest = {
     "metadata": {"name": task, "atespace": space},
     "spec": {
         "image": image,
+        "resources": {
+            "requests": {"cpu": "1", "memory": "1Gi"},
+            "limits": {"cpu": "1", "memory": "1Gi"},
+        },
         "command": ["/bin/sh", "-c", "echo released > /workspace/bootstrap-result"],
     },
 }
@@ -295,6 +299,53 @@ try:
     if request("/readyz")[0] != 200:
         raise RuntimeError("workspace did not become ready after release")
     report["checks"].append("signed release starts workspace")
+    task_resources = manifest["spec"]["resources"]
+    actor = ate("get", "actor", task, "-a", space, "-o", "json")["actors"][0]
+    actor_template = actor["actorTemplate"]
+    template = ate("get", "actor-template", actor_template["name"],
+        "-a", actor_template["atespace"], "-o", "json")["actorTemplates"][0]
+    placement = {item["name"]: item["quantity"] for item in template.get("resources", {}).get("limits", [])}
+    container = template.get("containers", [{}])[0]
+    container_limits = {item["name"]: item["quantity"] for item in container.get("resources", {}).get("limits", [])}
+    assignment = actor["status"]["workerAssignment"]
+    worker = json.loads(kubectl("get", "pod", "-n", assignment["workerNamespace"],
+        assignment["workerPod"], "-o", "json"))
+    if worker["metadata"]["uid"] != assignment["workerPodUid"]:
+        raise RuntimeError("actor moved to a different WorkerPod during resource inspection")
+    container_id = next(item["containerID"].split("://", 1)[1]
+        for item in worker["status"]["containerStatuses"] if item["name"] == "ateom")
+    ateom = json.loads(subprocess.check_output(("crictl", "inspect", container_id),
+        text=True, timeout=30))
+    pid = ateom["info"]["pid"]
+    cgroup_path = next(line[3:] for line in pathlib.Path(f"/proc/{pid}/cgroup").read_text().splitlines()
+        if line.startswith("0::"))
+    if not cgroup_path.endswith("/ateom"):
+        raise RuntimeError(f"unexpected WorkerPod cgroup path: {cgroup_path}")
+    sandbox_cgroup = pathlib.Path("/sys/fs/cgroup") / cgroup_path.lstrip("/")
+    sandbox_cgroup = sandbox_cgroup.parent / "_pause"
+    cgroup = [(sandbox_cgroup / name).read_text().strip() for name in ("cpu.max", "memory.max")]
+    expected_cgroup = ["100000 100000", "1073741824"]
+    if task_resources["requests"] != task_resources["limits"]:
+        raise RuntimeError("probe requires equal AX requests and limits at this Substrate pin")
+    if placement != task_resources["requests"] or container_limits != task_resources["limits"]:
+        raise RuntimeError(f"Substrate template resource mapping differs: placement={placement} container={container_limits}")
+    if cgroup != expected_cgroup:
+        raise RuntimeError(f"worker sandbox cgroup limits = {cgroup}, want {expected_cgroup}")
+    report["resources"] = {
+        "task": task_resources,
+        "substrate_placement": placement,
+        "task_container_oci_limits": container_limits,
+        "worker_pool": assignment["workerPool"],
+        "worker_pod": assignment["workerPod"],
+        "worker_pod_uid": assignment["workerPodUid"],
+        "sandbox_cgroup": {
+            "path": "/_pause",
+            "read_source": "Node cgroup v2, resolved from the WorkerPod ateom process; guest does not mount cgroupfs.",
+            "cpu.max": cgroup[0],
+            "memory.max": cgroup[1],
+        },
+    }
+    report["checks"].append("AX resources reached Substrate placement and gVisor sandbox cgroups")
     if git_repo:
         config = ax("ssh", task, "--", "/bin/sh", "-c",
             "test -f /workspace/private/README.md && test -f /workspace/bootstrap-result && cat /workspace/private/.git/config; for f in /ax/git-success.log /ax/git-error.log; do test ! -f \"$f\" || cat \"$f\"; done")

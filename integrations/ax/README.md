@@ -5,7 +5,7 @@ Upstream: `github.com/google/ax`, commit
 `fail-closed.patch`, `egress-policy.patch`, `bootstrap-gate.patch`,
 `platform-bootstrap-key.patch`, `encrypted-git-bootstrap.patch`,
 `command-exit-readback.patch`, `task-tombstones.patch`, `redis-ha.patch`,
-`consumer-recovery.patch`, and `provider-credential.patch` change the files named in their
+`consumer-recovery.patch`, `provider-credential.patch`, and `task-resources.patch` change the files named in their
 diffs; the reference checkout stays untouched. This is a temporary integration overlay, not a claim that AX
 has accepted these changes or that secure bootstrap is finished.
 
@@ -39,6 +39,13 @@ The patch closes observed launch failures at their source:
   and Sentinel master discovery to both AX API and controller processes.
 - [Consumer recovery overlay](../../docs/ax-redis-ha.md) reclaims stale pending
   stream entries, renews active ownership, and rejects former-owner acknowledgements.
+- `Task.spec.resources` reaches Substrate. This pin exposes one
+  `ActorTemplate.Resources` CPU/memory bound for both placement accounting and
+  gVisor sandbox sizing, so the controller rejects unequal AX requests and
+  limits; AX limits also reach the guest container OCI spec. Tool tasks use
+  equal 1 CPU/1 GiB bounds. The [live resource probe](../../docs/ax-resource-limits-probe.json)
+  verifies the template mapping and observed gVisor cgroup; admin-managed
+  classes and independent request/limit values remain unsupported.
 
 ## Rebuild and verify
 
@@ -51,7 +58,7 @@ it ran on the Linux development node.
 bash integrations/ax/build.sh ../reference/ax /tmp/blaxsmith-ax-build
 ```
 
-The script exports committed source into a temporary directory, applies all ten
+The script exports committed source into a temporary directory, applies all eleven
 patches without changing the checkout, runs the full AX test suite and `go vet`,
 and builds the server, controller and runner. It records source/patch/binary hashes in
 `provenance.json`. Changing the upstream revision fails before building; update
@@ -61,9 +68,10 @@ provenance](provenance-egress.json), [bootstrap-gate provenance](provenance-boot
 [platform-key provenance](provenance-platform-key.json), [encrypted-Git
 provenance](provenance-encrypted-git.json), [task-tombstone
 provenance](provenance-task-tombstones.json), [Redis connection
-provenance](provenance-redis-ha.json), and [consumer-recovery
-provenance](provenance-consumer-recovery.json) are evidence of tested Linux builds, not
-signatures.
+provenance](provenance-redis-ha.json), [consumer-recovery
+provenance](provenance-consumer-recovery.json), and [resource-contract
+provenance](provenance-task-resources.json) are evidence of tested Linux
+builds, not signatures.
 
 ## Synthetic bootstrap gate
 
@@ -84,6 +92,13 @@ on gVisor. The first live attempt exposed a `/readyz` activation deadlock; anoth
 showed one-worker golden-snapshot/cold-start contention. The probe now releases
 the cold actor before waiting for the golden snapshot. Full AX tests and vet
 passed on macOS and Linux after the readiness fix.
+
+The [resource-contract follow-up](../../docs/ax-resource-limits-probe.json)
+passed with Task `debug` off. It observed equal 1 CPU/1 GiB values in AX,
+Substrate placement, and the guest OCI spec, then read `cpu.max=100000 100000`
+and `memory.max=1073741824` from the worker's gVisor `_pause` cgroup on the
+node. Unequal requests/limits are rejected because this Substrate pin has one
+actor-level resource bound.
 
 The [platform-key follow-up](platform-bootstrap-key.patch) makes the AX
 controller inject a configured public key into every Task template, rejects

@@ -251,6 +251,24 @@ activation. The later [actor-fence run](../../docs/bootstrap-actor-fence-gate.js
 also rejects a stale actor UID under connector-authenticated HTTPS. This is
 only a synthetic startup/replay proof; there is no platform credential delivery.
 
+The [resource-contract follow-up](../../docs/ax-resource-limits-probe.json)
+uses the same signed bootstrap flow with equal AX requests and limits of 1 CPU
+and 1 GiB. It leaves Task `debug` off, verifies the Substrate template values,
+and reads the actual gVisor `_pause` cgroup from the worker's host cgroup tree:
+`cpu.max=100000 100000`, `memory.max=1073741824`. To repeat against the current
+runner build, use a new evidence directory:
+
+```sh
+python3 deploy/dev/probe-bootstrap.py \
+  "$(cat /opt/blaxsmith-dev/ax-resource-contract-build-20260924-3/ax-task-runner.image)" \
+  10.43.36.216 /opt/blaxsmith-dev/ax-resource-probe-next
+```
+
+Substrate currently uses the same ActorTemplate CPU/memory bound for placement
+and gVisor sizing, so AX rejects unequal requests and limits. The probe reads
+the configured cgroup caps; it does not test behavior under CPU or memory
+pressure, and this resource class is not admin-configurable yet.
+
 ## Require the platform bootstrap key and pinned runner
 
 Build and publish the AX overlays, including `platform-bootstrap-key.patch`.

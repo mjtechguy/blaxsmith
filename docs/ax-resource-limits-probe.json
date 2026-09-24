@@ -1,0 +1,57 @@
+{
+  "atespace": "blaxsmith-gate-dd1f9e391a",
+  "image": "127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:e1e75e0417c392f3680ea14dff5451c4f3e2b9cf8697df04ca1a10ad6d1711a2",
+  "debug_task": false,
+  "checks": [
+    "task-signer-override blocked before actor launch",
+    "unapproved-runner blocked before actor launch",
+    "stale actor UID denied before challenge",
+    "workspace blocked before release",
+    "signed release starts workspace",
+    "AX resources reached Substrate placement and gVisor sandbox cgroups",
+    "suspended actor persisted a data-only external snapshot",
+    "data-snapshot resume requires fresh release; replay denied",
+    "suspended actor persisted a data-only external snapshot"
+  ],
+  "resources": {
+    "task": {
+      "requests": {
+        "cpu": "1",
+        "memory": "1Gi"
+      },
+      "limits": {
+        "cpu": "1",
+        "memory": "1Gi"
+      }
+    },
+    "substrate_placement": {
+      "cpu": "1",
+      "memory": "1Gi"
+    },
+    "worker_pool": "blaxsmith-smoke",
+    "worker_pod": "blaxsmith-smoke-7d96f6b64c-h5wsc",
+    "sandbox_cgroup": {
+      "cpu.max": "100000 100000",
+      "memory.max": "1073741824",
+      "read_source": "Node cgroup v2, resolved from the WorkerPod ateom process; guest does not mount cgroupfs.",
+      "path": "/_pause"
+    },
+    "task_container_oci_limits": {
+      "cpu": "1",
+      "memory": "1Gi"
+    },
+    "worker_pod_uid": "3fee1399-1217-4d54-a797-d2a677988ff4"
+  },
+  "final_phase": "Suspended",
+  "reported_at_utc": "2026-09-24T03:14:40Z",
+  "scope": "Synthetic single-node gVisor task; no provider credentials; Task debug is off.",
+  "resource_contract": "This Substrate pin uses one ActorTemplate bound for worker placement and gVisor sandbox sizing, so AX requests and limits must be equal.",
+  "build": {
+    "controller_image": "127.0.0.1:5001/blaxsmith-ax-controller@sha256:022ddfcdb3e939111debaeae8cef7ddff397a1afe68d8c1c410bce1f6032b346",
+    "runner_image": "127.0.0.1:5001/blaxsmith-ax-task-runner@sha256:e1e75e0417c392f3680ea14dff5451c4f3e2b9cf8697df04ca1a10ad6d1711a2",
+    "upstream_ax_commit": "d8ed0fe38bceb7842d3c47817d53d16ccdfcb601",
+    "task_resources_patch_sha256": "35d3c19a36ef35193a449fbf68872cef238e59527d85466d1c528b22f3435332",
+    "build_provenance": "../integrations/ax/provenance-task-resources.json",
+    "build_provenance_sha256": "381d5201b8df207a825e13b7fc3d3db676b4879a12b93ea492e943df4ce6333c"
+  }
+}

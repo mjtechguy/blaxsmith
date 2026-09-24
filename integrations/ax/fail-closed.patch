@@ -51,7 +51,7 @@ index 31c399b..dc868fa 100644
  		WorkspaceReadyTimeout:   defaultWorkspaceReadyTimeout,
  	}
  }
-@@ -131,6 +117,39 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, task *v1alpha1.Task, gat
+@@ -131,6 +117,43 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, task *v1alpha1.Task, gat
  		task.Status.Id = fmt.Sprintf("task-%s-%d", task.Metadata.Name, now.Unix())
  	}
  
@@ -68,6 +68,10 @@ index 31c399b..dc868fa 100644
 +		r.setCondition(task, condReady, "False", "TaskSuspended", "Task is suspended", now)
 +		slog.Info("task successfully suspended", "name", task.Metadata.Name, "actor", actorName)
 +		return task, nil
++	}
++
++	if err := v1alpha1.ValidateTask(task); err != nil {
++		return r.blockExecution(ctx, task, "InvalidTask", err, now)
 +	}
 +
 +	// Missing referenced inputs must not become empty workspaces or default egress.

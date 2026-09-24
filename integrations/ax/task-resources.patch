@@ -1,0 +1,182 @@
+diff --git a/internal/controller/reconciler.go b/internal/controller/reconciler.go
+index 33d67cb..53a2e25 100644
+--- a/internal/controller/reconciler.go
++++ b/internal/controller/reconciler.go
+@@ -206,11 +206,11 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, task *v1alpha1.Task, gat
+ 	}
+ 
+ 	// If a custom image, workspace, or extra environment is specified, provision or use a dedicated ActorTemplate
+-	if task.Spec != nil && (task.Spec.Image != "" || len(extraEnv) > 0) {
++	if task.Spec != nil && (task.Spec.Image != "" || task.Spec.Resources != nil || len(extraEnv) > 0) {
+ 		slog.Info("ensuring custom ActorTemplate for task", "image", task.Spec.Image)
+ 		customTemplateName := taskTemplateName(task.Metadata.Name, task.Spec.Image, extraEnv)
+ 
+-		tmpl, err := r.client.EnsureActorTemplateWithImage(ctx, templateAtespace, templateName, atespace, customTemplateName, task.Spec.Image, extraEnv)
++		tmpl, err := r.client.EnsureActorTemplateWithImage(ctx, templateAtespace, templateName, atespace, customTemplateName, task.Spec.Image, task.Spec.GetResources(), extraEnv)
+ 		if err != nil {
+ 			return r.blockExecution(ctx, task, "TemplateCreationFailed", err, now)
+ 		} else if tmpl == nil || tmpl.GetMetadata().GetAtespace() != atespace || tmpl.GetMetadata().GetName() != customTemplateName {
+diff --git a/internal/controller/reconciler_test.go b/internal/controller/reconciler_test.go
+index cadf406..bce1e88 100644
+--- a/internal/controller/reconciler_test.go
++++ b/internal/controller/reconciler_test.go
+@@ -202,6 +202,10 @@ func TestTaskReconciler(t *testing.T) {
+ 		Spec: &v1alpha1.TaskSpec{
+ 			Image:   "ghrc.io/my-org/my-image",
+ 			Command: []string{"/bin/task-runner"},
++			Resources: &v1alpha1.ResourceReqs{
++				Requests: &v1alpha1.ResourceList{Cpu: "1", Memory: "1Gi"},
++				Limits:   &v1alpha1.ResourceList{Cpu: "1", Memory: "1Gi"},
++			},
+ 			Gateway: &v1alpha1.GatewayRef{
+ 				Name: "default-gateway",
+ 			},
+@@ -229,6 +233,17 @@ func TestTaskReconciler(t *testing.T) {
+ 		t.Fatalf("Reconcile failed: %v", err)
+ 	}
+ 
++	// AX task requests reserve worker capacity; limits bound the sandbox.
++	if mockSrv.createdTemplate == nil || len(mockSrv.createdTemplate.GetContainers()) != 1 {
++		t.Fatalf("task resource template missing: %+v", mockSrv.createdTemplate)
++	}
++	requests := mockSrv.createdTemplate.GetResources().GetLimits()
++	limits := mockSrv.createdTemplate.GetContainers()[0].GetResources().GetLimits()
++	if len(requests) != 2 || len(limits) != 2 || requests[0].GetQuantity() != "1" ||
++		requests[1].GetQuantity() != "1Gi" || limits[0].GetQuantity() != "1" || limits[1].GetQuantity() != "1Gi" {
++		t.Fatalf("task resource requests or limits did not reach Substrate: %+v", mockSrv.createdTemplate)
++	}
++
+ 	// 4. Validate reconciliation results
+ 	if reconciled.Status.Phase != "Running" {
+ 		t.Errorf("expected phase 'Running', got %q", reconciled.Status.Phase)
+diff --git a/internal/substrate/client.go b/internal/substrate/client.go
+index 6d96b26..0cec6bb 100644
+--- a/internal/substrate/client.go
++++ b/internal/substrate/client.go
+@@ -210,7 +210,7 @@ const (
+ )
+ 
+ // BuildActorTemplate constructs a Substrate ActorTemplate based on the standard ate-env specification.
+-func BuildActorTemplate(atespace, name, image string, envMap map[string]string, command []string, snapshotsBucket string) *ateapipb.ActorTemplate {
++func BuildActorTemplate(atespace, name, image string, resources *v1alpha1.ResourceReqs, envMap map[string]string, command []string, snapshotsBucket string) *ateapipb.ActorTemplate {
+ 	if atespace == "" {
+ 		atespace = "default"
+ 	}
+@@ -243,15 +243,17 @@ func BuildActorTemplate(atespace, name, image string, envMap map[string]string,
+ 	}
+ 
+ 	return &ateapipb.ActorTemplate{
++		Resources: substrateResources(resources.GetRequests()),
+ 		Metadata: &ateapipb.ResourceMetadata{
+ 			Name:     name,
+ 			Atespace: atespace,
+ 		},
+ 		Containers: []*ateapipb.Container{{
+-			Name:    "guest",
+-			Image:   image,
+-			Command: command,
+-			Env:     envList,
++			Name:      "guest",
++			Image:     image,
++			Command:   command,
++			Env:       envList,
++			Resources: substrateResources(resources.GetLimits()),
+ 			Readyz: &ateapipb.ContainerReadyz{
+ 				HttpGet: &ateapipb.HTTPGetAction{
+ 					Path: readyPath,
+@@ -282,8 +284,26 @@ func BuildActorTemplate(atespace, name, image string, envMap map[string]string,
+ 	}
+ }
+ 
+-// EnsureActorTemplateWithImage creates an ActorTemplate using the specified container image and optional environment variables.
+-func (c *Client) EnsureActorTemplateWithImage(ctx context.Context, baseAtespace, baseTemplate, targetAtespace, targetTemplate, image string, extraEnv ...map[string]string) (*ateapipb.ActorTemplate, error) {
++// substrateResources maps AX request/limit fields to Substrate's named resource limits.
++func substrateResources(in *v1alpha1.ResourceList) *ateapipb.Resources {
++	if in == nil {
++		return nil
++	}
++	limits := make([]*ateapipb.Limits, 0, 2)
++	if in.GetCpu() != "" {
++		limits = append(limits, &ateapipb.Limits{Name: "cpu", Quantity: in.GetCpu()})
++	}
++	if in.GetMemory() != "" {
++		limits = append(limits, &ateapipb.Limits{Name: "memory", Quantity: in.GetMemory()})
++	}
++	if len(limits) == 0 {
++		return nil
++	}
++	return &ateapipb.Resources{Limits: limits}
++}
++
++// EnsureActorTemplateWithImage creates an ActorTemplate using the specified image, resource bounds, and optional environment variables.
++func (c *Client) EnsureActorTemplateWithImage(ctx context.Context, baseAtespace, baseTemplate, targetAtespace, targetTemplate, image string, resources *v1alpha1.ResourceReqs, extraEnv ...map[string]string) (*ateapipb.ActorTemplate, error) {
+ 	existing, err := c.GetActorTemplate(ctx, targetAtespace, targetTemplate)
+ 	if err == nil && existing != nil {
+ 		return existing, nil
+@@ -296,7 +316,7 @@ func (c *Client) EnsureActorTemplateWithImage(ctx context.Context, baseAtespace,
+ 		}
+ 	}
+ 
+-	tmpl := BuildActorTemplate(targetAtespace, targetTemplate, image, envMap, nil, "")
++	tmpl := BuildActorTemplate(targetAtespace, targetTemplate, image, resources, envMap, nil, "")
+ 	req := &ateapipb.CreateActorTemplateRequest{
+ 		ActorTemplate: tmpl,
+ 	}
+diff --git a/internal/substrate/client_test.go b/internal/substrate/client_test.go
+index 189abb5..0e13e25 100644
+--- a/internal/substrate/client_test.go
++++ b/internal/substrate/client_test.go
+@@ -35,7 +35,7 @@ func TestBlaxsmithGatedTemplateUsesTransportReadiness(t *testing.T) {
+ 		{"gated", map[string]string{"BLAXSMITH_BOOTSTRAP_PUBLIC_KEY": "synthetic"}, "/healthz"},
+ 	} {
+ 		t.Run(tc.name, func(t *testing.T) {
+-			tmpl := BuildActorTemplate("space", "task", "image@sha256:test", tc.env, nil, "gs://bucket")
++			tmpl := BuildActorTemplate("space", "task", "image@sha256:test", nil, tc.env, nil, "gs://bucket")
+ 			if got := tmpl.Containers[0].Readyz.HttpGet.Path; got != tc.path {
+ 				t.Fatalf("Substrate readiness path = %q, want %q", got, tc.path)
+ 			}
+diff --git a/pkg/apis/v1alpha1/types.go b/pkg/apis/v1alpha1/types.go
+index a65e626..dd5823e 100644
+--- a/pkg/apis/v1alpha1/types.go
++++ b/pkg/apis/v1alpha1/types.go
+@@ -252,6 +252,18 @@ func ValidateTask(t *Task) error {
+ 	if spec == nil {
+ 		return nil
+ 	}
++	if resources := spec.GetResources(); resources != nil {
++		requests, limits := resources.GetRequests(), resources.GetLimits()
++		if requests == nil || limits == nil || requests.GetCpu() == "" || requests.GetMemory() == "" ||
++			limits.GetCpu() == "" || limits.GetMemory() == "" {
++			return fmt.Errorf("spec.resources: cpu and memory requests and limits are required")
++		}
++		// This Substrate pin has one ActorTemplate resource bound, used for both
++		// placement accounting and gVisor sandbox sizing.
++		if requests.GetCpu() != limits.GetCpu() || requests.GetMemory() != limits.GetMemory() {
++			return fmt.Errorf("spec.resources: requests must equal limits with this Substrate resource contract")
++		}
++	}
+ 	refs := spec.WorkspaceRefs()
+ 	paths := spec.WorkspacePaths()
+ 	names := make(map[string]bool, len(refs))
+diff --git a/pkg/apis/v1alpha1/types_test.go b/pkg/apis/v1alpha1/types_test.go
+index 83deaa4..3e5b6f1 100644
+--- a/pkg/apis/v1alpha1/types_test.go
++++ b/pkg/apis/v1alpha1/types_test.go
+@@ -412,6 +412,17 @@ func TestValidateTask(t *testing.T) {
+ 		{name: "nil spec"},
+ 		{name: "no workspaces", spec: &v1alpha1.TaskSpec{}},
+ 		{name: "list of one", spec: &v1alpha1.TaskSpec{Workspaces: []*v1alpha1.WorkspaceRef{{Name: "a"}}}},
++		{name: "bounded resources", spec: &v1alpha1.TaskSpec{Resources: &v1alpha1.ResourceReqs{
++			Requests: &v1alpha1.ResourceList{Cpu: "1", Memory: "1Gi"},
++			Limits:   &v1alpha1.ResourceList{Cpu: "1", Memory: "1Gi"},
++		}}},
++		{name: "incomplete resources", spec: &v1alpha1.TaskSpec{Resources: &v1alpha1.ResourceReqs{
++			Limits: &v1alpha1.ResourceList{Cpu: "1", Memory: "1Gi"},
++		}}, wantErr: "spec.resources: cpu and memory requests and limits are required"},
++		{name: "different request and limit", spec: &v1alpha1.TaskSpec{Resources: &v1alpha1.ResourceReqs{
++			Requests: &v1alpha1.ResourceList{Cpu: "500m", Memory: "512Mi"},
++			Limits:   &v1alpha1.ResourceList{Cpu: "1", Memory: "1Gi"},
++		}}, wantErr: "spec.resources: requests must equal limits with this Substrate resource contract"},
+ 		{
+ 			name:    "nameless entry with path",
+ 			spec:    &v1alpha1.TaskSpec{Workspaces: []*v1alpha1.WorkspaceRef{{Path: "/w"}}},

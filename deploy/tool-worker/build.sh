@@ -31,6 +31,7 @@ patches = {
     'redis_ha_patch_sha256': 'redis-ha.patch',
     'consumer_recovery_patch_sha256': 'consumer-recovery.patch',
     'provider_credential_patch_sha256': 'provider-credential.patch',
+    'task_resources_patch_sha256': 'task-resources.patch',
     'askpass_sha256': 'blaxsmith-git-askpass',
 }
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()

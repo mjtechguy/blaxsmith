@@ -1,7 +1,17 @@
 # AX agent capability boundary
 
 Pinned AX `TaskSpec` supplies an image, command, environment, workspace refs,
-gateway, resources, and debug mode. It has no task field that carries skill
+gateway, resources, and debug mode. The upstream controller at this pin did not
+forward resource requests or limits to Substrate. Blaxsmith's
+[`task-resources.patch`](../integrations/ax/task-resources.patch) maps them to
+the Substrate actor template and guest OCI spec. Substrate has one actor-level
+CPU/memory bound used for both placement accounting and gVisor sandbox sizing,
+so the AX controller rejects unequal requests and limits at this pin. The
+initial tool task uses equal 1 CPU/1 GiB bounds. The [live probe](ax-resource-limits-probe.json)
+observed those template values and the corresponding `_pause` host cgroup caps
+with Task debug off. This is a single-node configuration proof; independent
+request/limit values and admin-managed resource classes remain future work. AX
+has no task field that carries skill
 bytes, MCP configuration, or lifecycle hooks. `WorkspaceSpec` names MCP
 servers and skill registries/path, but the pinned runner's `setupSkills` only
 creates the path; it does not resolve registries, validate content, or wire
@@ -26,7 +36,7 @@ ambient project CLI/MCP configuration and unlisted `AGENTS.md`. The command
 contains no provider credential; a separate scoped bootstrap lease supplies
 that at execution.
 
-This implements content materialization and local adapter controls, not a live
+This implements resource forwarding, content materialization, and local adapter controls, not a live
 proof that each pinned CLI discovers and loads the skill/support files or
 rejects native delegation as configured. P1-28 stays blocked on those runtime
 proofs and UI-visible provenance. AX creates the Task,

@@ -103,6 +103,11 @@ func (b *Bridge) task(a workflow.Attempt) (Task, error) {
 		if !axResourceName.MatchString(b.Workspace) || !axResourceName.MatchString(b.Gateway) {
 			return Task{}, ErrInputs
 		}
+		// ponytail: one class matches the proof pool; add approved classes with admin selection.
+		spec["resources"] = map[string]any{
+			"requests": map[string]string{"cpu": "1", "memory": "1Gi"},
+			"limits":   map[string]string{"cpu": "1", "memory": "1Gi"},
+		}
 		spec["workspaces"] = []any{map[string]any{"name": b.Workspace, "path": "/workspace"}}
 		spec["gateway"] = map[string]any{"name": b.Gateway}
 	}
