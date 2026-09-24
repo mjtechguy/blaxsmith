@@ -1,0 +1,207 @@
+syntax = "proto3";
+
+package blaxsmith.api.v1;
+
+// Model gateway (docs/model-gateway-plan.md, phase G1). Costs are estimates
+// from list or contracted rates, never the provider bill. No message carries
+// prompt or response content, tokens, keys, or account identities.
+
+// §15.1 organization switches. Later-phase switches are not settable in G1.
+message GatewaySettings {
+  bool enabled = 1; // Master switch.
+  string default_delivery_mode = 2; // native_raw or brokered_gateway.
+  bool allow_project_choice = 3;
+  bool remove_direct_egress = 4;
+}
+
+message GetGatewaySettingsRequest {}
+
+message GetGatewaySettingsResponse {
+  GatewaySettings settings = 1;
+  // Whether this installation runs the gateway Deployment (Helm
+  // gateway.enabled). The master switch can only be turned on when true.
+  bool installation_available = 2;
+  int64 version = 3; // 0 when never saved.
+  string updated_at = 4; // RFC 3339; empty when never saved.
+  string updated_by_username = 5;
+}
+
+message UpdateGatewaySettingsRequest {
+  GatewaySettings settings = 1;
+  int64 expected_version = 2; // Optimistic concurrency; 0 for the first save.
+}
+
+message UpdateGatewaySettingsResponse {
+  GatewaySettings settings = 1;
+  int64 version = 2;
+}
+
+// Estimated USD micros and token counts for one slice of usage.
+message UsageTotals {
+  int64 requests = 1;
+  int64 errors = 2;
+  int64 rate_limited = 3;
+  int64 input_tokens = 4;
+  int64 output_tokens = 5;
+  int64 cache_read_tokens = 6;
+  int64 cache_write_tokens = 7;
+  int64 reasoning_tokens = 8;
+  int64 cost_usd_micros = 9;
+}
+
+message UsageSlice {
+  string key = 1; // Project id, principal id, model, or run id.
+  string label = 2; // Display name.
+  string detail = 3; // Secondary text, e.g. a run's project.
+  UsageTotals totals = 4;
+  string project_id = 5; // Set for runs, so the row links to the run page.
+}
+
+// One day of spend for one series key (project or model).
+message UsagePoint {
+  string day = 1; // YYYY-MM-DD, UTC.
+  string key = 2;
+  int64 cost_usd_micros = 3;
+  int64 tokens = 4;
+}
+
+message GetUsageOverviewRequest {
+  int32 days = 1; // 1–90; 0 means 30.
+  string series_by = 2; // project (default) or model.
+}
+
+message GetUsageOverviewResponse {
+  bool enabled = 1;
+  string from_day = 2;
+  string to_day = 3;
+  UsageTotals totals = 4;
+  int64 median_ttft_ms = 5; // Across requests with a first byte; 0 when none.
+  repeated UsagePoint series = 6;
+  repeated UsageSlice series_labels = 7; // key → label for the series.
+  repeated UsageSlice top_projects = 8;
+  repeated UsageSlice top_users = 9;
+  repeated UsageSlice top_runs = 10;
+}
+
+message ModelPrice {
+  string provider = 1;
+  string model = 2;
+  int64 input_micros_per_mtok = 3;
+  int64 output_micros_per_mtok = 4;
+  int64 cache_read_micros_per_mtok = 5;
+  int64 cache_write_micros_per_mtok = 6;
+  string source = 7; // manifest or override.
+  string version = 8; // manifest:<date> or override:<id>.
+  string effective_from = 9; // RFC 3339 for overrides.
+}
+
+message ListModelPricesRequest {}
+
+message ListModelPricesResponse {
+  repeated ModelPrice prices = 1;
+}
+
+message SetModelPriceOverrideRequest {
+  ModelPrice price = 1; // provider, model and the four rates.
+}
+
+message SetModelPriceOverrideResponse {
+  ModelPrice price = 1;
+}
+
+// Owner and admin operations. Mutations are CSRF-protected and audited.
+service GatewayAdminService {
+  rpc GetGatewaySettings(GetGatewaySettingsRequest) returns (GetGatewaySettingsResponse);
+  rpc UpdateGatewaySettings(UpdateGatewaySettingsRequest) returns (UpdateGatewaySettingsResponse);
+  rpc GetUsageOverview(GetUsageOverviewRequest) returns (GetUsageOverviewResponse);
+  rpc ListModelPrices(ListModelPricesRequest) returns (ListModelPricesResponse);
+  rpc SetModelPriceOverride(SetModelPriceOverrideRequest) returns (SetModelPriceOverrideResponse);
+}
+
+message GetGatewayStatusRequest {}
+
+// Whether gateway UI is shown to this organization (the master switch).
+message GetGatewayStatusResponse {
+  bool enabled = 1;
+}
+
+message GetMyUsageRequest {
+  int32 days = 1; // 1–90; 0 means 30.
+}
+
+message GetMyUsageResponse {
+  bool enabled = 1;
+  string from_day = 2;
+  string to_day = 3;
+  UsageTotals totals = 4;
+  repeated UsageSlice by_project = 5;
+  repeated UsageSlice by_model = 6;
+  repeated UsageSlice top_runs = 7;
+}
+
+message ModelCall {
+  string started_at = 1;
+  string stage = 2;
+  string model = 3;
+  string route_kind = 4;
+  string api = 5;
+  string status = 6;
+  int32 http_status = 7;
+  int32 retry_count = 8;
+  bool streamed = 9;
+  bool usage_reported = 10;
+  int32 ttft_ms = 11; // -1 when no byte arrived.
+  int32 duration_ms = 12;
+  UsageTotals totals = 13;
+}
+
+message StageCost {
+  string task_id = 1;
+  string stage = 2;
+  UsageTotals totals = 3;
+  double cache_hit_ratio = 4; // cache reads / all input tokens, 0–1.
+}
+
+message GetRunCostRequest {
+  string run_id = 1;
+}
+
+message GetRunCostResponse {
+  bool enabled = 1;
+  UsageTotals totals = 2;
+  repeated StageCost stages = 3;
+  repeated ModelCall requests = 4; // Newest first, at most 500.
+  bool truncated = 5;
+}
+
+message GetProjectDeliveryRequest {
+  string project_id = 1;
+}
+
+message GetProjectDeliveryResponse {
+  string delivery_mode = 1; // Effective mode for the next run.
+  string project_choice = 2; // The project's own setting; empty = org default.
+  string org_default = 3;
+  bool gateway_enabled = 4;
+  bool choice_allowed = 5; // Allow projects to choose delivery mode.
+  bool can_edit = 6; // Caller administers this project.
+}
+
+message SetProjectDeliveryRequest {
+  string project_id = 1;
+  string delivery_mode = 2; // native_raw, brokered_gateway, or empty for the org default.
+}
+
+message SetProjectDeliveryResponse {
+  GetProjectDeliveryResponse delivery = 1;
+}
+
+// Any member, scoped to themselves, their runs' organization, or projects
+// they administer.
+service UsageService {
+  rpc GetGatewayStatus(GetGatewayStatusRequest) returns (GetGatewayStatusResponse);
+  rpc GetMyUsage(GetMyUsageRequest) returns (GetMyUsageResponse);
+  rpc GetRunCost(GetRunCostRequest) returns (GetRunCostResponse);
+  rpc GetProjectDelivery(GetProjectDeliveryRequest) returns (GetProjectDeliveryResponse);
+  rpc SetProjectDelivery(SetProjectDeliveryRequest) returns (SetProjectDeliveryResponse);
+}

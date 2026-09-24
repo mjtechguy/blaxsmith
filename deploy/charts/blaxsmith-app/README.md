@@ -229,3 +229,19 @@ RBAC-protected project APIs remain deployment work. The chart does not build
 or publish the app/CLI/tunnel images or create dispatch credentials. The
 plaintext public preview remains a separate chart; do not expose it as the
 authenticated product.
+
+## Optional model gateway
+
+`gateway.enabled=true` adds a `<release>-gw` Deployment running the same image
+as `blaxsmith gateway` (docs/model-gateway-plan.md), a Service on port 8443 and,
+by default, a NetworkPolicy that admits only the gateway port and allows egress
+to DNS, PostgreSQL and public HTTPS (provider APIs). It needs
+`accessKeySecretName` (route credentials are decrypted in the gateway) and
+`gateway.publicURL`, which the app receives as `BLAXSMITH_GATEWAY_URL` and
+writes into brokered attempts' harness config. Under exact AX egress the public
+URL must resolve to public IPv4 addresses; put an ingress or LoadBalancer in
+front of the Service and narrow `gateway.networkPolicy.ingressFrom` to it. Set
+`gateway.tlsSecretName` to serve HTTPS directly; without it the gateway serves
+plain HTTP for a TLS-terminating proxy. The app runs migrations; gateway pods
+only verify them. On shutdown in-flight streams get `drainTimeoutSeconds`.
+With the value off, no gateway exists and organizations cannot enable it.

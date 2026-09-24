@@ -34,7 +34,8 @@ export async function revokeGrant(grantId: string) {
 
 export const auditActions = [
   "access.git_connection.created", "access.grant.revoked", "access.project_model.created", "access.project_model.revoked",
-  "access.resource_grant.created", "access.resource_grant.revoked", "identity.account.reset_completed", "identity.account.setup_completed",
+  "access.resource_grant.created", "access.resource_grant.revoked", "gateway.price.overridden", "gateway.project_delivery.updated", "gateway.settings.updated",
+  "identity.account.reset_completed", "identity.account.setup_completed",
   "identity.login", "identity.logout", "identity.refresh", "identity.refresh_reuse", "identity.user.disabled", "identity.user.enabled",
   "identity.user.invited", "identity.user.reset_link_issued", "identity.user.role_changed", "identity.user.sessions_revoked",
   "identity.user.setup_link_issued", "installation.bootstrap_owner",

@@ -583,6 +583,76 @@ function mayUseExtension(e, pid) {
     || (g.granteeKind === "role" && rank(mockRole) >= rank(g.granteeId)));
 }
 
+// Model gateway (G1): settings, usage and run cost. MOCK_GATEWAY=off starts
+// with the master switch off, so the gated UI can be checked hidden.
+{
+  const gw = { enabled: process.env.MOCK_GATEWAY !== "off", defaultDeliveryMode: "brokered_gateway", allowProjectChoice: true, removeDirectEgress: true, version: 3, updatedAt: minutesAgo(60 * 20) };
+  let projectChoice = "";
+  const overrides = [];
+  const projects = [["proj-demo", "Demo project"], ["proj-billing", "Billing service"], ["proj-search", "Search indexer"], ["proj-docs", "Docs site"], ["proj-mobile", "Mobile app"], ["proj-infra", "Infra scripts"], ["proj-ml", "ML pipeline"]];
+  const models = ["claude-opus-5-5", "gpt-6-luna", "claude-sonnet-5", "kimi-k3"];
+  const totals = (cost, requests = Math.round(cost / 40_000) + 1) => ({ requests: String(requests), errors: String(Math.floor(requests / 40)), rateLimited: String(Math.floor(requests / 90)),
+    inputTokens: String(cost * 2), outputTokens: String(Math.round(cost / 3)), cacheReadTokens: String(cost * 5), cacheWriteTokens: String(Math.round(cost / 2)), reasoningTokens: String(Math.round(cost / 9)), costUsdMicros: String(cost) });
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  const day = (back) => new Date(today.getTime() - back * 86_400_000).toISOString().slice(0, 10);
+  const wave = (i, k) => Math.round((Math.sin(i / 3 + k) + 1.4) * (900_000 - k * 110_000) + (i % 7 === 5 || i % 7 === 6 ? -200_000 : 0));
+  const priceRows = () => [
+    ["anthropic", "claude-opus-5-5", 4, 20, 0.2, 5], ["anthropic", "claude-sonnet-5", 2, 10, 0.2, 2.5], ["anthropic", "claude-haiku-4-5", 1, 5, 0.1, 1.25],
+  ].map(([provider, model, i, o, r, w]) => ({ provider, model, inputMicrosPerMtok: String(i * 1e6), outputMicrosPerMtok: String(o * 1e6), cacheReadMicrosPerMtok: String(r * 1e6),
+    cacheWriteMicrosPerMtok: String(w * 1e6), source: "manifest", version: "manifest:2026-09-24", effectiveFrom: "" }))
+    .map((p) => overrides.find((o) => o.provider === p.provider && o.model === p.model) ?? p).concat(overrides.filter((o) => !["claude-opus-5-5", "claude-sonnet-5", "claude-haiku-4-5"].includes(o.model)));
+  const delivery = () => ({ deliveryMode: !gw.enabled ? "native_raw" : gw.allowProjectChoice && projectChoice ? projectChoice : gw.defaultDeliveryMode,
+    projectChoice, orgDefault: gw.defaultDeliveryMode, gatewayEnabled: gw.enabled, choiceAllowed: gw.allowProjectChoice, canEdit: true });
+  const stageCosts = { plan: 1_840_000, implement: 3_120_000, verify: 960_000, review: 410_000 };
+  Object.assign(rpc, {
+    GetGatewayStatus: () => ({ enabled: gw.enabled }),
+    GetGatewaySettings: () => ({ settings: { enabled: gw.enabled, defaultDeliveryMode: gw.defaultDeliveryMode, allowProjectChoice: gw.allowProjectChoice, removeDirectEgress: gw.removeDirectEgress },
+      installationAvailable: true, version: String(gw.version), updatedAt: gw.updatedAt, updatedByUsername: "you" }),
+    UpdateGatewaySettings: ({ settings, expectedVersion }) => {
+      if (Number(expectedVersion) !== gw.version) return connectError(409, "aborted", "settings changed since you loaded them");
+      Object.assign(gw, { enabled: false, allowProjectChoice: false, removeDirectEgress: false }, settings, { version: gw.version + 1, updatedAt: now() }); auditEvent("gateway.settings.updated", "org-demo");
+      return { settings, version: String(gw.version) };
+    },
+    GetUsageOverview: ({ days = 30, seriesBy = "project" }) => {
+      const keys = seriesBy === "model" ? models.map((m) => [m, m]) : projects;
+      const series = [];
+      for (let i = days - 1; i >= 0; i--) keys.forEach(([key], k) => { const cost = Math.max(0, wave(i, k)); if (cost) series.push({ day: day(i), key, costUsdMicros: String(cost), tokens: String(cost * 8) }); });
+      const sum = (key) => series.filter((p) => p.key === key).reduce((n, p) => n + Number(p.costUsdMicros), 0);
+      const all = series.reduce((n, p) => n + Number(p.costUsdMicros), 0);
+      const top = projects.map(([key, label]) => ({ key, label, detail: "", totals: totals(seriesBy === "project" ? sum(key) : Math.round(all / projects.length)) }));
+      return { enabled: gw.enabled, fromDay: day(days - 1), toDay: day(0), totals: totals(all), medianTtftMs: "840", series,
+        seriesLabels: keys.map(([key, label]) => ({ key, label, detail: "", totals: totals(sum(key)) })),
+        topProjects: top.sort((a, b) => Number(b.totals.costUsdMicros) - Number(a.totals.costUsdMicros)),
+        topUsers: [["p-you", "You", "you"], ["p-ana", "Ana Ruiz", "ana"], ["p-sam", "Sam Lee", "sam"]].map(([key, label, detail], k) => ({ key, label, detail, totals: totals(Math.round(all / (k + 2))) })),
+        topRuns: [{ key: runId, label: run.launchKey, detail: "Demo project", projectId, totals: totals(6_330_000) }, { key: "run-stuck", label: "invoice-retry-fix", detail: "Billing service", projectId: "proj-billing", totals: totals(2_410_000) }] };
+    },
+    ListModelPrices: () => ({ prices: priceRows() }),
+    SetModelPriceOverride: ({ price }) => { const p = { ...price, source: "override", version: `override:${overrides.length + 1}`, effectiveFrom: now() }; overrides.splice(overrides.findIndex((o) => o.model === p.model) >>> 0, 1); overrides.push(p); auditEvent("gateway.price.overridden", "org-demo"); return { price: p }; },
+    GetMyUsage: ({ days = 30 }) => {
+      const scale = days / 30;
+      const byProject = projects.slice(0, 3).map(([key, label], k) => ({ key, label, detail: "", totals: totals(Math.round((4_100_000 - k * 1_100_000) * scale)) }));
+      const byModel = models.slice(0, 3).map((m, k) => ({ key: m, label: m, detail: k === 1 ? "openai" : "anthropic", totals: totals(Math.round((5_200_000 - k * 1_700_000) * scale)) }));
+      return { enabled: gw.enabled, fromDay: day(days - 1), toDay: day(0), totals: totals(Math.round(8_800_000 * scale)), byProject, byModel,
+        topRuns: [{ key: runId, label: run.launchKey, detail: "Demo project", projectId, totals: totals(6_330_000) }] };
+    },
+    GetRunCost: () => {
+      const stages = Object.entries(stageCosts).map(([stage, cost]) => ({ taskId: `t-${stage}`, stage, totals: totals(cost), cacheHitRatio: stage === "implement" ? 0.71 : 0.48 }));
+      const requests = [];
+      for (let i = 0; i < 24; i++) {
+        const stage = Object.keys(stageCosts)[i % 4];
+        const limited = i === 7;
+        requests.push({ startedAt: new Date(Date.now() - i * 95_000).toISOString(), stage, model: stage === "implement" ? "gpt-6-luna" : "claude-opus-5-5", routeKind: stage === "implement" ? "openai" : "anthropic",
+          api: stage === "implement" ? "openai_responses" : "anthropic_messages", status: limited ? "error" : "ok", httpStatus: limited ? 429 : 200, retryCount: 0, streamed: true, usageReported: !limited,
+          ttftMs: limited ? -1 : 600 + (i * 37) % 900, durationMs: 4_000 + (i * 911) % 30_000, totals: limited ? totals(0, 1) : totals(120_000 + (i * 7_919) % 300_000, 1) });
+      }
+      const all = Object.values(stageCosts).reduce((a, b) => a + b, 0);
+      return { enabled: gw.enabled, totals: totals(all, 24), stages, requests, truncated: false };
+    },
+    GetProjectDelivery: () => delivery(),
+    SetProjectDelivery: ({ deliveryMode = "" }) => { projectChoice = deliveryMode; auditEvent("gateway.project_delivery.updated", projectId); return { delivery: delivery() }; },
+  });
+}
+
 const server = createHttp(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   if (req.method === "GET" && url.pathname === `/api/runs/${runId}/events`) {

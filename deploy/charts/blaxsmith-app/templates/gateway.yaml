@@ -1,0 +1,207 @@
+{{- if .Values.gateway.enabled -}}
+{{- $g := .Values.gateway -}}
+{{- if not $g.publicURL -}}
+{{- fail "gateway.enabled requires gateway.publicURL (the URL sandboxes call)" -}}
+{{- end -}}
+{{- if not (regexMatch "^https?://[^/?#@ ]+$" $g.publicURL) -}}
+{{- fail "gateway.publicURL must be an http(s) origin with no path" -}}
+{{- end -}}
+{{- if not .Values.accessKeySecretName -}}
+{{- fail "gateway.enabled requires accessKeySecretName to inject route credentials" -}}
+{{- end -}}
+{{- $scheme := ternary "HTTPS" "HTTP" (ne $g.tlsSecretName "") -}}
+# Model gateway (docs/model-gateway-plan.md): the same image run as
+# `blaxsmith gateway`, in its own Deployment so streaming load is isolated.
+# The app owns migrations; the gateway only verifies them.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-gw
+  labels:
+    app.kubernetes.io/name: blaxsmith-gw
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ $g.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blaxsmith-gw
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: blaxsmith-gw
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # Drain (§15.1): SIGTERM stops new connections; in-flight streams get
+      # drainTimeout to finish before the pod is killed.
+      terminationGracePeriodSeconds: {{ add (int $g.drainTimeoutSeconds) 15 }}
+      containers:
+        - name: gateway
+          image: {{ .Values.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args:
+            - gateway
+            - --listen
+            - 0.0.0.0:8443
+            {{- if $g.tlsSecretName }}
+            - --tls-cert-file
+            - /run/blaxsmith/gateway-tls/tls.crt
+            - --tls-key-file
+            - /run/blaxsmith/gateway-tls/tls.key
+            {{- else }}
+            - --allow-plaintext
+            {{- end }}
+            - --token-rps
+            - {{ $g.tokenRPS | quote }}
+            - --org-rps
+            - {{ $g.orgRPS | quote }}
+            - --event-retention
+            - {{ $g.eventRetention | quote }}
+            - --drain-timeout
+            - {{ printf "%ds" (int $g.drainTimeoutSeconds) | quote }}
+          env:
+            - name: BLAXSMITH_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.databaseSecretName | quote }}
+                  key: url
+            - name: BLAXSMITH_ACCESS_KEY_FILE
+              value: /run/blaxsmith/access-key/key
+          ports:
+            - name: gateway
+              containerPort: 8443
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: gateway
+              scheme: {{ $scheme }}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: gateway
+              scheme: {{ $scheme }}
+            periodSeconds: 10
+          resources:
+            {{- toYaml $g.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: access-key
+              mountPath: /run/blaxsmith/access-key
+              readOnly: true
+            {{- if $g.tlsSecretName }}
+            - name: gateway-tls
+              mountPath: /run/blaxsmith/gateway-tls
+              readOnly: true
+            {{- end }}
+            {{- if .Values.databaseCASecretName }}
+            - name: database-ca
+              mountPath: /run/blaxsmith/database-ca
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: access-key
+          secret:
+            secretName: {{ .Values.accessKeySecretName | quote }}
+            items:
+              - key: key
+                path: key
+            defaultMode: 288
+        {{- if $g.tlsSecretName }}
+        - name: gateway-tls
+          secret:
+            secretName: {{ $g.tlsSecretName | quote }}
+            defaultMode: 288
+        {{- end }}
+        {{- if .Values.databaseCASecretName }}
+        - name: database-ca
+          secret:
+            secretName: {{ .Values.databaseCASecretName | quote }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+            defaultMode: 288
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-gw
+  labels:
+    app.kubernetes.io/name: blaxsmith-gw
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: {{ $g.service.type }}
+  ports:
+    - name: gateway
+      port: {{ $g.service.port }}
+      targetPort: gateway
+  selector:
+    app.kubernetes.io/name: blaxsmith-gw
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- if $g.networkPolicy.enabled }}
+---
+# The gateway accepts only its model-call port (every request carries a
+# lease-bound token) and reaches only DNS, PostgreSQL and provider HTTPS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-gw
+  labels:
+    app.kubernetes.io/name: blaxsmith-gw
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: blaxsmith-gw
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - ports:
+        - port: 8443
+          protocol: TCP
+      {{- with $g.networkPolicy.ingressFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - ports:
+        - port: {{ $g.networkPolicy.databasePort }}
+          protocol: TCP
+      {{- with $g.networkPolicy.databaseTo }}
+      to:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    # Provider APIs (api.anthropic.com, api.openai.com, opencode.ai) are
+    # public HTTPS; private ranges are excluded so the gateway cannot be used
+    # to reach in-cluster services.
+    - ports:
+        - port: 443
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "169.254.0.0/16", "127.0.0.0/8"]
+{{- end }}
+{{- end }}

@@ -63,6 +63,7 @@ type Invocation struct {
 	extension       *ExtensionMount // embedded extension stage; nil otherwise
 	extensionSource string          // pinned extension checkout
 	codexAuth       []byte          // delivered Codex ChatGPT sign-in; never env or argv
+	gatewayBaseURL  string          // brokered_gateway attempts only (gateway.go)
 }
 
 // withCodexAuth delivers an owner's Codex sign-in as $CODEX_HOME/auth.json
@@ -200,7 +201,9 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 		)
 		// The model stays explicit (provider/model) in config and argv, so no
 		// ambient default provider is ever picked.
-		data, err := json.Marshal(map[string]any{"update": "disable", "model": in.model, "permissions": permissions})
+		settings := map[string]any{"update": "disable", "model": in.model, "permissions": permissions}
+		openCodeGatewayProvider(settings, in.gatewayBaseURL, in.model)
+		data, err := json.Marshal(settings)
 		if err != nil {
 			return nil, err
 		}
@@ -250,7 +253,7 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 	seen := map[string]bool{}
 	for _, entry := range credentialEnv {
 		key, _, ok := strings.Cut(entry, "=")
-		if !ok || !slices.Contains(credentialEnvNames, key) || seen[key] || strings.ContainsRune(entry, 0) {
+		if !ok || !(slices.Contains(credentialEnvNames, key) || gatewayEnvKey(key)) || seen[key] || strings.ContainsRune(entry, 0) {
 			return nil, fmt.Errorf("%w: forbidden environment key", ErrBlocked)
 		}
 		seen[key] = true
@@ -300,6 +303,7 @@ func Run(ctx context.Context, in Invocation, workdir string, credentialEnv []str
 		// The TUI otherwise stops at a folder-trust prompt; exec never asks.
 		dir, _ := json.Marshal(workdir)
 		resume = append(resume, "--config", fmt.Sprintf("projects={%s={trust_level=%q}}", dir, "trusted"))
+		args, resume = codexGatewayArgs(args, resume, in.gatewayBaseURL)
 	}
 	var signals []extension.Signal
 	if in.extension != nil {

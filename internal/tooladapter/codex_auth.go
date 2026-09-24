@@ -20,10 +20,12 @@ const (
 	maxCodexAuth      = 16 << 10
 )
 
-// credentialEnvNames are the provider keys a lease can put in the tool
-// environment. The redactors hide their values; codexAuthSecrets adds the
-// tokens of a delivered Codex sign-in, which never enter the environment.
-var credentialEnvNames = []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY"}
+// credentialEnvNames are the provider keys (or, for a brokered_gateway
+// attempt, the gateway token) a lease can put in the tool environment. The
+// redactors hide their values; codexAuthSecrets adds the tokens of a
+// delivered Codex sign-in, which never enter the environment. The gateway's
+// ANTHROPIC_BASE_URL is public configuration (gatewayEnvKey).
+var credentialEnvNames = []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY", "ANTHROPIC_AUTH_TOKEN"}
 
 // ParseCodexAuth checks a delivered Codex ChatGPT sign-in: bounded JSON with
 // an access token and a present, empty refresh token (the platform keeps the

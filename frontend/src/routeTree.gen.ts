@@ -18,9 +18,11 @@ import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as AdminUsageRouteImport } from './routes/admin.usage'
 import { Route as ExtensionsIndexRouteImport } from './routes/extensions.index'
 import { Route as ExtensionsExtensionIdRouteImport } from './routes/extensions.$extensionId'
 import { Route as MeSettingsRouteImport } from './routes/me.settings'
+import { Route as MeUsageRouteImport } from './routes/me.usage'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsNewRouteImport } from './routes/projects.new'
@@ -37,6 +39,7 @@ import { Route as AdminRecipesIndexRouteImport } from './routes/admin.recipes.in
 import { Route as AdminRecipesNewRouteImport } from './routes/admin.recipes.new'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin.settings.index'
 import { Route as AdminSettingsGithubAppRouteImport } from './routes/admin.settings.github-app'
+import { Route as AdminSettingsModelGatewayRouteImport } from './routes/admin.settings.model-gateway'
 import { Route as AdminSettingsPoliciesRouteImport } from './routes/admin.settings.policies'
 import { Route as AdminSettingsRetentionRouteImport } from './routes/admin.settings.retention'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin.users.index'
@@ -73,6 +76,7 @@ import { Route as ProjectsProjectIdRunsIndexRouteImport } from './routes/project
 import { Route as ProjectsProjectIdRunsRunIdRouteImport } from './routes/projects.$projectId.runs.$runId'
 import { Route as ProjectsProjectIdRunsNewRouteImport } from './routes/projects.$projectId.runs.new'
 import { Route as ProjectsProjectIdSettingsIndexRouteImport } from './routes/projects.$projectId.settings.index'
+import { Route as ProjectsProjectIdSettingsModelAccessRouteImport } from './routes/projects.$projectId.settings.model-access'
 import { Route as ProjectsProjectIdSettingsSourceRouteImport } from './routes/projects.$projectId.settings.source'
 import { Route as ProjectsProjectIdSettingsVerificationRouteImport } from './routes/projects.$projectId.settings.verification'
 import { Route as RecipesRecipeIdVersionsNewRouteImport } from './routes/recipes.$recipeId.versions.new'
@@ -127,6 +131,11 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminUsageRoute = AdminUsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
+  getParentRoute: () => AdminRoute,
+} as any)
 const ExtensionsIndexRoute = ExtensionsIndexRouteImport.update({
   id: '/extensions/',
   path: '/extensions/',
@@ -140,6 +149,11 @@ const ExtensionsExtensionIdRoute = ExtensionsExtensionIdRouteImport.update({
 const MeSettingsRoute = MeSettingsRouteImport.update({
   id: '/me/settings',
   path: '/me/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeUsageRoute = MeUsageRouteImport.update({
+  id: '/me/usage',
+  path: '/me/usage',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
@@ -225,6 +239,12 @@ const AdminSettingsGithubAppRoute = AdminSettingsGithubAppRouteImport.update({
   path: '/github-app',
   getParentRoute: () => AdminSettingsRoute,
 } as any)
+const AdminSettingsModelGatewayRoute =
+  AdminSettingsModelGatewayRouteImport.update({
+    id: '/model-gateway',
+    path: '/model-gateway',
+    getParentRoute: () => AdminSettingsRoute,
+  } as any)
 const AdminSettingsPoliciesRoute = AdminSettingsPoliciesRouteImport.update({
   id: '/policies',
   path: '/policies',
@@ -423,6 +443,12 @@ const ProjectsProjectIdSettingsIndexRoute =
     path: '/',
     getParentRoute: () => ProjectsProjectIdSettingsRoute,
   } as any)
+const ProjectsProjectIdSettingsModelAccessRoute =
+  ProjectsProjectIdSettingsModelAccessRouteImport.update({
+    id: '/model-access',
+    path: '/model-access',
+    getParentRoute: () => ProjectsProjectIdSettingsRoute,
+  } as any)
 const ProjectsProjectIdSettingsSourceRoute =
   ProjectsProjectIdSettingsSourceRouteImport.update({
     id: '/source',
@@ -481,8 +507,10 @@ export interface FileRoutesByFullPath {
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
+  '/admin/usage': typeof AdminUsageRoute
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
   '/me/settings': typeof MeSettingsRouteWithChildren
+  '/me/usage': typeof MeUsageRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
   '/recipes/new': typeof RecipesNewRoute
@@ -497,6 +525,7 @@ export interface FileRoutesByFullPath {
   '/admin/extensions/new': typeof AdminExtensionsNewRoute
   '/admin/recipes/new': typeof AdminRecipesNewRoute
   '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
+  '/admin/settings/model-gateway': typeof AdminSettingsModelGatewayRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
   '/admin/settings/retention': typeof AdminSettingsRetentionRoute
   '/admin/users/$principalId': typeof AdminUsersPrincipalIdRoute
@@ -531,6 +560,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/projects/$projectId/settings/model-access': typeof ProjectsProjectIdSettingsModelAccessRoute
   '/projects/$projectId/settings/source': typeof ProjectsProjectIdSettingsSourceRoute
   '/projects/$projectId/settings/verification': typeof ProjectsProjectIdSettingsVerificationRoute
   '/recipes/$recipeId/versions/new': typeof RecipesRecipeIdVersionsNewRoute
@@ -553,7 +583,9 @@ export interface FileRoutesByTo {
   '/runs': typeof RunsRoute
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/admin/usage': typeof AdminUsageRoute
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
+  '/me/usage': typeof MeUsageRoute
   '/projects/new': typeof ProjectsNewRoute
   '/recipes/new': typeof RecipesNewRoute
   '/setup/$token': typeof SetupTokenRoute
@@ -567,6 +599,7 @@ export interface FileRoutesByTo {
   '/admin/extensions/new': typeof AdminExtensionsNewRoute
   '/admin/recipes/new': typeof AdminRecipesNewRoute
   '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
+  '/admin/settings/model-gateway': typeof AdminSettingsModelGatewayRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
   '/admin/settings/retention': typeof AdminSettingsRetentionRoute
   '/admin/users/$principalId': typeof AdminUsersPrincipalIdRoute
@@ -600,6 +633,7 @@ export interface FileRoutesByTo {
   '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/projects/$projectId/settings/model-access': typeof ProjectsProjectIdSettingsModelAccessRoute
   '/projects/$projectId/settings/source': typeof ProjectsProjectIdSettingsSourceRoute
   '/projects/$projectId/settings/verification': typeof ProjectsProjectIdSettingsVerificationRoute
   '/recipes/$recipeId/versions/new': typeof RecipesRecipeIdVersionsNewRoute
@@ -625,8 +659,10 @@ export interface FileRoutesById {
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
+  '/admin/usage': typeof AdminUsageRoute
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
   '/me/settings': typeof MeSettingsRouteWithChildren
+  '/me/usage': typeof MeUsageRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
   '/recipes/new': typeof RecipesNewRoute
@@ -641,6 +677,7 @@ export interface FileRoutesById {
   '/admin/extensions/new': typeof AdminExtensionsNewRoute
   '/admin/recipes/new': typeof AdminRecipesNewRoute
   '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
+  '/admin/settings/model-gateway': typeof AdminSettingsModelGatewayRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
   '/admin/settings/retention': typeof AdminSettingsRetentionRoute
   '/admin/users/$principalId': typeof AdminUsersPrincipalIdRoute
@@ -675,6 +712,7 @@ export interface FileRoutesById {
   '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/projects/$projectId/settings/model-access': typeof ProjectsProjectIdSettingsModelAccessRoute
   '/projects/$projectId/settings/source': typeof ProjectsProjectIdSettingsSourceRoute
   '/projects/$projectId/settings/verification': typeof ProjectsProjectIdSettingsVerificationRoute
   '/recipes/$recipeId/versions/new': typeof RecipesRecipeIdVersionsNewRoute
@@ -701,8 +739,10 @@ export interface FileRouteTypes {
     | '/tools'
     | '/admin/audit'
     | '/admin/settings'
+    | '/admin/usage'
     | '/extensions/$extensionId'
     | '/me/settings'
+    | '/me/usage'
     | '/projects/$projectId'
     | '/projects/new'
     | '/recipes/new'
@@ -717,6 +757,7 @@ export interface FileRouteTypes {
     | '/admin/extensions/new'
     | '/admin/recipes/new'
     | '/admin/settings/github-app'
+    | '/admin/settings/model-gateway'
     | '/admin/settings/policies'
     | '/admin/settings/retention'
     | '/admin/users/$principalId'
@@ -751,6 +792,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/projects/$projectId/settings/model-access'
     | '/projects/$projectId/settings/source'
     | '/projects/$projectId/settings/verification'
     | '/recipes/$recipeId/versions/new'
@@ -773,7 +815,9 @@ export interface FileRouteTypes {
     | '/runs'
     | '/tools'
     | '/admin/audit'
+    | '/admin/usage'
     | '/extensions/$extensionId'
+    | '/me/usage'
     | '/projects/new'
     | '/recipes/new'
     | '/setup/$token'
@@ -787,6 +831,7 @@ export interface FileRouteTypes {
     | '/admin/extensions/new'
     | '/admin/recipes/new'
     | '/admin/settings/github-app'
+    | '/admin/settings/model-gateway'
     | '/admin/settings/policies'
     | '/admin/settings/retention'
     | '/admin/users/$principalId'
@@ -820,6 +865,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/projects/$projectId/settings/model-access'
     | '/projects/$projectId/settings/source'
     | '/projects/$projectId/settings/verification'
     | '/recipes/$recipeId/versions/new'
@@ -844,8 +890,10 @@ export interface FileRouteTypes {
     | '/tools'
     | '/admin/audit'
     | '/admin/settings'
+    | '/admin/usage'
     | '/extensions/$extensionId'
     | '/me/settings'
+    | '/me/usage'
     | '/projects/$projectId'
     | '/projects/new'
     | '/recipes/new'
@@ -860,6 +908,7 @@ export interface FileRouteTypes {
     | '/admin/extensions/new'
     | '/admin/recipes/new'
     | '/admin/settings/github-app'
+    | '/admin/settings/model-gateway'
     | '/admin/settings/policies'
     | '/admin/settings/retention'
     | '/admin/users/$principalId'
@@ -894,6 +943,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/projects/$projectId/settings/model-access'
     | '/projects/$projectId/settings/source'
     | '/projects/$projectId/settings/verification'
     | '/recipes/$recipeId/versions/new'
@@ -919,6 +969,7 @@ export interface RootRouteChildren {
   ToolsRoute: typeof ToolsRoute
   ExtensionsExtensionIdRoute: typeof ExtensionsExtensionIdRoute
   MeSettingsRoute: typeof MeSettingsRouteWithChildren
+  MeUsageRoute: typeof MeUsageRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
   ProjectsNewRoute: typeof ProjectsNewRoute
   RecipesNewRoute: typeof RecipesNewRoute
@@ -999,6 +1050,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/usage': {
+      id: '/admin/usage'
+      path: '/usage'
+      fullPath: '/admin/usage'
+      preLoaderRoute: typeof AdminUsageRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/extensions/': {
       id: '/extensions/'
       path: '/extensions'
@@ -1018,6 +1076,13 @@ declare module '@tanstack/react-router' {
       path: '/me/settings'
       fullPath: '/me/settings'
       preLoaderRoute: typeof MeSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/me/usage': {
+      id: '/me/usage'
+      path: '/me/usage'
+      fullPath: '/me/usage'
+      preLoaderRoute: typeof MeUsageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/': {
@@ -1130,6 +1195,13 @@ declare module '@tanstack/react-router' {
       path: '/github-app'
       fullPath: '/admin/settings/github-app'
       preLoaderRoute: typeof AdminSettingsGithubAppRouteImport
+      parentRoute: typeof AdminSettingsRoute
+    }
+    '/admin/settings/model-gateway': {
+      id: '/admin/settings/model-gateway'
+      path: '/model-gateway'
+      fullPath: '/admin/settings/model-gateway'
+      preLoaderRoute: typeof AdminSettingsModelGatewayRouteImport
       parentRoute: typeof AdminSettingsRoute
     }
     '/admin/settings/policies': {
@@ -1384,6 +1456,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdSettingsIndexRouteImport
       parentRoute: typeof ProjectsProjectIdSettingsRoute
     }
+    '/projects/$projectId/settings/model-access': {
+      id: '/projects/$projectId/settings/model-access'
+      path: '/model-access'
+      fullPath: '/projects/$projectId/settings/model-access'
+      preLoaderRoute: typeof ProjectsProjectIdSettingsModelAccessRouteImport
+      parentRoute: typeof ProjectsProjectIdSettingsRoute
+    }
     '/projects/$projectId/settings/source': {
       id: '/projects/$projectId/settings/source'
       path: '/source'
@@ -1445,6 +1524,7 @@ declare module '@tanstack/react-router' {
 
 interface AdminSettingsRouteChildren {
   AdminSettingsGithubAppRoute: typeof AdminSettingsGithubAppRoute
+  AdminSettingsModelGatewayRoute: typeof AdminSettingsModelGatewayRoute
   AdminSettingsPoliciesRoute: typeof AdminSettingsPoliciesRoute
   AdminSettingsRetentionRoute: typeof AdminSettingsRetentionRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
@@ -1452,6 +1532,7 @@ interface AdminSettingsRouteChildren {
 
 const AdminSettingsRouteChildren: AdminSettingsRouteChildren = {
   AdminSettingsGithubAppRoute: AdminSettingsGithubAppRoute,
+  AdminSettingsModelGatewayRoute: AdminSettingsModelGatewayRoute,
   AdminSettingsPoliciesRoute: AdminSettingsPoliciesRoute,
   AdminSettingsRetentionRoute: AdminSettingsRetentionRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
@@ -1464,6 +1545,7 @@ const AdminSettingsRouteWithChildren = AdminSettingsRoute._addFileChildren(
 interface AdminRouteChildren {
   AdminAuditRoute: typeof AdminAuditRoute
   AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
+  AdminUsageRoute: typeof AdminUsageRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminConnectionsConnectionIdRoute: typeof AdminConnectionsConnectionIdRoute
   AdminConnectionsGithubAppRoute: typeof AdminConnectionsGithubAppRoute
@@ -1486,6 +1568,7 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAuditRoute: AdminAuditRoute,
   AdminSettingsRoute: AdminSettingsRouteWithChildren,
+  AdminUsageRoute: AdminUsageRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminConnectionsConnectionIdRoute: AdminConnectionsConnectionIdRoute,
   AdminConnectionsGithubAppRoute: AdminConnectionsGithubAppRoute,
@@ -1547,6 +1630,7 @@ const ProjectsProjectIdModelAccessRouteWithChildren =
   )
 
 interface ProjectsProjectIdSettingsRouteChildren {
+  ProjectsProjectIdSettingsModelAccessRoute: typeof ProjectsProjectIdSettingsModelAccessRoute
   ProjectsProjectIdSettingsSourceRoute: typeof ProjectsProjectIdSettingsSourceRoute
   ProjectsProjectIdSettingsVerificationRoute: typeof ProjectsProjectIdSettingsVerificationRoute
   ProjectsProjectIdSettingsIndexRoute: typeof ProjectsProjectIdSettingsIndexRoute
@@ -1554,6 +1638,8 @@ interface ProjectsProjectIdSettingsRouteChildren {
 
 const ProjectsProjectIdSettingsRouteChildren: ProjectsProjectIdSettingsRouteChildren =
   {
+    ProjectsProjectIdSettingsModelAccessRoute:
+      ProjectsProjectIdSettingsModelAccessRoute,
     ProjectsProjectIdSettingsSourceRoute: ProjectsProjectIdSettingsSourceRoute,
     ProjectsProjectIdSettingsVerificationRoute:
       ProjectsProjectIdSettingsVerificationRoute,
@@ -1624,6 +1710,7 @@ const rootRouteChildren: RootRouteChildren = {
   ToolsRoute: ToolsRoute,
   ExtensionsExtensionIdRoute: ExtensionsExtensionIdRoute,
   MeSettingsRoute: MeSettingsRouteWithChildren,
+  MeUsageRoute: MeUsageRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
   ProjectsNewRoute: ProjectsNewRoute,
   RecipesNewRoute: RecipesNewRoute,
