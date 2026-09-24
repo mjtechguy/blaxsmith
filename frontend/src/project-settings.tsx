@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useForm } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { GitBranch, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { FileSearch, GitBranch, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useConnections } from "./connection-ui";
 import { listGitBranches, listGitRepositories, providerLabel } from "./connections";
 import { TextField } from "./form-field";
 import type { ProjectSource, ProjectVerification } from "./gen/blaxsmith/api/v1/workflow_pb";
 import { GuardedSaveBar, useSaved } from "./layouts";
+import { RepositorySuggestion, useRepositoryInspection } from "./repo-inspect";
+import { inspectKey, inspectRepository } from "./setup";
 import { Disclosure } from "./ui";
 import {
   createGitConnection, gitConnectionsQueryKey, launchAvailabilityQueryKey, listGitConnections, projectSourceQueryKey,
@@ -68,6 +70,10 @@ export function SourceEditor({ projectId, org, source, mode }: { projectId: stri
           queryClient.invalidateQueries({ queryKey: projectSourceQueryKey(org, projectId) }),
           queryClient.invalidateQueries({ queryKey: launchAvailabilityQueryKey(org, projectId) }),
         ]);
+        // A new source means new suggestions: read the repository now, so the
+        // verification and recipe steps can prefill from it.
+        queryClient.removeQueries({ queryKey: inspectKey(org, projectId) });
+        void queryClient.prefetchQuery({ queryKey: inspectKey(org, projectId), queryFn: ({ signal }) => inspectRepository(projectId, signal), staleTime: 5 * 60_000, retry: false });
         form.reset({ repositoryUrl, ref, gitConnectionId: value.gitConnectionId });
         setSaved(true);
         if (mode.kind === "flow") mode.next();
@@ -116,6 +122,11 @@ export function SourceEditor({ projectId, org, source, mode }: { projectId: stri
           {error && mode.kind === "flow" ? <p className="auth-alert" role="alert">{error}</p> : null}
         </div>
       </section>
+      {source ? <section className="editor-card" aria-labelledby="repo-suggestion-heading">
+        <div className="editor-card-heading"><span className="project-symbol"><FileSearch size={18} aria-hidden="true" /></span><div><h2 id="repo-suggestion-heading">What this repository suggests</h2>
+          <p>Read from .blaxsmith.json at the pinned commit, or detected from its manifests. Nothing is saved until you confirm.</p></div></div>
+        <div className="editor-form"><RepositorySuggestion projectId={projectId} reviewLink={mode.kind === "settings"} /></div>
+      </section> : null}
       <form.Subscribe selector={(state) => [state.isDirty, state.isSubmitting, state.canSubmit] as const}>
         {([dirty, submitting, canSubmit]) => mode.kind === "flow" ? <FlowActions mode={mode} submitting={submitting} canSubmit={canSubmit} label="Save source and continue" />
           : <GuardedSaveBar dirty={dirty} saving={submitting} canSave={canSubmit} error={error} saved={saved} onCancel={() => { form.reset(); setError(""); }} saveLabel={source ? "Save changes" : "Add source"} />}
@@ -205,6 +216,11 @@ export function VerificationEditor({ projectId, org, current, mode }: { projectI
   const [error, setError] = useState("");
   const [saved, setSaved] = useSaved();
   const initial = () => current?.checks.map((check) => ({ id: check.id, command: [...check.command] })) || [{ id: "", command: [""] }];
+  // Suggestions from .blaxsmith.json or detection prefill an empty policy; an
+  // existing one is replaced only on request. Nothing is saved until the user confirms.
+  const inspection = useRepositoryInspection(projectId);
+  const suggested = inspection.data?.verification.map((c) => ({ id: c.id, command: [...c.command] })) ?? [];
+  const [prefilled, setPrefilled] = useState(false);
   const form = useForm({
     defaultValues: { checks: initial() },
     onSubmit: async ({ value }) => {
@@ -234,11 +250,21 @@ export function VerificationEditor({ projectId, org, current, mode }: { projectI
     },
   });
 
+  useEffect(() => {
+    if (current || prefilled || !suggested.length || form.state.isDirty) return;
+    form.setFieldValue("checks", suggested);
+    setPrefilled(true);
+  }, [current, prefilled, suggested.length]);
+  const applySuggested = () => { form.setFieldValue("checks", suggested); setPrefilled(true); };
+
   return <form className="settings-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
     <section className="editor-card" aria-labelledby="checks-heading">
       <div className="editor-card-heading"><span className="project-symbol"><ShieldCheck size={18} aria-hidden="true" /></span><div><h2 id="checks-heading">Checks</h2>
         <p>{current ? `Version ${current.version.toString()}${current.updatedAt ? ` · updated ${new Date(current.updatedAt).toLocaleString()}` : ""}. ` : "At least one check is required to launch a run. "}Enter the executable and each argument separately; shell syntax is not parsed.</p></div></div>
       <div className="editor-form">
+        <RepositorySuggestion projectId={projectId} />
+        {prefilled ? <p className="notice" role="status">These checks were prefilled from the repository. Review them, then {mode.kind === "flow" ? "save and continue" : "save"} to confirm.</p> : null}
+        {current && suggested.length && !prefilled ? <button type="button" className="secondary-button" onClick={applySuggested}>Use suggested checks</button> : null}
         <form.Field name="checks" mode="array">{(checksField) => <>
           {checksField.state.value.map((check, checkIndex) => <div className="verification-check" key={checkIndex}>
             <div className="verification-check-heading"><strong>Check {checkIndex + 1}{check.id ? ` · ${check.id}` : ""}</strong><button type="button" className="text-action" disabled={checksField.state.value.length === 1} onClick={() => checksField.removeValue(checkIndex)}><Trash2 size={14} aria-hidden="true" /> Remove</button></div>

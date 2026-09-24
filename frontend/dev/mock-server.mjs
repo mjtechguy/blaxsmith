@@ -408,6 +408,8 @@ const projects = [
   { id: "proj-mobile", slug: "mobile-app", name: "Mobile app", createdAt: minutesAgo(60 * 24 * 9) },
   { id: "proj-data", slug: "data-platform", name: "Data platform", createdAt: minutesAgo(60 * 24 * 3) },
 ];
+const projectSources = new Map();
+const projectChecks = new Map();
 const projectName = (id) => projects.find((p) => p.id === id)?.name ?? id;
 const sha = (n) => (n * 2654435761 >>> 0).toString(16).padStart(8, "0").repeat(5);
 const staticRuns = [
@@ -449,6 +451,17 @@ const roleOrder = ["owner", "admin", "member", "viewer"];
 Object.assign(rpc, {
   CurrentSession: () => ({ session: { organizationId: "org-demo", principalId, role: mockRole, accessExpiresAt: new Date(Date.now() + 3_600_000).toISOString() } }),
   GetProject: ({ projectId: pid = projectId }) => { const p = projects.find((x) => x.id === pid); return p ? { project: p } : connectError(404, "not_found", "workflow resource not found"); },
+  // New projects start with no source or checks, so the setup flow's repository prefill shows.
+  CreateProject: ({ slug, name }) => {
+    if (projects.some((p) => p.slug === slug)) return connectError(409, "already_exists", "project slug already exists");
+    const p = { id: `proj-${slug}`, slug, name, createdAt: now() };
+    projects.push(p);
+    return { project: p };
+  },
+  GetProjectSource: ({ projectId: pid = projectId }) => pid === projectId ? { source: { projectId, repositoryUrl: "https://github.com/example/blaxsmith-demo.git", ref: "main" } } : projectSources.has(pid) ? { source: projectSources.get(pid) } : {},
+  SetProjectSource: ({ projectId: pid, repositoryUrl, ref = "", gitConnectionId = "" }) => { const s = { projectId: pid, repositoryUrl, ref, gitConnectionId }; projectSources.set(pid, s); return { source: s }; },
+  GetProjectVerification: ({ projectId: pid = projectId }) => pid === projectId ? { verification: { projectId, version: "1", checks: [{ id: "go-test", command: ["go", "test", "./..."] }] } } : projectChecks.has(pid) ? { verification: projectChecks.get(pid) } : {},
+  SetProjectVerification: ({ projectId: pid, checks }) => { const v = { projectId: pid, version: "1", checks, updatedAt: now() }; projectChecks.set(pid, v); return { verification: v }; },
   ListProjects: ({ search = "", sortBy = "created_at", sortDirection = "desc" }) => {
     const rows = projects.filter((p) => `${p.name} ${p.slug}`.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => (sortBy === "name" ? a.name.localeCompare(b.name) : a.createdAt.localeCompare(b.createdAt)) * (sortDirection === "asc" ? 1 : -1));
