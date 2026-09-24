@@ -19,7 +19,8 @@ func testWorkspaceBrowserAPI(t *testing.T, ctx context.Context, client *http.Cli
 	home := connect.NewRequest(&api.GetWorkspaceHomeRequest{})
 	home.Header().Set("Origin", origin)
 	got, err := c.GetWorkspaceHome(ctx, home)
-	if err != nil || got.Msg.GeneratedAt == "" || len(got.Msg.RecentRuns) == 0 || got.Msg.RecentRuns[0].ProjectName == "" {
+	if err != nil || got.Msg.GeneratedAt == "" || len(got.Msg.RecentRuns) == 0 || got.Msg.RecentRuns[0].ProjectName == "" ||
+		got.Msg.OrganizationSlug == "" || got.Msg.OrganizationName == "" || got.Msg.Username == "" {
 		t.Fatalf("workspace home: %+v, %v", got, err)
 	}
 	if !admin && (got.Msg.WaitingOnYou != 0 || len(got.Msg.Waiting) != 0) {

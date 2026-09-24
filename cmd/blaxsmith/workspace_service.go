@@ -43,7 +43,8 @@ func (s *workspaceService) GetWorkspaceHome(ctx context.Context, req *connect.Re
 	}
 	response := &api.GetWorkspaceHomeResponse{WaitingOnYou: home.WaitingOnYou, OpenItems: home.OpenItems,
 		RunningAgents: home.RunningAgents, ActiveRuns: home.ActiveRuns, RunsLast_24H: home.RunsLast24h,
-		FailedLast_24H: home.FailedLast24h, GeneratedAt: adminTime(time.Now())}
+		FailedLast_24H: home.FailedLast24h, GeneratedAt: adminTime(time.Now()), OrganizationName: home.OrganizationName,
+		OrganizationSlug: home.OrganizationSlug, Username: home.Username, DisplayName: home.DisplayName}
 	for _, i := range home.Waiting {
 		response.Waiting = append(response.Waiting, inboxItem(i))
 	}

@@ -473,8 +473,13 @@ type GetWorkspaceHomeResponse struct {
 	Agents         []*WorkspaceAgent      `protobuf:"bytes,8,rep,name=agents,proto3" json:"agents,omitempty"`                           // Up to 10, oldest first.
 	RecentRuns     []*WorkspaceRun        `protobuf:"bytes,9,rep,name=recent_runs,json=recentRuns,proto3" json:"recent_runs,omitempty"` // Up to 8, newest first.
 	GeneratedAt    string                 `protobuf:"bytes,10,opt,name=generated_at,json=generatedAt,proto3" json:"generated_at,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// The caller's organization and own account; non-secret.
+	OrganizationName string `protobuf:"bytes,11,opt,name=organization_name,json=organizationName,proto3" json:"organization_name,omitempty"`
+	OrganizationSlug string `protobuf:"bytes,12,opt,name=organization_slug,json=organizationSlug,proto3" json:"organization_slug,omitempty"`
+	Username         string `protobuf:"bytes,13,opt,name=username,proto3" json:"username,omitempty"`
+	DisplayName      string `protobuf:"bytes,14,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *GetWorkspaceHomeResponse) Reset() {
@@ -573,6 +578,34 @@ func (x *GetWorkspaceHomeResponse) GetRecentRuns() []*WorkspaceRun {
 func (x *GetWorkspaceHomeResponse) GetGeneratedAt() string {
 	if x != nil {
 		return x.GeneratedAt
+	}
+	return ""
+}
+
+func (x *GetWorkspaceHomeResponse) GetOrganizationName() string {
+	if x != nil {
+		return x.OrganizationName
+	}
+	return ""
+}
+
+func (x *GetWorkspaceHomeResponse) GetOrganizationSlug() string {
+	if x != nil {
+		return x.OrganizationSlug
+	}
+	return ""
+}
+
+func (x *GetWorkspaceHomeResponse) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *GetWorkspaceHomeResponse) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
 	}
 	return ""
 }
@@ -1059,7 +1092,7 @@ const file_blaxsmith_api_v1_workspace_proto_rawDesc = "" +
 	"\x10last_activity_at\x18\f \x01(\tR\x0elastActivityAt\x12\x1d\n" +
 	"\n" +
 	"taken_over\x18\r \x01(\bR\ttakenOver\"\x19\n" +
-	"\x17GetWorkspaceHomeRequest\"\xc8\x03\n" +
+	"\x17GetWorkspaceHomeRequest\"\xe1\x04\n" +
 	"\x18GetWorkspaceHomeResponse\x12$\n" +
 	"\x0ewaiting_on_you\x18\x01 \x01(\x05R\fwaitingOnYou\x12\x1d\n" +
 	"\n" +
@@ -1074,7 +1107,11 @@ const file_blaxsmith_api_v1_workspace_proto_rawDesc = "" +
 	"\vrecent_runs\x18\t \x03(\v2\x1e.blaxsmith.api.v1.WorkspaceRunR\n" +
 	"recentRuns\x12!\n" +
 	"\fgenerated_at\x18\n" +
-	" \x01(\tR\vgeneratedAt\"\xb9\x01\n" +
+	" \x01(\tR\vgeneratedAt\x12+\n" +
+	"\x11organization_name\x18\v \x01(\tR\x10organizationName\x12+\n" +
+	"\x11organization_slug\x18\f \x01(\tR\x10organizationSlug\x12\x1a\n" +
+	"\busername\x18\r \x01(\tR\busername\x12!\n" +
+	"\fdisplay_name\x18\x0e \x01(\tR\vdisplayName\"\xb9\x01\n" +
 	"\x10ListInboxRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x14\n" +

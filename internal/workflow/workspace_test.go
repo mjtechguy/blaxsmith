@@ -277,6 +277,10 @@ func TestWorkspaceViewsAreScopedRoleAwareAndPaged(t *testing.T) {
 		len(home.Agents) != 1 || len(home.RecentRuns) != 7 || home.RecentRuns[0].LaunchKey != "run-escalated" {
 		t.Fatalf("member home: %+v", home)
 	}
+	if home.OrganizationName != "Organization workspace-a" || home.OrganizationSlug != "org-workspace-a" ||
+		home.Username != "ws-member" {
+		t.Fatalf("member home identity: %+v", home)
+	}
 	if a := home.Agents[0]; a.AttemptID != attempt.ID || a.Kind != "implement" || a.Harness != "codex" || a.Model != "gpt-5" ||
 		a.ControllerID != admin.PrincipalID || a.ProjectName != "Alpha project" {
 		t.Fatalf("home agent: %+v", a)

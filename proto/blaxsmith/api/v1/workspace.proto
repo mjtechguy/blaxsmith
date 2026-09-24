@@ -78,6 +78,11 @@ message GetWorkspaceHomeResponse {
   repeated WorkspaceAgent agents = 8; // Up to 10, oldest first.
   repeated WorkspaceRun recent_runs = 9; // Up to 8, newest first.
   string generated_at = 10;
+  // The caller's organization and own account; non-secret.
+  string organization_name = 11;
+  string organization_slug = 12;
+  string username = 13;
+  string display_name = 14;
 }
 
 message ListInboxRequest {
