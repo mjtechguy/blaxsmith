@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"testing"
 
+	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 	"gopkg.in/yaml.v3"
 )
 
@@ -100,5 +101,31 @@ spec:
           port: 0
 `), &gateway); err != nil || len(gateway.Spec.Egress.Allowlist.Hosts) != 1 {
 		t.Fatalf("gateway readback: %+v, %v", gateway, err)
+	}
+}
+
+func TestPerAttemptWorkspaceMatchesOnlyFrozenGitInput(t *testing.T) {
+	request := tooladapter.Request{RepositoryURL: "https://github.com/owner/repo", SourceRef: "feature/work",
+		SourceDirectory: "source"}
+	name := AttemptWorkspaceName("attempt-1234")
+	workspace := sourceWorkspace("space", name, request)
+	if name != "source-attempt1234" || !sourceWorkspaceMatches(workspace, "space", name, request) {
+		t.Fatalf("valid attempt Workspace rejected: %+v", workspace)
+	}
+	git := workspace.Spec["git"].([]any)[0].(map[string]any)
+	git["branch"] = "main"
+	if sourceWorkspaceMatches(workspace, "space", name, request) {
+		t.Fatal("mutable source ref accepted")
+	}
+	git["branch"] = "feature/work"
+	workspace.Spec["mcp"] = map[string]any{"servers": []any{"ambient"}}
+	if sourceWorkspaceMatches(workspace, "space", name, request) {
+		t.Fatal("unapproved MCP configuration accepted")
+	}
+	request.SourceRef = ""
+	git["branch"] = "HEAD"
+	delete(workspace.Spec, "mcp")
+	if !sourceWorkspaceMatches(workspace, "space", name, request) {
+		t.Fatal("empty ref did not map to exact AX HEAD input")
 	}
 }

@@ -7,8 +7,10 @@ import (
 	"net/netip"
 	"net/url"
 	"regexp"
+	"strings"
 
 	"github.com/mjtechguy/blaxsmith/internal/gitfetch"
+	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 )
 
 var ErrInputs = errors.New("approved AX workspace or gateway unavailable")
@@ -57,9 +59,78 @@ type InputReader interface {
 	GetGateway(context.Context, string, string) (Gateway, error)
 }
 
-// CheckToolInputs validates a native empty Workspace and narrow CIDR Gateway
-// before reservation. The AX controller still applies the gateway policy at
-// launch; this is configuration inspection, not a dataplane measurement.
+type WorkspaceManager interface {
+	InputReader
+	ApplyWorkspace(context.Context, Workspace) error
+	DeleteWorkspace(context.Context, string, string) error
+}
+
+func AttemptWorkspaceName(attemptID string) string {
+	name := "source-" + strings.ReplaceAll(attemptID, "-", "")
+	if !axResourceName.MatchString(name) {
+		return ""
+	}
+	return name
+}
+
+func sourceWorkspace(space, name string, request tooladapter.Request) Workspace {
+	ref := request.SourceRef
+	if ref == "" {
+		ref = "HEAD"
+	}
+	return Workspace{APIVersion: "ax.io/v1alpha1", Kind: "Workspace",
+		Metadata: TaskMetadata{Name: name, Atespace: space}, Spec: map[string]any{"git": []any{
+			map[string]any{"name": "source", "repo": request.RepositoryURL, "branch": ref,
+				"dir": request.SourceDirectory, "depth": 1},
+		}}}
+}
+
+func sourceWorkspaceMatches(workspace Workspace, space, name string, request tooladapter.Request) bool {
+	if gitfetch.Validate(request.RepositoryURL, request.SourceRef) != nil ||
+		workspace.APIVersion != "ax.io/v1alpha1" || workspace.Kind != "Workspace" ||
+		workspace.Metadata != (TaskMetadata{Name: name, Atespace: space}) {
+		return false
+	}
+	for key, value := range workspace.Spec {
+		if key == "mcp" || key == "skills" {
+			if value == nil {
+				continue
+			}
+		}
+		if key != "git" {
+			return false
+		}
+	}
+	git, ok := workspace.Spec["git"].([]any)
+	if !ok || len(git) != 1 {
+		return false
+	}
+	repo, ok := git[0].(map[string]any)
+	ref := request.SourceRef
+	if ref == "" {
+		ref = "HEAD"
+	}
+	if !ok || len(repo) != 5 || repo["name"] != "source" || repo["repo"] != request.RepositoryURL ||
+		repo["branch"] != ref || repo["dir"] != request.SourceDirectory {
+		return false
+	}
+	switch depth := repo["depth"].(type) {
+	case int:
+		return depth == 1
+	case int32:
+		return depth == 1
+	case int64:
+		return depth == 1
+	case uint64:
+		return depth == 1
+	default:
+		return false
+	}
+}
+
+// CheckToolInputs validates the preflight Workspace or exact per-attempt Git
+// Workspace and narrow CIDR Gateway. This is configuration inspection, not a
+// dataplane measurement.
 func (b *Bridge) CheckToolInputs(ctx context.Context, organizationID, repositoryURL, provider string) error {
 	if b == nil || !axResourceName.MatchString(b.Workspace) || !axResourceName.MatchString(b.Gateway) {
 		return ErrInputs
@@ -83,8 +154,14 @@ func (b *Bridge) CheckToolInputs(ctx context.Context, organizationID, repository
 	}
 	space := Space(organizationID)
 	workspace, err := reader.GetWorkspace(ctx, space, b.Workspace)
-	if err != nil || workspace.APIVersion != "ax.io/v1alpha1" || workspace.Kind != "Workspace" ||
-		workspace.Metadata.Name != b.Workspace || workspace.Metadata.Atespace != space || !emptyWorkspaceSpec(workspace.Spec) {
+	workspaceOK := err == nil && workspace.APIVersion == "ax.io/v1alpha1" && workspace.Kind == "Workspace" &&
+		workspace.Metadata.Name == b.Workspace && workspace.Metadata.Atespace == space
+	if workspaceOK && b.Tool != nil && b.Tool.SourceDirectory != "" {
+		workspaceOK = sourceWorkspaceMatches(workspace, space, b.Workspace, *b.Tool)
+	} else if workspaceOK {
+		workspaceOK = emptyWorkspaceSpec(workspace.Spec)
+	}
+	if !workspaceOK {
 		return ErrInputs
 	}
 	gateway, err := reader.GetGateway(ctx, space, b.Gateway)

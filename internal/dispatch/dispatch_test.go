@@ -26,6 +26,7 @@ import (
 type dispatchAX struct {
 	task                       *axbridge.Task
 	workspace                  axbridge.Workspace
+	attemptWorkspaces          map[string]axbridge.Workspace
 	gateway                    axbridge.Gateway
 	invalidateGatewayAfterTask bool
 }
@@ -37,13 +38,41 @@ func (a *dispatchAX) Get(context.Context, string, string) (axbridge.Task, error)
 	return *a.task, nil
 }
 func (a *dispatchAX) Apply(_ context.Context, task axbridge.Task) error {
+	refs, _ := task.Spec["workspaces"].([]any)
+	for _, item := range refs {
+		ref, _ := item.(map[string]any)
+		name, _ := ref["name"].(string)
+		if name != "source" {
+			if _, ok := a.attemptWorkspaces[name]; !ok {
+				return axbridge.ErrInputs
+			}
+		}
+	}
 	task.Status.Phase, task.Status.Actor = "Running", task.Metadata.Name
 	a.task = &task
 	return nil
 }
 func (a *dispatchAX) Delete(context.Context, string, string) error { a.task = nil; return nil }
-func (a *dispatchAX) GetWorkspace(context.Context, string, string) (axbridge.Workspace, error) {
-	return a.workspace, nil
+func (a *dispatchAX) GetWorkspace(_ context.Context, _, name string) (axbridge.Workspace, error) {
+	if name == a.workspace.Metadata.Name {
+		return a.workspace, nil
+	}
+	workspace, ok := a.attemptWorkspaces[name]
+	if !ok {
+		return axbridge.Workspace{}, axbridge.ErrNotFound
+	}
+	return workspace, nil
+}
+func (a *dispatchAX) ApplyWorkspace(_ context.Context, workspace axbridge.Workspace) error {
+	if a.attemptWorkspaces == nil {
+		a.attemptWorkspaces = make(map[string]axbridge.Workspace)
+	}
+	a.attemptWorkspaces[workspace.Metadata.Name] = workspace
+	return nil
+}
+func (a *dispatchAX) DeleteWorkspace(_ context.Context, _, name string) error {
+	delete(a.attemptWorkspaces, name)
+	return nil
 }
 func (a *dispatchAX) GetGateway(context.Context, string, string) (axbridge.Gateway, error) {
 	if a.invalidateGatewayAfterTask && a.task != nil {
@@ -243,6 +272,18 @@ func TestDispatchBatchPostgres(t *testing.T) {
 	if err != nil || len(batch.Outcomes) != 1 || batch.Outcomes[0].State != "started" ||
 		batch.Outcomes[0].AttemptID == "" || batch.Outcomes[0].BindingID == "" || ax.task == nil || activationPreflights != 1 {
 		t.Fatalf("dispatch batch: %+v, %v", batch, err)
+	}
+	workspaceName := axbridge.AttemptWorkspaceName(batch.Outcomes[0].AttemptID)
+	workspace, ok := ax.attemptWorkspaces[workspaceName]
+	command := ax.task.Spec["command"].([]any)[1].(string)
+	if !ok || workspace.Metadata.Atespace != axbridge.Space(orgID) ||
+		!strings.Contains(command, `"source_directory":"source"`) ||
+		ax.task.Spec["workspaces"].([]any)[0].(map[string]any)["name"] != workspaceName {
+		t.Fatalf("attempt Workspace was not frozen into its AX task: name=%q workspace=%+v task=%+v", workspaceName, workspace, ax.task)
+	}
+	git := workspace.Spec["git"].([]any)[0].(map[string]any)
+	if git["repo"] != "https://github.com/owner/repo" || git["branch"] != "main" || git["dir"] != "source" {
+		t.Fatalf("AX Workspace did not contain the frozen source: %+v", git)
 	}
 	var taskState, attemptState string
 	if err := pool.QueryRow(ctx, `SELECT t.state,a.state FROM workflow_tasks t

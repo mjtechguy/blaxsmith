@@ -76,6 +76,20 @@ func (c CLI) GetWorkspace(ctx context.Context, space, name string) (Workspace, e
 	return workspace, nil
 }
 
+func (c CLI) ApplyWorkspace(ctx context.Context, workspace Workspace) error {
+	manifest, err := yaml.Marshal(workspace)
+	if err != nil {
+		return err
+	}
+	_, err = c.ax(ctx, manifest, "apply", "-f", "-")
+	return err
+}
+
+func (c CLI) DeleteWorkspace(ctx context.Context, space, name string) error {
+	_, err := c.ax(ctx, nil, "delete", "workspace", name, "--atespace", space)
+	return err
+}
+
 func (c CLI) GetGateway(ctx context.Context, space, name string) (Gateway, error) {
 	out, err := c.ax(ctx, nil, "get", "gateway", name, "--atespace", space)
 	if err != nil {

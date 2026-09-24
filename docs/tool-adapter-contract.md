@@ -62,13 +62,14 @@ on command exit. No raw key goes into AX Task metadata.
 The lease table now permits **one Git and one model capability per challenge**;
 each keeps a separate binding and lease while AX seals both in one challenge-bound
 envelope. The pinned AX overlay and combined Git/model path have passed the
-overlay build and security tests. The dispatcher still does not select a
-product Git binding or pass an AX-mounted checkout to this worker; public runs
-continue to use the worker's own pinned checkout. A recorded revocation fences
-future delivery; an already issued raw provider key remains usable until
-provider rotation, expiry, or actor termination. The scheduler must stop the
-actor on grant/connection revocation. An approved registry image and product
-connector callbacks are still required before live use. A CLI exit only proves process
+overlay build and security tests. Public dispatch now creates a per-attempt AX
+Git Workspace, and the worker checks the mounted checkout against the frozen
+URL and commit. Product selection of a private Git binding and a
+browser-launched private-repository task are still missing. A recorded
+revocation fences future delivery; an already issued raw provider key remains
+usable until provider rotation, expiry, or actor termination. The scheduler
+must stop the actor on grant/connection revocation. An approved registry image
+and product connector callbacks are still required before live use. A CLI exit only proves process
 exit; evidence collection, actual model identification, and a trusted
 supervisor boundary remain required before crediting work or enabling
 untrusted repositories.

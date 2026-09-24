@@ -65,7 +65,7 @@ type Bridge struct {
 	Signer     string                                              // enrolled bootstrap public key, base64
 	Storage    string                                              // approved data-only snapshot location
 	Tool       *tooladapter.Request                                // frozen, public CLI selection; nil runs the synthetic probe
-	Workspace  string                                              // approved empty AX Workspace, bound at /workspace for tool tasks
+	Workspace  string                                              // approved AX Workspace bound at /workspace for tool tasks
 	Gateway    string                                              // approved AX Gateway with exact public-IP egress rules
 	LookupIPv4 func(context.Context, string) ([]netip.Addr, error) // nil uses system DNS
 	// RevokeOwner must fence the bootstrap owner and any access lease before
@@ -157,6 +157,9 @@ func (b *Bridge) launch(ctx context.Context, a workflow.Attempt) (bootstrap.Runt
 	if run != "active" || state != "reserved" || !sealed {
 		return bootstrap.Runtime{}, workflow.ErrFenced
 	}
+	if err := b.ensureWorkspace(ctx, a); err != nil {
+		return bootstrap.Runtime{}, err
+	}
 	got, err := b.AX.Get(ctx, want.Metadata.Atespace, want.Metadata.Name)
 	if errors.Is(err, ErrNotFound) {
 		if err = b.AX.Apply(ctx, want); err != nil {
@@ -168,6 +171,41 @@ func (b *Bridge) launch(ctx context.Context, a workflow.Attempt) (bootstrap.Runt
 		return bootstrap.Runtime{}, b.uncertain(a, ErrMismatch)
 	}
 	return b.confirm(ctx, a, want, false)
+}
+
+func (b *Bridge) ensureWorkspace(ctx context.Context, attempt workflow.Attempt) error {
+	if b.Tool == nil || b.Tool.SourceDirectory == "" {
+		return nil
+	}
+	name := AttemptWorkspaceName(attempt.ID)
+	manager, ok := b.AX.(WorkspaceManager)
+	if name == "" || b.Workspace != name || !ok {
+		return b.uncertain(attempt, ErrInputs)
+	}
+	space, _ := Name(attempt)
+	expected := sourceWorkspace(space, name, *b.Tool)
+	current, err := manager.GetWorkspace(ctx, expected.Metadata.Atespace, name)
+	if err == nil {
+		if !sourceWorkspaceMatches(current, space, name, *b.Tool) {
+			return b.uncertain(attempt, ErrMismatch)
+		}
+		return nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return b.uncertain(attempt, err)
+	}
+	if err := manager.ApplyWorkspace(ctx, expected); err != nil {
+		current, readErr := manager.GetWorkspace(ctx, expected.Metadata.Atespace, name)
+		if readErr == nil && sourceWorkspaceMatches(current, space, name, *b.Tool) {
+			return nil
+		}
+		return b.uncertain(attempt, errors.Join(err, readErr))
+	}
+	current, err = manager.GetWorkspace(ctx, expected.Metadata.Atespace, name)
+	if err != nil || !sourceWorkspaceMatches(current, space, name, *b.Tool) {
+		return b.uncertain(attempt, errors.Join(ErrMismatch, err))
+	}
+	return nil
 }
 
 // ReconcileUnknown never writes an AX task. A missing task cannot prove that
@@ -341,6 +379,15 @@ func (b *Bridge) stopKnown(ctx context.Context, a workflow.Attempt) error {
 	}
 	if !decision {
 		return ErrPending
+	}
+	if b.Tool != nil && b.Tool.SourceDirectory != "" {
+		manager, ok := b.AX.(WorkspaceManager)
+		if !ok || b.Workspace != AttemptWorkspaceName(a.ID) {
+			return ErrInputs
+		}
+		if err := manager.DeleteWorkspace(ctx, want.Metadata.Atespace, b.Workspace); err != nil && !errors.Is(err, ErrNotFound) {
+			return err
+		}
 	}
 	return b.Workflow.ConfirmStopped(ctx, a)
 }

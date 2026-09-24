@@ -47,12 +47,15 @@ configuration, and revocation proof. Hooks remain unsupported until they have
 an explicit lifecycle and execution policy. The adapter stays pinned and
 noninteractive, and launch stays disabled until end-to-end AX verification.
 
-The tool worker can optionally use a single child directory from the AX mount
-as its source. It rejects symlink/path traversal and verifies the checkout's
-origin URL and `HEAD` against the frozen public repository and commit before
-launching a CLI. The dispatcher does not yet set this option or create a
-per-attempt Git Workspace, so normal dispatch still uses the worker's own
-pinned checkout.
+For public Git runs, the dispatcher creates an attempt-named AX Workspace with
+the frozen repository/ref and a `source` child directory. The AX Task binds
+that definition at `/workspace`; the worker rejects path traversal/symlinks
+and verifies the child's origin URL and `HEAD` against the frozen repository
+and commit before launching a CLI. The bridge reads the exact Workspace back
+before releasing the model lease and removes it after stop proves the actor is
+gone. Private-repository binding selection from the product is still missing;
+the encrypted AX bootstrap capability is not yet exposed by project settings
+or dispatch.
 
 ## Substrate connector authority
 

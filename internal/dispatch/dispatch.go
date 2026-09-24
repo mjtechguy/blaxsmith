@@ -159,7 +159,13 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 	}
 	outcome.AttemptID, outcome.BindingID = attempt.ID, bindingID
 	request.AttemptID = attempt.ID
+	request.SourceDirectory = "source"
 	bridge := *d.Bridge // the per-attempt tool selection is never shared across launches.
+	bridge.Workspace = axbridge.AttemptWorkspaceName(attempt.ID)
+	if bridge.Workspace == "" {
+		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, axbridge.ErrInputs)
+		return outcome
+	}
 	bridge.Workflow, bridge.Tool, bridge.Image, bridge.Pool = d.Workflow, &request, approved.Runtime.Image, approved.WorkerPool
 	runtime, err := bridge.Launch(ctx, attempt)
 	if err != nil {
