@@ -3,10 +3,15 @@ package tooladapter
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,20 +22,29 @@ import (
 const (
 	WorkerBinary   = "/usr/local/bin/blaxsmith-tool-worker"
 	CredentialFile = "/run/blaxsmith/agent-credential.json"
+	maxTaskArg     = 120 << 10 // AX passes the JSON as one Linux argv element.
 )
 
 // Request is public task configuration, bound to the immutable AX task. It
 // deliberately has no credential, connection ID, or lease token.
 type Request struct {
-	AttemptID      string         `json:"attempt_id"`
-	RepositoryURL  string         `json:"repository_url"`
-	SourceRef      string         `json:"source_ref"`
-	SourceCommit   string         `json:"source_commit"`
-	Runtime        Runtime        `json:"runtime"`
-	Profile        recipe.Profile `json:"profile"`
-	Prompt         string         `json:"prompt"`
-	TimeoutSeconds int            `json:"timeout_seconds"`
-	MaxOutputBytes int            `json:"max_output_bytes"`
+	AttemptID       string           `json:"attempt_id"`
+	RepositoryURL   string           `json:"repository_url"`
+	SourceRef       string           `json:"source_ref"`
+	SourceCommit    string           `json:"source_commit"`
+	Runtime         Runtime          `json:"runtime"`
+	Profile         recipe.Profile   `json:"profile"`
+	Prompt          string           `json:"prompt"`
+	FrozenArtifacts []ArtifactDigest `json:"frozen_artifacts,omitempty"`
+	TimeoutSeconds  int              `json:"timeout_seconds"`
+	MaxOutputBytes  int              `json:"max_output_bytes"`
+}
+
+// ArtifactDigest binds prompt context to regular files in the pinned checkout.
+// Only public Git-authored text belongs here; no credentials or live config.
+type ArtifactDigest struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
 }
 
 // Command prepares a task argv without a shell or a secret. The AX bridge
@@ -42,7 +56,11 @@ func Command(request Request) ([]string, error) {
 	if err := gitfetch.Validate(request.RepositoryURL, request.SourceRef); err != nil || !gitCommit.MatchString(request.SourceCommit) {
 		return nil, fmt.Errorf("%w: invalid frozen public Git source", ErrBlocked)
 	}
-	if _, err := Prepare(request.Runtime, request.Profile, request.Prompt,
+	profile, err := frozenProfile(request)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := Prepare(request.Runtime, profile, request.Prompt,
 		time.Duration(request.TimeoutSeconds)*time.Second, request.MaxOutputBytes); err != nil {
 		return nil, err
 	}
@@ -50,7 +68,7 @@ func Command(request Request) ([]string, error) {
 		return nil, err
 	}
 	body, err := json.Marshal(request)
-	if err != nil || len(body) > 1<<20 {
+	if err != nil || len(body) > maxTaskArg {
 		return nil, ErrBlocked
 	}
 	return []string{WorkerBinary, string(body)}, nil
@@ -71,7 +89,7 @@ func Execute(ctx context.Context, encoded, workdir, credentialPath string) ([]by
 
 func execute(ctx context.Context, encoded, workdir, credentialPath string,
 	checkout func(context.Context, string, string, string, string) error) ([]byte, error) {
-	if len(encoded) == 0 || len(encoded) > 1<<20 {
+	if len(encoded) == 0 || len(encoded) > maxTaskArg {
 		return nil, ErrBlocked
 	}
 	var request Request
@@ -93,7 +111,14 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 	if checkout == nil || checkout(ctx, request.RepositoryURL, request.SourceRef, request.SourceCommit, workdir) != nil {
 		return nil, fmt.Errorf("%w: pinned source checkout failed", ErrBlocked)
 	}
-	in, err := Prepare(request.Runtime, request.Profile, request.Prompt,
+	if err := verifyFrozenArtifacts(workdir, request.FrozenArtifacts); err != nil {
+		return nil, err
+	}
+	profile, err := frozenProfile(request)
+	if err != nil {
+		return nil, err
+	}
+	in, err := Prepare(request.Runtime, profile, request.Prompt,
 		time.Duration(request.TimeoutSeconds)*time.Second, request.MaxOutputBytes)
 	if err != nil {
 		return nil, err
@@ -106,6 +131,68 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 	defer cancel()
 	output, err := Run(leaseContext, in, workdir, []string{variable + string(key)})
 	return bytes.ReplaceAll(output, key, []byte("[redacted]")), err
+}
+
+func frozenProfile(request Request) (recipe.Profile, error) {
+	seen := make(map[string]bool, len(request.FrozenArtifacts))
+	for _, artifact := range request.FrozenArtifacts {
+		if !filepath.IsLocal(artifact.Path) || path.Clean(artifact.Path) != artifact.Path ||
+			strings.ContainsAny(artifact.Path, "\\\r\n\x00") || !sha256Hex.MatchString(artifact.SHA256) || seen[artifact.Path] ||
+			len(seen) >= 256 {
+			return recipe.Profile{}, fmt.Errorf("%w: invalid frozen artifact manifest", ErrBlocked)
+		}
+		seen[artifact.Path] = true
+	}
+	for _, name := range append(append([]string(nil), request.Profile.Instructions...), request.Profile.Skills...) {
+		if !seen[name] {
+			return recipe.Profile{}, fmt.Errorf("%w: instruction or skill is not frozen", ErrBlocked)
+		}
+	}
+	profile := request.Profile
+	profile.Instructions, profile.Skills = nil, nil
+	return profile, nil
+}
+
+func verifyFrozenArtifacts(workdir string, artifacts []ArtifactDigest) error {
+	allowedAgents := map[string]bool{}
+	for _, artifact := range artifacts {
+		name := filepath.Join(workdir, filepath.FromSlash(artifact.Path))
+		info, err := os.Lstat(name)
+		if err != nil || !info.Mode().IsRegular() || info.Size() > 16<<20 {
+			return fmt.Errorf("%w: frozen artifact unavailable", ErrBlocked)
+		}
+		data, err := os.ReadFile(name)
+		if err != nil || len(data) > 16<<20 {
+			return fmt.Errorf("%w: frozen artifact unavailable", ErrBlocked)
+		}
+		sum := sha256.Sum256(data)
+		if hex.EncodeToString(sum[:]) != artifact.SHA256 {
+			return fmt.Errorf("%w: frozen artifact digest mismatch", ErrBlocked)
+		}
+		if path.Base(artifact.Path) == "AGENTS.md" {
+			allowedAgents[artifact.Path] = true
+		}
+	}
+	return filepath.WalkDir(workdir, func(name string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		base := entry.Name()
+		if base == ".git" && entry.IsDir() {
+			return filepath.SkipDir
+		}
+		if base == ".codex" || base == ".opencode" || base == ".claude" || base == ".agents" ||
+			base == "opencode.json" || base == "opencode.jsonc" || base == "CLAUDE.md" || base == "CLAUDE.local.md" {
+			return fmt.Errorf("%w: ambient project CLI configuration", ErrBlocked)
+		}
+		if base == "AGENTS.md" {
+			relative, err := filepath.Rel(workdir, name)
+			if err != nil || !allowedAgents[filepath.ToSlash(relative)] || !entry.Type().IsRegular() {
+				return fmt.Errorf("%w: unlisted project instructions", ErrBlocked)
+			}
+		}
+		return nil
+	})
 }
 
 func credentialProvider(profile recipe.Profile) (string, error) {

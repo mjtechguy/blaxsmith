@@ -2,50 +2,65 @@ package dispatch
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"path"
 	"slices"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
 const maxPromptBytes = 1 << 20
 
-// frozenPrompt uses only bytes in the run's immutable bundle. Tool profiles
-// with separately declared skills/instructions are blocked by tooladapter.
-func frozenPrompt(task workflow.FrozenTask) (string, error) {
+// frozenPrompt delivers declared instructions and skills as bounded prompt
+// context, with a manifest the worker checks against its pinned checkout.
+func frozenPrompt(task workflow.FrozenTask) (string, []tooladapter.ArtifactDigest, error) {
 	if task.Bundle == nil || task.Stage.Prompt == "" || task.Bundle.Source.Spec == "" || task.Bundle.Source.Transcript == "" {
-		return "", tooladapter.ErrBlocked
+		return "", nil, tooladapter.ErrBlocked
 	}
-	artifacts := make(map[string][]byte, len(task.Bundle.Artifacts))
+	artifacts := make(map[string]recipe.Artifact, len(task.Bundle.Artifacts))
 	agents := []string{}
 	for _, artifact := range task.Bundle.Artifacts {
 		if _, exists := artifacts[artifact.Path]; exists {
-			return "", tooladapter.ErrBlocked
+			return "", nil, tooladapter.ErrBlocked
 		}
-		artifacts[artifact.Path] = artifact.Data
+		artifacts[artifact.Path] = artifact
 		if path.Base(artifact.Path) == "AGENTS.md" {
 			agents = append(agents, artifact.Path)
 		}
 	}
 	slices.Sort(agents)
-	paths := append(agents, task.Bundle.Source.Spec, task.Bundle.Source.Transcript, task.Stage.Prompt)
+	paths := append(agents, task.Bundle.Source.Spec, task.Bundle.Source.Transcript)
+	paths = append(paths, task.Profile.Instructions...)
+	paths = append(paths, task.Profile.Skills...)
+	paths = append(paths, task.Stage.Prompt)
 	var prompt bytes.Buffer
+	manifest := make([]tooladapter.ArtifactDigest, 0, len(paths))
+	seen := map[string]bool{}
 	fmt.Fprintf(&prompt, "Frozen source commit: %s\nScope: %s\nStage: %s (%s)\n",
 		task.Bundle.Source.Commit, task.Bundle.Source.Scope, task.Stage.ID, task.Stage.Kind)
 	for _, name := range paths {
-		data, ok := artifacts[name]
-		if !ok || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 || strings.ContainsAny(name, "\r\n\x00") {
-			return "", tooladapter.ErrBlocked
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		artifact, ok := artifacts[name]
+		sum := sha256.Sum256(artifact.Data)
+		if !ok || artifact.SHA256 != hex.EncodeToString(sum[:]) || !utf8.Valid(artifact.Data) ||
+			bytes.IndexByte(artifact.Data, 0) >= 0 || strings.ContainsAny(name, "\r\n\x00") {
+			return "", nil, tooladapter.ErrBlocked
 		}
 		fmt.Fprintf(&prompt, "\n--- %s ---\n", name)
-		prompt.Write(data)
+		prompt.Write(artifact.Data)
 		if prompt.Len() > maxPromptBytes {
-			return "", tooladapter.ErrBlocked
+			return "", nil, tooladapter.ErrBlocked
 		}
+		manifest = append(manifest, tooladapter.ArtifactDigest{Path: name, SHA256: artifact.SHA256})
 	}
-	return prompt.String(), nil
+	return prompt.String(), manifest, nil
 }

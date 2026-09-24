@@ -98,7 +98,7 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		outcome.Err = err
 		return outcome
 	}
-	prompt, err := frozenPrompt(frozen)
+	prompt, artifacts, err := frozenPrompt(frozen)
 	if err != nil {
 		outcome.Err = err
 		return outcome
@@ -107,7 +107,7 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 	request := tooladapter.Request{AttemptID: "preflight", RepositoryURL: frozen.RepositoryURL,
 		SourceRef: frozen.SourceRef, SourceCommit: frozen.Bundle.Source.Commit,
 		Runtime: approved.Runtime, Profile: frozen.Profile,
-		Prompt: prompt, TimeoutSeconds: timeout, MaxOutputBytes: approved.MaxOutputBytes}
+		Prompt: prompt, FrozenArtifacts: artifacts, TimeoutSeconds: timeout, MaxOutputBytes: approved.MaxOutputBytes}
 	if _, err := tooladapter.Command(request); err != nil {
 		outcome.Err = err
 		return outcome
