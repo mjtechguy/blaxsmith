@@ -93,6 +93,9 @@ func (f *Fake) get(id string) *proc {
 	return f.procs[id]
 }
 
+// Output writes data to a running attach process's stdout stream.
+func (f *Fake) Output(id string, data []byte) { f.get(id).out <- data }
+
 // Exit ends a running attach process.
 func (f *Fake) Exit(id string, code int) { f.get(id).exit <- code }
 

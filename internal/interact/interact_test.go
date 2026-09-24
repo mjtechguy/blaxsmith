@@ -387,6 +387,19 @@ func TestProgressPayloadTruncates(t *testing.T) {
 	if err != nil || len(got) > 8192 || !strings.Contains(string(got), `"type":"finding"`) {
 		t.Fatalf("payload %d bytes: %v", len(got), err)
 	}
+	items := make([]map[string]string, 400)
+	for i := range items {
+		items[i] = map[string]string{"text": strings.Repeat("step ", 20), "status": "pending"}
+	}
+	plan, _ := json.Marshal(map[string]any{"type": "plan.updated", "id": "plan", "items": items})
+	if got, err := progressPayload(plan); err != nil || len(got) > 8192 || !strings.Contains(string(got), `"type":"plan.updated"`) {
+		t.Fatalf("plan payload %d bytes: %v", len(got), err)
+	}
+	for _, kind := range []string{"tool.started", "tool.completed", "command", "file.changed", "assistant.message"} {
+		if _, err := progressPayload([]byte(`{"type":"` + kind + `","id":"x"}`)); err != nil {
+			t.Fatalf("rejected work-log type %s", kind)
+		}
+	}
 	for _, bad := range []string{`[]`, `{"type":"shell"}`, `null`, `{"text":"x"}`} {
 		if _, err := progressPayload([]byte(bad)); err == nil {
 			t.Fatalf("accepted %s", bad)

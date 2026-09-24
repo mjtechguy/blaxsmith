@@ -134,6 +134,11 @@ func (ix Interaction) checkAnswer(optionIDs []string, text string) (string, erro
 	return text, nil
 }
 
+// progressTypes are the `bx event` types plus the guest pane's normalized
+// work-log records (docs/interactive-sessions.md, "Agent activity").
+var progressTypes = []string{"phase", "cycle", "handoff", "finding", "progress",
+	"tool.started", "tool.completed", "command", "file.changed", "plan.updated", "assistant.message"}
+
 // progressPayload keeps a `bx event` object, truncating text rather than
 // rejecting, so it fits the 8 KiB workflow_events payload cap.
 func progressPayload(raw json.RawMessage) ([]byte, error) {
@@ -142,7 +147,7 @@ func progressPayload(raw json.RawMessage) ([]byte, error) {
 		return nil, workflow.ErrInvalid
 	}
 	kind, _ := body["type"].(string)
-	if !slices.Contains([]string{"phase", "cycle", "handoff", "finding", "progress"}, kind) {
+	if !slices.Contains(progressTypes, kind) {
 		return nil, workflow.ErrInvalid
 	}
 	for _, limit := range []int{2000, 500, 120} {
@@ -158,7 +163,8 @@ func progressPayload(raw json.RawMessage) ([]byte, error) {
 	}
 	// Still too large (deep nesting or many keys): keep only the settled fields.
 	kept := map[string]any{}
-	for _, key := range []string{"type", "cycle", "max_cycles", "status", "text", "message", "name"} {
+	for _, key := range []string{"type", "cycle", "max_cycles", "status", "text", "message", "name",
+		"id", "tool", "input", "cmd", "exit", "duration_ms", "path", "kind", "added", "removed", "truncated"} {
 		if value, ok := body[key]; ok {
 			if _, nested := value.(map[string]any); !nested {
 				kept[key] = value

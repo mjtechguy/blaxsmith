@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
@@ -9,6 +9,8 @@ import { DataTable } from "../data-table";
 import type { RunTask } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
 import { Inbox, interactionsKey, StagePanel, useInteractions } from "../run-live";
+import { needsYou, runStatus, stageStatus, type AgentStatus } from "../agent-view";
+import { StatusPill, useAttentionTitle } from "../work-log";
 import { appendRunEvent, decideReview, eventsAfter, getCurrentReview, getRun, listCommandExits, listRunTasks, liveEventsUrl, parseLiveEvent, recoverRunEventBatch, type RunEventPages } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId/runs/$runId")({
@@ -41,6 +43,12 @@ const activityLabels: Record<string, string> = {
   "attempt.control": "Terminal control changed",
 };
 
+// Stage status pills for the execution plan rows (docs/interactive-sessions.md, status rollup).
+const StageStatuses = createContext<Map<string, AgentStatus | null>>(new Map());
+function StageStatusCell({ taskKey }: { taskKey: string }) {
+  return <StatusPill status={useContext(StageStatuses).get(taskKey) ?? null} />;
+}
+
 function activityLabel(kind: string) {
   return activityLabels[kind] ?? kind.split(".").map((part) => part.replaceAll("_", " ")).join(" · ");
 }
@@ -63,6 +71,7 @@ const taskColumns: ColumnDef<typeof taskFeatures, RunTask>[] = [
     </details>;
   } },
   { id: "depends", accessorKey: "dependsOn", header: "Depends on", cell: ({ row }) => row.original.dependsOn.length ? row.original.dependsOn.join(", ") : "Start" },
+  { id: "status", header: "Status", cell: ({ row }) => <StageStatusCell taskKey={row.original.key} /> },
   { id: "state", accessorKey: "state", header: "State", cell: ({ row }) => <span className={`state-badge state-${row.original.state}`}>{row.original.state.replaceAll("_", " ")}</span> },
   { id: "attempts", accessorKey: "generation", header: "Attempts", cell: ({ row }) => `${row.original.generation.toString()} of ${row.original.maxAttempts}` },
   { id: "active", accessorKey: "activeAttemptId", header: "Active attempt", cell: ({ row }) => row.original.activeAttemptId ? <code title={row.original.activeAttemptId}>{row.original.activeAttemptId.slice(0, 8)}</code> : "—" },
@@ -104,6 +113,12 @@ function RunDetail() {
   const selectedKey = search.stage ?? tasks.data?.tasks.find((task) => task.activeAttemptId)?.key;
   const selectedTask = tasks.data?.tasks.find((task) => task.key === selectedKey);
   const mayOperate = session.data?.role === "owner" || session.data?.role === "admin" || session.data?.role === "member";
+  const review = useQuery({ queryKey: reviewKey, queryFn: ({ signal }) => getCurrentReview(runId, signal), enabled: !!scope && run.data?.run?.projectId === projectId });
+  const reviewWaiting = !!review.data && !review.data.decision;
+  const statuses = useMemo(() => new Map((tasks.data?.tasks || []).map((task) =>
+    [task.key, stageStatus(task, interactions.data ?? [], tasks.data!.tasks, reviewWaiting)] as const)), [tasks.data, interactions.data, reviewWaiting]);
+  const overall = run.data?.run ? runStatus(run.data.run.state, tasks.data?.tasks || [], interactions.data ?? [], reviewWaiting) : null;
+  useAttentionTitle([...statuses.values()].filter(needsYou).length);
 
   useEffect(() => {
     if (!scope || run.data?.run?.projectId !== projectId || !activity.isSuccess) return;
@@ -180,7 +195,7 @@ function RunDetail() {
     {run.isPending ? <div className="state-panel" role="status"><RefreshCw className="spin" size={22} aria-hidden="true" /><h2>Loading run</h2></div> : null}
     {run.isError ? <div className="state-panel" role="alert"><h2>Run unavailable</h2><p>This run could not be loaded.</p><button type="button" className="secondary-button" onClick={() => void run.refetch()}>Try again</button></div> : null}
     {run.data?.run ? <div className="summary-grid">
-      <section className="summary-card"><span className="summary-label">State</span><strong className="summary-value"><span className={`state-badge state-${run.data.run.state}`}>{run.data.run.state.replaceAll("_", " ")}</span></strong><span className="summary-meta">Persisted workflow state</span></section>
+      <section className="summary-card"><span className="summary-label">State</span><strong className="summary-value"><span className={`state-badge state-${run.data.run.state}`}>{run.data.run.state.replaceAll("_", " ")}</span> <StatusPill status={overall} /></strong><span className="summary-meta">Persisted workflow state · agent status</span></section>
       <section className="summary-card"><span className="summary-label">Source commit</span><strong className="summary-value mono" title={run.data.run.sourceCommit}>{run.data.run.sourceCommit.slice(0, 12)}</strong><span className="summary-meta">Pinned at launch</span></section>
       <section className="summary-card"><span className="summary-label">Created</span><strong className="summary-value"><time dateTime={run.data.run.createdAt}>{new Date(run.data.run.createdAt).toLocaleDateString()}</time></strong><span className="summary-meta">{new Date(run.data.run.createdAt).toLocaleTimeString()}</span></section>
     </div> : null}
@@ -189,10 +204,10 @@ function RunDetail() {
       <div className="table-heading"><div><h2 id="run-tasks-heading">Execution plan</h2><p>Frozen stages run after their dependencies. Attempts count reservations, not verified results. AX pod and interactive session status are not exposed here.</p></div><span className="fetched-time">{tasks.data?.tasks.length ?? 0} stages</span></div>
       {tasks.isPending ? <div className="table-empty" role="status">Loading stages…</div> : null}
       {tasks.isError ? <div className="table-empty" role="alert">Execution plan is unavailable. <button type="button" className="text-action" onClick={() => void tasks.refetch()}>Try again</button></div> : null}
-      {tasks.data ? <DataTable table={taskTable} label="Run execution plan" empty="No stages have been frozen for this run." /> : null}
+      {tasks.data ? <StageStatuses.Provider value={statuses}><DataTable table={taskTable} label="Run execution plan" empty="No stages have been frozen for this run." /></StageStatuses.Provider> : null}
     </section> : null}
     {run.data?.run && selectedTask && session.data ? <StagePanel key={selectedTask.id} task={selectedTask} principalId={session.data.principalId} mayControl={mayOperate}
-      interactions={interactions.data ?? []} events={events} label={activityLabel} scope={scope} runId={runId} /> : null}
+      interactions={interactions.data ?? []} events={events} status={statuses.get(selectedTask.key) ?? null} scope={scope} runId={runId} /> : null}
     {run.data?.run ? <FinalReview runId={runId} scope={scope} state={run.data.run.state} /> : null}
     {run.data?.run ? <section className="table-section" aria-labelledby="command-exits-heading">
       <div className="table-heading"><div><h2 id="command-exits-heading">Command observations</h2><p>Connector-signed exits are unverified. A zero exit does not verify artifacts or complete a task.</p></div><span className="fetched-time">{observations.length} observed</span></div>

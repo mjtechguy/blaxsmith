@@ -3,10 +3,12 @@ package terminal
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -282,4 +284,136 @@ func TestGuestTargetValidated(t *testing.T) {
 	if _, err := NewRouter("http://router"); err == nil {
 		t.Fatal("URL accepted as router address")
 	}
+}
+
+// slowClient records every frame a viewer receives; it acks only on request.
+type slowClient struct {
+	c      *websocket.Conn
+	mu     sync.Mutex
+	sizes  []int
+	text   []map[string]any
+	closed error
+}
+
+func dialWindowed(t *testing.T, guest *Guest, window Window) *slowClient {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		s := &Session{Guest: guest, Recheck: time.Hour, Window: window, Check: func(context.Context) (Access, error) {
+			return Access{State: State{Type: "state", Control: "agent", Stage: "implement", AttemptStatus: "running"}}, nil
+		}}
+		s.Serve(r.Context(), c)
+	}))
+	t.Cleanup(server.Close)
+	c, _, err := websocket.Dial(t.Context(), "ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.CloseNow() })
+	client := &slowClient{c: c}
+	go func() {
+		for {
+			kind, data, err := c.Read(context.Background())
+			client.mu.Lock()
+			switch {
+			case err != nil:
+				client.closed = err
+			case kind == websocket.MessageBinary:
+				client.sizes = append(client.sizes, len(data))
+			default:
+				var v map[string]any
+				_ = json.Unmarshal(data, &v)
+				client.text = append(client.text, v)
+			}
+			client.mu.Unlock()
+			if err != nil {
+				return
+			}
+		}
+	}()
+	return client
+}
+
+func (s *slowClient) received() (int, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	total := 0
+	for _, n := range s.sizes {
+		total += n
+	}
+	return len(s.sizes), total
+}
+
+func (s *slowClient) ack(t *testing.T, n int) {
+	t.Helper()
+	if err := s.c.Write(t.Context(), websocket.MessageText, fmt.Appendf(nil, `{"type":"ack","bytes":%d}`, n)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// settled waits for in-flight frames, then reports the frame count.
+func (s *slowClient) settled() int {
+	time.Sleep(150 * time.Millisecond)
+	n, _ := s.received()
+	return n
+}
+
+func TestOutputWindowWaitsForAcknowledgements(t *testing.T) {
+	fake, guest := newFakeGuest(t)
+	client := dialWindowed(t, guest, Window{Chunks: 4, Bytes: 64 << 10, Buffer: 1 << 20})
+	eventually(t, "attach", func() bool { return len(fake.Commands("script")) == 1 })
+	for range 11 {
+		fake.Output("1", []byte(strings.Repeat("x", 1000)))
+	}
+	// 12 frames are ready ("screen\r\n" plus 11); only a window of 4 is sent.
+	eventually(t, "first window", func() bool { n, _ := client.received(); return n == 4 })
+	if n := client.settled(); n != 4 {
+		t.Fatalf("sent %d frames without acknowledgement", n)
+	}
+	client.ack(t, len("screen\r\n")+1000) // two frames rendered: two more may go
+	eventually(t, "window reopened", func() bool { n, _ := client.received(); return n == 6 })
+	if n := client.settled(); n != 6 {
+		t.Fatalf("ack of two frames released %d", n-4)
+	}
+	client.ack(t, 500) // a partial frame retires nothing
+	if n := client.settled(); n != 6 {
+		t.Fatalf("partial ack released a frame: %d", n)
+	}
+	client.ack(t, 1<<30) // an ack larger than the wire only retires what was sent
+	eventually(t, "next window", func() bool { n, _ := client.received(); return n == 10 })
+	if n := client.settled(); n != 10 {
+		t.Fatalf("oversized ack pre-paid output: %d frames", n)
+	}
+	client.ack(t, 4000)
+	eventually(t, "all output", func() bool { n, total := client.received(); return n == 12 && total == len("screen\r\n")+11000 })
+}
+
+func TestSlowViewerIsDroppedWithErrorFrame(t *testing.T) {
+	fake, guest := newFakeGuest(t)
+	client := dialWindowed(t, guest, Window{Chunks: 2, Bytes: 8 << 10, Buffer: 16 << 10})
+	eventually(t, "attach", func() bool { return len(fake.Commands("script")) == 1 })
+	for range 10 { // the viewer never acks: 40 KiB overflows the 16 KiB buffer
+		fake.Output("1", []byte(strings.Repeat("y", 4<<10)))
+	}
+	eventually(t, "viewer dropped", func() bool {
+		client.mu.Lock()
+		defer client.mu.Unlock()
+		return client.closed != nil
+	})
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	if len(client.sizes) > 2 {
+		t.Fatalf("window exceeded without acknowledgement: %v", client.sizes)
+	}
+	last := client.text[len(client.text)-1]
+	if last["type"] != "error" || last["message"] != ErrSlowViewer {
+		t.Fatalf("error frame: %v", client.text)
+	}
+	if websocket.CloseStatus(client.closed) != websocket.StatusPolicyViolation {
+		t.Fatalf("close: %v", client.closed)
+	}
+	eventually(t, "attach client killed", func() bool { return fake.Snapshot()[0].Killed })
 }

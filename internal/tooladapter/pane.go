@@ -154,14 +154,17 @@ func Pane(args []string) int {
 		}
 		cmd.Stderr = io.MultiWriter(stderrLog, redactor{os.Stderr})
 		streamed = make(chan struct{})
+		work := paneActivity(l.Dir)
 		go func() {
 			defer close(streamed)
+			defer work.Close() // held work-log records are written before done is signalled
 			reader := bufio.NewReaderSize(stdout, 64<<10)
 			for {
 				line, err := reader.ReadBytes('\n')
 				if len(line) > 0 {
 					_, _ = events.Write(line)
 					text, id, final := renderEvent(line)
+					work.Observe(bytes.TrimSpace(line))
 					if id != "" && session == "" {
 						session = id
 						_ = writeAtomic(statePath("session-id"), []byte(id+"\n"), 0600)

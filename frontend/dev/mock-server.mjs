@@ -76,6 +76,7 @@ const findings = [["TestExportCSV: header row missing `created_at`", "retention 
 function nextCycle() {
   cycle += 1;
   progress("verify", { type: "cycle", cycle, max_cycles: cap, status: "running" });
+  void verifyWork(cycle);
   setTimeout(() => {
     for (const text of findings[(cycle - 1) % findings.length]) progress("verify", { type: "finding", cycle, text });
     const pass = cycle > 3;
@@ -98,6 +99,40 @@ function finishVerify() {
   emit("human-review", "review.presented");
 }
 setTimeout(nextCycle, 1_500);
+
+// Agent work log (docs/interactive-sessions.md, "Agent activity"): the normalized records the
+// guest pane derives from harness JSON, replayed on a timer. Same id = same item, latest wins.
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function planWork() {
+  const todo = (statuses) => progress("plan", { type: "plan.updated", id: "plan", items: [
+    ["Read the export handler and spec", statuses[0]], ["Map CSV/JSON writer changes", statuses[1]], ["Draft crew plan", statuses[2]], ["Ask for plan approval", statuses[3]]].map(([text, status]) => ({ text, status })) });
+  todo(["in_progress", "pending", "pending", "pending"]);
+  progress("plan", { type: "assistant.message", id: "msg_1", text: "I'll read the export handler and the spec before drafting the crew plan." });
+  for (const [id, tool, input, ms] of [["toolu_1", "Read", "internal/export/handler.go", 40], ["toolu_2", "Read", "docs/spec.md", 25], ["toolu_3", "Grep", "created_at", 12], ["toolu_4", "Glob", "internal/export/**/*_test.go", 8]]) {
+    await sleep(700);
+    progress("plan", { type: "tool.completed", id, tool, input, status: id === "toolu_3" ? "failed" : "completed", duration_ms: ms });
+  }
+  todo(["completed", "in_progress", "pending", "pending"]);
+  await sleep(800);
+  progress("plan", { type: "command", id: "toolu_5", cmd: "go test ./internal/export/... -run TestExport", status: "running" });
+  await sleep(2_500);
+  progress("plan", { type: "command", id: "toolu_5", cmd: "go test ./internal/export/... -run TestExport", status: "failed", exit: 1, duration_ms: 2_480 });
+  await sleep(600);
+  progress("plan", { type: "tool.started", id: "toolu_6", tool: "WebFetch", input: "https://www.rfc-editor.org/rfc/rfc3339", status: "running" });
+  await sleep(1_800);
+  progress("plan", { type: "tool.completed", id: "toolu_6", tool: "WebFetch", input: "https://www.rfc-editor.org/rfc/rfc3339", status: "completed", duration_ms: 1_790 });
+  progress("plan", { type: "file.changed", id: "toolu_7", tool: "Write", path: "docs/plans/export-crew.md", status: "completed", added: 42, removed: 0 });
+  todo(["completed", "completed", "completed", "in_progress"]);
+  progress("plan", { type: "assistant.message", id: "msg_2", text: "Crew plan drafted in docs/plans/export-crew.md. Waiting for approval before implementation starts.\n\nRisk: the retention job touches the shared scheduler.", truncated: false });
+}
+async function verifyWork(n) {
+  progress("verify", { type: "command", id: `cmd-${n}`, cmd: "go test ./...", status: "running" });
+  await sleep(1_500);
+  progress("verify", { type: "command", id: `cmd-${n}`, cmd: "go test ./...", status: n > 3 ? "completed" : "failed", exit: n > 3 ? 0 : 1, duration_ms: 1_480 });
+  progress("verify", { type: "file.changed", id: `edit-${n}`, tool: "Edit", path: "internal/export/csv.go", status: "completed", added: 3, removed: 1 });
+  progress("verify", { type: "file.changed", id: `edit-${n}b`, tool: "Edit", path: "internal/export/retention_test.go", status: "completed", added: 12, removed: 4 });
+}
+void planWork();
 
 function answered(item, answer) {
   if (item.kind === "interview_round") {

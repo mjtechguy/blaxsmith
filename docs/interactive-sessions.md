@@ -63,6 +63,20 @@ revocation).
   - server → client: `{"type":"state","control":"agent"|"human","holder":"<principalId>"|null,"stage":"<stageId>","attemptStatus":"<status>"}`
   - server → client: `{"type":"exit","code":0}` then close.
   - server → client: `{"type":"error","message":"<safe message>"}` then close.
+  - client → server: `{"type":"ack","bytes":N}` after rendering N more bytes
+    of terminal output (see flow control).
+
+Flow control (idea from t3code's terminal OutputProtocol): the server keeps an
+acknowledgement window per socket. At most 8 binary frames or 64 KiB of
+terminal output are unacknowledged on the wire (frames are at most 16 KiB).
+The client acks the bytes it has rendered (xterm `write` callback); an ack
+retires every frame it fully covers and never credits more than is on the
+wire. Guest output waiting behind a full window is buffered up to 1 MiB per
+socket; past that the server sends `{"type":"error","message":"terminal
+output overflowed; the viewer fell behind"}` and closes the socket instead of
+growing memory. Clients treat that error as transient and reconnect (tmux
+redraws the screen on attach). A client that never acks stalls after the
+first window.
 
 Connect RPCs (in the existing workflow service):
 - `TakeOverAttempt(attempt_id)` → holder becomes caller, guest takeover runs,
@@ -171,6 +185,35 @@ Answer: `{"interaction_id":"...","option_ids":["a"],"text":"...","answered_by":"
   and controls for pause after this cycle, halt with reason, change cap, and
   add an instruction for the next cycle.
 - Stage activity feed from `event`s; the terminal stays available alongside.
+
+### Agent activity (work log)
+
+While `pane` renders each harness JSON line (Claude stream-json, Codex
+`exec --json`, OpenCode `run --format json`) it also appends normalized
+records to the guest watch log, so they reach the UI as `attempt.progress`
+payloads through the existing watcher and SSE (no schema change):
+
+| `type` | fields |
+| --- | --- |
+| `tool.started` / `tool.completed` | `id`, `tool`, `input` (short summary), `status` running/completed/failed, `duration_ms` |
+| `command` | `id`, `cmd`, `status`, `exit` (when known), `duration_ms` |
+| `file.changed` | `id`, `path` (workspace-relative), `kind` add/update/delete (Codex), `added`/`removed` (when known), `status` |
+| `plan.updated` | `id:"plan"`, `items:[{text, status: pending/in_progress/completed/cancelled}]` (Claude TodoWrite, Codex todo_list, OpenCode todowrite) |
+| `assistant.message` | `id`, `text` (bounded summary) |
+
+A later record with the same family (`tool.*` counts as one) and `id`
+replaces the earlier one. Non-final records (a running tool or command, a
+plan update) are held for 500 ms per item and only the latest is written;
+a final record replaces anything held and is written at once, so a fast tool
+call produces one record. Records are redacted of the leased key and capped
+at 4 KiB (text 1000, cmd 500, input 200 runes; plans 30 items); anything cut
+is marked `"truncated": true`. The server accepts these types in
+`attempt.progress` with the same 8 KiB truncation as other progress events.
+
+Status rollup per stage and run (highest wins): Needs approval (open
+approval interaction) > Awaiting input (open question, interview round, or
+escalation) > Working (running attempt) > Plan ready (a finished plan stage
+whose dependents have not started) > Failed > Done.
 
 ### Wire shapes (settled)
 
