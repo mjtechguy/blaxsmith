@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from "react";
 
-export function TextField({ label, name, value, onChange, onBlur, autoComplete, placeholder, type = "text", autoFocus, error, trailing, required = true }: {
+export function TextField({ label, name, value, onChange, onBlur, autoComplete, placeholder, type = "text", autoFocus, error, trailing, required = true, readOnly }: {
   label: string;
   name: string;
   value: string;
@@ -8,7 +8,8 @@ export function TextField({ label, name, value, onChange, onBlur, autoComplete, 
   onBlur: () => void;
   autoComplete: string;
   placeholder: string;
-  type?: "text" | "password" | "url";
+  type?: "text" | "password" | "url" | "email";
+  readOnly?: boolean;
   autoFocus?: boolean;
   error?: string;
   trailing?: ReactNode;
@@ -16,7 +17,7 @@ export function TextField({ label, name, value, onChange, onBlur, autoComplete, 
 }) {
   const id = useId();
   const input = <input id={id} type={type} autoFocus={autoFocus} autoComplete={autoComplete} name={name} value={value}
-    onBlur={onBlur} onChange={(event) => onChange(event.target.value)} required={required} placeholder={placeholder}
+    onBlur={onBlur} onChange={(event) => onChange(event.target.value)} required={required} placeholder={placeholder} readOnly={readOnly}
     aria-invalid={error ? true : undefined} aria-describedby={error ? `${id}-error` : undefined} />;
   return <div className="form-field"><label htmlFor={id}>{label}</label>
     {trailing ? <span className="field-with-action">{input}{trailing}</span> : input}

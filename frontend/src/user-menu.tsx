@@ -23,7 +23,7 @@ export function UserMenu() {
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const id = useId();
-  const name = account?.displayName || account?.username || "Your account";
+  const name = account?.displayName || account?.email || "Your account";
 
   const items = () => [...(menu.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([aria-disabled="true"])') ?? [])];
   const focusItem = (index: number) => { const list = items(); list[(index + list.length) % list.length]?.focus(); };
@@ -78,7 +78,7 @@ export function UserMenu() {
     {isOpen ? <div ref={menu} id={`${id}-menu`} className="user-menu-panel" role="menu" aria-labelledby={`${id}-button`} onKeyDown={onMenuKey}>
       <div className="user-menu-identity" role="presentation">
         <span className="avatar avatar-large" aria-hidden="true">{initials(account)}</span>
-        <span><strong>{name}</strong><small>{account?.username ? `@${account.username}` : "Signed in"}</small>
+        <span><strong>{name}</strong><small>{account?.displayName && account.email ? account.email : "Signed in"}</small>
           <small>{account?.organizationName || "Organization"} · {roleLabel[account?.role ?? ""] ?? account?.role}</small></span>
       </div>
       <div className="user-menu-separator" role="separator" />

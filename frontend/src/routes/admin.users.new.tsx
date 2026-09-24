@@ -3,6 +3,7 @@ import { useForm } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, RefreshCw, UserPlus } from "lucide-react";
+import { emailProblem } from "../account";
 import { OneTimeLink } from "../account-link";
 import { currentSession, sessionQueryKey } from "../auth";
 import { TextField } from "../form-field";
@@ -12,7 +13,6 @@ import { assignableRoles, inviteUser, membersKey, userAdminError } from "../user
 
 export const Route = createFileRoute("/admin/users/new")({ component: InviteUser });
 
-const usernamePattern = /^[a-z][a-z0-9._-]{2,63}$/;
 const roleHelp: Record<string, string> = {
   owner: "Full organization administration, including other owners.",
   admin: "Organization administration and member management, except owners.",
@@ -26,20 +26,21 @@ function InviteUser() {
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const roles = assignableRoles(session.data);
   const [error, setError] = useState("");
-  const [issued, setIssued] = useState<{ link: AccountLink; username: string } | null>(null);
+  const [issued, setIssued] = useState<{ link: AccountLink; email: string } | null>(null);
   const form = useForm({
-    defaultValues: { username: "", displayName: "", role: "member" },
+    defaultValues: { email: "", displayName: "", role: "member" },
     onSubmit: async ({ value }) => {
       setError("");
-      const username = value.username.trim().toLowerCase();
-      if (!usernamePattern.test(username) || value.displayName.trim().length > 160) {
-        setError("Check the username and display name before inviting.");
+      const email = value.email.trim().toLowerCase();
+      if (emailProblem(email) || value.displayName.trim().length > 160) {
+        setError("Check the email and display name before inviting.");
         return;
       }
       try {
-        const response = await inviteUser(username, value.displayName.trim(), value.role);
-        await queryClient.invalidateQueries({ queryKey: membersKey(session.data?.organizationId || "") });
-        if (response.link) setIssued({ link: response.link, username });
+        const response = await inviteUser(email, value.displayName.trim(), value.role);
+        await Promise.all([queryClient.invalidateQueries({ queryKey: membersKey(session.data?.organizationId || "") }),
+          queryClient.invalidateQueries({ queryKey: ["workspace-members"] })]);
+        if (response.link) setIssued({ link: response.link, email });
         else setError("The member was created, but no setup link was returned. Issue a new setup link from the Users list.");
       } catch (cause) {
         setError(userAdminError(cause));
@@ -49,17 +50,17 @@ function InviteUser() {
 
 
   return <PageShell>
-    <PageHeader eyebrow="Administration / Users / New" title="Invite a user" description="Create a local account and get a one-time setup link to hand to them. No email is sent." />
+    <PageHeader eyebrow="Administration / Users / New" title="Invite a user" description="Invite someone by email and get a one-time setup link to hand to them. No email is sent." />
     <Link to="/admin/users" className="text-action"><ArrowLeft size={15} aria-hidden="true" /> Back to users</Link>
     <div className="editor-layout">
       <section className="editor-card" aria-labelledby="invite-heading">
-        <div className="editor-card-heading"><span className="project-symbol"><UserPlus size={18} aria-hidden="true" /></span><div><h2 id="invite-heading">{issued ? "Invitation created" : "Account details"}</h2><p>{issued ? `${issued.username} can now choose a password with this link.` : "The username is used to sign in and cannot be changed later."}</p></div></div>
+        <div className="editor-card-heading"><span className="project-symbol"><UserPlus size={18} aria-hidden="true" /></span><div><h2 id="invite-heading">{issued ? "Invitation created" : "Account details"}</h2><p>{issued ? `${issued.email} can now choose a password with this link.` : "They sign in with this email. It must not already belong to another account."}</p></div></div>
         {issued ? <>
-          <OneTimeLink link={issued.link} username={issued.username} />
+          <OneTimeLink link={issued.link} recipient={issued.email} />
           <div className="editor-actions"><button type="button" className="secondary-button" onClick={() => { setIssued(null); form.reset(); }}>Invite another</button><Link to="/admin/users" className="primary-button">Done</Link></div>
-        </> : <form className="editor-form" onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
-          <form.Field name="username" validators={{ onBlur: ({ value }) => usernamePattern.test(value.trim().toLowerCase()) ? undefined : "Use 3–64 lowercase letters, numbers, dots, underscores, or hyphens; start with a letter." }}>
-            {(field) => <TextField autoFocus label="Username" name={field.name} autoComplete="off" placeholder="jordan" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} />}
+        </> : <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
+          <form.Field name="email" validators={{ onBlur: ({ value }) => emailProblem(value) }}>
+            {(field) => <TextField autoFocus label="Email" type="email" name={field.name} autoComplete="off" placeholder="jordan@example.com" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} />}
           </form.Field>
           <form.Field name="displayName" validators={{ onBlur: ({ value }) => value.trim().length <= 160 ? undefined : "Use at most 160 characters." }}>
             {(field) => <TextField label="Display name (optional)" name={field.name} autoComplete="off" placeholder="Jordan Lee" required={false} value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} />}

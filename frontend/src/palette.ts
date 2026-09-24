@@ -10,7 +10,7 @@ export type PaletteData = {
   runs?: Array<{ id: string; projectId: string; launchKey: string; state: string }>;
   recipes?: Array<{ id: string; name: string; projectId: string; currentVersionId: string }>;
   connections?: Array<{ id: string; scope: string; ownerId: string; provider: string; kind: string; label: string }>;
-  users?: Array<{ principalId: string; username: string; displayName: string; role: string }>;
+  users?: Array<{ principalId: string; username: string; displayName: string; email?: string; role: string }>;
   inbox?: Array<{ id: string; runId: string; projectId: string; projectName: string; title: string; kind: string; stage?: string }>;
 };
 
@@ -73,7 +73,7 @@ export function paletteItems(role: string, data: PaletteData, context: { project
   }
   if (isAdmin(role)) {
     for (const u of data.users ?? []) {
-      out.push({ id: `user:${u.principalId}`, group: "Users", label: u.displayName || u.username, detail: `${u.username} · ${u.role}`, to: "/admin/users", keywords: u.username });
+      out.push({ id: `user:${u.principalId}`, group: "Users", label: u.displayName || u.email || u.username, detail: `${u.email || u.username} · ${u.role}`, to: "/admin/users", keywords: `${u.email ?? ""} ${u.username}` });
     }
   }
   return out;

@@ -23,7 +23,7 @@ export const listWorkspaceRuns = (view: TableView, projectId = "", signal?: Abor
   client.listWorkspaceRuns({ page: view.page, pageSize: view.size, search: view.q, states: view.filters.state ?? [], projectId,
     sortBy: runSort[view.sort[0]?.id ?? "created"] ?? "created_at", sortDirection: view.sort[0]?.desc === false ? "asc" : "desc" }, { signal });
 
-const memberSort: Record<string, string> = { username: "username", role: "role", lastLogin: "last_login", created: "created_at" };
+const memberSort: Record<string, string> = { member: "email", role: "role", lastLogin: "last_login", created: "created_at" };
 export const listMembersPage = (view: TableView, signal?: AbortSignal) =>
   client.listMembersPage({ page: view.page, pageSize: view.size, search: view.q, roles: view.filters.role ?? [], statuses: view.filters.status ?? [],
     sortBy: memberSort[view.sort[0]?.id ?? "role"] ?? "role", sortDirection: view.sort[0]?.desc ? "desc" : "asc" }, { signal });
