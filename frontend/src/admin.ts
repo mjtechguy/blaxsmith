@@ -39,7 +39,8 @@ export const auditActions = [
   "identity.user.invited", "identity.user.reset_link_issued", "identity.user.role_changed", "identity.user.sessions_revoked",
   "identity.user.setup_link_issued", "installation.bootstrap_owner",
   "workflow.attempt.steered", "workflow.interaction.answered", "workflow.project.created", "workflow.project_source.set",
-  "workflow.project_verification.set", "workflow.review.presented", "workflow.review.superseded",
+  "workflow.project_verification.set", "workflow.recipe.created", "workflow.recipe.current_set", "workflow.recipe.version_created",
+  "workflow.review.presented", "workflow.review.superseded",
   "workflow.run.halted", "workflow.run.launched",
 ];
 

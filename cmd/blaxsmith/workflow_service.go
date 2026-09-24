@@ -294,35 +294,30 @@ func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[ap
 	if caller.Role != "owner" && caller.Role != "admin" && caller.Role != "member" {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("run launch denied"))
 	}
-	source, err := s.store.GetProjectSource(ctx, caller.OrganizationID, req.Msg.ProjectId)
-	if err != nil {
-		return nil, workflowError(err)
+	var library workflow.RecipeVersion
+	if req.Msg.RecipeVersionId != "" {
+		if req.Msg.RecipePath != "" {
+			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("choose a library recipe version or a recipe path, not both"))
+		}
+		if library, err = s.store.LibraryRecipeForLaunch(ctx, caller, req.Msg.ProjectId, req.Msg.RecipeVersionId); err != nil {
+			return nil, workflowError(err)
+		}
 	}
 	verification, err := s.store.GetProjectVerification(ctx, caller.OrganizationID, req.Msg.ProjectId)
 	if err != nil {
 		return nil, workflowError(err)
 	}
-	repositoryURL, ref, err := workflow.ValidatePublicGitSource(ctx, source.RepositoryURL, source.Ref)
+	source, repositoryURL, fetched, err := s.fetchProjectSource(ctx, caller.OrganizationID, req.Msg.ProjectId)
 	if err != nil {
-		return nil, workflowError(err)
-	}
-	var fetched gitfetch.Source
-	if source.GitConnectionID != "" {
-		username, token, err := s.privateSourceCredential(ctx, caller.OrganizationID, source)
-		if err != nil {
-			return nil, workflowError(err)
-		}
-		fetched, err = gitfetch.FetchAuth(ctx, repositoryURL, ref, username, token)
-		clear(token)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("private repository fetch failed; check the URL, ref, and the Git connection's access"))
-		}
-	} else if fetched, err = gitfetch.Fetch(ctx, repositoryURL, ref); err != nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("repository fetch failed; check the URL, ref, and public access"))
+		return nil, err
 	}
 	defer fetched.Close()
 	sourceInput := recipe.Input{Repo: fetched.Directory, Ref: fetched.Commit, Recipe: req.Msg.RecipePath,
 		Spec: req.Msg.SpecPath, Transcript: req.Msg.TranscriptPath, Scope: req.Msg.Scope}
+	if library.ID != "" {
+		// The chosen version's exact bytes are frozen as the committed file was.
+		sourceInput.Recipe, sourceInput.RecipeData = library.FrozenPath, library.JSON
+	}
 	bundle, err := recipe.Freeze(ctx, sourceInput)
 	if err != nil {
 		return nil, workflowError(fmt.Errorf("%w: %v", workflow.ErrRecipe, err))
@@ -339,12 +334,40 @@ func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[ap
 		OrganizationID: caller.OrganizationID, ProjectID: req.Msg.ProjectId, LaunchKey: req.Msg.LaunchKey,
 		Source:       sourceInput,
 		Verification: verification.Policy, Caller: &caller, SourceRepositoryURL: source.RepositoryURL,
-		SourceRef: source.Ref, VerificationVersion: verification.Version,
+		SourceRef: source.Ref, VerificationVersion: verification.Version, RecipeVersionID: library.ID,
 	})
 	if err != nil {
 		return nil, workflowError(err)
 	}
 	return connect.NewResponse(&api.LaunchRunResponse{Run: runMessage(run)}), nil
+}
+
+// fetchProjectSource materializes the project's configured source at its ref,
+// with the granted Git connection when the source is private.
+func (s *workflowService) fetchProjectSource(ctx context.Context, orgID, projectID string) (workflow.ProjectSource, string, gitfetch.Source, error) {
+	source, err := s.store.GetProjectSource(ctx, orgID, projectID)
+	if err != nil {
+		return source, "", gitfetch.Source{}, workflowError(err)
+	}
+	repositoryURL, ref, err := workflow.ValidatePublicGitSource(ctx, source.RepositoryURL, source.Ref)
+	if err != nil {
+		return source, "", gitfetch.Source{}, workflowError(err)
+	}
+	var fetched gitfetch.Source
+	if source.GitConnectionID != "" {
+		username, token, err := s.privateSourceCredential(ctx, orgID, source)
+		if err != nil {
+			return source, "", gitfetch.Source{}, workflowError(err)
+		}
+		fetched, err = gitfetch.FetchAuth(ctx, repositoryURL, ref, username, token)
+		clear(token)
+		if err != nil {
+			return source, "", gitfetch.Source{}, connect.NewError(connect.CodeFailedPrecondition, errors.New("private repository fetch failed; check the URL, ref, and the Git connection's access"))
+		}
+	} else if fetched, err = gitfetch.Fetch(ctx, repositoryURL, ref); err != nil {
+		return source, "", gitfetch.Source{}, connect.NewError(connect.CodeFailedPrecondition, errors.New("repository fetch failed; check the URL, ref, and public access"))
+	}
+	return source, repositoryURL, fetched, nil
 }
 
 func (s *workflowService) GetLaunchAvailability(ctx context.Context, req *connect.Request[api.GetLaunchAvailabilityRequest]) (*connect.Response[api.GetLaunchAvailabilityResponse], error) {

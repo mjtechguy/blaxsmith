@@ -3,7 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { Activity, ArrowRight, Inbox, KeyRound, OctagonX, RefreshCw, ScrollText, ShieldAlert, Square, Trash2, Users } from "lucide-react";
+import { Activity, ArrowRight, BookCopy, Inbox, KeyRound, OctagonX, RefreshCw, ScrollText, ShieldAlert, Square, Trash2, Users } from "lucide-react";
 import { ADMIN_REFRESH_MS, adminOverviewKey, ago, getAdminOverview, haltRun, isOrgAdmin, revokeGrant } from "../admin";
 import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
@@ -140,7 +140,7 @@ function AdminOverview() {
 
   return <PageShell>
     <PageHeader eyebrow="Administration" title="Operations" description="What is running, what is waiting on a person, and connection health across every project in this organization."
-      actions={<><Link className="secondary-button" to="/admin/users"><Users size={15} aria-hidden="true" /> Users</Link><Link className="secondary-button" to="/admin/audit"><ScrollText size={15} aria-hidden="true" /> Audit log</Link></>} />
+      actions={<><Link className="secondary-button" to="/admin/users"><Users size={15} aria-hidden="true" /> Users</Link><Link className="secondary-button" to="/admin/recipes"><BookCopy size={15} aria-hidden="true" /> Recipes</Link><Link className="secondary-button" to="/admin/audit"><ScrollText size={15} aria-hidden="true" /> Audit log</Link></>} />
     {overview.isPending ? <div className="state-panel" role="status"><RefreshCw className="spin" size={22} aria-hidden="true" /><h2>Loading operations</h2></div> : null}
     {overview.isError ? <div className="state-panel" role="alert"><h2>{denied ? "Administration is restricted" : "Operations unavailable"}</h2><p>{denied ? "Your session is not an organization owner or admin." : "The admin overview could not be loaded."}</p>{denied ? null : <button className="secondary-button" type="button" onClick={() => void overview.refetch()}>Try again</button>}</div> : null}
     {data ? <>

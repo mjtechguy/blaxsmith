@@ -2289,8 +2289,11 @@ type LaunchRunRequest struct {
 	SpecPath       string                 `protobuf:"bytes,4,opt,name=spec_path,json=specPath,proto3" json:"spec_path,omitempty"`                   // Committed repository path.
 	TranscriptPath string                 `protobuf:"bytes,5,opt,name=transcript_path,json=transcriptPath,proto3" json:"transcript_path,omitempty"` // Committed repository path.
 	Scope          string                 `protobuf:"bytes,6,opt,name=scope,proto3" json:"scope,omitempty"`                                         // Repository-relative code scope.
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Library recipe version to freeze instead of recipe_path. Its bytes are
+	// frozen under the version's path label; prompts and skills come from Git.
+	RecipeVersionId string `protobuf:"bytes,7,opt,name=recipe_version_id,json=recipeVersionId,proto3" json:"recipe_version_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *LaunchRunRequest) Reset() {
@@ -2361,6 +2364,13 @@ func (x *LaunchRunRequest) GetTranscriptPath() string {
 func (x *LaunchRunRequest) GetScope() string {
 	if x != nil {
 		return x.Scope
+	}
+	return ""
+}
+
+func (x *LaunchRunRequest) GetRecipeVersionId() string {
+	if x != nil {
+		return x.RecipeVersionId
 	}
 	return ""
 }
@@ -4947,7 +4957,7 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\rGetRunRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\"9\n" +
 	"\x0eGetRunResponse\x12'\n" +
-	"\x03run\x18\x01 \x01(\v2\x15.blaxsmith.api.v1.RunR\x03run\"\xcd\x01\n" +
+	"\x03run\x18\x01 \x01(\v2\x15.blaxsmith.api.v1.RunR\x03run\"\xf9\x01\n" +
 	"\x10LaunchRunRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1d\n" +
@@ -4957,7 +4967,8 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"recipePath\x12\x1b\n" +
 	"\tspec_path\x18\x04 \x01(\tR\bspecPath\x12'\n" +
 	"\x0ftranscript_path\x18\x05 \x01(\tR\x0etranscriptPath\x12\x14\n" +
-	"\x05scope\x18\x06 \x01(\tR\x05scope\"<\n" +
+	"\x05scope\x18\x06 \x01(\tR\x05scope\x12*\n" +
+	"\x11recipe_version_id\x18\a \x01(\tR\x0frecipeVersionId\"<\n" +
 	"\x11LaunchRunResponse\x12'\n" +
 	"\x03run\x18\x01 \x01(\v2\x15.blaxsmith.api.v1.RunR\x03run\"=\n" +
 	"\x1cGetLaunchAvailabilityRequest\x12\x1d\n" +

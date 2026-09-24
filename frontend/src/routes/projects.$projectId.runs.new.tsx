@@ -3,11 +3,13 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useForm } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, GitBranch, Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft, BookCopy, GitBranch, Plus, RefreshCw } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
 import { TextField } from "../form-field";
 import type { ProjectSource, ProjectVerification } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
+import { StageDag } from "../recipe-pages";
+import { getRecipe, getRecipeVersion, listRecipes, parseRecipe, recipeKey, recipesKey, recipeVersionKey, validateRecipe } from "../recipes";
 import { getLaunchAvailability, getProject, getProjectSource, getProjectVerification, launchAvailabilityQueryKey, launchRun, projectSourceQueryKey, projectVerificationQueryKey } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId/runs/new")({ component: NewRun });
@@ -44,17 +46,27 @@ function RunEditor({ projectId, org, source, verification }: { projectId: string
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
   const [launchKey] = useState(() => `run-${new Date().toISOString().slice(0, 19).replaceAll(":", "-")}-${crypto.randomUUID().slice(0, 8)}`);
+  const recipes = useQuery({ queryKey: recipesKey(org, projectId), enabled: Boolean(org), queryFn: ({ signal }) => listRecipes(projectId, signal) });
+  const [recipeId, setRecipeId] = useState("");
+  const [versionChoice, setVersionChoice] = useState("");
+  const chosenRecipe = recipes.data?.recipes.find((r) => r.id === recipeId);
+  const recipe = useQuery({ queryKey: recipeKey(org, recipeId), enabled: Boolean(org && recipeId), queryFn: ({ signal }) => getRecipe(recipeId, signal) });
+  const versionId = versionChoice || chosenRecipe?.currentVersionId || "";
+  const version = useQuery({ queryKey: recipeVersionKey(org, versionId), enabled: Boolean(org && versionId), queryFn: ({ signal }) => getRecipeVersion(versionId, signal) });
+  const order = useQuery({ queryKey: ["recipe-order", org, versionId], enabled: Boolean(org && version.data?.version), queryFn: ({ signal }) => validateRecipe(version.data?.version?.recipeJson || "", "", signal) });
   const form = useForm({
     defaultValues: { launchKey, recipePath: "", specPath: "", transcriptPath: "", scope: "." },
     onSubmit: async ({ value }) => {
       setError("");
       const fields = { launchKey: value.launchKey.trim(), recipePath: value.recipePath.trim(), specPath: value.specPath.trim(), transcriptPath: value.transcriptPath.trim(), scope: value.scope.trim() };
-      if (!fields.launchKey || fields.launchKey.length > 128 || !fields.recipePath || !fields.specPath || !fields.transcriptPath || !fields.scope) {
-        setError("Enter a run key of at most 128 characters and all committed paths and scope.");
+      // Advanced: a committed recipe path overrides the library choice.
+      const libraryVersion = fields.recipePath ? "" : versionId;
+      if (!fields.launchKey || fields.launchKey.length > 128 || (!fields.recipePath && !libraryVersion) || !fields.specPath || !fields.transcriptPath || !fields.scope) {
+        setError("Enter a run key of at most 128 characters, choose a recipe version (or a committed recipe path), and enter the spec, transcript, and scope.");
         return;
       }
       try {
-        const response = await launchRun(projectId, fields.launchKey, fields.recipePath, fields.specPath, fields.transcriptPath, fields.scope);
+        const response = await launchRun(projectId, fields.launchKey, fields.recipePath, fields.specPath, fields.transcriptPath, fields.scope, libraryVersion);
         if (!response.run?.id) throw new Error("Run response did not include an ID");
         await queryClient.invalidateQueries({ queryKey: ["runs", org, projectId] });
         await navigate({ to: "/projects/$projectId/runs/$runId", params: { projectId, runId: response.run.id } });
@@ -69,20 +81,37 @@ function RunEditor({ projectId, org, source, verification }: { projectId: string
     },
   });
 
-  return <div className="editor-layout">
+  return <><div className="editor-layout">
     <section className="editor-card" aria-labelledby="run-inputs-heading">
-      <div className="editor-card-heading"><span className="project-symbol"><GitBranch size={18} aria-hidden="true" /></span><div><h2 id="run-inputs-heading">Committed inputs</h2><p>Use paths from the configured repository and ref. Each must exist in the commit selected when this run starts.</p></div></div>
+      <div className="editor-card-heading"><span className="project-symbol"><GitBranch size={18} aria-hidden="true" /></span><div><h2 id="run-inputs-heading">Run inputs</h2><p>Choose a library recipe version. Spec, transcript, prompt, and skill paths must exist in the commit selected when this run starts.</p></div></div>
       <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
         <div className="notice"><strong>Guild recipe.</strong> Plan, implement, review, verify, architect review, then human review.{" "}
           <button type="button" className="text-action" onClick={() => {
-            form.setFieldValue("recipePath", "examples/guild/recipe.json");
+            const guild = recipes.data?.recipes.find((r) => r.name === "Guild engineering");
+            if (guild) { setRecipeId(guild.id); setVersionChoice(""); form.setFieldValue("recipePath", ""); } else form.setFieldValue("recipePath", "examples/guild/recipe.json");
             form.setFieldValue("specPath", "examples/guild/spec.md");
             form.setFieldValue("transcriptPath", "examples/guild/transcript.md");
-          }}>Use Guild example paths</button></div>
+          }}>Use the Guild example</button></div>
         <form.Field name="launchKey" validators={{ onBlur: ({ value }) => value.trim().length >= 1 && value.trim().length <= 128 ? undefined : "Use 1–128 characters." }}>
           {(field) => <TextField autoFocus label="Run key" name={field.name} autoComplete="off" placeholder="customer-portal-iteration-1" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} />}
         </form.Field>
-        <form.Field name="recipePath">{(field) => <TextField label="Recipe path" name={field.name} autoComplete="off" placeholder="automation/recipe.json" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} />}</form.Field>
+        <div className="recipe-grid">
+          <label className="form-field"><span>Recipe</span>
+            <select value={recipeId} onChange={(event) => { setRecipeId(event.target.value); setVersionChoice(""); }} disabled={!recipes.data}>
+              <option value="">{recipes.isPending ? "Loading recipes…" : recipes.isError ? "Recipes unavailable" : "Choose a recipe…"}</option>
+              {recipes.data?.recipes.map((r) => <option key={r.id} value={r.id}>{r.name}{r.projectId ? " · project" : " · organization"}</option>)}
+            </select></label>
+          <label className="form-field"><span>Version</span>
+            <select value={versionId} onChange={(event) => setVersionChoice(event.target.value)} disabled={!recipe.data}>
+              {!recipe.data ? <option value="">—</option> : null}
+              {recipe.data?.versions.map((v) => <option key={v.id} value={v.id}>v{v.version}{v.id === recipe.data?.recipe?.currentVersionId ? " · current" : ""} · {v.sha256.slice(0, 10)}</option>)}
+            </select></label>
+        </div>
+        {version.data?.version ? <p className="form-hint">Freezes v{version.data.version.version} (<code>{version.data.version.sha256.slice(0, 12)}</code>) as <code>{version.data.version.frozenPath}</code>. Its prompts and skills are read from the repository commit.</p> : null}
+        <p className="form-hint"><Link className="text-action" to="/projects/$projectId/recipes" params={{ projectId }}><BookCopy size={14} aria-hidden="true" /> Manage recipes</Link></p>
+        <details className="recipe-advanced"><summary>Advanced: use a committed recipe file</summary>
+          <form.Field name="recipePath">{(field) => <TextField label="Recipe path (overrides the library choice)" name={field.name} autoComplete="off" placeholder="automation/recipe.json" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} required={false} />}</form.Field>
+        </details>
         <form.Field name="specPath">{(field) => <TextField label="Spec path" name={field.name} autoComplete="off" placeholder="docs/spec.md" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} />}</form.Field>
         <form.Field name="transcriptPath">{(field) => <TextField label="Transcript path" name={field.name} autoComplete="off" placeholder="docs/transcript.md" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} />}</form.Field>
         <form.Field name="scope">{(field) => <TextField label="Code scope" name={field.name} autoComplete="off" placeholder="." value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} />}</form.Field>
@@ -95,8 +124,10 @@ function RunEditor({ projectId, org, source, verification }: { projectId: string
     <aside className="editor-note"><h2>Run prerequisites</h2>
       <dl className="launch-prerequisites"><div><dt>Git source</dt><dd>{source.repositoryUrl}<br /><span>{source.ref || "Remote default branch"}</span></dd></div>
         <div><dt>Verification · Version {verification.version.toString()}</dt><dd><ol>{verification.checks.map((check) => <li key={check.id}><strong>{check.id}</strong><code>{JSON.stringify(check.command)}</code></li>)}</ol></dd></div></dl>
-      <p>Enter repository-relative paths; this workspace does not yet have a repository file browser. The server validates the paths against the resolved commit and freezes the recipe and verification policy at launch.</p>
+      <p>Pick a recipe version from the library. The server freezes that version's exact bytes with the spec, transcript, prompts, and skills from the resolved commit, plus the verification policy, at launch.</p>
       <p>The run key makes duplicate launch requests idempotent. Use a new key for a distinct run.</p>
     </aside>
-  </div>;
+  </div>
+  {version.data?.version ? <StageDag doc={parseRecipe(version.data.version.recipeJson)} order={order.data?.stageOrder} title={`Stage graph · ${chosenRecipe?.name || "recipe"} v${version.data.version.version}`} /> : null}
+  </>;
 }

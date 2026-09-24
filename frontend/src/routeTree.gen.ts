@@ -20,6 +20,8 @@ import { Route as SetupTokenRouteImport } from './routes/setup.$token'
 import { Route as AdminConnectionsIndexRouteImport } from './routes/admin.connections.index'
 import { Route as AdminConnectionsConnectionIdRouteImport } from './routes/admin.connections.$connectionId'
 import { Route as AdminConnectionsGithubAppRouteImport } from './routes/admin.connections.github-app'
+import { Route as AdminRecipesIndexRouteImport } from './routes/admin.recipes.index'
+import { Route as AdminRecipesNewRouteImport } from './routes/admin.recipes.new'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin.users.index'
 import { Route as AdminUsersNewRouteImport } from './routes/admin.users.new'
 import { Route as MeConnectionsIndexRouteImport } from './routes/me.connections.index'
@@ -29,16 +31,22 @@ import { Route as ProjectsProjectIdSourceRouteImport } from './routes/projects.$
 import { Route as ProjectsProjectIdVerificationRouteImport } from './routes/projects.$projectId.verification'
 import { Route as AdminConnectionsNewApiKeyRouteImport } from './routes/admin.connections.new.api-key'
 import { Route as AdminConnectionsNewGitRouteImport } from './routes/admin.connections.new.git'
+import { Route as AdminRecipesRecipeIdIndexRouteImport } from './routes/admin.recipes.$recipeId.index'
 import { Route as MeConnectionsNewApiKeyRouteImport } from './routes/me.connections.new.api-key'
 import { Route as MeConnectionsNewSubscriptionRouteImport } from './routes/me.connections.new.subscription'
 import { Route as ProjectsProjectIdConnectionsIndexRouteImport } from './routes/projects.$projectId.connections.index'
 import { Route as ProjectsProjectIdConnectionsConnectionIdRouteImport } from './routes/projects.$projectId.connections.$connectionId'
 import { Route as ProjectsProjectIdModelAccessNewRouteImport } from './routes/projects.$projectId.model-access.new'
 import { Route as ProjectsProjectIdModelAccessSubscriptionRouteImport } from './routes/projects.$projectId.model-access.subscription'
+import { Route as ProjectsProjectIdRecipesIndexRouteImport } from './routes/projects.$projectId.recipes.index'
+import { Route as ProjectsProjectIdRecipesNewRouteImport } from './routes/projects.$projectId.recipes.new'
 import { Route as ProjectsProjectIdRunsRunIdRouteImport } from './routes/projects.$projectId.runs.$runId'
 import { Route as ProjectsProjectIdRunsNewRouteImport } from './routes/projects.$projectId.runs.new'
+import { Route as AdminRecipesRecipeIdVersionsNewRouteImport } from './routes/admin.recipes.$recipeId.versions.new'
 import { Route as ProjectsProjectIdConnectionsNewApiKeyRouteImport } from './routes/projects.$projectId.connections.new.api-key'
 import { Route as ProjectsProjectIdConnectionsNewGitRouteImport } from './routes/projects.$projectId.connections.new.git'
+import { Route as ProjectsProjectIdRecipesRecipeIdIndexRouteImport } from './routes/projects.$projectId.recipes.$recipeId.index'
+import { Route as ProjectsProjectIdRecipesRecipeIdVersionsNewRouteImport } from './routes/projects.$projectId.recipes.$recipeId.versions.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -97,6 +105,16 @@ const AdminConnectionsGithubAppRoute =
     path: '/admin/connections/github-app',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminRecipesIndexRoute = AdminRecipesIndexRouteImport.update({
+  id: '/admin/recipes/',
+  path: '/admin/recipes/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRecipesNewRoute = AdminRecipesNewRouteImport.update({
+  id: '/admin/recipes/new',
+  path: '/admin/recipes/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
   id: '/admin/users/',
   path: '/admin/users/',
@@ -146,6 +164,12 @@ const AdminConnectionsNewGitRoute = AdminConnectionsNewGitRouteImport.update({
   path: '/admin/connections/new/git',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRecipesRecipeIdIndexRoute =
+  AdminRecipesRecipeIdIndexRouteImport.update({
+    id: '/admin/recipes/$recipeId/',
+    path: '/admin/recipes/$recipeId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const MeConnectionsNewApiKeyRoute = MeConnectionsNewApiKeyRouteImport.update({
   id: '/me/connections/new/api-key',
   path: '/me/connections/new/api-key',
@@ -181,6 +205,18 @@ const ProjectsProjectIdModelAccessSubscriptionRoute =
     path: '/subscription',
     getParentRoute: () => ProjectsProjectIdModelAccessRoute,
   } as any)
+const ProjectsProjectIdRecipesIndexRoute =
+  ProjectsProjectIdRecipesIndexRouteImport.update({
+    id: '/recipes/',
+    path: '/recipes/',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdRecipesNewRoute =
+  ProjectsProjectIdRecipesNewRouteImport.update({
+    id: '/recipes/new',
+    path: '/recipes/new',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdRunsRunIdRoute =
   ProjectsProjectIdRunsRunIdRouteImport.update({
     id: '/runs/$runId',
@@ -193,6 +229,12 @@ const ProjectsProjectIdRunsNewRoute =
     path: '/runs/new',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const AdminRecipesRecipeIdVersionsNewRoute =
+  AdminRecipesRecipeIdVersionsNewRouteImport.update({
+    id: '/admin/recipes/$recipeId/versions/new',
+    path: '/admin/recipes/$recipeId/versions/new',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ProjectsProjectIdConnectionsNewApiKeyRoute =
   ProjectsProjectIdConnectionsNewApiKeyRouteImport.update({
     id: '/connections/new/api-key',
@@ -203,6 +245,18 @@ const ProjectsProjectIdConnectionsNewGitRoute =
   ProjectsProjectIdConnectionsNewGitRouteImport.update({
     id: '/connections/new/git',
     path: '/connections/new/git',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdRecipesRecipeIdIndexRoute =
+  ProjectsProjectIdRecipesRecipeIdIndexRouteImport.update({
+    id: '/recipes/$recipeId/',
+    path: '/recipes/$recipeId/',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdRecipesRecipeIdVersionsNewRoute =
+  ProjectsProjectIdRecipesRecipeIdVersionsNewRouteImport.update({
+    id: '/recipes/$recipeId/versions/new',
+    path: '/recipes/$recipeId/versions/new',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
 
@@ -217,12 +271,14 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/admin/connections/$connectionId': typeof AdminConnectionsConnectionIdRoute
   '/admin/connections/github-app': typeof AdminConnectionsGithubAppRoute
+  '/admin/recipes/new': typeof AdminRecipesNewRoute
   '/admin/users/new': typeof AdminUsersNewRoute
   '/me/connections/$connectionId': typeof MeConnectionsConnectionIdRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/admin/connections/': typeof AdminConnectionsIndexRoute
+  '/admin/recipes/': typeof AdminRecipesIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/me/connections/': typeof MeConnectionsIndexRoute
   '/admin/connections/new/api-key': typeof AdminConnectionsNewApiKeyRoute
@@ -232,11 +288,17 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/connections/$connectionId': typeof ProjectsProjectIdConnectionsConnectionIdRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/model-access/subscription': typeof ProjectsProjectIdModelAccessSubscriptionRoute
+  '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/admin/recipes/$recipeId/': typeof AdminRecipesRecipeIdIndexRoute
   '/projects/$projectId/connections/': typeof ProjectsProjectIdConnectionsIndexRoute
+  '/projects/$projectId/recipes/': typeof ProjectsProjectIdRecipesIndexRoute
+  '/admin/recipes/$recipeId/versions/new': typeof AdminRecipesRecipeIdVersionsNewRoute
   '/projects/$projectId/connections/new/api-key': typeof ProjectsProjectIdConnectionsNewApiKeyRoute
   '/projects/$projectId/connections/new/git': typeof ProjectsProjectIdConnectionsNewGitRoute
+  '/projects/$projectId/recipes/$recipeId/': typeof ProjectsProjectIdRecipesRecipeIdIndexRoute
+  '/projects/$projectId/recipes/$recipeId/versions/new': typeof ProjectsProjectIdRecipesRecipeIdVersionsNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -249,12 +311,14 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/admin/connections/$connectionId': typeof AdminConnectionsConnectionIdRoute
   '/admin/connections/github-app': typeof AdminConnectionsGithubAppRoute
+  '/admin/recipes/new': typeof AdminRecipesNewRoute
   '/admin/users/new': typeof AdminUsersNewRoute
   '/me/connections/$connectionId': typeof MeConnectionsConnectionIdRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/admin/connections': typeof AdminConnectionsIndexRoute
+  '/admin/recipes': typeof AdminRecipesIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/me/connections': typeof MeConnectionsIndexRoute
   '/admin/connections/new/api-key': typeof AdminConnectionsNewApiKeyRoute
@@ -264,11 +328,17 @@ export interface FileRoutesByTo {
   '/projects/$projectId/connections/$connectionId': typeof ProjectsProjectIdConnectionsConnectionIdRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/model-access/subscription': typeof ProjectsProjectIdModelAccessSubscriptionRoute
+  '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/admin/recipes/$recipeId': typeof AdminRecipesRecipeIdIndexRoute
   '/projects/$projectId/connections': typeof ProjectsProjectIdConnectionsIndexRoute
+  '/projects/$projectId/recipes': typeof ProjectsProjectIdRecipesIndexRoute
+  '/admin/recipes/$recipeId/versions/new': typeof AdminRecipesRecipeIdVersionsNewRoute
   '/projects/$projectId/connections/new/api-key': typeof ProjectsProjectIdConnectionsNewApiKeyRoute
   '/projects/$projectId/connections/new/git': typeof ProjectsProjectIdConnectionsNewGitRoute
+  '/projects/$projectId/recipes/$recipeId': typeof ProjectsProjectIdRecipesRecipeIdIndexRoute
+  '/projects/$projectId/recipes/$recipeId/versions/new': typeof ProjectsProjectIdRecipesRecipeIdVersionsNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -282,12 +352,14 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/admin/connections/$connectionId': typeof AdminConnectionsConnectionIdRoute
   '/admin/connections/github-app': typeof AdminConnectionsGithubAppRoute
+  '/admin/recipes/new': typeof AdminRecipesNewRoute
   '/admin/users/new': typeof AdminUsersNewRoute
   '/me/connections/$connectionId': typeof MeConnectionsConnectionIdRoute
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/admin/connections/': typeof AdminConnectionsIndexRoute
+  '/admin/recipes/': typeof AdminRecipesIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/me/connections/': typeof MeConnectionsIndexRoute
   '/admin/connections/new/api-key': typeof AdminConnectionsNewApiKeyRoute
@@ -297,11 +369,17 @@ export interface FileRoutesById {
   '/projects/$projectId/connections/$connectionId': typeof ProjectsProjectIdConnectionsConnectionIdRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/model-access/subscription': typeof ProjectsProjectIdModelAccessSubscriptionRoute
+  '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/admin/recipes/$recipeId/': typeof AdminRecipesRecipeIdIndexRoute
   '/projects/$projectId/connections/': typeof ProjectsProjectIdConnectionsIndexRoute
+  '/projects/$projectId/recipes/': typeof ProjectsProjectIdRecipesIndexRoute
+  '/admin/recipes/$recipeId/versions/new': typeof AdminRecipesRecipeIdVersionsNewRoute
   '/projects/$projectId/connections/new/api-key': typeof ProjectsProjectIdConnectionsNewApiKeyRoute
   '/projects/$projectId/connections/new/git': typeof ProjectsProjectIdConnectionsNewGitRoute
+  '/projects/$projectId/recipes/$recipeId/': typeof ProjectsProjectIdRecipesRecipeIdIndexRoute
+  '/projects/$projectId/recipes/$recipeId/versions/new': typeof ProjectsProjectIdRecipesRecipeIdVersionsNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -316,12 +394,14 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/admin/connections/$connectionId'
     | '/admin/connections/github-app'
+    | '/admin/recipes/new'
     | '/admin/users/new'
     | '/me/connections/$connectionId'
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
     | '/admin/connections/'
+    | '/admin/recipes/'
     | '/admin/users/'
     | '/me/connections/'
     | '/admin/connections/new/api-key'
@@ -331,11 +411,17 @@ export interface FileRouteTypes {
     | '/projects/$projectId/connections/$connectionId'
     | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/model-access/subscription'
+    | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/admin/recipes/$recipeId/'
     | '/projects/$projectId/connections/'
+    | '/projects/$projectId/recipes/'
+    | '/admin/recipes/$recipeId/versions/new'
     | '/projects/$projectId/connections/new/api-key'
     | '/projects/$projectId/connections/new/git'
+    | '/projects/$projectId/recipes/$recipeId/'
+    | '/projects/$projectId/recipes/$recipeId/versions/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -348,12 +434,14 @@ export interface FileRouteTypes {
     | '/admin'
     | '/admin/connections/$connectionId'
     | '/admin/connections/github-app'
+    | '/admin/recipes/new'
     | '/admin/users/new'
     | '/me/connections/$connectionId'
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
     | '/admin/connections'
+    | '/admin/recipes'
     | '/admin/users'
     | '/me/connections'
     | '/admin/connections/new/api-key'
@@ -363,11 +451,17 @@ export interface FileRouteTypes {
     | '/projects/$projectId/connections/$connectionId'
     | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/model-access/subscription'
+    | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/admin/recipes/$recipeId'
     | '/projects/$projectId/connections'
+    | '/projects/$projectId/recipes'
+    | '/admin/recipes/$recipeId/versions/new'
     | '/projects/$projectId/connections/new/api-key'
     | '/projects/$projectId/connections/new/git'
+    | '/projects/$projectId/recipes/$recipeId'
+    | '/projects/$projectId/recipes/$recipeId/versions/new'
   id:
     | '__root__'
     | '/'
@@ -380,12 +474,14 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/admin/connections/$connectionId'
     | '/admin/connections/github-app'
+    | '/admin/recipes/new'
     | '/admin/users/new'
     | '/me/connections/$connectionId'
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/source'
     | '/projects/$projectId/verification'
     | '/admin/connections/'
+    | '/admin/recipes/'
     | '/admin/users/'
     | '/me/connections/'
     | '/admin/connections/new/api-key'
@@ -395,11 +491,17 @@ export interface FileRouteTypes {
     | '/projects/$projectId/connections/$connectionId'
     | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/model-access/subscription'
+    | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/admin/recipes/$recipeId/'
     | '/projects/$projectId/connections/'
+    | '/projects/$projectId/recipes/'
+    | '/admin/recipes/$recipeId/versions/new'
     | '/projects/$projectId/connections/new/api-key'
     | '/projects/$projectId/connections/new/git'
+    | '/projects/$projectId/recipes/$recipeId/'
+    | '/projects/$projectId/recipes/$recipeId/versions/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -413,15 +515,19 @@ export interface RootRouteChildren {
   AdminIndexRoute: typeof AdminIndexRoute
   AdminConnectionsConnectionIdRoute: typeof AdminConnectionsConnectionIdRoute
   AdminConnectionsGithubAppRoute: typeof AdminConnectionsGithubAppRoute
+  AdminRecipesNewRoute: typeof AdminRecipesNewRoute
   AdminUsersNewRoute: typeof AdminUsersNewRoute
   MeConnectionsConnectionIdRoute: typeof MeConnectionsConnectionIdRoute
   AdminConnectionsIndexRoute: typeof AdminConnectionsIndexRoute
+  AdminRecipesIndexRoute: typeof AdminRecipesIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
   MeConnectionsIndexRoute: typeof MeConnectionsIndexRoute
   AdminConnectionsNewApiKeyRoute: typeof AdminConnectionsNewApiKeyRoute
   AdminConnectionsNewGitRoute: typeof AdminConnectionsNewGitRoute
   MeConnectionsNewApiKeyRoute: typeof MeConnectionsNewApiKeyRoute
   MeConnectionsNewSubscriptionRoute: typeof MeConnectionsNewSubscriptionRoute
+  AdminRecipesRecipeIdIndexRoute: typeof AdminRecipesRecipeIdIndexRoute
+  AdminRecipesRecipeIdVersionsNewRoute: typeof AdminRecipesRecipeIdVersionsNewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -503,6 +609,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminConnectionsGithubAppRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/recipes/': {
+      id: '/admin/recipes/'
+      path: '/admin/recipes'
+      fullPath: '/admin/recipes/'
+      preLoaderRoute: typeof AdminRecipesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/recipes/new': {
+      id: '/admin/recipes/new'
+      path: '/admin/recipes/new'
+      fullPath: '/admin/recipes/new'
+      preLoaderRoute: typeof AdminRecipesNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/users/': {
       id: '/admin/users/'
       path: '/admin/users'
@@ -566,6 +686,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminConnectionsNewGitRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/recipes/$recipeId/': {
+      id: '/admin/recipes/$recipeId/'
+      path: '/admin/recipes/$recipeId'
+      fullPath: '/admin/recipes/$recipeId/'
+      preLoaderRoute: typeof AdminRecipesRecipeIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/me/connections/new/api-key': {
       id: '/me/connections/new/api-key'
       path: '/me/connections/new/api-key'
@@ -608,6 +735,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdModelAccessSubscriptionRouteImport
       parentRoute: typeof ProjectsProjectIdModelAccessRoute
     }
+    '/projects/$projectId/recipes/': {
+      id: '/projects/$projectId/recipes/'
+      path: '/recipes'
+      fullPath: '/projects/$projectId/recipes/'
+      preLoaderRoute: typeof ProjectsProjectIdRecipesIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/recipes/new': {
+      id: '/projects/$projectId/recipes/new'
+      path: '/recipes/new'
+      fullPath: '/projects/$projectId/recipes/new'
+      preLoaderRoute: typeof ProjectsProjectIdRecipesNewRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/runs/$runId': {
       id: '/projects/$projectId/runs/$runId'
       path: '/runs/$runId'
@@ -622,6 +763,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRunsNewRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/admin/recipes/$recipeId/versions/new': {
+      id: '/admin/recipes/$recipeId/versions/new'
+      path: '/admin/recipes/$recipeId/versions/new'
+      fullPath: '/admin/recipes/$recipeId/versions/new'
+      preLoaderRoute: typeof AdminRecipesRecipeIdVersionsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects/$projectId/connections/new/api-key': {
       id: '/projects/$projectId/connections/new/api-key'
       path: '/connections/new/api-key'
@@ -634,6 +782,20 @@ declare module '@tanstack/react-router' {
       path: '/connections/new/git'
       fullPath: '/projects/$projectId/connections/new/git'
       preLoaderRoute: typeof ProjectsProjectIdConnectionsNewGitRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/recipes/$recipeId/': {
+      id: '/projects/$projectId/recipes/$recipeId/'
+      path: '/recipes/$recipeId'
+      fullPath: '/projects/$projectId/recipes/$recipeId/'
+      preLoaderRoute: typeof ProjectsProjectIdRecipesRecipeIdIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/recipes/$recipeId/versions/new': {
+      id: '/projects/$projectId/recipes/$recipeId/versions/new'
+      path: '/recipes/$recipeId/versions/new'
+      fullPath: '/projects/$projectId/recipes/$recipeId/versions/new'
+      preLoaderRoute: typeof ProjectsProjectIdRecipesRecipeIdVersionsNewRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
   }
@@ -661,11 +823,15 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdSourceRoute: typeof ProjectsProjectIdSourceRoute
   ProjectsProjectIdVerificationRoute: typeof ProjectsProjectIdVerificationRoute
   ProjectsProjectIdConnectionsConnectionIdRoute: typeof ProjectsProjectIdConnectionsConnectionIdRoute
+  ProjectsProjectIdRecipesNewRoute: typeof ProjectsProjectIdRecipesNewRoute
   ProjectsProjectIdRunsRunIdRoute: typeof ProjectsProjectIdRunsRunIdRoute
   ProjectsProjectIdRunsNewRoute: typeof ProjectsProjectIdRunsNewRoute
   ProjectsProjectIdConnectionsIndexRoute: typeof ProjectsProjectIdConnectionsIndexRoute
+  ProjectsProjectIdRecipesIndexRoute: typeof ProjectsProjectIdRecipesIndexRoute
   ProjectsProjectIdConnectionsNewApiKeyRoute: typeof ProjectsProjectIdConnectionsNewApiKeyRoute
   ProjectsProjectIdConnectionsNewGitRoute: typeof ProjectsProjectIdConnectionsNewGitRoute
+  ProjectsProjectIdRecipesRecipeIdIndexRoute: typeof ProjectsProjectIdRecipesRecipeIdIndexRoute
+  ProjectsProjectIdRecipesRecipeIdVersionsNewRoute: typeof ProjectsProjectIdRecipesRecipeIdVersionsNewRoute
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
@@ -675,14 +841,20 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdVerificationRoute: ProjectsProjectIdVerificationRoute,
   ProjectsProjectIdConnectionsConnectionIdRoute:
     ProjectsProjectIdConnectionsConnectionIdRoute,
+  ProjectsProjectIdRecipesNewRoute: ProjectsProjectIdRecipesNewRoute,
   ProjectsProjectIdRunsRunIdRoute: ProjectsProjectIdRunsRunIdRoute,
   ProjectsProjectIdRunsNewRoute: ProjectsProjectIdRunsNewRoute,
   ProjectsProjectIdConnectionsIndexRoute:
     ProjectsProjectIdConnectionsIndexRoute,
+  ProjectsProjectIdRecipesIndexRoute: ProjectsProjectIdRecipesIndexRoute,
   ProjectsProjectIdConnectionsNewApiKeyRoute:
     ProjectsProjectIdConnectionsNewApiKeyRoute,
   ProjectsProjectIdConnectionsNewGitRoute:
     ProjectsProjectIdConnectionsNewGitRoute,
+  ProjectsProjectIdRecipesRecipeIdIndexRoute:
+    ProjectsProjectIdRecipesRecipeIdIndexRoute,
+  ProjectsProjectIdRecipesRecipeIdVersionsNewRoute:
+    ProjectsProjectIdRecipesRecipeIdVersionsNewRoute,
 }
 
 const ProjectsProjectIdRouteWithChildren =
@@ -699,15 +871,19 @@ const rootRouteChildren: RootRouteChildren = {
   AdminIndexRoute: AdminIndexRoute,
   AdminConnectionsConnectionIdRoute: AdminConnectionsConnectionIdRoute,
   AdminConnectionsGithubAppRoute: AdminConnectionsGithubAppRoute,
+  AdminRecipesNewRoute: AdminRecipesNewRoute,
   AdminUsersNewRoute: AdminUsersNewRoute,
   MeConnectionsConnectionIdRoute: MeConnectionsConnectionIdRoute,
   AdminConnectionsIndexRoute: AdminConnectionsIndexRoute,
+  AdminRecipesIndexRoute: AdminRecipesIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
   MeConnectionsIndexRoute: MeConnectionsIndexRoute,
   AdminConnectionsNewApiKeyRoute: AdminConnectionsNewApiKeyRoute,
   AdminConnectionsNewGitRoute: AdminConnectionsNewGitRoute,
   MeConnectionsNewApiKeyRoute: MeConnectionsNewApiKeyRoute,
   MeConnectionsNewSubscriptionRoute: MeConnectionsNewSubscriptionRoute,
+  AdminRecipesRecipeIdIndexRoute: AdminRecipesRecipeIdIndexRoute,
+  AdminRecipesRecipeIdVersionsNewRoute: AdminRecipesRecipeIdVersionsNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
