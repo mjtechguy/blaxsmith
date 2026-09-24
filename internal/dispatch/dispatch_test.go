@@ -261,6 +261,8 @@ func TestDispatchBatchPostgres(t *testing.T) {
 			}
 			return []netip.Addr{netip.MustParseAddr("104.18.33.45")}, nil
 		}}
+	ownerRevocations := 0
+	bridge.RevokeOwner = func(context.Context, workflow.Attempt) error { ownerRevocations++; return nil }
 	if _, err := (&Dispatcher{Workflow: store, DB: pool, Secrets: secretStore, Bridge: bridge}).DispatchBatch(ctx, "", 1, 1); err != ErrNotReady {
 		t.Fatalf("missing worker route preflight must block dispatch: %v", err)
 	}
@@ -420,6 +422,49 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		WHERE t.organization_id=$1 AND t.run_id=$2`, orgID, thirdRun.ID).Scan(&taskState, &attemptState); err != nil ||
 		taskState != "reconciling" || attemptState != "reconciling" {
 		t.Fatalf("changed Gateway did not fence the blocked actor: %s/%s, %v", taskState, attemptState, err)
+	}
+	fourthRun, err := store.CreateRun(ctx, workflow.RunInput{OrganizationID: orgID, ProjectID: projectID,
+		LaunchKey: "workspace-setup-fails", SourceCommit: bundle.Source.Commit,
+		BundleSHA256: bundle.Digest, VerificationSHA256: policySHA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workflow_run_bundles
+		(organization_id,run_id,bundle_json,verification_json,repository_url,git_ref)
+		VALUES ($1,$2,$3,$4,'https://github.com/owner/repo','main')`, orgID, fourthRun.ID, bundleJSON, policyJSON); err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.AddTask(ctx, orgID, fourthRun.ID, "plan", inputSHA, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, orgID, fourthRun.ID); err != nil {
+		t.Fatal(err)
+	}
+	ax.task = nil
+	ax.invalidateGatewayAfterTask = false
+	dispatcher.Activate = func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error {
+		ax.task.Status.Phase = "Failed"
+		ax.task.Status.Conditions = []axbridge.TaskCondition{{Type: "WorkspaceReady", Status: "False", Reason: "Failed"}}
+		return nil
+	}
+	failedSetup, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
+	if err != nil || len(failedSetup.Outcomes) != 1 || failedSetup.Outcomes[0].State != "stopped" ||
+		!errors.Is(failedSetup.Outcomes[0].Err, axbridge.ErrWorkspaceSetup) || ownerRevocations != 1 {
+		t.Fatalf("failed Workspace was not revoked and stopped: %+v revocations=%d err=%v", failedSetup, ownerRevocations, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT t.state,a.state FROM workflow_tasks t
+		JOIN workflow_attempts a ON a.organization_id=t.organization_id AND a.task_id=t.id
+		WHERE t.organization_id=$1 AND t.run_id=$2 AND a.id=$3`, orgID, fourthRun.ID,
+		failedSetup.Outcomes[0].AttemptID).Scan(&taskState, &attemptState); err != nil ||
+		taskState != "pending" || attemptState != "stopped" {
+		t.Fatalf("failed Workspace became retryable before actor stop: %s/%s, %v", taskState, attemptState, err)
+	}
+	if _, ok := ax.attemptWorkspaces[axbridge.AttemptWorkspaceName(failedSetup.Outcomes[0].AttemptID)]; ok {
+		t.Fatal("failed attempt Workspace was retained after actor-gone proof")
+	}
+	if _, ok := ax.attemptGateways[axbridge.AttemptGatewayName(failedSetup.Outcomes[0].AttemptID)]; ok || ax.task != nil {
+		t.Fatal("failed attempt AX resources were retained after actor-gone proof")
 	}
 }
 

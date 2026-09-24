@@ -42,12 +42,16 @@ persisted runtime binding and exact model grant to the activation callback. A
 changed input fences the actor without releasing credentials. This removes the
 shared-name dependency for a running attempt, but AX still permits privileged
 writers to mutate those attempt resources and the readback does not prove the
-Substrate dataplane. It reports `started` only after the bootstrap gate and
-model lease have been opened. Stop removes the Workspace and Gateway only after
-AX Task absence and Substrate actor absence are proved. An activation error
-fences the already-launched attempt as unresolved. The callback is still not
-composed in the application or a connector process, so product launch remains
-disabled.
+Substrate dataplane. The signed release opens AX workspace setup; the runner
+creates the model credential file only after local setup completes, though the
+model payload is currently plaintext in runner memory during setup. Dispatch
+then waits for AX `WorkspaceReady=True/SetupComplete` and rechecks the same
+actor/runtime before returning `started`. A setup failure or timeout triggers
+owner revocation and Task/actor-gone proof before retry. Stop removes the
+Workspace and Gateway only after AX Task absence and Substrate actor absence
+are proved. An uncertain activation remains fenced for reconciliation. The
+callback is still not composed in the application or a connector process, so
+product launch remains disabled.
 
 `dispatch.ModelActivator` is the concrete model path: it creates a durable
 bootstrap owner for the observed actor, builds the attempt-scoped

@@ -41,7 +41,7 @@ type Outcome struct {
 	Task      workflow.ReadyTask
 	AttemptID string
 	BindingID string
-	State     string // blocked, conflict, started, or unresolved.
+	State     string // blocked, conflict, started, stopped, or unresolved.
 	Err       error
 }
 
@@ -56,7 +56,7 @@ type Batch struct {
 func (d *Dispatcher) DispatchBatch(ctx context.Context, afterOrganizationID string, organizationLimit, taskLimit int) (Batch, error) {
 	if d == nil || d.Workflow == nil || d.DB == nil || d.Secrets == nil || d.Bridge == nil ||
 		d.Bridge.AX == nil || d.Bridge.Actor == nil || d.Bridge.Signer == "" || d.Bridge.Storage == "" ||
-		d.PreflightWorker == nil || d.PreflightActivation == nil || d.Activate == nil {
+		d.Bridge.RevokeOwner == nil || d.PreflightWorker == nil || d.PreflightActivation == nil || d.Activate == nil {
 		return Batch{}, ErrNotReady
 	}
 	organizations, err := d.Workflow.ListReadyOrganizationIDs(ctx, afterOrganizationID, organizationLimit)
@@ -199,7 +199,14 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		return outcome
 	}
 	if err := bridge.WaitWorkspaceReady(ctx, attempt); err != nil {
-		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, err)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 45*time.Second)
+		stopErr := bridge.StopKnown(cleanupCtx, attempt)
+		cancel()
+		if stopErr == nil {
+			outcome.State, outcome.Err = "stopped", err
+		} else {
+			outcome.State, outcome.Err = "unresolved", errors.Join(err, stopErr)
+		}
 		return outcome
 	}
 	outcome.State = "started"

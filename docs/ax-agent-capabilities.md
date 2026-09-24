@@ -40,14 +40,20 @@ networking disabled. It does not prove real-provider authentication, every
 permission denial against hostile requests, MCP calls or revocation, or AX
 workspace/lifecycle behavior.
 
-After bootstrap activation, dispatch now waits for AX's exact
-`WorkspaceReady=True/SetupComplete` condition and rechecks the actor against
-the frozen runtime binding before reporting `started`. This closes the
-premature-status path. The authenticated [workspace-ready probe](ax-workspace-ready-probe.json)
-now confirms the bridge stays pending when AX is `Running` but setup is not
-complete, and cleans the Task, actor, Workspace, and Gateways afterward. It
-released no credentials. The successful product activation-to-ready transition
-through this same bridge call remains unproved.
+AX activation opens the signed bootstrap gate that permits its runner to set up
+the Workspace. The runner writes the model key file only after local setup
+succeeds, then starts the CLI; the current release does decrypt the model
+payload into trusted runner-process memory before setup. Dispatch waits for
+AX's exact `WorkspaceReady=True/SetupComplete` condition and rechecks the actor
+against the frozen runtime binding before reporting `started`. If setup fails
+or times out, it revokes the owner and requires Task and actor absence before
+making the task retryable. The PostgreSQL-backed test covers delayed readiness
+and failed-setup cleanup. The authenticated
+[workspace-ready probe](ax-workspace-ready-probe.json) intentionally leaves
+the bootstrap gate closed, so AX remains pending and no credentials are
+released; successful activated setup on the live cluster remains unproved. A
+policy that forbids plaintext model bytes in runner memory until AX-observed
+readiness needs a separate post-ready model challenge, which is still open.
 
 Blaxsmith delivers declared `instructions`, applicable `AGENTS.md`, Forge
 specification, decision transcript, and stage prompt as bounded instruction
