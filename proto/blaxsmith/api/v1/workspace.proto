@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+package blaxsmith.api.v1;
+
+import "blaxsmith/api/v1/users.proto";
+
+// Cross-project work views for the application shell: Home, Inbox, all Runs,
+// and a paged member directory for administrators. Every read is scoped to the
+// caller's session organization and bounded. Organization members read every
+// project's runs (as WorkflowService does); `can_act` and the actionable
+// filters follow exactly what the server lets the caller do: owners, admins,
+// and members answer interactions; owners and admins decide reviews; viewers
+// act on nothing. Paged lists use 1-based page numbers with a total count so
+// the browser can keep page state in the URL.
+
+// A run with its project and a server-side status rollup, so list rows need no
+// per-row reads.
+message WorkspaceRun {
+  string id = 1;
+  string project_id = 2;
+  string project_name = 3;
+  string launch_key = 4;
+  string source_commit = 5;
+  string state = 6; // queued, active, cancel_requested, cancelled, failed, or succeeded.
+  string created_at = 7; // RFC 3339.
+  // Agent status rollup: needs_approval (open approval or undecided review),
+  // awaiting_input (other open interaction or escalated stage), working,
+  // failed, done, or empty.
+  string status = 8;
+  int32 open_interactions = 9;
+  bool review_waiting = 10;
+  int32 stage_count = 11;
+  int32 stages_succeeded = 12;
+}
+
+// An item a person may need to handle: an open interaction on a queued or
+// active run, or an undecided final review package on a succeeded run.
+message InboxItem {
+  string id = 1; // Interaction id, or the review package id for kind review.
+  string kind = 2; // question, approval, escalation, interview_round, or review.
+  string run_id = 3;
+  string project_id = 4;
+  string project_name = 5;
+  string run_launch_key = 6;
+  string stage = 7; // Frozen stage id; empty for review.
+  string title = 8;
+  bool blocking = 9;
+  string created_at = 10; // RFC 3339.
+  bool can_act = 11; // The caller's role may answer or decide it.
+}
+
+// A current attempt owner: reserved, starting, running, or reconciling.
+message WorkspaceAgent {
+  string attempt_id = 1;
+  string run_id = 2;
+  string project_id = 3;
+  string project_name = 4;
+  string run_launch_key = 5;
+  string stage = 6;
+  string kind = 7;
+  string harness = 8;
+  string model = 9;
+  string state = 10;
+  string started_at = 11;
+  string last_activity_at = 12; // Empty when no attempt event exists yet.
+  bool taken_over = 13; // A human holds the terminal.
+}
+
+message GetWorkspaceHomeRequest {}
+message GetWorkspaceHomeResponse {
+  int32 waiting_on_you = 1; // Inbox items the caller can act on.
+  int32 open_items = 2; // All inbox items.
+  int32 running_agents = 3;
+  int32 active_runs = 4; // queued, active, or cancel_requested.
+  int32 runs_last_24h = 5;
+  int32 failed_last_24h = 6;
+  repeated InboxItem waiting = 7; // Up to 5 actionable items, blocking and oldest first.
+  repeated WorkspaceAgent agents = 8; // Up to 10, oldest first.
+  repeated WorkspaceRun recent_runs = 9; // Up to 8, newest first.
+  string generated_at = 10;
+}
+
+message ListInboxRequest {
+  int32 page = 1; // 1-based; default 1.
+  int32 page_size = 2; // 1-100, default 25.
+  repeated string kinds = 3; // Empty for all.
+  string project_id = 4;
+  string search = 5; // Title, project name, launch key, or stage.
+  bool actionable_only = 6;
+}
+message ListInboxResponse {
+  repeated InboxItem items = 1;
+  int32 total_count = 2;
+}
+
+message ListWorkspaceRunsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string search = 3; // Launch key, source commit, or project name.
+  repeated string states = 4; // Empty for all.
+  string project_id = 5;
+  string sort_by = 6; // created_at (default), launch_key, state, or project.
+  string sort_direction = 7; // desc (default) or asc.
+}
+message ListWorkspaceRunsResponse {
+  repeated WorkspaceRun runs = 1;
+  int32 total_count = 2;
+}
+
+// Owner/admin only, like UserAdminService.ListOrgMembers.
+message ListMembersPageRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string search = 3; // Username or display name.
+  repeated string roles = 4;
+  repeated string statuses = 5; // invited, active, or disabled.
+  string sort_by = 6; // role (default), username, last_login, or created_at.
+  string sort_direction = 7; // asc (default) or desc.
+}
+message ListMembersPageResponse {
+  repeated OrgMember members = 1;
+  int32 total_count = 2;
+}
+
+service WorkspaceService {
+  rpc GetWorkspaceHome(GetWorkspaceHomeRequest) returns (GetWorkspaceHomeResponse);
+  rpc ListInbox(ListInboxRequest) returns (ListInboxResponse);
+  rpc ListWorkspaceRuns(ListWorkspaceRunsRequest) returns (ListWorkspaceRunsResponse);
+  rpc ListMembersPage(ListMembersPageRequest) returns (ListMembersPageResponse);
+}
