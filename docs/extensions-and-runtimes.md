@@ -254,6 +254,13 @@ and recorded in a proof (`proof.json`) with its manifest digest. The build
 never runs extension code except the pinned installers its own Dockerfile
 names.
 
+The `guild` extension-runtime layer is built today as
+`deploy/tool-worker/build.sh ... --variant guild`
+([tool-worker README](../deploy/tool-worker/README.md#runner-variants)). Its
+pins live in `deploy/tool-worker/guild-runtimes.json`, and
+`check-variant.py` refuses a build whose pins differ from the Guild
+manifest's `runtimes`.
+
 ### Image pool and selection
 
 The platform keeps a small pool of pre-built, digest-pinned combinations
@@ -337,9 +344,15 @@ and `hooks`; profile `implementer` uses `codex`".
   by a live probe. Hooks are materialized only when approved, and the probe
   that confirms they run (or that `--bare` must be relaxed for approved hooks)
   is a Phase 1 follow-up.
-- Serena and Foundry's MCP server resolve Python packages from PyPI at run
-  time unless the layer's cache satisfies them; the manifest declares that
-  egress.
+- Serena is preinstalled in the `guild` layer, but Foundry's MCP server
+  (`uv run foundry-mcp`) still resolves Python packages from PyPI at run
+  time into each attempt's empty uv cache; the manifest declares that egress.
+  The layer sets `UV_PYTHON_DOWNLOADS=never`, so tasks use only the
+  preinstalled interpreter.
+- The `guild` variant has passed `build.sh --check --variant guild` and a
+  native arm64 smoke build of its layer (qemu cannot run uv for amd64 on the
+  development Mac). The full amd64 image build and proof run on the AX
+  development node.
 
 ## Appendix A: Guild manifest
 

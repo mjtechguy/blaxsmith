@@ -74,6 +74,32 @@ moving tag, and writes the pullable digest to `registry-proof.json.image`.
 The loopback registry uses plain HTTP and is for this development node only.
 Neither script deploys to the cluster or creates administrator approvals.
 
+## Runner variants
+
+`--variant NAME` layers extension runtimes onto the verified worker image
+with `deploy/tool-worker/NAME.Dockerfile`, pinned by `NAME-runtimes.json`.
+The `guild` variant adds uv 0.12.18 (release tarball with a pinned SHA-256),
+the Python 3.12 interpreter that uv version selects, and `serena-agent`
+1.7.0 resolved with `--exclude-newer 2026-09-01T00:00:00Z`. It sets
+`UV_PYTHON_DOWNLOADS=never` for tasks.
+
+```sh
+bash deploy/tool-worker/build.sh /tmp/blaxsmith-ax-verified /tmp/blaxsmith-guild-image --variant guild
+bash deploy/tool-worker/build.sh /tmp/blaxsmith-ax-verified /tmp/unused --check --variant guild
+```
+
+`check-variant.py` runs first, including in `--check`: it refuses pins that
+differ from the extension manifest's declared `runtimes`, a Dockerfile that
+does not use them, or a floating `latest`. The variant image is tagged
+`blaxsmith-tool-worker:proof-<fingerprint>-<variant>`; the fingerprint covers
+the variant files. `cli_manifest.runtimes` records each runtime's version,
+path and SHA-256 (verified offline by `runtimes.mjs` at build time), and
+`proof.json.variant` names the variant. Until AX accepts a runner image
+allowlist, extension stages need the variant to be the configured runner
+image.
+
+## Process model
+
 The AX runner currently serves port 80 and this combined image therefore
 keeps its existing root process model inside the gVisor sandbox. A rootless
 runner needs a separate AX port/ownership change. The image only supplies the
