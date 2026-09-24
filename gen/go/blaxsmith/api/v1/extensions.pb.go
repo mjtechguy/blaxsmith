@@ -538,8 +538,11 @@ func (x *ExtensionValidationError) GetMessage() string {
 	return ""
 }
 
+// With project_id, only the extensions the caller may use in that project
+// (a project, user, or role grant); without it, every installed extension.
 type ListExtensionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -572,6 +575,13 @@ func (x *ListExtensionsRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListExtensionsRequest.ProtoReflect.Descriptor instead.
 func (*ListExtensionsRequest) Descriptor() ([]byte, []int) {
 	return file_blaxsmith_api_v1_extensions_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ListExtensionsRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
 }
 
 type ListExtensionsResponse struct {
@@ -1408,8 +1418,10 @@ const file_blaxsmith_api_v1_extensions_proto_rawDesc = "" +
 	"\ttemplates\x18\x11 \x03(\v2#.blaxsmith.api.v1.ExtensionTemplateR\ttemplates\"H\n" +
 	"\x18ExtensionValidationError\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\x17\n" +
-	"\x15ListExtensionsRequest\"U\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"6\n" +
+	"\x15ListExtensionsRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\"U\n" +
 	"\x16ListExtensionsResponse\x12;\n" +
 	"\n" +
 	"extensions\x18\x01 \x03(\v2\x1b.blaxsmith.api.v1.ExtensionR\n" +

@@ -89,7 +89,7 @@ func (s *extensionService) ListExtensions(ctx context.Context, req *connect.Requ
 	if err != nil {
 		return nil, err
 	}
-	list, err := s.store.ListExtensions(ctx, caller)
+	list, err := s.store.ListExtensions(ctx, caller, req.Msg.ProjectId)
 	if err != nil {
 		return nil, extensionError(err)
 	}
@@ -174,7 +174,7 @@ func (s *extensionService) PreviewExtensionInstall(ctx context.Context, req *con
 	response := &api.PreviewExtensionInstallResponse{Commit: preview.Commit, ExtensionKey: preview.Manifest.ID,
 		Version: preview.Manifest.Version, ManifestJson: string(preview.ManifestJSON), ManifestSha256: preview.ManifestSHA256,
 		Permissions: permissionMessages(preview.Manifest), Templates: templateMessages(preview.Manifest)}
-	if list, err := s.store.ListExtensions(ctx, caller); err == nil {
+	if list, err := s.store.ListExtensions(ctx, caller, ""); err == nil {
 		for _, e := range list {
 			if e.Key == preview.Manifest.ID {
 				response.ExistingExtensionId = e.ID

@@ -234,16 +234,41 @@ func (s *Store) RecordExtensionRefAs(ctx context.Context, caller identity.Caller
 }
 
 // ListExtensions returns the organization's extensions to any active member.
-func (s *Store) ListExtensions(ctx context.Context, caller identity.Caller) ([]Extension, error) {
-	if !ids(caller.OrganizationID) {
+// With projectID, it returns only those the caller may use in that project.
+func (s *Store) ListExtensions(ctx context.Context, caller identity.Caller, projectID string) ([]Extension, error) {
+	if !ids(caller.OrganizationID) || (projectID != "" && !ids(projectID)) {
 		return nil, ErrInvalid
 	}
-	rows, err := s.pool.Query(ctx, `SELECT `+extensionColumns+` WHERE e.organization_id=$1 ORDER BY e.extension_key LIMIT 200`,
+	tx, err := s.pool.Begin(ctx) // Not read-only: access.CanUse locks grant rows FOR SHARE.
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if projectID != "" {
+		if err := projectExists(ctx, tx, caller.OrganizationID, projectID); err != nil {
+			return nil, err
+		}
+	}
+	rows, err := tx.Query(ctx, `SELECT `+extensionColumns+` WHERE e.organization_id=$1 ORDER BY e.extension_key LIMIT 200`,
 		caller.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Extension, error) { return scanExtension(row) })
+	all, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Extension, error) { return scanExtension(row) })
+	if err != nil || projectID == "" {
+		return all, err
+	}
+	out := make([]Extension, 0, len(all))
+	for _, e := range all {
+		ok, err := s.authz.CanUse(ctx, tx, caller, projectID, access.ResourceExtension, e.ID)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, e)
+		}
+	}
+	return out, nil
 }
 
 // GetExtension returns one extension and its versions, newest first.

@@ -71,7 +71,9 @@ message ExtensionValidationError {
   string message = 2;
 }
 
-message ListExtensionsRequest {}
+// With project_id, only the extensions the caller may use in that project
+// (a project, user, or role grant); without it, every installed extension.
+message ListExtensionsRequest { string project_id = 1; }
 message ListExtensionsResponse { repeated Extension extensions = 1; }
 
 message GetExtensionRequest { string extension_id = 1; }

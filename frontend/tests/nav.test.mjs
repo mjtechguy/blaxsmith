@@ -11,10 +11,10 @@ test("navigation IA per role: groups, items, the project group, and Admin", asyn
     const common = [
       ["home", ["Home"]],
       ["work", ["Inbox", "Runs", "Projects"]],
-      ["library", ["Recipes", "Tools & runtimes"]],
+      ["library", ["Recipes", "Extensions", "Tools & runtimes"]],
     ];
     // Organization recipes live once, in Library; Admin has no Recipes item.
-    const admin = ["admin", ["Operations", "Users", "Connections", "Audit", ["Settings", ["GitHub app", "Policies", "Retention"]]]];
+    const admin = ["admin", ["Operations", "Users", "Connections", "Extensions", "Audit", ["Settings", ["GitHub app", "Policies", "Retention"]]]];
     assert.deepEqual(shape(navigation({ role: "member" })), common);
     assert.deepEqual(shape(navigation({ role: "viewer" })), common);
     assert.deepEqual(shape(navigation({ role: "admin" })), [...common, admin]);

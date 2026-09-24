@@ -21,7 +21,7 @@ const write = (key: string, value: unknown) => { try { localStorage.setItem(key,
 const exactPath = { exact: true, includeSearch: false } as const;
 
 const detailLabels: Record<string, string> = {
-  "new-run": "New run", connection: "Connection", "new-connection": "New connection", recipe: "Recipe", "new-recipe": "Recipe editor",
+  "new-run": "New run", connection: "Connection", "new-connection": "New connection", recipe: "Recipe", "new-recipe": "Recipe editor", extension: "Extension", "new-extension": "Install extension",
   user: "User", "new-user": "Invite user", "new-project": "New project", setup: "Setup",
 };
 

@@ -17,9 +17,10 @@ test("extension mutations send CSRF, install pins the previewed commit, and appr
   };
   try {
     const ext = await server.ssrLoadModule("/src/extensions.ts");
-    const { adminSectionFor } = await server.ssrLoadModule("/src/admin.ts");
+    const nav = await server.ssrLoadModule("/src/nav.ts");
     const source = { repositoryUrl: "https://github.com/example/guild", gitRef: "main", manifestPath: "", overlayManifestJson: "{}" };
     await ext.listExtensions();
+    await ext.listExtensions("p1");
     await ext.previewExtensionInstall(source);
     await ext.installExtension(source, "a".repeat(40), ["mcp:foundry"]);
     await ext.checkExtensionUpdate("e1");
@@ -28,22 +29,41 @@ test("extension mutations send CSRF, install pins the previewed commit, and appr
     const C = "C".repeat(43);
     assert.deepEqual(requests.map((r) => [r.url, r.csrf]), [
       ["blaxsmith.api.v1.ExtensionService/ListExtensions", null],
+      ["blaxsmith.api.v1.ExtensionService/ListExtensions", null],
       ["blaxsmith.api.v1.ExtensionService/PreviewExtensionInstall", C],
       ["blaxsmith.api.v1.ExtensionService/InstallExtension", C],
       ["blaxsmith.api.v1.ExtensionService/CheckExtensionUpdate", C],
       ["blaxsmith.api.v1.ExtensionService/GrantExtension", C],
       ["blaxsmith.api.v1.ExtensionService/RevokeExtensionGrant", C],
     ]);
-    assert.equal(requests[2].body.expectedCommit, "a".repeat(40));
-    assert.deepEqual(requests[2].body.approvedPermissions, ["mcp:foundry"]);
-    assert.equal(requests[2].body.source.overlayManifestJson, "{}");
-    assert.deepEqual(requests[4].body, { extensionId: "e1", projectId: "p1", granteeKind: "project" });
+    assert.equal(requests[3].body.expectedCommit, "a".repeat(40));
+    assert.deepEqual(requests[3].body.approvedPermissions, ["mcp:foundry"]);
+    assert.equal(requests[3].body.source.overlayManifestJson, "{}");
+    assert.deepEqual(requests[5].body, { extensionId: "e1", projectId: "p1", granteeKind: "project" });
 
     const permissions = [{ id: "mcp:foundry", optional: false }, { id: "mcp:serena", optional: true }, { id: "hook:foundry-serena", optional: true }];
     assert.deepEqual(ext.approvedPermissions(permissions, new Set()), ["mcp:foundry"]);
     assert.deepEqual(ext.approvedPermissions(permissions, new Set(["mcp:serena", "undeclared"])), ["mcp:foundry", "mcp:serena"]);
-    assert.deepEqual(["/admin/extensions", "/admin/extensions/new", "/admin/extensions/e1"].map(adminSectionFor),
-      ["/admin/extensions", "/admin/extensions", "/admin/extensions"]);
+    // A project-scoped list asks the server for that project's grants only.
+    assert.deepEqual(requests[1].body, { projectId: "p1" });
+    // Admin > Extensions for owners/admins; Library > Extensions for every member.
+    const owner = nav.navigation({ role: "owner" });
+    const at = (groups, path) => { const a = nav.activeItem(groups, path); return a ? [a.group.id, a.item.label] : null; };
+    for (const path of ["/admin/extensions", "/admin/extensions/new", "/admin/extensions/e1"]) assert.deepEqual(at(owner, path), ["admin", "Extensions"]);
+    const member = nav.navigation({ role: "member" });
+    assert.deepEqual(at(member, "/extensions/e1"), ["library", "Extensions"]);
+    assert.ok(!member.some((g) => g.id === "admin"));
+    assert.deepEqual(["/admin/extensions/new", "/admin/extensions/e1", "/extensions/e1", "/extensions"].map(nav.detailKind), ["new-extension", "extension", "extension", undefined]);
+
+    // Recipe stages pick templates that fill their kind, from every installed version.
+    const versions = [
+      { version: "1.1.0", templates: [{ id: "forge-plan", title: "Forge plan", harness: "claude-code", kinds: ["plan", "interview"], reference: "guild@1.1.0/forge-plan" }] },
+      { version: "1.0.0", templates: [{ id: "forge-plan", title: "", harness: "claude-code", kinds: ["plan"], reference: "guild@1.0.0/forge-plan" },
+        { id: "review", title: "Review", harness: "claude-code", kinds: ["review"], reference: "guild@1.0.0/review" }] },
+    ];
+    assert.deepEqual(ext.templateChoices(versions, "1.1.0", "plan", "guild").map((c) => [c.reference, c.title, c.current]),
+      [["guild@1.1.0/forge-plan", "Forge plan", true], ["guild@1.0.0/forge-plan", "forge-plan", false]]);
+    assert.deepEqual(ext.templateChoices(versions, "1.1.0", "review", "guild").map((c) => c.reference), ["guild@1.0.0/review"]);
   } finally {
     globalThis.fetch = previousFetch;
     globalThis.window = previousWindow;

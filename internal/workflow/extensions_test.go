@@ -132,9 +132,36 @@ func TestExtensionInstallIsAdminOnlyImmutableAndTracksUpdates(t *testing.T) {
 	if _, _, err := installGuild(t, store, owner, brokenDir, brokenCommit, approved); !errors.As(err, &invalid) {
 		t.Fatalf("broken tree installed: %v", err)
 	}
-	list, err := store.ListExtensions(ctx, member)
+	list, err := store.ListExtensions(ctx, member, "")
 	if err != nil || len(list) != 1 || list[0].VersionCount != 1 {
 		t.Fatalf("member list: %+v %v", list, err)
+	}
+	// Scoped to a project, the list holds only extensions usable there.
+	project, err := store.CreateProject(ctx, org, "ext-install-project", "Extension project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sibling, err := store.CreateProject(ctx, org, "ext-install-sibling", "Sibling project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list, err := store.ListExtensions(ctx, member, project); err != nil || len(list) != 0 {
+		t.Fatalf("ungranted project list: %+v %v", list, err)
+	}
+	if _, err := store.GrantExtensionAs(ctx, owner, ext.ID, project, "project", ""); err != nil {
+		t.Fatal(err)
+	}
+	if list, err := store.ListExtensions(ctx, member, project); err != nil || len(list) != 1 || list[0].ID != ext.ID {
+		t.Fatalf("granted project list: %+v %v", list, err)
+	}
+	if list, err := store.ListExtensions(ctx, member, sibling); err != nil || len(list) != 0 {
+		t.Fatalf("sibling project list: %+v %v", list, err)
+	}
+	if list, err := store.ListExtensions(ctx, viewer, project); err != nil || len(list) != 0 {
+		t.Fatalf("viewer may not use extensions: %+v %v", list, err)
+	}
+	if _, err := store.ListExtensions(ctx, member, "not-a-uuid"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("malformed project: %v", err)
 	}
 	var audited int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM identity_audit_events WHERE organization_id=$1

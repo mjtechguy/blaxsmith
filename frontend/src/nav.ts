@@ -4,7 +4,7 @@
 // /admin layout and every admin RPC is enforced on the server.
 import {
   Activity, BookCopy, FolderKanban, GitBranch, GitPullRequest, House, Inbox, KeyRound, LayoutDashboard,
-  ListChecks, ScrollText, Settings, ShieldCheck, Timer, Users, Wrench, type LucideIcon,
+  ListChecks, Package, ScrollText, Settings, ShieldCheck, Timer, Users, Wrench, type LucideIcon,
 } from "lucide-react";
 
 export type NavItem = {
@@ -59,6 +59,7 @@ export function navigation({ role, projectId, projectName }: NavContext): NavGro
   groups.push(
     { id: "library", label: "Library", collapsible: true, items: [
       { id: "library-recipes", label: "Recipes", href: "/recipes", icon: BookCopy },
+      { id: "library-extensions", label: "Extensions", href: "/extensions", icon: Package },
       { id: "tools", label: "Tools & runtimes", href: "/tools", icon: Wrench, exact: true },
     ] },
   );
@@ -66,6 +67,7 @@ export function navigation({ role, projectId, projectName }: NavContext): NavGro
     { id: "admin-operations", label: "Operations", href: "/admin", icon: ShieldCheck, exact: true },
     { id: "admin-users", label: "Users", href: "/admin/users", icon: Users },
     { id: "admin-connections", label: "Connections", href: "/admin/connections", icon: KeyRound },
+    { id: "admin-extensions", label: "Extensions", href: "/admin/extensions", icon: Package },
     { id: "admin-audit", label: "Audit", href: "/admin/audit", icon: ScrollText },
     { id: "admin-settings", label: "Settings", href: "/admin/settings", icon: Settings, children: [
       { id: "admin-github-app", label: "GitHub app", href: "/admin/settings/github-app", icon: GitPullRequest },
@@ -127,7 +129,7 @@ export function breadcrumbs(groups: NavGroup[], pathname: string, detail?: strin
 }
 
 // Detail pages below a nav item get a trailing crumb.
-export function detailKind(pathname: string): "run" | "new-run" | "connection" | "new-connection" | "recipe" | "new-recipe" | "user" | "new-user" | "new-project" | "setup" | undefined {
+export function detailKind(pathname: string): "run" | "new-run" | "connection" | "new-connection" | "recipe" | "new-recipe" | "user" | "new-user" | "new-project" | "setup" | "extension" | "new-extension" | undefined {
   const path = trim(pathname);
   if (path === "/projects/new") return "new-project";
   if (/^\/projects\/[^/]+\/setup$/.test(path)) return "setup";
@@ -137,6 +139,8 @@ export function detailKind(pathname: string): "run" | "new-run" | "connection" |
   if (/\/connections\/[^/]+$/.test(path) && !path.endsWith("/github-app")) return "connection";
   if (/\/recipes\/new$/.test(path) || /\/recipes\/[^/]+\/versions\/new$/.test(path)) return "new-recipe";
   if (/\/recipes\/[^/]+$/.test(path)) return "recipe";
+  if (path === "/admin/extensions/new") return "new-extension";
+  if (/^(\/admin)?\/extensions\/[^/]+$/.test(path)) return "extension";
   if (path === "/admin/users/new") return "new-user";
   if (/^\/admin\/users\/[^/]+$/.test(path)) return "user";
   return undefined;

@@ -32,7 +32,7 @@ test("admin is one guarded section; the sidebar carries its navigation", async (
       assert.doesNotMatch(html, /admin-subnav/, "the in-page admin subnav is gone");
       assert.deepEqual(currentLinks(html), ["Connections"], "the sidebar marks Admin › Connections current");
       assert.deepEqual(adminLinks(await renderApp("/", session(role))),
-        ["/admin", "/admin/users", "/admin/connections", "/admin/audit", "/admin/settings"], `${role} sidebar`);
+        ["/admin", "/admin/users", "/admin/connections", "/admin/extensions", "/admin/audit", "/admin/settings"], `${role} sidebar`);
       const settings = await renderApp("/admin/settings/retention", session(role));
       assert.match(settings, /Coming soon/);
       assert.doesNotMatch(settings, /<input/, "placeholder settings carry no fake form");

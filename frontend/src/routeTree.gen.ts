@@ -18,6 +18,8 @@ import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as ExtensionsIndexRouteImport } from './routes/extensions.index'
+import { Route as ExtensionsExtensionIdRouteImport } from './routes/extensions.$extensionId'
 import { Route as MeSettingsRouteImport } from './routes/me.settings'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
@@ -124,6 +126,16 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => AdminRoute,
+} as any)
+const ExtensionsIndexRoute = ExtensionsIndexRouteImport.update({
+  id: '/extensions/',
+  path: '/extensions/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExtensionsExtensionIdRoute = ExtensionsExtensionIdRouteImport.update({
+  id: '/extensions/$extensionId',
+  path: '/extensions/$extensionId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const MeSettingsRoute = MeSettingsRouteImport.update({
   id: '/me/settings',
@@ -469,12 +481,14 @@ export interface FileRoutesByFullPath {
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
+  '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
   '/me/settings': typeof MeSettingsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
   '/recipes/new': typeof RecipesNewRoute
   '/setup/$token': typeof SetupTokenRoute
   '/admin/': typeof AdminIndexRoute
+  '/extensions/': typeof ExtensionsIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/recipes/': typeof RecipesIndexRoute
   '/admin/connections/$connectionId': typeof AdminConnectionsConnectionIdRoute
@@ -539,10 +553,12 @@ export interface FileRoutesByTo {
   '/runs': typeof RunsRoute
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
   '/projects/new': typeof ProjectsNewRoute
   '/recipes/new': typeof RecipesNewRoute
   '/setup/$token': typeof SetupTokenRoute
   '/admin': typeof AdminIndexRoute
+  '/extensions': typeof ExtensionsIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/recipes': typeof RecipesIndexRoute
   '/admin/connections/$connectionId': typeof AdminConnectionsConnectionIdRoute
@@ -609,12 +625,14 @@ export interface FileRoutesById {
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
+  '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
   '/me/settings': typeof MeSettingsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
   '/recipes/new': typeof RecipesNewRoute
   '/setup/$token': typeof SetupTokenRoute
   '/admin/': typeof AdminIndexRoute
+  '/extensions/': typeof ExtensionsIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/recipes/': typeof RecipesIndexRoute
   '/admin/connections/$connectionId': typeof AdminConnectionsConnectionIdRoute
@@ -683,12 +701,14 @@ export interface FileRouteTypes {
     | '/tools'
     | '/admin/audit'
     | '/admin/settings'
+    | '/extensions/$extensionId'
     | '/me/settings'
     | '/projects/$projectId'
     | '/projects/new'
     | '/recipes/new'
     | '/setup/$token'
     | '/admin/'
+    | '/extensions/'
     | '/projects/'
     | '/recipes/'
     | '/admin/connections/$connectionId'
@@ -753,10 +773,12 @@ export interface FileRouteTypes {
     | '/runs'
     | '/tools'
     | '/admin/audit'
+    | '/extensions/$extensionId'
     | '/projects/new'
     | '/recipes/new'
     | '/setup/$token'
     | '/admin'
+    | '/extensions'
     | '/projects'
     | '/recipes'
     | '/admin/connections/$connectionId'
@@ -822,12 +844,14 @@ export interface FileRouteTypes {
     | '/tools'
     | '/admin/audit'
     | '/admin/settings'
+    | '/extensions/$extensionId'
     | '/me/settings'
     | '/projects/$projectId'
     | '/projects/new'
     | '/recipes/new'
     | '/setup/$token'
     | '/admin/'
+    | '/extensions/'
     | '/projects/'
     | '/recipes/'
     | '/admin/connections/$connectionId'
@@ -893,11 +917,13 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RunsRoute: typeof RunsRoute
   ToolsRoute: typeof ToolsRoute
+  ExtensionsExtensionIdRoute: typeof ExtensionsExtensionIdRoute
   MeSettingsRoute: typeof MeSettingsRouteWithChildren
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
   ProjectsNewRoute: typeof ProjectsNewRoute
   RecipesNewRoute: typeof RecipesNewRoute
   SetupTokenRoute: typeof SetupTokenRoute
+  ExtensionsIndexRoute: typeof ExtensionsIndexRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
   RecipesIndexRoute: typeof RecipesIndexRoute
   MeConnectionsConnectionIdRoute: typeof MeConnectionsConnectionIdRoute
@@ -972,6 +998,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/settings'
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/extensions/': {
+      id: '/extensions/'
+      path: '/extensions'
+      fullPath: '/extensions/'
+      preLoaderRoute: typeof ExtensionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/extensions/$extensionId': {
+      id: '/extensions/$extensionId'
+      path: '/extensions/$extensionId'
+      fullPath: '/extensions/$extensionId'
+      preLoaderRoute: typeof ExtensionsExtensionIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/me/settings': {
       id: '/me/settings'
@@ -1582,11 +1622,13 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RunsRoute: RunsRoute,
   ToolsRoute: ToolsRoute,
+  ExtensionsExtensionIdRoute: ExtensionsExtensionIdRoute,
   MeSettingsRoute: MeSettingsRouteWithChildren,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
   ProjectsNewRoute: ProjectsNewRoute,
   RecipesNewRoute: RecipesNewRoute,
   SetupTokenRoute: SetupTokenRoute,
+  ExtensionsIndexRoute: ExtensionsIndexRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
   RecipesIndexRoute: RecipesIndexRoute,
   MeConnectionsConnectionIdRoute: MeConnectionsConnectionIdRoute,

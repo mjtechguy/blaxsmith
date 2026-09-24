@@ -270,8 +270,9 @@ const rpc = {
   RevokeRecipeGrant: ({ grantId }) => { for (const r of recipes) r.grants = (r.grants || []).filter((g) => g.id !== grantId); return {}; },
   // ExtensionService: previews derive permissions from the example Guild
   // manifest (or an overlay); the real server validates against the Git tree.
-  ListExtensions: () => ({ extensions: extensions.map(extensionSummary) }),
-  GetExtension: ({ extensionId }) => { const e = extensions.find((x) => x.id === extensionId); return e ? { extension: extensionSummary(e), versions: [...e.versions].reverse(), grants: e.grants } : connectError(404, "not_found", "workflow resource not found"); },
+  // With a project, only extensions a grant lets this session use there (CanUse).
+  ListExtensions: ({ projectId: pid = "" }) => ({ extensions: extensions.filter((e) => !pid || mayUseExtension(e, pid)).map(extensionSummary) }),
+  GetExtension: ({ extensionId }) => { const e = extensions.find((x) => x.id === extensionId); return e ? { extension: extensionSummary(e), versions: [...e.versions].reverse(), grants: mayDecide() ? e.grants : [] } : connectError(404, "not_found", "workflow resource not found"); },
   PreviewExtensionInstall: ({ source = {} }) => extensionPreview(source),
   InstallExtension: ({ source = {}, expectedCommit, approvedPermissions = [] }) => {
     const p = extensionPreview(source);
@@ -279,14 +280,14 @@ const rpc = {
     if (p.commit !== expectedCommit) return connectError(400, "failed_precondition", "the ref moved since the preview; preview again");
     let e = extensions.find((x) => x.key === p.extensionKey);
     if (!e) { e = { id: `ext-${extensions.length + 1}`, key: p.extensionKey, repositoryUrl: source.repositoryUrl, gitRef: source.gitRef, createdAt: now(), versions: [], grants: [] }; extensions.push(e); }
-    const version = { id: `extv-${Date.now()}`, extensionId: e.id, version: p.version, repositoryUrl: source.repositoryUrl, gitRef: source.gitRef, commit: p.commit, manifestJson: p.manifestJson,
+    const version = { id: `extv-${extensions.reduce((n, x) => n + x.versions.length, 1)}`, extensionId: e.id, version: p.version, repositoryUrl: source.repositoryUrl, gitRef: source.gitRef, commit: p.commit, manifestJson: p.manifestJson,
       manifestSha256: p.manifestSha256, manifestOrigin: source.overlayManifestJson ? "overlay" : "repository", manifestPath: source.overlayManifestJson ? "" : source.manifestPath || "blaxsmith-extension.json",
       approvedPermissions: [...approvedPermissions].sort(), permissionsSha256: "c".repeat(64), installedByUsername: "you", createdAt: now(), permissions: p.permissions, templates: p.templates };
     e.versions.push(version); e.current = version.id; e.latestRefCommit = p.commit; auditEvent("workflow.extension.installed", version.id);
     return { extension: extensionSummary(e), version };
   },
   CheckExtensionUpdate: ({ extensionId }) => { const e = extensions.find((x) => x.id === extensionId); e.latestRefCommit = "9".repeat(40); e.checkedAt = now(); return { extension: extensionSummary(e) }; },
-  GrantExtension: ({ extensionId, projectId: pid = "", granteeKind, granteeId = "" }) => { const grant = { id: `egrant-${Date.now()}`, projectId: pid, projectName: pid ? "Demo project" : "", granteeKind, granteeId, createdAt: now() }; extensions.find((x) => x.id === extensionId)?.grants.push(grant); return { grant }; },
+  GrantExtension: ({ extensionId, projectId: pid = "", granteeKind, granteeId = "" }) => { const grant = { id: `egrant-${Date.now()}`, projectId: pid, projectName: pid ? projectName(pid) : "", granteeKind, granteeId, createdAt: now() }; extensions.find((x) => x.id === extensionId)?.grants.push(grant); return { grant }; },
   RevokeExtensionGrant: ({ grantId }) => { for (const e of extensions) e.grants = e.grants.filter((g) => g.id !== grantId); return {}; },
   GetRecipeEditorOptions: () => ({
     harnesses: [{ harness: "claude-code", provider: "anthropic", efforts: ["low", "medium", "high", "xhigh", "max"] }, { harness: "codex", provider: "openai", efforts: ["minimal", "low", "medium", "high", "xhigh"] }, { harness: "opencode", provider: "", efforts: ["provider-default", "low", "medium", "high"] }],
@@ -553,6 +554,31 @@ hubAdd({ scope: "organization", ownerId: "org-demo", ownerName: "Acme Engineerin
 hubAdd({ scope: "personal", ownerId: principalId, ownerName: "You", kind: "subscription", provider: "codex", label: "", account: "acct-demo", modelCount: 3, modelsCheckedAt: minutesAgo(90), lastUsedAt: minutesAgo(200), createdAt: minutesAgo(60 * 24 * 5),
   uses: [{ id: "cu-2", projectId, projectName: "Demo project", model: "gpt-5.6-luna", granteeKind: "user", createdAt: minutesAgo(60 * 24 * 4) }] });
 hubAdd({ scope: "project", ownerId: projectId, ownerName: "Demo project", kind: "api_key", provider: "anthropic", label: "Project key", account: "sk-ant-…77b0", modelCount: 4, modelsCheckedAt: minutesAgo(300), createdAt: minutesAgo(60 * 24 * 6) });
+
+// Seeded extensions: Guild granted to the demo project (two versions, the ref
+// moved since), and a lint pack installed but granted nowhere.
+{
+  const guild = { repositoryUrl: "https://github.com/example/guild", gitRef: "main", manifestPath: "", overlayManifestJson: "" };
+  const older = JSON.parse(guildManifest);
+  older.version = "0.9.0";
+  const all = (src) => extensionPreview(src).permissions.map((p) => p.id);
+  rpc.InstallExtension({ source: { ...guild, overlayManifestJson: JSON.stringify(older) }, expectedCommit: extensionPreview({ overlayManifestJson: JSON.stringify(older) }).commit, approvedPermissions: all({ overlayManifestJson: JSON.stringify(older) }) });
+  rpc.InstallExtension({ source: guild, expectedCommit: extensionPreview(guild).commit, approvedPermissions: extensionPreview(guild).permissions.filter((p) => !p.optional).map((p) => p.id) });
+  const g = extensions.find((e) => e.key === "guild");
+  g.versions[0].createdAt = minutesAgo(60 * 24 * 12); g.versions[1].createdAt = minutesAgo(60 * 24 * 2); g.createdAt = g.versions[0].createdAt;
+  g.latestRefCommit = "7c2d".padEnd(40, "1"); g.checkedAt = minutesAgo(90);
+  rpc.GrantExtension({ extensionId: g.id, projectId, granteeKind: "project" });
+  const lint = { id: "lint-pack", version: "2.1.0", title: "Lint pack", native_subagents: false, mcp_servers: [], hooks: [], egress: [], runtimes: [],
+    stage_templates: [{ id: "strict-review", title: "Strict review", mode: "embedded", harness: "claude-code", kinds: ["review"] }] };
+  const lintSource = { repositoryUrl: "https://gitlab.com/example/lint-pack", gitRef: "v2", manifestPath: "", overlayManifestJson: JSON.stringify(lint) };
+  rpc.InstallExtension({ source: lintSource, expectedCommit: extensionPreview(lintSource).commit, approvedPermissions: [] });
+  extensions.find((e) => e.key === "lint-pack").checkedAt = minutesAgo(60 * 5);
+}
+function mayUseExtension(e, pid) {
+  const rank = (role) => ["member", "admin", "owner"].indexOf(role);
+  return mockRole !== "viewer" && e.grants.some((g) => (g.granteeKind === "project" && g.projectId === pid) || (g.granteeKind === "user" && g.granteeId === principalId)
+    || (g.granteeKind === "role" && rank(mockRole) >= rank(g.granteeId)));
+}
 
 const server = createHttp(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
