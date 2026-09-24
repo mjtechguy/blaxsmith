@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, ArrowRight, BookCopy, Check, CopyPlus, FileJson, GitFork, ListTree, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookCopy, Check, CopyPlus, FileJson, GitFork, ListTree, Package, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { extensionKey, extensionsKey, getExtension, listExtensions, templateChoices } from "./extensions";
+import type { ExtensionVersion } from "./gen/blaxsmith/api/v1/extensions_pb";
 import { currentSession, sessionQueryKey } from "./auth";
 import { ResourceGrants, useConnectionModels } from "./connection-ui";
 import { ModelSelect } from "./model-select";
@@ -192,7 +194,8 @@ export function RecipeDetailPage({ projectId, recipeId }: { projectId?: string; 
 
 const dagFeatures = tableFeatures({});
 const dagColumns: ColumnDef<typeof dagFeatures, StageRow>[] = [
-  { id: "id", header: "Stage", cell: ({ row }) => <strong className="mono">{row.original.id}</strong> },
+  { id: "id", header: "Stage", cell: ({ row }) => <span><strong className="mono">{row.original.id}</strong>{row.original.template
+    ? <><br /><span className="state-badge extension-badge" title={`Extension stage template ${row.original.template}`}><Package size={11} aria-hidden="true" /> {row.original.template}</span></> : null}</span> },
   { id: "kind", header: "Kind", cell: ({ row }) => <span className="state-badge">{row.original.kind.replaceAll("_", " ")}</span> },
   { id: "profile", header: "Profile", cell: ({ row }) => row.original.profile ? <span>{row.original.profile}<br /><small className="mono">{row.original.harness} · {row.original.model} · {row.original.effort}</small></span> : <span className="state-badge">human</span> },
   { id: "deps", header: "Depends on", cell: ({ row }) => row.original.dependsOn.length ? <span className="mono">{row.original.dependsOn.join(", ")}</span> : "—" },
@@ -251,6 +254,12 @@ function RecipeEditor({ org, projectId, recipeId, source, baseName }: { org: str
   const options = useQuery({ queryKey: recipeOptionsKey(org), enabled: Boolean(org), queryFn: ({ signal }) => getRecipeEditorOptions(signal), staleTime: 60_000 });
   const tools = useQuery({ queryKey: ["tool-catalog"], queryFn: ({ signal }) => listTools(signal), staleTime: 5 * 60_000, retry: false });
   const files = useQuery({ queryKey: recipeFilesKey(org, projectId || ""), enabled: Boolean(org && projectId), queryFn: ({ signal }) => listProjectRecipeFiles(projectId || "", signal), staleTime: 60_000, retry: false });
+  // Extension templates a stage may name: those granted to this project, or
+  // for an organization recipe every installed one (launch still needs a grant).
+  const extensions = useQuery({ queryKey: extensionsKey(org, projectId || ""), enabled: Boolean(org), queryFn: ({ signal }) => listExtensions(projectId || "", signal), staleTime: 60_000, retry: false });
+  const extensionDetails = useQueries({ queries: (extensions.data?.extensions ?? []).map((e) => ({
+    queryKey: extensionKey(org, e.id), queryFn: ({ signal }: { signal: AbortSignal }) => getExtension(e.id, signal), staleTime: 60_000 })) });
+  const extensionSets: ExtensionSet[] = (extensions.data?.extensions ?? []).map((e, i) => ({ key: e.key, currentVersion: e.currentVersion, versions: extensionDetails[i]?.data?.versions ?? [] }));
   const doc = parseRecipe(json);
   const errors: RecipeValidationError[] = validation.data?.errors || [];
   const stale = debounced.json !== json || debounced.frozenPath !== frozenPath || validation.isFetching;
@@ -311,7 +320,7 @@ function RecipeEditor({ org, projectId, recipeId, source, baseName }: { org: str
         {view === "form" && doc ? <RecipeForm doc={doc} update={update} errors={errors}
           harnesses={options.data?.harnesses.filter((h) => !tools.data || tools.data.tools.some((tool) => tool.tool === h.harness)) || []}
           allHarnesses={options.data?.harnesses || []} stageKinds={options.data?.stageKinds || []} connections={options.data?.connections || []}
-          skillPaths={files.data?.skillPaths} promptPaths={files.data?.promptPaths} /> : null}
+          skillPaths={files.data?.skillPaths} promptPaths={files.data?.promptPaths} extensions={extensionSets} orgRecipe={!projectId} /> : null}
         <div id="recipe-validation" className={errors.length ? "recipe-validation is-invalid" : "recipe-validation"} role="status" aria-live="polite">
           {stale ? <span><RefreshCw size={13} className="spin" aria-hidden="true" /> Validating…</span>
             : validation.isError ? <span>Validation is unavailable.</span>
@@ -350,7 +359,10 @@ type FormProps = {
   doc: RecipeDocument; update: (doc: RecipeDocument) => void; errors: RecipeValidationError[];
   harnesses: Array<{ harness: string; provider: string; efforts: string[] }>; allHarnesses: Array<{ harness: string; provider: string; efforts: string[] }>;
   stageKinds: string[]; connections: RecipeModelConnection[]; skillPaths?: string[]; promptPaths?: string[];
+  extensions: ExtensionSet[]; orgRecipe: boolean;
 };
+
+type ExtensionSet = { key: string; currentVersion: string; versions: ExtensionVersion[] };
 
 const list = (value: string) => value.split(",").map((part) => part.trim()).filter(Boolean);
 const int = (value: string) => Number.parseInt(value, 10) || 0;
@@ -437,12 +449,12 @@ function ProfileCard({ id, profile, errors, harnesses, allHarnesses, connections
   </div>;
 }
 
-function StagesEditor({ doc, update, errors, stageKinds, promptPaths }: FormProps) {
+function StagesEditor({ doc, update, errors, stageKinds, promptPaths, extensions, orgRecipe }: FormProps) {
   const setStage = (index: number, stage: RecipeStage) => update({ ...doc, stages: doc.stages.map((s, i) => i === index ? stage : s) });
   const profiles = Object.keys(doc.profiles || {});
   return <fieldset className="recipe-fieldset"><legend>Stages</legend>
     {doc.stages.map((stage, index) => <StageCard key={`${index}-${stage.id}`} index={index} stage={stage} doc={doc} errors={errors} stageKinds={stageKinds}
-      profiles={profiles} promptPaths={promptPaths} onChange={(next) => setStage(index, next)}
+      profiles={profiles} promptPaths={promptPaths} extensions={extensions} orgRecipe={orgRecipe} onChange={(next) => setStage(index, next)}
       onRename={(to) => { if (to && to !== stage.id && !doc.stages.some((s) => s.id === to)) update(renameStage(doc, stage.id, to)); }}
       onRemove={() => update({ ...doc, stages: doc.stages.filter((_, i) => i !== index).map((s) => ({ ...s,
         ...(s.depends_on ? { depends_on: s.depends_on.filter((d) => d !== stage.id) } : {}) })) })} />)}
@@ -455,8 +467,9 @@ function StagesEditor({ doc, update, errors, stageKinds, promptPaths }: FormProp
   </fieldset>;
 }
 
-function StageCard({ index, stage, doc, errors, stageKinds, profiles, promptPaths, onChange, onRename, onRemove }: {
+function StageCard({ index, stage, doc, errors, stageKinds, profiles, promptPaths, extensions, orgRecipe, onChange, onRename, onRemove }: {
   index: number; stage: RecipeStage; doc: RecipeDocument; errors: RecipeValidationError[]; stageKinds: string[]; profiles: string[]; promptPaths?: string[];
+  extensions: ExtensionSet[]; orgRecipe: boolean;
   onChange: (s: RecipeStage) => void; onRename: (to: string) => void; onRemove: () => void;
 }) {
   const [draftId, setDraftId] = useState(stage.id);
@@ -465,6 +478,9 @@ function StageCard({ index, stage, doc, errors, stageKinds, profiles, promptPath
   const others = doc.stages.filter((s) => s.id !== stage.id).map((s) => s.id);
   const deps = stage.depends_on || [];
   const loopable = stage.kind === "review" || stage.kind === "verify";
+  const templates = extensions.flatMap((e) => templateChoices(e.versions, e.currentVersion, stage.kind, e.key));
+  const template = templates.find((t) => t.reference === stage.template);
+  const harness = stage.profile ? doc.profiles[stage.profile]?.harness : "";
   return <div className="verification-check">
     <div className="verification-check-heading"><strong>Stage {index + 1} · {stage.id}</strong><button type="button" className="text-action" onClick={onRemove}><Trash2 size={14} aria-hidden="true" /> Remove</button></div>
     <div className="recipe-grid">
@@ -476,6 +492,14 @@ function StageCard({ index, stage, doc, errors, stageKinds, profiles, promptPath
       {!human ? promptPaths?.length ? <Select label="Prompt file" value={stage.prompt || ""} choices={promptPaths.map((p) => [p, p])} onChange={(prompt) => onChange({ ...stage, prompt })} error={fieldError(errors, `${at}.prompt`)} />
         : <TextField label="Prompt file" name={`${at}-prompt`} autoComplete="off" placeholder="prompts/implement.md" value={stage.prompt || ""} onChange={(prompt) => onChange({ ...stage, prompt })} onBlur={() => undefined} error={fieldError(errors, `${at}.prompt`)} /> : null}
     </div>
+    {!human ? <>
+      <Select label="Extension template" value={stage.template || ""} error={fieldError(errors, `${at}.template`)}
+        choices={[["", "None · the prompt file only"], ...templates.map((t): [string, string] => [t.reference, `${t.reference} · ${t.title}${t.current ? "" : " (older version)"}`])]}
+        onChange={(value) => { const { template: _drop, ...rest } = stage; onChange(value ? { ...rest, template: value } : rest); }} />
+      {template && harness && template.harness !== harness ? <p className="form-hint form-field-error">This template runs on {template.harness}; profile {stage.profile} uses {harness}.</p> : null}
+      {!templates.length ? <p className="form-hint">{orgRecipe ? "No installed extension offers a template for this stage kind." : `No extension granted to this project offers a template for ${stage.kind.replaceAll("_", " ")} stages.`}</p>
+        : orgRecipe ? <p className="form-hint">Lists every installed extension; a project launches it only with a grant.</p> : null}
+    </> : null}
     <fieldset className="recipe-fieldset"><legend>Depends on</legend>
       {others.length ? others.map((id) => <label key={id} className="recipe-check"><input type="checkbox" checked={deps.includes(id)}
         onChange={(event) => onChange({ ...stage, depends_on: event.target.checked ? [...deps, id] : deps.filter((d) => d !== id) })} /> <span className="mono">{id}</span></label>)

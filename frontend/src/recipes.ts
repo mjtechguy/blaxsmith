@@ -50,7 +50,8 @@ export async function cloneRecipe(sourceVersionId: string, projectId: string, na
 // by editing a parsed copy of the document.
 export type RecipeProfile = { harness: string; model: string; effort: string; instructions?: string[]; skills?: string[] };
 export type RecipeLoop = { with: string; until: string; max_cycles: number };
-export type RecipeStage = { id: string; kind: string; profile?: string; depends_on?: string[]; prompt?: string; loop?: RecipeLoop };
+// template names an installed extension stage template, "extension@version/template".
+export type RecipeStage = { id: string; kind: string; profile?: string; depends_on?: string[]; prompt?: string; loop?: RecipeLoop; template?: string };
 export type RecipeDocument = {
   schema_version: string; name: string; profiles: Record<string, RecipeProfile>; stages: RecipeStage[];
   required_checks: string[]; limits: { max_correction_cycles: number; timeout_seconds: number; max_runtime_seconds?: number };
@@ -81,14 +82,14 @@ export function parseRecipe(json: string): RecipeDocument | null {
 export const formatRecipe = (doc: RecipeDocument) => `${JSON.stringify(doc, null, 2)}\n`;
 
 // Stage rows for the read-only DAG view, in server topological order when known.
-export type StageRow = { id: string; kind: string; profile: string; harness: string; model: string; effort: string; dependsOn: string[]; loop: string };
+export type StageRow = { id: string; kind: string; profile: string; harness: string; model: string; effort: string; dependsOn: string[]; loop: string; template: string };
 export function stageRows(doc: RecipeDocument | null, order: string[] = []): StageRow[] {
   if (!doc) return [];
   const rows = doc.stages.map((stage) => {
     const profile = stage.profile ? doc.profiles?.[stage.profile] : undefined;
     return { id: stage.id, kind: stage.kind, profile: stage.profile || "", harness: profile?.harness || "", model: profile?.model || "",
       effort: profile?.effort || "", dependsOn: stage.depends_on || [],
-      loop: stage.loop ? `${stage.loop.with} until ${stage.loop.until} · ≤${stage.loop.max_cycles}` : "" };
+      loop: stage.loop ? `${stage.loop.with} until ${stage.loop.until} · ≤${stage.loop.max_cycles}` : "", template: stage.template || "" };
   });
   if (!order.length) return rows;
   const rank = new Map(order.map((id, index) => [id, index]));

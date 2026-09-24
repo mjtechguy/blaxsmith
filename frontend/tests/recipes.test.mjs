@@ -48,6 +48,10 @@ test("recipe mutations send CSRF, launch sends the library version, and the form
     assert.deepEqual(rows.map((r) => r.id), ["plan", "implement", "verify", "review", "architect-review", "human-review"]);
     assert.equal(rows[2].loop, "implement until pass · ≤3");
     assert.equal(rows[1].harness, "codex");
+    // Extension template stages carry their reference into the stage graph.
+    assert.ok(rows.every((r) => r.template === ""));
+    const templated = { ...guild, stages: guild.stages.map((s) => s.id === "plan" ? { ...s, template: "guild@1.0.0/forge-plan" } : s) };
+    assert.equal(recipes.stageRows(templated)[0].template, "guild@1.0.0/forge-plan");
     const renamed = recipes.renameStage(guild, "implement", "build");
     assert.deepEqual(renamed.stages.find((s) => s.id === "verify").loop.with, "build");
     assert.deepEqual(renamed.stages.find((s) => s.id === "review").depends_on, ["build"]);
