@@ -15,7 +15,9 @@ import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsNewRouteImport } from './routes/projects.new'
 import { Route as ProjectsProjectIdSourceRouteImport } from './routes/projects.$projectId.source'
+import { Route as ProjectsProjectIdVerificationRouteImport } from './routes/projects.$projectId.verification'
 import { Route as ProjectsProjectIdRunsRunIdRouteImport } from './routes/projects.$projectId.runs.$runId'
+import { Route as ProjectsProjectIdRunsNewRouteImport } from './routes/projects.$projectId.runs.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -47,10 +49,22 @@ const ProjectsProjectIdSourceRoute = ProjectsProjectIdSourceRouteImport.update({
   path: '/source',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const ProjectsProjectIdVerificationRoute =
+  ProjectsProjectIdVerificationRouteImport.update({
+    id: '/verification',
+    path: '/verification',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdRunsRunIdRoute =
   ProjectsProjectIdRunsRunIdRouteImport.update({
     id: '/runs/$runId',
     path: '/runs/$runId',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdRunsNewRoute =
+  ProjectsProjectIdRunsNewRouteImport.update({
+    id: '/runs/new',
+    path: '/runs/new',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
 
@@ -61,7 +75,9 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
+  '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
+  '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,7 +86,9 @@ export interface FileRoutesByTo {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
+  '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
+  '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,7 +98,9 @@ export interface FileRoutesById {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
+  '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
+  '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,7 +111,9 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/projects/new'
     | '/projects/$projectId/source'
+    | '/projects/$projectId/verification'
     | '/projects/$projectId/runs/$runId'
+    | '/projects/$projectId/runs/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,7 +122,9 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/projects/new'
     | '/projects/$projectId/source'
+    | '/projects/$projectId/verification'
     | '/projects/$projectId/runs/$runId'
+    | '/projects/$projectId/runs/new'
   id:
     | '__root__'
     | '/'
@@ -109,7 +133,9 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/projects/new'
     | '/projects/$projectId/source'
+    | '/projects/$projectId/verification'
     | '/projects/$projectId/runs/$runId'
+    | '/projects/$projectId/runs/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -164,6 +190,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdSourceRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/verification': {
+      id: '/projects/$projectId/verification'
+      path: '/verification'
+      fullPath: '/projects/$projectId/verification'
+      preLoaderRoute: typeof ProjectsProjectIdVerificationRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/runs/$runId': {
       id: '/projects/$projectId/runs/$runId'
       path: '/runs/$runId'
@@ -171,17 +204,28 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRunsRunIdRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/runs/new': {
+      id: '/projects/$projectId/runs/new'
+      path: '/runs/new'
+      fullPath: '/projects/$projectId/runs/new'
+      preLoaderRoute: typeof ProjectsProjectIdRunsNewRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
   }
 }
 
 interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdSourceRoute: typeof ProjectsProjectIdSourceRoute
+  ProjectsProjectIdVerificationRoute: typeof ProjectsProjectIdVerificationRoute
   ProjectsProjectIdRunsRunIdRoute: typeof ProjectsProjectIdRunsRunIdRoute
+  ProjectsProjectIdRunsNewRoute: typeof ProjectsProjectIdRunsNewRoute
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdSourceRoute: ProjectsProjectIdSourceRoute,
+  ProjectsProjectIdVerificationRoute: ProjectsProjectIdVerificationRoute,
   ProjectsProjectIdRunsRunIdRoute: ProjectsProjectIdRunsRunIdRoute,
+  ProjectsProjectIdRunsNewRoute: ProjectsProjectIdRunsNewRoute,
 }
 
 const ProjectsProjectIdRouteWithChildren =

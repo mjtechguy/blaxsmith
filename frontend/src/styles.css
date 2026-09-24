@@ -185,6 +185,7 @@ a { color: inherit; text-decoration: none; }
 .table-heading p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .source-summary { display: flex; flex-direction: column; gap: 5px; padding: 0 20px 20px; overflow-wrap: anywhere; color: var(--muted); font-size: 12px; }
 .source-summary strong { color: var(--text); font-weight: 650; }
+.source-summary code { white-space: normal; overflow-wrap: anywhere; }
 .fetched-time { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .table-toolbar { display: flex; gap: 9px; padding: 0 20px 14px; }
 .search-field { display: flex; align-items: center; gap: 8px; min-width: 220px; width: min(330px, 100%); padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); background: var(--surface); }
@@ -239,6 +240,19 @@ a { color: inherit; text-decoration: none; }
 .editor-form { display: flex; flex-direction: column; gap: 20px; padding-top: 23px; }
 .editor-actions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 15px; border-top: 1px solid var(--line); }
 .editor-note { padding: 22px; }
+.verification-check { display: flex; flex-direction: column; gap: 16px; padding: 18px; border: 1px solid var(--line); border-radius: 8px; }
+.verification-check-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.verification-check-heading strong, .verification-arguments > span { font-size: 12px; font-weight: 650; }
+.verification-arguments { display: flex; flex-direction: column; gap: 10px; }
+.verification-argument { display: flex; align-items: end; gap: 8px; }
+.verification-argument .form-field { flex: 1; min-width: 0; }
+.verification-argument > button { min-width: 42px; min-height: 42px; }
+.launch-prerequisites { display: flex; flex-direction: column; gap: 18px; margin: 20px 0; }
+.launch-prerequisites dt { margin-bottom: 5px; color: var(--muted); font-size: 11px; font-weight: 650; }
+.launch-prerequisites dd { margin: 0; overflow-wrap: anywhere; font-size: 12px; }
+.launch-prerequisites dd span { color: var(--muted); }
+.launch-prerequisites ol { display: flex; flex-direction: column; gap: 9px; margin: 0; padding-left: 19px; }
+.launch-prerequisites li code { display: block; margin-top: 2px; overflow-wrap: anywhere; color: var(--muted); font-size: 11px; }
 .event-list { margin: 0; padding: 0; list-style: none; }
 .event-list li { display: flex; align-items: center; gap: 13px; min-height: 62px; padding: 12px 20px; border-top: 1px solid var(--line); }
 .event-mark { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%; color: var(--primary); background: var(--primary-soft); }

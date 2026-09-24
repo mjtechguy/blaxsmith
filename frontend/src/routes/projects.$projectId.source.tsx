@@ -8,7 +8,7 @@ import { currentSession, sessionQueryKey } from "../auth";
 import { TextField } from "../form-field";
 import type { ProjectSource } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { PageHeader, PageShell } from "../page";
-import { getProject, getProjectSource, projectSourceQueryKey, setProjectSource } from "../workflow";
+import { getProject, getProjectSource, launchAvailabilityQueryKey, projectSourceQueryKey, setProjectSource } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId/source")({ component: ProjectSourceSettings });
 
@@ -41,13 +41,16 @@ function SourceEditor({ projectId, org, source }: { projectId: string; org: stri
       setError("");
       const repositoryUrl = value.repositoryUrl.trim();
       const ref = value.ref.trim();
-      if (repositoryUrl.length > 2048 || ref.length > 128) {
-        setError("Use a repository URL of at most 2,048 characters and a ref of at most 128 characters.");
+      if (!repositoryUrl || repositoryUrl.length > 2048 || ref.length > 128) {
+        setError("Enter a repository URL of at most 2,048 characters and a ref of at most 128 characters.");
         return;
       }
       try {
         await setProjectSource(projectId, repositoryUrl, ref);
-        await queryClient.invalidateQueries({ queryKey: projectSourceQueryKey(org, projectId) });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: projectSourceQueryKey(org, projectId) }),
+          queryClient.invalidateQueries({ queryKey: launchAvailabilityQueryKey(org, projectId) }),
+        ]);
         await navigate({ to: "/projects/$projectId", params: { projectId } });
       } catch (cause) {
         const code = ConnectError.from(cause).code;
@@ -61,7 +64,7 @@ function SourceEditor({ projectId, org, source }: { projectId: string; org: stri
   return <div className="editor-layout">
     <section className="editor-card" aria-labelledby="source-details-heading">
       <div className="editor-card-heading"><span className="project-symbol"><GitBranch size={18} aria-hidden="true" /></span><div><h2 id="source-details-heading">Repository</h2><p>Choose the codebase and branch or tag for future runs.</p></div></div>
-      <form className="editor-form" onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
+      <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
         <form.Field name="repositoryUrl">
           {(field) => <TextField autoFocus label="Repository URL" name={field.name} type="url" autoComplete="url" placeholder="https://github.com/organization/repository" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} />}
         </form.Field>
