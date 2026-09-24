@@ -19,7 +19,7 @@ COPY --from=binaries --chmod=0755 /ax-task-runner /usr/local/bin/ax-task-runner
 COPY --from=binaries --chmod=0755 /blaxsmith-tool-worker /usr/local/bin/blaxsmith-tool-worker
 COPY --from=binaries --chmod=0755 /blaxsmith-git-askpass /usr/local/bin/blaxsmith-git-askpass
 COPY --from=binaries /blaxsmith-git-ca.pem /tmp/blaxsmith-git-ca.pem
-COPY deploy/tool-worker/manifest.mjs /opt/blaxsmith/manifest.mjs
+COPY deploy/tool-worker/manifest.mjs deploy/tool-worker/runtimes.mjs /opt/blaxsmith/
 RUN mkdir -p /run/blaxsmith /workspace \
     && ln -s blaxsmith-tool-worker /usr/local/bin/bx \
     && chmod 0700 /run/blaxsmith \

@@ -1,0 +1,15 @@
+{
+  "schema": "blaxsmith.runner-variant/v1alpha1",
+  "variant": "guild",
+  "extension_manifest": "examples/extensions/guild/blaxsmith-extension.json",
+  "exclude_newer": "2026-09-01T00:00:00Z",
+  "runtimes": {
+    "uv": {
+      "version": "0.12.18",
+      "url": "https://github.com/astral-sh/uv/releases/download/0.12.18/uv-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "89eadd7c76fc063887959510d5ba0ab1264dfd5f1143b925ddb73021a40acf16"
+    },
+    "python": { "version": "3.12" },
+    "serena": { "version": "1.7.0", "package": "serena-agent" }
+  }
+}

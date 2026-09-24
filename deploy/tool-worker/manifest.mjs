@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { runtimes } from "./runtimes.mjs";
 
 const root = "/opt/blaxsmith";
 const packages = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
@@ -21,6 +22,8 @@ const tools = [
 
 const git = execFileSync("/usr/bin/git", ["--version"], { encoding: "utf8", timeout: 20_000 }).trim();
 if (!git.startsWith("git version ")) throw new Error("Git unavailable");
+// A runner variant (for example guild) adds verified runtime layers.
+const variant = runtimes();
 process.stdout.write(JSON.stringify({
   schema: "blaxsmith.tool-worker-image/v1alpha1",
   platform: "linux/amd64",
@@ -28,4 +31,5 @@ process.stdout.write(JSON.stringify({
   tool_worker_sha256: hash("/usr/local/bin/blaxsmith-tool-worker"),
   git_version: git,
   tools,
+  ...(variant ? { runtimes: variant } : {}),
 }) + "\n");
