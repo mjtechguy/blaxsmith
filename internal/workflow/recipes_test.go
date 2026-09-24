@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
@@ -31,6 +32,21 @@ func grantRecipe(t *testing.T, store *Store, owner identity.Caller, recipeID str
 		t.Fatal(err)
 	}
 	return id
+}
+
+// seedGrants lists live member-role grants on an organization recipe.
+func seedGrants(t *testing.T, store *Store, org, recipeID string) []string {
+	t.Helper()
+	rows, err := store.pool.Query(t.Context(), `SELECT id::text FROM access_resource_grants WHERE organization_id=$1
+		AND resource_kind='recipe' AND resource_id=$2 AND grantee_role='member' AND revoked_at IS NULL`, org, recipeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ids
 }
 
 func revokeRecipeGrant(t *testing.T, store *Store, owner identity.Caller, grantID string) {
@@ -102,6 +118,41 @@ func TestRecipeSeedIsIdempotentAndVersionsAreImmutable(t *testing.T) {
 	if _, err := db.Migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
+	for range 2 {
+		if _, err := pool.Exec(ctx, `SELECT workflow_seed_recipe_grants($1)`, org); err != nil {
+			t.Fatal(err)
+		}
+	}
+	grants := seedGrants(t, store, org, seed.ID)
+	if len(grants) != 1 {
+		t.Fatalf("seeded recipe member grants: %v", grants)
+	}
+	project, err := store.CreateProject(ctx, org, "recipe-seed-project", "Recipe seed project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	member := reviewer(t, pool, org, "member", "recipe-seed-member")
+	viewer := reviewer(t, pool, org, "viewer", "recipe-seed-project-viewer")
+	if list, err := store.ListRecipes(ctx, member, project); err != nil || len(list) != 1 || list[0].ID != seed.ID {
+		t.Fatalf("member cannot use the seeded recipe by default: %+v %v", list, err)
+	}
+	if _, err := store.LibraryRecipeForLaunch(ctx, member, project, version.ID); err != nil {
+		t.Fatalf("seeded recipe not launchable by default: %v", err)
+	}
+	if _, err := store.LibraryRecipeForLaunch(ctx, viewer, project, version.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("viewer launched the seeded recipe: %v", err)
+	}
+	// A revoked default grant stays revoked when the seed runs again.
+	revokeRecipeGrant(t, store, owner, grants[0])
+	if _, err := pool.Exec(ctx, `SELECT workflow_seed_recipe_grants($1)`, org); err != nil {
+		t.Fatal(err)
+	}
+	if again := seedGrants(t, store, org, seed.ID); len(again) != 0 {
+		t.Fatalf("seed restored a revoked grant: %v", again)
+	}
+	if list, err := store.ListRecipes(ctx, member, project); err != nil || len(list) != 0 {
+		t.Fatalf("revoked seeded recipe still usable: %+v %v", list, err)
+	}
 	var recipes, versions int
 	if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM workflow_recipes WHERE organization_id=$1),
 		(SELECT count(*) FROM workflow_recipe_versions WHERE organization_id=$1)`, org).Scan(&recipes, &versions); err != nil ||
@@ -142,8 +193,12 @@ func TestRecipeSeedIsIdempotentAndVersionsAreImmutable(t *testing.T) {
 	}
 	// A new organization is seeded by the trigger.
 	later := organization(t, pool, "recipe-seed-later")
-	if _, v := seededGuild(t, store, reviewer(t, pool, later, "viewer", "recipe-seed-viewer")); v.SHA256 != version.SHA256 {
+	laterSeed, v := seededGuild(t, store, reviewer(t, pool, later, "viewer", "recipe-seed-viewer"))
+	if v.SHA256 != version.SHA256 {
 		t.Fatal("later organization seeded different bytes")
+	}
+	if grants := seedGrants(t, store, later, laterSeed.ID); len(grants) != 1 {
+		t.Fatalf("later organization's seeded recipe not granted to members: %v", grants)
 	}
 }
 
@@ -222,8 +277,6 @@ func TestRecipeScopesAndPermissions(t *testing.T) {
 	if err != nil || orgRecipe.ProjectID != "" || orgRecipe.CurrentVersionID != orgVersion.ID {
 		t.Fatalf("owner org recipe: %+v %v", orgRecipe, err)
 	}
-	guild, _ := seededGuild(t, store, owner)
-	grantRecipe(t, store, owner, guild.ID, access.Grantee{Role: "member"})
 	orgFastGrants := []string{grantRecipe(t, store, owner, orgRecipe.ID, access.Grantee{ProjectID: project}),
 		grantRecipe(t, store, owner, orgRecipe.ID, access.Grantee{ProjectID: sibling})}
 	projectRecipe, projectVersion, err := store.CreateRecipeAs(ctx, admin, project, "Org fast", "Same name, project scope", data, "")
@@ -343,7 +396,7 @@ func TestLaunchFromLibraryFreezesSameDigestAsFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	guild, seed := seededGuild(t, store, member)
-	guildGrant := grantRecipe(t, store, owner, guild.ID, access.Grantee{Role: "member"})
+	guildGrants := seedGrants(t, store, org, guild.ID) // Seeded: no explicit grant needed.
 	library, err := store.LibraryRecipeForLaunch(ctx, member, project, seed.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -374,7 +427,9 @@ func TestLaunchFromLibraryFreezesSameDigestAsFile(t *testing.T) {
 	if _, err := launch("tampered", tampered, library.ID); !errors.Is(err, ErrConflict) {
 		t.Fatalf("tampered library bytes launched: %v", err)
 	}
-	revokeRecipeGrant(t, store, owner, guildGrant)
+	for _, id := range guildGrants {
+		revokeRecipeGrant(t, store, owner, id)
+	}
 	if _, err := launch("ungranted", fromLibrary, library.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("ungranted library recipe launched: %v", err)
 	}
