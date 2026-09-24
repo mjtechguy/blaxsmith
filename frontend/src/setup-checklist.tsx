@@ -85,8 +85,8 @@ export function ProjectSetupChecklist({ projectId }: { projectId: string }) {
   const settled = <T,>(q: { isSuccess: boolean; isError: boolean; data?: T }, done: (data: T) => boolean) =>
     q.isSuccess ? done(q.data as T) : q.isError ? false : undefined;
   const items: ChecklistItem[] = [
-    { id: "source", label: "Connect the repository", hint: "Choose the Git repository and ref runs start from.", to: `/projects/${projectId}/source`, done: settled(source, Boolean) },
-    { id: "verification", label: "Set verification checks", hint: "At least one check is required to launch.", to: `/projects/${projectId}/verification`, done: settled(verification, Boolean) },
+    { id: "source", label: "Connect the repository", hint: "Choose the Git repository and ref runs start from.", to: `/projects/${projectId}/settings/source`, done: settled(source, Boolean) },
+    { id: "verification", label: "Set verification checks", hint: "At least one check is required to launch.", to: `/projects/${projectId}/settings/verification`, done: settled(verification, Boolean) },
     { id: "recipe", label: "Make a recipe available", hint: "Create a project recipe or ask an admin to grant one.", to: `/projects/${projectId}/recipes`,
       done: settled(recipes, (r) => r.recipes.length > 0) },
     { id: "models", label: "Give runs model access", hint: "Use a granted organization connection or add a project key.", to: `/projects/${projectId}/connections`,

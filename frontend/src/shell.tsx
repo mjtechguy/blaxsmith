@@ -6,6 +6,7 @@ import type { SessionIdentity } from "./gen/blaxsmith/api/v1/auth_pb";
 import { activeItem, breadcrumbs, detailKind, itemMatches, navigation, projectIdFrom, switchPath, type NavGroup, type NavItem } from "./nav";
 import { applyTheme, setPrefs, usePrefs, type Theme } from "./preferences";
 import { Slot } from "./slots";
+import "./setup-slots";
 import { UserMenu } from "./user-menu";
 import { getWorkspaceHome, homeKey } from "./workspace";
 import { getProject, getRun, listProjects } from "./workflow";

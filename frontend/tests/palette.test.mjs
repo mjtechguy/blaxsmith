@@ -32,13 +32,26 @@ test("owners and admins see everything, including users and org connections", ()
   }
 });
 
-test("members get no users, org connections, admin actions, or admin inbox", () => {
+test("members get no users, org connections, or admin actions", () => {
   const items = m.paletteItems("member", data, { projectId: "p1" });
   const got = ids(items);
-  for (const id of ["user:u2", "connection:c-org", "inbox:ix1", "action:connect-github", "action:new-org-api-key"]) assert.ok(!got.includes(id), `member sees ${id}`);
-  for (const id of ["connection:c-me", "project:p1", "run:r1", "action:new-project", "action:run-recipe:rc1", "action:inbox"]) assert.ok(got.includes(id), `member missing ${id}`);
+  for (const id of ["user:u2", "connection:c-org", "action:connect-github", "action:new-org-api-key"]) assert.ok(!got.includes(id), `member sees ${id}`);
+  for (const id of ["connection:c-me", "project:p1", "run:r1", "action:new-project", "action:run-recipe:rc1", "action:inbox", "action:runs", "action:project-runs", "inbox:ix1"]) assert.ok(got.includes(id), `member missing ${id}`);
   assert.ok(!got.includes("action:run-recipe:rc2"), "recipe without a current version offered for launch");
   assert.ok(items.every((i) => !i.to.startsWith("/admin")), "member offered an admin route");
+});
+
+test("Inbox and Runs routes are searchable, and inbox items open where they are acted on", () => {
+  const items = m.paletteItems("viewer", { inbox: [...data.inbox, { id: "rv", runId: "r2", projectId: "p2", projectName: "Billing", title: "Review", kind: "review" },
+    { id: "iv", runId: "r3", projectId: "p1", projectName: "Portal", title: "Interview", kind: "interview_round", stage: "plan" }] });
+  const byId = Object.fromEntries(items.map((i) => [i.id, i.to]));
+  assert.equal(byId["action:inbox"], "/inbox");
+  assert.equal(byId["action:runs"], "/runs");
+  assert.equal(byId["inbox:ix1"], "/projects/p1/runs/r1#inbox-heading");
+  assert.equal(byId["inbox:rv"], "/projects/p2/runs/r2?tab=review");
+  assert.equal(byId["inbox:iv"], "/projects/p1/runs/r3?tab=stages&stage=plan");
+  assert.ok(m.filterPalette(items, [], "inbox", "viewer").some((i) => i.id === "action:inbox"));
+  assert.ok(m.filterPalette(items, [], "runs", "viewer").some((i) => i.id === "action:runs"));
 });
 
 test("viewers cannot create projects or start runs", () => {

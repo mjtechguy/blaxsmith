@@ -2,13 +2,17 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as Reac
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { Search } from "lucide-react";
-import { getAdminOverview } from "./admin";
 import { listConnections } from "./connections";
 import type { SessionIdentity } from "./gen/blaxsmith/api/v1/auth_pb";
 import { addRecent, filterPalette, groupOrder, paletteItems, type PaletteItem } from "./palette";
 import { listRecipes } from "./recipes";
 import { listMembers } from "./users";
 import { getProject, listProjects, listRuns } from "./workflow";
+import type { TableView } from "./table-state";
+import { inboxKey, listInbox } from "./workspace";
+
+// The actionable Inbox the palette lists: the first page, newest first.
+const inboxView: TableView = { q: "", sort: [], page: 1, size: 25, filters: {} };
 
 const isAdmin = (role: string) => role === "owner" || role === "admin";
 
@@ -68,12 +72,13 @@ function PaletteDialog({ session, onClose }: { session: SessionIdentity; onClose
   const personal = useQuery({ queryKey: ["connections", org, "personal", ""], queryFn: ({ signal }) => listConnections("personal", "", signal), retry: false });
   const orgConnections = useQuery({ queryKey: ["connections", org, "organization", ""], enabled: admin, queryFn: ({ signal }) => listConnections("organization", "", signal), retry: false });
   const users = useQuery({ queryKey: ["org-members", org], enabled: admin, queryFn: ({ signal }) => listMembers(signal), retry: false });
-  const inbox = useQuery({ queryKey: ["admin-overview", org], enabled: admin, queryFn: ({ signal }) => getAdminOverview(signal), retry: false });
+  const inboxScope = `${org}:${session.principalId}`;
+  const inbox = useQuery({ queryKey: inboxKey(inboxScope, inboxView, true), queryFn: ({ signal }) => listInbox(inboxView, true, "", signal), retry: false });
 
   const items = useMemo(() => paletteItems(role, {
     projects: projects.data?.projects, runs: runs.data?.runs, recipes: recipes.data?.recipes,
     connections: [...(personal.data ?? []), ...(admin ? orgConnections.data ?? [] : [])],
-    users: admin ? users.data?.members : undefined, inbox: admin ? inbox.data?.openInteractions : undefined,
+    users: admin ? users.data?.members : undefined, inbox: inbox.data?.items,
   }, { projectId, projectName: project.data?.project?.name }), [role, admin, projects.data, runs.data, recipes.data, personal.data, orgConnections.data, users.data, inbox.data, projectId, project.data]);
   const shown = useMemo(() => filterPalette(items, recents, query, role).slice(0, 60), [items, recents, query, role]);
   const loading = projects.isFetching || runs.isFetching;

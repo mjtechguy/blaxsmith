@@ -11,8 +11,16 @@ export type PaletteData = {
   recipes?: Array<{ id: string; name: string; projectId: string; currentVersionId: string }>;
   connections?: Array<{ id: string; scope: string; ownerId: string; provider: string; kind: string; label: string }>;
   users?: Array<{ principalId: string; username: string; displayName: string; role: string }>;
-  inbox?: Array<{ id: string; runId: string; projectId: string; projectName: string; title: string; kind: string }>;
+  inbox?: Array<{ id: string; runId: string; projectId: string; projectName: string; title: string; kind: string; stage?: string }>;
 };
+
+// Where an Inbox item opens: the run's review tab, the interview's stage, or the run's inbox.
+export function inboxTarget(i: { runId: string; projectId: string; kind: string; stage?: string }): string {
+  const run = `/projects/${i.projectId}/runs/${i.runId}`;
+  if (i.kind === "review") return `${run}?tab=review`;
+  if (i.kind === "interview_round") return `${run}?tab=stages${i.stage ? `&stage=${encodeURIComponent(i.stage)}` : ""}`;
+  return `${run}#inbox-heading`;
+}
 
 const isAdmin = (role: string) => role === "owner" || role === "admin";
 const mayLaunch = (role: string) => isAdmin(role) || role === "member";
@@ -31,7 +39,9 @@ export function paletteItems(role: string, data: PaletteData, context: { project
     action("new-org-api-key", "New organization API key", "/admin/connections/new/api-key", "connection key model");
     action("connect-github", "Connect GitHub", "/admin/connections/new/git", "git oauth repository");
   }
-  action("inbox", "Inbox: items awaiting me", context.projectId ? `/projects/${context.projectId}` : isAdmin(role) ? "/admin" : "/", "questions approvals waiting");
+  action("inbox", "Inbox: items awaiting me", "/inbox", "questions approvals reviews waiting");
+  action("runs", "Runs: all runs", "/runs", "activity history launched");
+  if (context.projectId) action("project-runs", `Runs in ${context.projectName || "this project"}`, `/projects/${context.projectId}/runs`, "activity history launched");
   if (mayLaunch(role)) {
     if (context.projectId) {
       for (const r of data.recipes ?? []) {
@@ -43,11 +53,9 @@ export function paletteItems(role: string, data: PaletteData, context: { project
       if (p.id !== context.projectId) action(`run-in:${p.id}`, `Start run in ${p.name}…`, `/projects/${p.id}/runs/new`, "launch new run recipe");
     }
   }
-  if (isAdmin(role)) {
-    for (const i of data.inbox ?? []) {
-      out.push({ id: `inbox:${i.id}`, group: "Inbox", label: i.title || i.kind, detail: `${i.projectName} · ${i.kind.replaceAll("_", " ")}`,
-        to: `/projects/${i.projectId}/runs/${i.runId}#inbox-heading` });
-    }
+  // The caller's own actionable Inbox (WorkspaceService.ListInbox), for every role.
+  for (const i of data.inbox ?? []) {
+    out.push({ id: `inbox:${i.id}`, group: "Inbox", label: i.title || i.kind, detail: `${i.projectName} · ${i.kind.replaceAll("_", " ")}`, to: inboxTarget(i) });
   }
   for (const p of data.projects ?? []) out.push({ id: `project:${p.id}`, group: "Projects", label: p.name, detail: p.slug, to: `/projects/${p.id}` });
   for (const r of data.runs ?? []) {
