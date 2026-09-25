@@ -185,7 +185,7 @@ func TestBudgetsAlertsExactlyOnce(t *testing.T) {
 			eighty = item
 		}
 	}
-	if eighty.Kind != "budget_alert" || eighty.RunID != "" || eighty.ProjectID != project || eighty.Stage != "project" ||
+	if eighty.Kind != "budget_alert" || eighty.RunID != "" || eighty.ProjectID != project || eighty.Stage != "project" || eighty.Target != "project_usage" ||
 		eighty.Blocking || !eighty.CanAct || !strings.Contains(eighty.Title, "Budget project monthly passed 80%") {
 		t.Fatalf("inbox item: %+v", eighty)
 	}
@@ -257,8 +257,18 @@ func TestBudgetsAlertsExactlyOnce(t *testing.T) {
 	if n, err := EvaluateBudgets(ctx, pool, time.Now()); err != nil || n != 1 {
 		t.Fatalf("user budget: %d %v", n, err)
 	}
-	if items := inboxAlerts(t, store, other); len(items) != 1 || items[0].Stage != "user" || items[0].ProjectID != "" {
+	// The budget's own user opens My usage; owners and admins open the admin feed.
+	if items := inboxAlerts(t, store, other); len(items) != 1 || items[0].Stage != "user" || items[0].ProjectID != "" || items[0].Target != "my_usage" {
 		t.Fatalf("user alert: %+v", items)
+	}
+	var ownerView []InboxItem
+	for _, item := range inboxAlerts(t, store, owner) {
+		if item.Stage == "user" {
+			ownerView = append(ownerView, item)
+		}
+	}
+	if len(ownerView) != 1 || ownerView[0].Target != "admin_alerts" {
+		t.Fatalf("owner's view of another user's budget alert: %+v", ownerView)
 	}
 	if n := len(inboxAlerts(t, store, lead)); n != 0 {
 		t.Fatalf("project admin sees a user budget alert: %d", n)

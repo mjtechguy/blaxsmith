@@ -31,12 +31,12 @@ export function RunStateBadge({ state }: { state: string }) {
 }
 
 // Where an inbox item is handled: the run's review tab, its stage, or its inbox on the overview.
-// A budget alert opens where its spend is shown: the project's usage, the
-// admin alert feed (organization budgets), or My usage (user budgets).
+// A budget alert opens where the server says it should for this caller: My
+// usage for their own user budget, the project's usage, or the admin feed.
 export function InboxLink({ item, children, className = "text-action" }: { item: InboxItem; children: React.ReactNode; className?: string }) {
   if (item.kind === "budget_alert") {
-    if (item.stage === "project" && item.projectId) return <Link className={className} to="/projects/$projectId/usage" params={{ projectId: item.projectId }}>{children}</Link>;
-    return <Link className={className} to={item.stage === "user" ? "/me/usage" : "/admin/alerts"}>{children}</Link>;
+    if (item.target === "project_usage" && item.projectId) return <Link className={className} to="/projects/$projectId/usage" params={{ projectId: item.projectId }}>{children}</Link>;
+    return <Link className={className} to={item.target === "my_usage" ? "/me/usage" : "/admin/alerts"}>{children}</Link>;
   }
   const params = { projectId: item.projectId, runId: item.runId };
   if (item.kind === "review") return <Link className={className} to="/projects/$projectId/runs/$runId" params={params} search={{ tab: "review" } as never}>{children}</Link>;

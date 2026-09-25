@@ -490,7 +490,8 @@ function inboxItems() {
     { id: "pkg-ledger", kind: "review", runId: "run-ledger-export-v2", projectId: "proj-billing", projectName: "Billing service", runLaunchKey: "ledger-export-v2", stage: "", title: "Review package revision 2", blocking: true, createdAt: minutesAgo(60 * 4), canAct: mayDecide() },
   );
   if (mayDecide()) for (const a of mockBudgetAlerts.filter((x) => !x.acknowledgedAt && !(x.snoozedUntil && Date.parse(x.snoozedUntil) > Date.now()))) {
-    items.push({ id: a.id, kind: "budget_alert", runId: "", projectId: a.projectId, projectName: a.projectName, runLaunchKey: "", stage: a.scope, title: `${a.budgetName} passed ${a.thresholdPct}% of its monthly budget`, blocking: false, createdAt: a.createdAt, canAct: true });
+    items.push({ id: a.id, kind: "budget_alert", runId: "", projectId: a.projectId, projectName: a.projectName, runLaunchKey: "", stage: a.scope, title: `${a.budgetName} passed ${a.thresholdPct}% of its monthly budget`, blocking: false, createdAt: a.createdAt, canAct: true,
+      target: a.scope === "project" ? "project_usage" : a.scope === "user" && a.principalId === principalId ? "my_usage" : "admin_alerts" });
   }
   return items.sort((a, b) => Number(b.blocking) - Number(a.blocking) || a.createdAt.localeCompare(b.createdAt));
 }

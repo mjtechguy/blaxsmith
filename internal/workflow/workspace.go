@@ -26,6 +26,9 @@ type InboxItem struct {
 	ID, Kind, RunID, ProjectID, ProjectName, LaunchKey, Stage, Title string
 	Blocking, CanAct                                                 bool
 	CreatedAt                                                        time.Time
+	// Target is where a budget_alert opens for this caller: my_usage (the
+	// budget is the caller's own), project_usage, or admin_alerts.
+	Target string
 }
 
 type WorkspaceHome struct {
@@ -110,7 +113,7 @@ func validChoices(values, allowed []string) bool {
 const inboxItems = `WITH items AS (
 	SELECT i.id::text AS id,i.kind,i.run_id,r.project_id,p.name AS project_name,r.launch_key,t.task_key AS stage,
 		left(COALESCE(i.payload->>'title',''),300) AS title,COALESCE((i.payload->>'blocking')::boolean,false) AS blocking,
-		i.created_at,$2::boolean AS can_act
+		i.created_at,$2::boolean AS can_act,'' AS target
 	FROM workflow_interactions i
 	JOIN workflow_tasks t ON t.organization_id=i.organization_id AND t.id=i.task_id
 	JOIN workflow_runs r ON r.organization_id=i.organization_id AND r.id=i.run_id
@@ -118,7 +121,7 @@ const inboxItems = `WITH items AS (
 	WHERE i.organization_id=$1 AND i.state='open' AND r.state IN ('queued','active')
 	UNION ALL
 	SELECT k.id::text,'review',r.id,r.project_id,p.name,r.launch_key,'','Review package revision '||k.revision,true,
-		k.presented_at,$3::boolean
+		k.presented_at,$3::boolean,''
 	FROM workflow_runs r
 	JOIN workflow_review_packages k ON k.organization_id=r.organization_id AND k.run_id=r.id AND k.id=r.review_package_id
 	JOIN workflow_projects p ON p.organization_id=r.organization_id AND p.id=r.project_id
@@ -126,7 +129,9 @@ const inboxItems = `WITH items AS (
 		WHERE d.organization_id=r.organization_id AND d.run_id=r.id AND d.package_id=r.review_package_id)
 	UNION ALL
 	SELECT a.id::text,'budget_alert',NULL::uuid,a.project_id,COALESCE(p.name,''),'',a.scope,
-		left(b.name||' passed '||a.threshold_pct||'% of its monthly budget',300),false,a.created_at,$2::boolean
+		left(b.name||' passed '||a.threshold_pct||'% of its monthly budget',300),false,a.created_at,$2::boolean,
+		CASE WHEN a.scope='project' THEN 'project_usage' WHEN a.scope='user' AND a.principal_id::text=$8::text THEN 'my_usage'
+			ELSE 'admin_alerts' END
 	FROM gateway_alerts a
 	JOIN gateway_budgets b ON b.organization_id=a.organization_id AND b.id=a.budget_id
 	LEFT JOIN workflow_projects p ON p.organization_id=a.organization_id AND p.id=a.project_id
@@ -176,7 +181,7 @@ func (s *Store) inbox(ctx context.Context, caller identity.Caller, f InboxFilter
 		return items, total, nil
 	}
 	rows, err := s.pool.Query(ctx, inboxItems+` SELECT id,kind,COALESCE(run_id::text,''),COALESCE(project_id::text,''),
-		project_name,launch_key,stage,title,blocking,created_at,can_act FROM filtered ORDER BY blocking DESC,created_at,id LIMIT $10 OFFSET $11`,
+		project_name,launch_key,stage,title,blocking,created_at,can_act,target FROM filtered ORDER BY blocking DESC,created_at,id LIMIT $10 OFFSET $11`,
 		append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, err
@@ -184,7 +189,7 @@ func (s *Store) inbox(ctx context.Context, caller identity.Caller, f InboxFilter
 	items, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (InboxItem, error) {
 		var i InboxItem
 		err := row.Scan(&i.ID, &i.Kind, &i.RunID, &i.ProjectID, &i.ProjectName, &i.LaunchKey, &i.Stage, &i.Title,
-			&i.Blocking, &i.CreatedAt, &i.CanAct)
+			&i.Blocking, &i.CreatedAt, &i.CanAct, &i.Target)
 		return i, err
 	})
 	return items, total, err

@@ -51,6 +51,10 @@ message InboxItem {
   bool blocking = 9;
   string created_at = 10; // RFC 3339.
   bool can_act = 11; // The caller's role may answer or decide it.
+  // budget_alert only, computed per caller: my_usage (the budget is the
+  // caller's own user budget), project_usage (a project budget), or
+  // admin_alerts (organization budgets, and other users' budgets).
+  string target = 12;
 }
 
 // A current attempt owner: reserved, starting, running, or reconciling.

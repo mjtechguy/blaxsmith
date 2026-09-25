@@ -88,12 +88,18 @@ test("Admin → Budgets and Alerts, Project → Usage, inbox alerts and the rest
 
     // Home: a budget alert links to where its spend is shown.
     const home = { organizationName: "Acme", organizationSlug: "acme", username: "owner", displayName: "Owner", email: "", waitingOnYou: 1, openItems: 1, runningAgents: 0, activeRuns: 0, runsLast24h: 0, failedLast24h: 0,
-      waiting: [{ id: "a1", kind: "budget_alert", runId: "", projectId: "p1", projectName: "Billing", runLaunchKey: "", stage: "project", title: "Billing monthly passed 80% of its monthly budget", blocking: false, createdAt: "2026-09-20T10:00:00Z", canAct: true }],
+      waiting: [{ id: "a1", kind: "budget_alert", runId: "", projectId: "p1", projectName: "Billing", runLaunchKey: "", stage: "project", title: "Billing monthly passed 80% of its monthly budget", blocking: false, createdAt: "2026-09-20T10:00:00Z", canAct: true, target: "project_usage" },
+        { id: "a2", kind: "budget_alert", runId: "", projectId: "", projectName: "", runLaunchKey: "", stage: "user", title: "Chidi spend passed 100% of its monthly budget", blocking: false, createdAt: "2026-09-20T11:00:00Z", canAct: true, target: "admin_alerts" }],
       agents: [], recentRuns: [], generatedAt: "2026-09-24T10:00:00Z" };
     const landing = await renderApp("/", owner, [on, [homeKey(`${org}:${owner.principalId}`), home]]);
     assert.match(landing, /Billing monthly passed 80% of its monthly budget/);
     assert.match(landing, /Budget alert · Billing</);
     assert.match(landing, /href="\/projects\/p1\/usage"/);
+    // Another user's budget opens the admin feed for an owner; the budget's own user opens My usage.
+    assert.match(landing, /href="\/admin\/alerts"[^>]*>Chidi spend passed 100%/);
+    const mine = { ...home, waiting: [{ ...home.waiting[1], title: "My spend passed 100% of its monthly budget", target: "my_usage" }] };
+    const memberHome = await renderApp("/", member, [on, [homeKey(`${org}:${member.principalId}`), mine]]);
+    assert.match(memberHome, /href="\/me\/usage"[^>]*>My spend passed 100%/);
 
     // Cost tab on a personal-subscription run for a non-owner: aggregates only, never request rows.
     const React = await import("react");
