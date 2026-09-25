@@ -103,7 +103,10 @@
 }
 
 * { box-sizing: border-box; }
-html { background: var(--canvas); }
+html { background: var(--canvas); scroll-padding-top: 72px; }
+/* Keep keyboard focus clear of the sticky topbar and a sticky save bar. */
+html:has(.save-bar) { scroll-padding-bottom: 96px; }
+@media (max-width: 500px) { html:has(.save-bar) { scroll-padding-bottom: 150px; } }
 body { margin: 0; min-width: 320px; background: var(--canvas); color: var(--text); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
