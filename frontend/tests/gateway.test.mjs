@@ -48,7 +48,7 @@ test("gateway pages: settings always reachable for admins; other gateway UI hidd
     // A member sees the admin restriction, never the switches.
     const member = await renderApp("/admin/settings/model-gateway", { ...owner, role: "member" });
     assert.match(member, /Administration is restricted/);
-    // Off (the status RPC reports disabled): no Usage & Gateway in the sidebar.
+    // Off (the status RPC reports disabled): no Usage & gateway in the sidebar.
     const home = await renderApp("/", owner);
     assert.match(home, /Model gateway|GitHub app|Operations/);
     assert.doesNotMatch(home, /Usage &amp; Gateway/);

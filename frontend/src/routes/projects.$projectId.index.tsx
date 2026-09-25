@@ -7,7 +7,7 @@ import { DashboardLayout } from "../layouts";
 import { checklistProgress, useProjectSetupItems } from "../setup-checklist";
 import { Slot } from "../slots";
 import type { TableView } from "../table-state";
-import { Card, CopyValue, EmptyState, ShowMore, StatePanel, StatTile, Timestamp } from "../ui";
+import { Card, CopyValue, EmptyState, ShowMore, StatePanel, StatTile, TimeText, Timestamp } from "../ui";
 import { StatusPill, useAttentionTitle } from "../work-log";
 import { asStatus, InboxLink, KindMark, RunStateBadge, useScope } from "../workspace-ui";
 import { inboxKey, kindLabel, listInbox, listWorkspaceRuns, workspaceRunsKey } from "../workspace";
@@ -95,7 +95,7 @@ function ProjectOverview() {
       {runs.data?.runs.length ? <ul className="run-list">{runs.data.runs.map((run) => <li key={run.id}>
         <Link className="run-list-link" to="/projects/$projectId/runs/$runId" params={{ projectId, runId: run.id }}>
           <span className="run-list-main"><strong>{run.launchKey}</strong><small>{run.sourceCommit.slice(0, 12)}</small></span>
-          <StatusPill status={asStatus(run.status)} /><RunStateBadge state={run.state} /><time dateTime={run.createdAt}>{new Date(run.createdAt).toLocaleString()}</time>
+          <StatusPill status={asStatus(run.status)} /><RunStateBadge state={run.state} /><TimeText value={run.createdAt} />
         </Link></li>)}</ul>
         : runs.isSuccess ? <EmptyState title="No runs yet" action={canLaunch ? <Link className="primary-button" to="/projects/$projectId/runs/new" params={{ projectId }}><Plus size={15} aria-hidden="true" /> Start the first run</Link> : undefined}>
           {canLaunch ? "Runs use the recipe, spec, and code already committed to the repository." : "Finish setup to start the first run."}</EmptyState> : null}

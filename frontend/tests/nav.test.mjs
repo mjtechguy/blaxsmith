@@ -15,9 +15,9 @@ test("navigation IA per role: groups, items, the project group, and Admin", asyn
     ];
     // Organization recipes live once, in Library; Admin has no Recipes item.
     const admin = ["admin", ["Operations", "Users", "Connections", "Extensions", "Audit", ["Settings", ["GitHub app", "Model gateway", "Connections", "Policies", "Retention"]]]];
-    // Usage & Gateway appears only while the model gateway master switch is on.
+    // Usage & gateway appears only while the model gateway master switch is on.
     assert.deepEqual(shape(navigation({ role: "owner", gatewayEnabled: true })).at(-1),
-      ["admin", ["Operations", "Users", "Connections", "Extensions", "Usage & Gateway", "Audit", ["Settings", ["GitHub app", "Model gateway", "Connections", "Policies", "Retention"]]]]);
+      ["admin", ["Operations", "Users", "Connections", "Extensions", "Usage & gateway", "Audit", ["Settings", ["GitHub app", "Model gateway", "Connections", "Policies", "Retention"]]]]);
     assert.deepEqual(shape(navigation({ role: "member", gatewayEnabled: true })), common);
     assert.deepEqual(shape(navigation({ role: "member" })), common);
     assert.deepEqual(shape(navigation({ role: "viewer" })), common);

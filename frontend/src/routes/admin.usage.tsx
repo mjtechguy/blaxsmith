@@ -18,7 +18,7 @@ export const Route = createFileRoute("/admin/usage")({
   }),
 });
 
-// Admin → Usage & Gateway (docs/model-gateway-plan.md §9.1): stat tiles,
+// Admin → Usage & gateway (docs/model-gateway-plan.md §9.1): stat tiles,
 // spend over time by project or model, and the top projects, users and runs.
 function UsageOverview() {
   const { org } = useOrg();
@@ -34,12 +34,12 @@ function UsageOverview() {
   const set = (next: Search) => void navigate({ search: (prev: Search) => ({ ...prev, ...next }), replace: true });
   const filters = <RangeFilter days={days} onDays={(d) => set({ days: d === 30 ? undefined : d })} />;
 
-  if (overview.isPending) return <DashboardLayout title="Usage & Gateway" actions={filters}><StatePanel kind="loading" title="Loading usage" /></DashboardLayout>;
-  if (overview.isError || !data) return <DashboardLayout title="Usage & Gateway"><StatePanel kind="error" title="Usage is unavailable" retry={() => void overview.refetch()} /></DashboardLayout>;
-  if (!data.enabled) return <DashboardLayout title="Usage & Gateway"><GatewayOff admin /></DashboardLayout>;
+  if (overview.isPending) return <DashboardLayout title="Usage & gateway" actions={filters}><StatePanel kind="loading" title="Loading usage" /></DashboardLayout>;
+  if (overview.isError || !data) return <DashboardLayout title="Usage & gateway"><StatePanel kind="error" title="Usage is unavailable" retry={() => void overview.refetch()} /></DashboardLayout>;
+  if (!data.enabled) return <DashboardLayout title="Usage & gateway"><GatewayOff admin /></DashboardLayout>;
   const t = data.totals!;
   const requests = Number(t.requests);
-  return <DashboardLayout title="Usage & Gateway" description={`Model traffic through the gateway, ${data.fromDay} to ${data.toDay} (UTC). Counts and metadata only; no prompts or responses are stored.`}
+  return <DashboardLayout title="Usage & gateway" description={`Model traffic through the gateway, ${data.fromDay} to ${data.toDay} (UTC). Counts and metadata only; no prompts or responses are stored.`}
     actions={filters}
     tiles={<>
       <StatTile label="Estimated spend" value={usd(t.costUsdMicros)} meta={`${compact(requests)} requests`} />

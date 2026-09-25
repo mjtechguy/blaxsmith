@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CircleCheck, CircleSlash, Route as RouteIcon } from "lucide-react";
 import { currentSession, sessionQueryKey } from "./auth";
-import { TextField } from "./form-field";
 import { accessChain, explainAccess, explainKey } from "./setup";
 
 export function useAccessExplanation(projectId: string, kind: "connection" | "recipe", resourceId: string, principalId = "") {
@@ -29,8 +28,9 @@ export function AccessExplanation({ projectId, kind, resourceId, principalId = "
 }
 
 // Admins check the chain for any project and member from the grants UI.
-export function AccessCheck({ kind, resourceId, projectPicker }: {
+export function AccessCheck({ kind, resourceId, projectPicker, memberPicker }: {
   kind: "connection" | "recipe"; resourceId: string; projectPicker: (value: string, onChange: (id: string) => void) => ReactNode;
+  memberPicker: (value: string, onChange: (id: string) => void) => ReactNode;
 }) {
   const [project, setProject] = useState("");
   const [principal, setPrincipal] = useState("");
@@ -39,8 +39,7 @@ export function AccessCheck({ kind, resourceId, projectPicker }: {
     onSubmit={(event) => { event.preventDefault(); if (project) setAsked({ project, principal: principal.trim() }); }}>
     <h3 className="access-check-title"><RouteIcon size={15} aria-hidden="true" /> Where this comes from</h3>
     {projectPicker(project, setProject)}
-    <TextField label="Member principal id (blank for you)" name={`explain-principal-${kind}`} autoComplete="off" placeholder="Principal id"
-      value={principal} onChange={setPrincipal} onBlur={() => {}} required={false} />
+    {memberPicker(principal, setPrincipal)}
     <div className="editor-actions"><button type="submit" className="secondary-button" disabled={!project}>Check access</button></div>
     {asked ? <AccessExplanation projectId={asked.project} kind={kind} resourceId={resourceId} principalId={asked.principal} /> : null}
   </form>;

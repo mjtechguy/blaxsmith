@@ -20,8 +20,10 @@ import { CreateFlow, type FlowStep } from "./layouts";
 import { ModelSelect } from "./model-select";
 import { isBusy, type SignInState } from "./sign-in";
 import { SignInStatus, useSignIn } from "./sign-in-flow";
-import { Disclosure } from "./ui";
+import { Disclosure, sentence, Timestamp, useModalDialog } from "./ui";
 import { listProjects } from "./workflow";
+import { listMembersPage, membersPageKey } from "./workspace";
+import { personLabel } from "./account";
 
 export function useOrg() {
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
@@ -38,7 +40,7 @@ export function failure(cause: unknown, fallback: string): string {
 
 export function StateBadge({ state }: { state: string }) {
   const tone = state === "active" ? "state-succeeded" : state === "reconnect_required" ? "state-waiting" : "state-failed";
-  return <span className={`state-badge ${tone}`}>{state.replaceAll("_", " ")}</span>;
+  return <span className={`state-badge ${tone}`}>{sentence(state)}</span>;
 }
 
 // A non-secret identity (account id, username, key label) stays blurred
@@ -59,7 +61,7 @@ export function HealthLine({ connection, compact = false }: { connection: Connec
   if (!h) return <StateBadge state={connection.state} />;
   const fix = healthFix(connection);
   return <span className={compact ? "health-line health-compact" : "health-line"}>
-    <span className={`state-badge ${healthTone[h.state] ?? ""}`}>{h.state}</span>
+    <span className={`state-badge ${healthTone[h.state] ?? ""}`}>{sentence(h.state)}</span>
     {!compact ? <span>{authLabel(h.auth)}{h.identity ? <> · <RedactedText text={h.identity} label="identity" /></> : null}</span> : null}
     {!compact ? <span>{h.checkedAt ? <>Checked <time dateTime={h.checkedAt}>{ago(h.checkedAt)}</time></> : "Never checked"}</span> : null}
     {h.message ? <span className={h.state === "error" ? "form-field-error" : undefined}>{h.message}</span> : null}
@@ -81,7 +83,7 @@ export function ConfirmDialog({ title, body, confirmLabel, busy, error, onConfir
   tone?: "danger" | "primary";
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => { dialog.current?.showModal(); }, []);
+  useModalDialog(dialog);
   return <dialog ref={dialog} className="review-confirm" aria-labelledby="connection-confirm-title"
     onCancel={(event) => { if (busy) event.preventDefault(); }} onClose={() => { if (!busy) onClose(); }}>
     <h3 id="connection-confirm-title">{title}</h3>
@@ -121,6 +123,26 @@ export function ProjectSelect({ value, onChange, idPrefix = "project" }: { value
       <select id={`${idPrefix}-select`} value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">Choose a project</option>
         {(projects.data?.projects ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select></div>
+  </>;
+}
+
+// Admins pick a person by name or email instead of typing a principal ID.
+export function MemberSelect({ value, onChange, idPrefix = "member", label = "User", emptyLabel = "Choose a user" }: {
+  value: string; onChange: (id: string) => void; idPrefix?: string; label?: string; emptyLabel?: string;
+}) {
+  const { org } = useOrg();
+  const [search, setSearch] = useState("");
+  const [submitted, setSubmitted] = useState("");
+  useEffect(() => { const t = window.setTimeout(() => setSubmitted(search.trim()), 250); return () => window.clearTimeout(t); }, [search]);
+  const view = { q: submitted, sort: [{ id: "member", desc: false }], page: 1, size: 50, filters: { status: ["active", "invited"] } };
+  const members = useQuery({ queryKey: [...membersPageKey(org, view), "picker"], enabled: Boolean(org), queryFn: ({ signal }) => listMembersPage(view, signal) });
+  return <>
+    <TextField label={`Find ${label.toLowerCase()}`} name={`${idPrefix}-search`} autoComplete="off" placeholder="Search by name or email…" value={search} onChange={setSearch} onBlur={() => {}} required={false} />
+    <div className="form-field"><label htmlFor={`${idPrefix}-select`}>{label}</label>
+      <select id={`${idPrefix}-select`} value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">{members.isPending ? "Loading people…" : members.isError ? "People could not be loaded" : emptyLabel}</option>
+        {(members.data?.members ?? []).map((m) => <option key={m.principalId} value={m.principalId}>{personLabel(m)}{m.email && m.email !== personLabel(m) ? ` · ${m.email}` : ""}</option>)}
       </select></div>
   </>;
 }
@@ -308,7 +330,7 @@ export function ResourceGrants({ grants, label, description, canManage, canAdd, 
       ? <span className="task-stage"><strong>Project</strong><small>{row.original.projectName || row.original.projectId.slice(0, 8)}</small></span>
       : <span className="task-stage"><strong>{row.original.granteeKind === "user" ? "User" : "Minimum role"}</strong><small className="mono">{row.original.granteeName || row.original.granteeId}</small></span> },
     { id: "reach", header: "Reach", cell: ({ row }) => row.original.granteeKind === "project" ? "That project's runs and admins" : "Every project, for matching people" },
-    { id: "created", header: "Granted", cell: ({ row }) => <time dateTime={row.original.createdAt}>{ago(row.original.createdAt)}</time> },
+    { id: "created", header: "Granted", cell: ({ row }) => <Timestamp value={row.original.createdAt} /> },
     { id: "actions", header: "Actions", cell: ({ row }) => canManage ? <button type="button" className="text-action text-action-danger" disabled={remove.isPending} onClick={() => { setError(""); setPending(row.original); }}><Trash2 size={13} aria-hidden="true" /> Revoke</button> : null },
   ], [remove.isPending, canManage]);
   const table = useTable({ features, data: grants, columns, getRowId: (g) => g.id });
@@ -317,7 +339,8 @@ export function ResourceGrants({ grants, label, description, canManage, canAdd, 
     <DataTable table={table} label={label} empty="Not granted to any project, user, or role." />
     {canAdd ? <AddGrant grant={grant} onChanged={onChanged} /> : null}
     {explain ? <AccessCheck kind={explain.kind} resourceId={explain.resourceId}
-      projectPicker={(value, onChange) => <ProjectSelect value={value} onChange={onChange} idPrefix="explain" />} /> : null}
+      projectPicker={(value, onChange) => <ProjectSelect value={value} onChange={onChange} idPrefix="explain" />}
+      memberPicker={(value, onChange) => <MemberSelect value={value} onChange={onChange} idPrefix={`explain-member-${explain.kind}`} label="Member" emptyLabel="You" />} /> : null}
     {pending ? <ConfirmDialog busy={remove.isPending} error={error} onClose={() => setPending(null)} onConfirm={() => remove.mutate(pending)}
       title="Revoke grant" confirmLabel="Revoke"
       body={<>Revoke this grant for <strong>{pending.granteeKind === "project" ? pending.projectName || pending.projectId : pending.granteeName || pending.granteeId}</strong>?{revokeNote ? ` ${revokeNote}` : ""}</>} /> : null}
@@ -341,7 +364,7 @@ function AddGrant({ grant, onChanged }: { grant: (kind: string, projectId: strin
         <option value="project">A project</option><option value="user">A user (all projects)</option><option value="role">A minimum role (all projects)</option>
       </select></div>
     {kind === "project" ? <ProjectSelect value={project} onChange={setProject} /> : null}
-    {kind === "user" ? <TextField label="User principal id" name="grantee-user" autoComplete="off" placeholder="Principal id" value={grantee} onChange={setGrantee} onBlur={() => {}} /> : null}
+    {kind === "user" ? <MemberSelect value={grantee} onChange={setGrantee} idPrefix="grantee-user" /> : null}
     {kind === "role" ? <div className="form-field"><label htmlFor="grantee-role">Role</label>
       <select id="grantee-role" value={grantee} onChange={(event) => setGrantee(event.target.value)}>
         {[["member", "Members and above"], ["admin", "Admins and owners"], ["owner", "Owners only"]].map(([r, name]) => <option key={r} value={r}>{name}</option>)}

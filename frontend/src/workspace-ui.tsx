@@ -8,7 +8,7 @@ import { currentSession, sessionQueryKey } from "./auth";
 import { inSet, type GridColumn } from "./data-table";
 import type { InboxItem, WorkspaceRun } from "./gen/blaxsmith/api/v1/workspace_pb";
 import { StatusPill } from "./work-log";
-import { CopyValue, Timestamp } from "./ui";
+import { CopyValue, sentence, Timestamp } from "./ui";
 import { kindLabel } from "./workspace";
 import { listRunTasks } from "./workflow";
 
@@ -26,7 +26,7 @@ export function useScope() {
 export const asStatus = (status: string): AgentStatus | null => (statusOrder as readonly string[]).includes(status) ? status as AgentStatus : null;
 
 export function RunStateBadge({ state }: { state: string }) {
-  return <span className={`state-badge state-${state}`}>{state.replaceAll("_", " ")}</span>;
+  return <span className={`state-badge state-${state}`}>{sentence(state)}</span>;
 }
 
 // Where an inbox item is handled: the run's review tab, its stage, or its inbox on the overview.
@@ -87,7 +87,7 @@ export function RunStagesDetail({ run, scope }: { run: WorkspaceRun; scope: stri
   return <div className="row-detail">
     <ol className="stage-strip" aria-label={`Stages of ${run.launchKey}`}>{tasks.data.tasks.map((task) => <li key={task.id}>
       <Link to="/projects/$projectId/runs/$runId" params={{ projectId: run.projectId, runId: run.id }} search={{ tab: "stages", stage: task.key } as never} className="stage-chip">
-        <strong>{task.key}</strong><span className={`state-badge state-${task.state}`}>{task.state.replaceAll("_", " ")}</span>
+        <strong>{task.key}</strong><span className={`state-badge state-${task.state}`}>{sentence(task.state)}</span>
         <small>{task.kind === "human_review" ? "Human review" : [task.harness, task.model].filter(Boolean).join(" · ")}</small></Link></li>)}</ol>
     <Link className="text-action" to="/projects/$projectId/runs/$runId" params={{ projectId: run.projectId, runId: run.id }} search={{ tab: "stages" } as never}>Open stages <ArrowRight size={13} aria-hidden="true" /></Link>
   </div>;

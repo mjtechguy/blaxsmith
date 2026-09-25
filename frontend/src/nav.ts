@@ -69,7 +69,7 @@ export function navigation({ role, projectId, projectName, gatewayEnabled }: Nav
     { id: "admin-users", label: "Users", href: "/admin/users", icon: Users },
     { id: "admin-connections", label: "Connections", href: "/admin/connections", icon: KeyRound },
     { id: "admin-extensions", label: "Extensions", href: "/admin/extensions", icon: Package },
-    ...(gatewayEnabled ? [{ id: "admin-usage", label: "Usage & Gateway", href: "/admin/usage", icon: Gauge }] : []),
+    ...(gatewayEnabled ? [{ id: "admin-usage", label: "Usage & gateway", href: "/admin/usage", icon: Gauge }] : []),
     { id: "admin-audit", label: "Audit", href: "/admin/audit", icon: ScrollText },
     { id: "admin-settings", label: "Settings", href: "/admin/settings", icon: Settings, children: [
       { id: "admin-github-app", label: "GitHub app", href: "/admin/settings/github-app", icon: GitPullRequest },
@@ -159,3 +159,11 @@ export function switchPath(pathname: string, nextProjectId: string): string {
   return ["runs", "recipes", "connections"].includes(section[1]) ? `${base}/${section[1]}` : base;
 }
 
+// Where to go after sign-in: a same-origin app path only. Anything else
+// (absolute or protocol-relative URLs, backslashes, control characters,
+// the login page itself) falls back to home.
+export function safeNext(value: unknown): string {
+  if (typeof value !== "string" || value.length > 512 || !value.startsWith("/") || value.startsWith("//")) return "/";
+  if (/[\\\u0000-\u001f\u007f]/.test(value) || /^\/login(?:[/?#]|$)/.test(value)) return "/";
+  return value;
+}

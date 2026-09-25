@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { Activity, ArrowRight, Cable, FolderPlus, Inbox, ShieldCheck } from "lucide-react";
+import { Activity, ArrowRight, Cable, FolderPlus, Inbox, Plus, ShieldCheck } from "lucide-react";
 import { DataTable } from "../data-table";
 import type { WorkspaceAgent } from "../gen/blaxsmith/api/v1/workspace_pb";
 import { DashboardLayout } from "../layouts";
 import { Slot } from "../slots";
-import { Card, EmptyState, StatePanel, StatTile, Timestamp } from "../ui";
+import { Card, EmptyState, StatePanel, StatTile, TimeText, Timestamp } from "../ui";
 import { StatusPill, useAttentionTitle } from "../work-log";
 import { asStatus, InboxLink, KindMark, RunStateBadge, useScope } from "../workspace-ui";
 import { getWorkspaceHome, homeKey, HOME_REFRESH_MS, kindLabel } from "../workspace";
@@ -34,9 +34,9 @@ function Home() {
   const agents = useTable({ features: agentFeatures, data: data?.agents ?? [], columns: agentColumns, getRowId: (row) => row.attemptId });
 
   return <DashboardLayout title="Home" description="What needs you, what is running, and what finished recently across your organization's projects."
-    actions={isMember ? <Link className="primary-button" to="/projects/new"><FolderPlus size={15} aria-hidden="true" /> New project</Link> : undefined}
+    actions={isMember ? <Link className="primary-button" to="/projects/new"><Plus size={15} aria-hidden="true" /> New project</Link> : undefined}
     tiles={data ? <>
-      <StatTile label="Waiting on you" value={data.waitingOnYou} tone={data.waitingOnYou ? "attention" : undefined} href="/inbox" meta={`${data.openItems} open in total`} />
+      <StatTile label="Waiting on you" value={data.waitingOnYou} tone={data.waitingOnYou ? "attention" : undefined} href="/inbox" meta={data.openItems > data.waitingOnYou ? `${data.openItems} open in total` : "Open the inbox"} />
       <StatTile label="Running agents" value={data.runningAgents} meta="Attempts in flight" href="/runs?f_state=active" />
       <StatTile label="Active runs" value={data.activeRuns} meta="Queued or running" href="/runs?f_state=queued,active,cancel_requested" />
       <StatTile label="Runs in 24 hours" value={data.runsLast24h} meta="Started" />
@@ -67,7 +67,7 @@ function Home() {
       <Card title={<><Activity size={15} aria-hidden="true" /> Running agents</>} description="Current attempt owners, oldest first." className="dash-main"
         actions={isAdmin ? <Link className="text-action" to="/admin">Operations <ArrowRight size={13} aria-hidden="true" /></Link> : undefined}>
         {data.agents.length ? <DataTable table={agents} label="Running agents" />
-          : <EmptyState title="No agents are running">Start a run from a project to see its agents here.</EmptyState>}
+          : <EmptyState title="No agents are running" action={isMember ? <Link className="text-action" to="/projects">Choose a project <ArrowRight size={13} aria-hidden="true" /></Link> : undefined}>Start a run from a project to see its agents here.</EmptyState>}
       </Card>
 
       <Card title="Quick actions" className="dash-side">
@@ -86,7 +86,7 @@ function Home() {
           <Link className="run-list-link" to="/projects/$projectId/runs/$runId" params={{ projectId: run.projectId, runId: run.id }}>
             <span className="run-list-main"><strong>{run.launchKey}</strong><small>{run.projectName}</small></span>
             <StatusPill status={asStatus(run.status)} /><RunStateBadge state={run.state} />
-            <time dateTime={run.createdAt}>{new Date(run.createdAt).toLocaleString()}</time>
+            <TimeText value={run.createdAt} />
           </Link></li>)}</ul>
           : <EmptyState title="No runs yet" action={isMember ? <Link className="primary-button" to="/projects">Choose a project</Link> : undefined}>Runs appear here once a project launches one.</EmptyState>}
       </Card>

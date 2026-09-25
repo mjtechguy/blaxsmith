@@ -7,7 +7,7 @@ import { CollectionTable, useUrlView, type GridColumn } from "../data-table";
 import { personLabel } from "../account";
 import type { OrgMember } from "../gen/blaxsmith/api/v1/users_pb";
 import { PageHeader, PageShell } from "../page";
-import { EmptyState, Timestamp } from "../ui";
+import { EmptyState, sentence, Timestamp } from "../ui";
 import { canManage } from "../users";
 import { BulkMemberDialog, memberStatusBadge, roleLabel } from "../users-ui";
 import { useScope } from "../workspace-ui";
@@ -28,7 +28,7 @@ function Users() {
       <span className="task-stage"><strong>{personLabel(row.original)}</strong>{row.original.principalId === self ? <small>you</small> : null}</span></Link> },
     { id: "email", accessorKey: "email", header: "Email", enableSorting: false, cell: ({ row }) => row.original.email || <span className="muted">Not set</span> },
     { id: "role", accessorKey: "role", header: "Role", cell: ({ row }) => <span className="state-badge">{roleLabel[row.original.role] ?? row.original.role}</span> },
-    { id: "status", accessorKey: "status", header: "Status", enableSorting: false, cell: ({ row }) => <span className={`state-badge ${memberStatusBadge[row.original.status] ?? ""}`}>{row.original.status}</span> },
+    { id: "status", accessorKey: "status", header: "Status", enableSorting: false, cell: ({ row }) => <span className={`state-badge ${memberStatusBadge[row.original.status] ?? ""}`}>{sentence(row.original.status)}</span> },
     { id: "sessions", accessorKey: "activeSessions", header: "Sessions", enableSorting: false, cell: ({ row }) => row.original.activeSessions },
     { id: "lastLogin", accessorKey: "lastLoginAt", header: "Last login", cell: ({ row }) => row.original.lastLoginAt ? <Timestamp value={row.original.lastLoginAt} /> : <span className="muted">Never</span> },
     { id: "created", accessorKey: "createdAt", header: "Added", cell: ({ row }) => <Timestamp value={row.original.createdAt} /> },

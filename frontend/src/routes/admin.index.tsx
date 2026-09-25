@@ -11,7 +11,7 @@ import type { AdminConnection, AdminGrant, AdminLiveAttempt, AdminOpenInteractio
 import { CollectionTable, useLocalView, type GridColumn } from "../data-table";
 import { DashboardLayout } from "../layouts";
 import { Slot } from "../slots";
-import { EmptyState, StatePanel, StatTile, Timestamp } from "../ui";
+import { EmptyState, sentence, StatePanel, StatTile, Timestamp } from "../ui";
 import { steerAttempt } from "../run-control";
 import type { AgentStatus } from "../agent-view";
 import { StatusPill, useAttentionTitle } from "../work-log";
@@ -109,7 +109,7 @@ function AdminOverview() {
     { id: "stage", header: "Stage", cell: ({ row }) => <span className="task-stage"><strong>{row.original.stage}</strong><small>{row.original.kind.replaceAll("_", " ") || "—"}</small></span> },
     { id: "runtime", header: "Harness / model", cell: ({ row }) => <span className="task-stage"><strong>{row.original.harness || "—"}</strong><small className="mono">{row.original.model || "—"}</small></span> },
     { id: "status", header: "Status", cell: ({ row }) => <StatusPill status={liveStatus(row.original, openItems ?? [])} /> },
-    { id: "state", header: "State", cell: ({ row }) => <span className={`state-badge state-${row.original.state}`}>{row.original.state}</span> },
+    { id: "state", header: "State", cell: ({ row }) => <span className={`state-badge state-${row.original.state}`}>{sentence(row.original.state)}</span> },
     { id: "control", header: "Control", cell: ({ row }) => row.original.controllerPrincipalId
       ? <span className="control-pill control-other" title={row.original.controllerPrincipalId}>Taken over · {row.original.controllerUsername || row.original.controllerPrincipalId.slice(0, 8)}</span>
       : <span className="control-pill control-agent">Agent</span> },
@@ -128,7 +128,7 @@ function AdminOverview() {
 
   const inboxColumns = useMemo<ColumnDef<typeof features, AdminOpenInteraction>[]>(() => [
     { id: "age", header: "Waiting", cell: ({ row }) => <time dateTime={row.original.createdAt} title={new Date(row.original.createdAt).toLocaleString()}>{ago(row.original.createdAt, now)}</time> },
-    { id: "kind", header: "Kind", cell: ({ row }) => <span className={`state-badge ${row.original.kind === "escalation" ? "state-blocked" : "state-waiting"}`}>{row.original.kind.replaceAll("_", " ")}</span> },
+    { id: "kind", header: "Kind", cell: ({ row }) => <span className={`state-badge ${row.original.kind === "escalation" ? "state-blocked" : "state-waiting"}`}>{sentence(row.original.kind)}</span> },
     { id: "title", header: "Question", cell: ({ row }) => <span className="admin-wrap"><strong>{row.original.title}</strong>{row.original.blocking ? <small> · blocking</small> : null}</span> },
     { id: "where", header: "Project / run · stage", cell: ({ row }) => <span className="task-stage"><strong>{row.original.projectName} · {row.original.stage}</strong>
       <RunLink projectId={row.original.projectId} runId={row.original.runId} label={`${row.original.runLaunchKey} inbox`} inbox /></span> },
@@ -137,7 +137,7 @@ function AdminOverview() {
   const connectionColumns = useMemo<ColumnDef<typeof features, AdminConnection>[]>(() => [
     { id: "provider", header: "Provider", cell: ({ row }) => <span className="task-stage"><strong>{row.original.providerKind === "git" ? "Git" : row.original.providerKind === "openai" ? "OpenAI" : row.original.providerKind === "anthropic" ? "Anthropic" : row.original.providerKind}</strong><small>{row.original.host}</small></span> },
     { id: "account", header: "Owner / account", cell: ({ row }) => <span className="task-stage"><strong>{row.original.ownerKind === "organization" ? "Organization" : "User"}</strong><small className="mono">{row.original.account}</small></span> },
-    { id: "state", header: "State", cell: ({ row }) => <span className={`state-badge ${row.original.state === "active" ? "state-succeeded" : "state-failed"}`}>{row.original.state}</span> },
+    { id: "state", header: "State", cell: ({ row }) => <span className={`state-badge ${row.original.state === "active" ? "state-succeeded" : "state-failed"}`}>{sentence(row.original.state)}</span> },
     { id: "grants", header: "Grants", cell: ({ row }) => row.original.activeGrants },
     { id: "leases", header: "Leases", cell: ({ row }) => <span>{row.original.activeLeases} live{row.original.expiringLeases ? <span className="state-badge state-waiting admin-inline-badge">{row.original.expiringLeases} expiring</span> : null}</span> },
     { id: "used", header: "Last used", cell: ({ row }) => row.original.lastUsedAt ? <time dateTime={row.original.lastUsedAt} title={new Date(row.original.lastUsedAt).toLocaleString()}>{ago(row.original.lastUsedAt, now)}</time> : "Never" },
@@ -191,7 +191,7 @@ function AdminOverview() {
           <Link className="text-action" to="/admin/connections">All <ArrowRight size={13} aria-hidden="true" /></Link></div>
         <ul className="health-list">{data.connections.map((c) => <li key={c.id}>
           <span className="task-stage"><strong>{c.providerKind === "git" ? "Git" : c.providerKind === "openai" ? "OpenAI" : c.providerKind === "anthropic" ? "Anthropic" : c.providerKind}</strong><small className="mono">{c.account}</small></span>
-          <span className={`state-badge ${c.state === "active" ? "state-succeeded" : "state-failed"}`}>{c.state}</span>
+          <span className={`state-badge ${c.state === "active" ? "state-succeeded" : "state-failed"}`}>{sentence(c.state)}</span>
           <small>{c.activeGrants} grants · {c.activeLeases} live{c.expiringLeases ? ` · ${c.expiringLeases} expiring` : ""}</small>
         </li>)}</ul>
         {data.connections.length === 0 ? <EmptyState title="No model or Git connections yet" action={<Link className="text-action" to="/admin/connections/new">Add a connection</Link>} /> : null}

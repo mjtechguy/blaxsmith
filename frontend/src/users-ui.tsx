@@ -1,6 +1,7 @@
 // Member actions shared by the Users table (bulk) and a user's detail page.
 // Every action is confirmed in the app dialog; the server rechecks role rules.
 import { useEffect, useRef, useState } from "react";
+import { useModalDialog } from "./ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { emailProblem, personLabel } from "./account";
 import { OneTimeLink } from "./account-link";
@@ -41,7 +42,7 @@ export function MemberActionDialog({ action, roles, onClose }: { action: MemberA
     },
     onError: (cause) => { setError(userAdminError(cause)); void invalidate(queryClient); },
   });
-  useEffect(() => { dialog.current?.showModal(); }, []);
+  useModalDialog(dialog);
   const busy = act.isPending;
   const m = action.member;
   const name = personLabel(m);
@@ -93,7 +94,7 @@ export function BulkMemberDialog({ kind, members, onClose }: { kind: "disable" |
       setResult(`${results.length - failed.length} of ${results.length} done. Not changed: ${failed.map((f) => `${personLabel(f.member)} (${f.error})`).join("; ")}`);
     },
   });
-  useEffect(() => { dialog.current?.showModal(); }, []);
+  useModalDialog(dialog);
   const names = members.map((m) => personLabel(m)).join(", ");
   return <dialog ref={dialog} className="review-confirm" aria-labelledby="bulk-member-title" onCancel={(event) => { if (act.isPending) event.preventDefault(); }} onClose={() => { if (!act.isPending) onClose(Boolean(result)); }}>
     <h3 id="bulk-member-title">{kind === "disable" ? `Disable ${members.length} members` : `Sign out ${members.length} members`}</h3>

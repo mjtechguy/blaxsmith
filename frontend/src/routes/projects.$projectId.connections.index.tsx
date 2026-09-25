@@ -1,28 +1,32 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
-import { GitBranch, KeyRound } from "lucide-react";
+import { Plus } from "lucide-react";
 import { ConnectionCollection } from "../connection-pages";
 import { GitHubReturnNotice, LoadError, Loading, useConnections, useOrg } from "../connection-ui";
 import { PageHeader, PageShell } from "../page";
 import { EmptyState } from "../ui";
 import { getProject } from "../workflow";
+import { useScope } from "../workspace-ui";
 
 export const Route = createFileRoute("/projects/$projectId/connections/")({ component: ProjectConnections });
 
 function ProjectConnections() {
   const { projectId } = Route.useParams();
   const { org } = useOrg();
+  const { isMember } = useScope();
   const search = useLocation({ select: (l) => l.search as Record<string, unknown> });
   const project = useQuery({ queryKey: ["project", org, projectId], enabled: Boolean(org), queryFn: ({ signal }) => getProject(projectId, signal) });
   const owned = useConnections("project", projectId, Boolean(project.data?.project));
   const available = useConnections("project_available", projectId, Boolean(project.data?.project));
   const href = (c: { id: string }) => `/projects/${projectId}/connections/${c.id}`;
+  // Viewers never manage project connections; members may if they administer this project.
+  const actions = !isMember ? undefined : <>
+    <Link className="primary-button" to="/projects/$projectId/connections/new/api-key" params={{ projectId }}><Plus size={15} aria-hidden="true" /> Add API key</Link>
+    <Link className="secondary-button" to="/projects/$projectId/connections/new/git" params={{ projectId }}><Plus size={15} aria-hidden="true" /> Add Git</Link>
+  </>;
   return <PageShell>
     <PageHeader title="Project connections" description={project.data?.project ? `Model and Git access for ${project.data.project.name}.` : "Model and Git access for this project."}
-      actions={<>
-        <Link className="primary-button" to="/projects/$projectId/connections/new/api-key" params={{ projectId }}><KeyRound size={15} aria-hidden="true" /> Add API key</Link>
-        <Link className="secondary-button" to="/projects/$projectId/connections/new/git" params={{ projectId }}><GitBranch size={15} aria-hidden="true" /> Add Git</Link>
-      </>} />
+      actions={actions} />
     <GitHubReturnNotice search={search} />
     {project.isPending || owned.isPending ? <Loading label="Loading connections" /> : null}
     {project.isError ? <LoadError label="Project unavailable" retry={() => void project.refetch()} /> : null}
@@ -30,7 +34,7 @@ function ProjectConnections() {
     {owned.data ? <section className="table-section" aria-labelledby="project-connections-heading">
       <div className="table-heading"><div><h2 id="project-connections-heading">Project connections</h2><p>Owned by this project and usable only by its runs. Project owners and admins manage them.</p></div></div>
       <ConnectionCollection id="project-connections" label="Project connections" connections={owned.data} urlState href={href}
-        empty={<EmptyState title="No project connections">Add a key that only this project’s runs can use.</EmptyState>} />
+        empty={<EmptyState title="No project connections" action={actions ? <div className="page-actions">{actions}</div> : undefined}>Add a key that only this project’s runs can use.</EmptyState>} />
     </section> : null}
     {available.isError ? <LoadError label="Organization connections unavailable" retry={() => void available.refetch()} /> : null}
     {available.data ? <section className="table-section" aria-labelledby="available-connections-heading">

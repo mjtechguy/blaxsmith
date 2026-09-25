@@ -52,14 +52,14 @@ function AccountSetup() {
   });
 
   if (done) return <AuthFrame>
-    <div className="auth-heading" role="status"><p className="eyebrow">All set</p><h2>Your password is saved</h2><p>Sign in to <strong>{done.organizationSlug}</strong> with <strong>{done.email}</strong>. Any earlier sessions for this account were signed out.</p></div>
+    <div className="auth-heading" role="status"><p className="eyebrow">All set</p><h1>Your password is saved</h1><p>Sign in to <strong>{done.organizationSlug}</strong> with <strong>{done.email}</strong>. Any earlier sessions for this account were signed out.</p></div>
     <Link className="primary-button auth-submit" to="/login" search={{ next: "/" }}><LogIn size={16} aria-hidden="true" /> Continue to sign in</Link>
   </AuthFrame>;
-  if (link.isPending) return <AuthFrame><div className="auth-heading" role="status"><h2>Checking your link</h2><p>One moment.</p></div></AuthFrame>;
+  if (link.isPending) return <AuthFrame><div className="auth-heading" role="status"><h1>Checking your link</h1><p>One moment.</p></div></AuthFrame>;
   if (link.isError) {
     const missing = ConnectError.from(link.error).code === Code.NotFound;
     return <AuthFrame><div className="auth-heading" role="alert"><p className="eyebrow">{missing ? "Link unavailable" : "Connection needed"}</p>
-      <h2>{missing ? "This link can't be used" : "We couldn't check this link"}</h2>
+      <h1>{missing ? "This link can't be used" : "We couldn't check this link"}</h1>
       <p>{missing ? "Setup and reset links work once and expire. This one was already used, replaced by a newer link, or has expired. Ask your organization administrator for a new link." : "The identity service could not be reached. Try again in a moment."}</p></div>
       {missing ? <Link className="secondary-button" to="/login" search={{ next: "/" }}>Go to sign in</Link>
         : <button className="secondary-button" type="button" onClick={() => void link.refetch()}><RefreshCw size={16} aria-hidden="true" /> Try again</button>}
@@ -67,9 +67,9 @@ function AccountSetup() {
   }
   const info = link.data;
   const reset = info.purpose === "reset";
-  return <AuthFrame>
+  return <AuthFrame title={reset ? "Reset password" : "Set up your account"}>
     <div className="auth-heading"><p className="eyebrow">{reset ? "Password reset" : "Account setup"}</p>
-      <h2>{reset ? "Choose a new password" : `Welcome${info.displayName ? `, ${info.displayName}` : ""}`}</h2>
+      <h1>{reset ? "Choose a new password" : `Welcome${info.displayName ? `, ${info.displayName}` : ""}`}</h1>
       <p>{reset ? "Set a new password for your account" : "Choose a password for your account"} in <strong>{info.organizationName}</strong>. This link expires {new Date(info.expiresAt).toLocaleString()}.</p></div>
     <form className="auth-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
       <div className="auth-fields">

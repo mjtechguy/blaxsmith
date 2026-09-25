@@ -10,7 +10,7 @@ import type { RunTask } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { useGatewayEnabled } from "../gateway";
 import { DetailLayout } from "../layouts";
 import { RunCostTab, StageCostChip, useRunCost } from "../run-cost";
-import { Card, CopyValue, Disclosure, ShowMore, StatePanel, Timestamp, type TabSpec } from "../ui";
+import { Card, CopyValue, Disclosure, sentence, ShowMore, StatePanel, Timestamp, type TabSpec } from "../ui";
 import { Inbox, interactionsKey, StagePanel, useInteractions } from "../run-live";
 import { needsYou, runStatus, stageStatus, type AgentStatus } from "../agent-view";
 import { StatusPill, useAttentionTitle } from "../work-log";
@@ -56,7 +56,7 @@ function StageStatusCell({ taskKey }: { taskKey: string }) {
 }
 
 function activityLabel(kind: string) {
-  return activityLabels[kind] ?? kind.split(".").map((part) => part.replaceAll("_", " ")).join(" · ");
+  return activityLabels[kind] ?? sentence(kind.split(".").map((part) => part.replaceAll("_", " ")).join(" · "));
 }
 
 const taskColumns: ColumnDef<typeof taskFeatures, RunTask>[] = [
@@ -78,7 +78,7 @@ const taskColumns: ColumnDef<typeof taskFeatures, RunTask>[] = [
   } },
   { id: "depends", accessorKey: "dependsOn", header: "Depends on", cell: ({ row }) => row.original.dependsOn.length ? row.original.dependsOn.join(", ") : "Start" },
   { id: "status", header: "Status", cell: ({ row }) => <StageStatusCell taskKey={row.original.key} /> },
-  { id: "state", accessorKey: "state", header: "State", cell: ({ row }) => <span className={`state-badge state-${row.original.state}`}>{row.original.state.replaceAll("_", " ")}</span> },
+  { id: "state", accessorKey: "state", header: "State", cell: ({ row }) => <span className={`state-badge state-${row.original.state}`}>{sentence(row.original.state)}</span> },
   { id: "attempts", accessorKey: "generation", header: "Attempts", cell: ({ row }) => `${row.original.generation.toString()} of ${row.original.maxAttempts}` },
   { id: "active", accessorKey: "activeAttemptId", header: "Active attempt", cell: ({ row }) => <CopyValue value={row.original.activeAttemptId} label="Attempt ID" /> },
   { id: "live", header: "Live", cell: ({ row }) => <Link from={Route.fullPath} to={Route.fullPath} search={{ stage: row.original.key, tab: "stages" }} className="text-action" aria-label={`Open stage ${row.original.key}`}>
@@ -223,7 +223,7 @@ function RunDetail() {
   </section>;
 
   return <DetailLayout back={{ href: `/projects/${projectId}/runs`, label: "Project runs" }} title={runData.launchKey}
-    status={<><span className={`state-badge state-${runData.state}`}>{runData.state.replaceAll("_", " ")}</span> <StatusPill status={overall} /></>}
+    status={<><span className={`state-badge state-${runData.state}`}>{sentence(runData.state)}</span> <StatusPill status={overall} /></>}
     facts={[
       { label: "Source commit", value: <CopyValue value={runData.sourceCommit} label="Source commit" chars={12} /> },
       { label: "Created", value: <Timestamp value={runData.createdAt} /> },
@@ -331,7 +331,7 @@ function FinalReview({ runId, scope, state }: { runId: string; scope: string; st
     {review.isSuccess && !current ? <p className="review-message">{state === "succeeded" ? "Execution finished, but a verified evidence package has not been presented yet." : "Final review becomes available after execution and evidence verification."}</p> : null}
     {current ? <>
       <dl className="review-facts">
-        <div><dt>Package</dt><dd>Revision {current.revision.toString()} · <time dateTime={current.presentedAt}>{new Date(current.presentedAt).toLocaleString()}</time></dd></div>
+        <div><dt>Package</dt><dd>Revision {current.revision.toString()} · <Timestamp value={current.presentedAt} /></dd></div>
         <div><dt>Integrated commit</dt><dd><CopyValue value={current.integratedCommit} label="Integrated commit" chars={12} /></dd></div>
         <div><dt>Source commit</dt><dd><CopyValue value={current.sourceCommit} label="Source commit" chars={12} /></dd></div>
       </dl>

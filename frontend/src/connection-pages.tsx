@@ -112,7 +112,7 @@ export function ConnectionDetailPage({ connection, scope, projectId = "", back, 
           <SummaryList items={[{ label: "Connection ID", value: <CopyValue value={c.id} label="Connection ID" chars={13} /> }, { label: "Owner ID", value: <CopyValue value={c.ownerId} label="Owner ID" chars={13} /> }]} />
         </Disclosure></div>
       </Card>
-      <Card title="Where this comes from" className="dash-main" description={projectId ? "Why runs in this project may use it." : "Why the projects that use it may."}>
+      <Card title="Where this comes from" className="dash-main" description={projectId ? "Why runs in this project may use it." : "Why each project that uses it is allowed to."}>
         <div className="card-body access-list">
           {projectId ? <AccessExplanation projectId={projectId} kind="connection" resourceId={c.id} />
             : projectsUsing(c).length ? projectsUsing(c).map((u) => <div key={u.id}><strong>{u.name}</strong><AccessExplanation projectId={u.id} kind="connection" resourceId={c.id} /></div>)

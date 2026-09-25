@@ -1,11 +1,30 @@
 // Shared display primitives for progressive disclosure: stat tiles, cards,
 // inline disclosures, copyable values, timestamps, "show more", empty states,
 // and route-backed tabs. No drawers: detail opens inline or on a routed page.
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { Check, ChevronRight, Copy, RefreshCw } from "lucide-react";
 import { ago } from "./admin";
 import { usePrefs } from "./preferences";
+
+// Status and badge text is sentence case: "reconnect_required" -> "Reconnect required".
+export const sentence = (value: string) => { const text = value.replaceAll("_", " "); return text.charAt(0).toUpperCase() + text.slice(1); };
+
+// Opens a <dialog> modally on mount. A dialog removed by React (rather than
+// closed) does not return focus, so hand it back to whatever opened it unless
+// something else, such as a navigation, has taken focus since.
+export function useModalDialog(dialog: RefObject<HTMLDialogElement | null>) {
+  // Captured on first render, before showModal moves focus into the dialog.
+  const opener = useRef(globalThis.document?.activeElement);
+  useEffect(() => {
+    if (!dialog.current?.open) dialog.current?.showModal();
+    return () => {
+      const lost = !document.activeElement || document.activeElement === document.body;
+      const target = opener.current;
+      if (lost && target instanceof HTMLElement && target.isConnected) target.focus();
+    };
+  }, [dialog]);
+}
 
 export function StatTile({ label, value, meta, tone, href }: { label: string; value: ReactNode; meta?: ReactNode; tone?: "attention" | "danger" | "ok"; href?: string }) {
   const body = <><span className="stat-label">{label}</span><strong className="stat-value">{value}</strong>{meta ? <span className="stat-meta">{meta}</span> : null}</>;
@@ -72,11 +91,24 @@ export function CopyValue({ value, label, chars = 8 }: { value: string; label: s
   </InfoPopover>;
 }
 
-export function Timestamp({ value, now }: { value: string; now?: number }) {
+const useShownTime = (value: string, now?: number) => {
   const { dateStyle } = usePrefs();
+  const date = new Date(value);
+  return dateStyle === "absolute" ? date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : ago(value, now);
+};
+
+// The same preference-aware time as Timestamp, as plain text for places that
+// cannot hold a button (inside a link row); the full time is the tooltip.
+export function TimeText({ value, now }: { value: string; now?: number }) {
+  const shown = useShownTime(value, now);
+  if (!value) return <span className="muted">—</span>;
+  return <time dateTime={value} title={new Date(value).toLocaleString()}>{shown}</time>;
+}
+
+export function Timestamp({ value, now }: { value: string; now?: number }) {
+  const shown = useShownTime(value, now);
   if (!value) return <span className="muted">—</span>;
   const date = new Date(value);
-  const shown = dateStyle === "absolute" ? date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : ago(value, now);
   return <InfoPopover label={`Time: ${date.toLocaleString()}`} trigger={<time dateTime={value}>{shown}</time>}>
     <span className="info-title">Local</span><span className="info-value">{date.toLocaleString()}</span>
     <span className="info-title">UTC</span><code className="info-value">{date.toISOString()}</code><CopyButton value={date.toISOString()} label="timestamp" />

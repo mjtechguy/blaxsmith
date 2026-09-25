@@ -9,6 +9,7 @@ import { applyTheme, setPrefs, usePrefs, type Theme } from "./preferences";
 import { Slot } from "./slots";
 import "./setup-slots";
 import { UserMenu } from "./user-menu";
+import { usePageTitle } from "./work-log";
 import { getWorkspaceHome, homeKey } from "./workspace";
 import { getProject, getRun, listProjects } from "./workflow";
 
@@ -49,6 +50,7 @@ export function Shell({ children, session }: { children: ReactNode; session?: Se
   const kind = detailKind(pathname);
   const detail = kind === "run" ? run.data?.run?.launchKey || "Run" : kind ? detailLabels[kind] : undefined;
   const crumbs = breadcrumbs(groups, pathname, detail);
+  usePageTitle(crumbs.map((c) => c.label).reverse().join(" · "));
 
   useEffect(() => { setMobileOpen(false); }, [pathname]);
   useEffect(() => { write(COLLAPSED_KEY, collapsed); }, [collapsed]);
@@ -100,7 +102,7 @@ export function Shell({ children, session }: { children: ReactNode; session?: Se
           <nav className="breadcrumb" aria-label="Breadcrumb"><ol>
             {crumbs.map((crumb, index) => <li key={`${crumb.label}-${index}`} className={index === crumbs.length - 1 ? "crumb-current" : undefined}>
               {index > 0 ? <ChevronRight size={13} aria-hidden="true" /> : null}
-              {crumb.href && index < crumbs.length - 1 ? <Link to={crumb.href as "/"} activeOptions={exactPath}>{crumb.label}</Link> : <span aria-current={index === crumbs.length - 1 ? "page" : undefined}>{crumb.label}</span>}
+              {crumb.href && index < crumbs.length - 1 ? <Link to={crumb.href as "/"} activeOptions={exactPath} title={crumb.label}>{crumb.label}</Link> : <span aria-current={index === crumbs.length - 1 ? "page" : undefined} title={crumb.label}>{crumb.label}</span>}
             </li>)}
           </ol></nav>
         </div>
