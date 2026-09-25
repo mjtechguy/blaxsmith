@@ -7,7 +7,7 @@ import { DataTable } from "../data-table";
 import type { WorkspaceAgent } from "../gen/blaxsmith/api/v1/workspace_pb";
 import { DashboardLayout } from "../layouts";
 import { Slot } from "../slots";
-import { Card, EmptyState, StatePanel, StatTile, Timestamp } from "../ui";
+import { Card, EmptyState, StatePanel, StatTile, TimeText, Timestamp } from "../ui";
 import { StatusPill, useAttentionTitle } from "../work-log";
 import { asStatus, InboxLink, KindMark, RunStateBadge, useScope } from "../workspace-ui";
 import { getWorkspaceHome, homeKey, HOME_REFRESH_MS, kindLabel } from "../workspace";
@@ -86,7 +86,7 @@ function Home() {
           <Link className="run-list-link" to="/projects/$projectId/runs/$runId" params={{ projectId: run.projectId, runId: run.id }}>
             <span className="run-list-main"><strong>{run.launchKey}</strong><small>{run.projectName}</small></span>
             <StatusPill status={asStatus(run.status)} /><RunStateBadge state={run.state} />
-            <time dateTime={run.createdAt}>{new Date(run.createdAt).toLocaleString()}</time>
+            <TimeText value={run.createdAt} />
           </Link></li>)}</ul>
           : <EmptyState title="No runs yet" action={isMember ? <Link className="primary-button" to="/projects">Choose a project</Link> : undefined}>Runs appear here once a project launches one.</EmptyState>}
       </Card>

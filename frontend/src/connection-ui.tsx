@@ -20,7 +20,7 @@ import { CreateFlow, type FlowStep } from "./layouts";
 import { ModelSelect } from "./model-select";
 import { isBusy, type SignInState } from "./sign-in";
 import { SignInStatus, useSignIn } from "./sign-in-flow";
-import { Disclosure, sentence, useModalDialog } from "./ui";
+import { Disclosure, sentence, Timestamp, useModalDialog } from "./ui";
 import { listProjects } from "./workflow";
 import { listMembersPage, membersPageKey } from "./workspace";
 import { personLabel } from "./account";
@@ -330,7 +330,7 @@ export function ResourceGrants({ grants, label, description, canManage, canAdd, 
       ? <span className="task-stage"><strong>Project</strong><small>{row.original.projectName || row.original.projectId.slice(0, 8)}</small></span>
       : <span className="task-stage"><strong>{row.original.granteeKind === "user" ? "User" : "Minimum role"}</strong><small className="mono">{row.original.granteeName || row.original.granteeId}</small></span> },
     { id: "reach", header: "Reach", cell: ({ row }) => row.original.granteeKind === "project" ? "That project's runs and admins" : "Every project, for matching people" },
-    { id: "created", header: "Granted", cell: ({ row }) => <time dateTime={row.original.createdAt}>{ago(row.original.createdAt)}</time> },
+    { id: "created", header: "Granted", cell: ({ row }) => <Timestamp value={row.original.createdAt} /> },
     { id: "actions", header: "Actions", cell: ({ row }) => canManage ? <button type="button" className="text-action text-action-danger" disabled={remove.isPending} onClick={() => { setError(""); setPending(row.original); }}><Trash2 size={13} aria-hidden="true" /> Revoke</button> : null },
   ], [remove.isPending, canManage]);
   const table = useTable({ features, data: grants, columns, getRowId: (g) => g.id });

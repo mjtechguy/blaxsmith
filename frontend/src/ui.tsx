@@ -91,11 +91,24 @@ export function CopyValue({ value, label, chars = 8 }: { value: string; label: s
   </InfoPopover>;
 }
 
-export function Timestamp({ value, now }: { value: string; now?: number }) {
+const useShownTime = (value: string, now?: number) => {
   const { dateStyle } = usePrefs();
+  const date = new Date(value);
+  return dateStyle === "absolute" ? date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : ago(value, now);
+};
+
+// The same preference-aware time as Timestamp, as plain text for places that
+// cannot hold a button (inside a link row); the full time is the tooltip.
+export function TimeText({ value, now }: { value: string; now?: number }) {
+  const shown = useShownTime(value, now);
+  if (!value) return <span className="muted">—</span>;
+  return <time dateTime={value} title={new Date(value).toLocaleString()}>{shown}</time>;
+}
+
+export function Timestamp({ value, now }: { value: string; now?: number }) {
+  const shown = useShownTime(value, now);
   if (!value) return <span className="muted">—</span>;
   const date = new Date(value);
-  const shown = dateStyle === "absolute" ? date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : ago(value, now);
   return <InfoPopover label={`Time: ${date.toLocaleString()}`} trigger={<time dateTime={value}>{shown}</time>}>
     <span className="info-title">Local</span><span className="info-value">{date.toLocaleString()}</span>
     <span className="info-title">UTC</span><code className="info-value">{date.toISOString()}</code><CopyButton value={date.toISOString()} label="timestamp" />

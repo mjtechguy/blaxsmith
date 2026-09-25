@@ -331,7 +331,7 @@ function FinalReview({ runId, scope, state }: { runId: string; scope: string; st
     {review.isSuccess && !current ? <p className="review-message">{state === "succeeded" ? "Execution finished, but a verified evidence package has not been presented yet." : "Final review becomes available after execution and evidence verification."}</p> : null}
     {current ? <>
       <dl className="review-facts">
-        <div><dt>Package</dt><dd>Revision {current.revision.toString()} · <time dateTime={current.presentedAt}>{new Date(current.presentedAt).toLocaleString()}</time></dd></div>
+        <div><dt>Package</dt><dd>Revision {current.revision.toString()} · <Timestamp value={current.presentedAt} /></dd></div>
         <div><dt>Integrated commit</dt><dd><CopyValue value={current.integratedCommit} label="Integrated commit" chars={12} /></dd></div>
         <div><dt>Source commit</dt><dd><CopyValue value={current.sourceCommit} label="Source commit" chars={12} /></dd></div>
       </dl>
