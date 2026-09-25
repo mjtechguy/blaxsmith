@@ -669,3 +669,8 @@ Between steps 1 and 2 the running app still dials plaintext `:80` and gets
 app identity is still all-or-nothing across guests; per-attempt access
 remains the app's authorization. Operator `ax debug` through a router
 port-forward is refused while the flag is on.
+
+`13-db-app-role.sh` (once per database) moves the preview app off the Postgres
+bootstrap superuser onto `blaxsmith_app` (NOSUPERUSER NOBYPASSRLS, owner of every
+object), so row-level security applies. Run `07-db-backup.sh` first; the new
+password goes straight into the `preview-app-db` Secret and is never printed.
