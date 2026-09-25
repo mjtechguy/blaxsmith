@@ -174,6 +174,7 @@ func (a *Authorizer) RouteKey(ctx context.Context, g Grant, route Route) ([]byte
 	if a == nil || a.DB == nil || a.Secrets == nil || subscriptionAuth(route.AuthMethod) || route.Personal() {
 		return nil, ErrDenied
 	}
+	ctx = tenant.Org(ctx, g.OrganizationID)
 	tx, err := a.DB.Begin(ctx)
 	if err != nil {
 		return nil, err

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // RecordSubscriptionLimits stores the windows a personal route reported, for
@@ -18,6 +19,7 @@ func RecordSubscriptionLimits(ctx context.Context, db *pgxpool.Pool, g Grant, wi
 	if db == nil || g.OwnerID == "" || g.ConnectionID == "" {
 		return ErrDenied
 	}
+	ctx = tenant.Org(ctx, g.OrganizationID)
 	for _, w := range windows {
 		var minutes *int
 		if w.WindowMinutes > 0 {
@@ -47,6 +49,7 @@ type Headroom struct {
 // that needs about estimate tokens now? It reads the persisted route state,
 // so it works from the app process and across gateway replicas.
 func HeadroomFor(ctx context.Context, db *pgxpool.Pool, orgID, poolID string, estimate int64) (Headroom, error) {
+	ctx = tenant.Org(ctx, orgID)
 	var name string
 	var poolCap int
 	if err := db.QueryRow(ctx, `SELECT name,concurrency_cap FROM gateway_pools WHERE organization_id=$1 AND id=$2`,
@@ -154,6 +157,7 @@ type PaceRequest struct {
 // earlier pacing and returns nil. Personal subscriptions are never pooled
 // and so never paced here.
 func Pace(ctx context.Context, db *pgxpool.Pool, request PaceRequest) error {
+	ctx = tenant.Org(ctx, request.OrganizationID)
 	var poolID, name, strategy string
 	var poolCap int
 	var affinity bool
@@ -193,6 +197,7 @@ func Pace(ctx context.Context, db *pgxpool.Pool, request PaceRequest) error {
 func ClearPaced(ctx context.Context, db interface {
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 }, orgID, taskID string) error {
+	ctx = tenant.Org(ctx, orgID)
 	_, err := db.Exec(ctx, `DELETE FROM gateway_paced_tasks WHERE organization_id=$1 AND task_id=$2`, orgID, taskID)
 	return err
 }

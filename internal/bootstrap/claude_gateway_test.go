@@ -10,6 +10,7 @@ import (
 
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/gateway"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // TestClaudeSetupTokenThroughGatewayPostgres: a member's own Claude
@@ -63,18 +64,18 @@ func TestClaudeSetupTokenThroughGatewayPostgres(t *testing.T) {
 	// The owner's subscription window is recorded for the owner only.
 	var used float64
 	var principal string
-	if err := pool.QueryRow(t.Context(), `SELECT used_pct,principal_id::text FROM gateway_subscription_limits
+	if err := pool.QueryRow(tenant.System(t.Context()), `SELECT used_pct,principal_id::text FROM gateway_subscription_limits
 		WHERE organization_id=$1 AND connection_id='connection' AND window_name='claude_5h'`, model.Invoke.OrganizationID).
 		Scan(&used, &principal); err != nil || used != 40 || principal != owner {
 		t.Fatalf("subscription window: %v %q %v", used, principal, err)
 	}
 	var routeKind string
-	if err := pool.QueryRow(t.Context(), `SELECT route_kind FROM gateway_usage_events WHERE organization_id=$1`,
+	if err := pool.QueryRow(tenant.System(t.Context()), `SELECT route_kind FROM gateway_usage_events WHERE organization_id=$1`,
 		model.Invoke.OrganizationID).Scan(&routeKind); err != nil || routeKind != gateway.KindPersonal {
 		t.Fatalf("usage route kind %q %v", routeKind, err)
 	}
 	// Turning off members' own Claude subscriptions stops the very next request.
-	if _, err := pool.Exec(t.Context(), `UPDATE identity_organizations SET allow_member_claude_subscription=false WHERE id=$1`,
+	if _, err := pool.Exec(tenant.System(t.Context()), `UPDATE identity_organizations SET allow_member_claude_subscription=false WHERE id=$1`,
 		model.Invoke.OrganizationID); err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +98,7 @@ func TestClaudeSetupTokenThroughGatewayPostgres(t *testing.T) {
 // serves personal subscription routes; then it gets a gateway token.
 func TestCodexSignInMintsOnlyAsPersonalRoutePostgres(t *testing.T) {
 	pool, _, _, model, _, _ := modelAttemptFixture(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org := model.Invoke.OrganizationID
 	for _, statement := range []string{
 		`UPDATE access_connections SET auth_method='codex_chatgpt' WHERE organization_id=$1`,

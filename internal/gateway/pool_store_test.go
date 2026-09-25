@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func insertConnection(t *testing.T, pool *pgxpool.Pool, org, id, provider, ownerKind, owner, authMethod string) {
 	t.Helper()
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	if _, err := pool.Exec(ctx, `INSERT INTO access_provider_registrations (organization_id,id,provider_kind,origin,delivery_modes,state)
 		VALUES ($1,$2,$3,'https://example.invalid',ARRAY['native_raw'],'active')`, org, "reg-"+id, provider); err != nil {
 		t.Fatal(err)
@@ -26,7 +27,7 @@ func insertConnection(t *testing.T, pool *pgxpool.Pool, org, id, provider, owner
 func insertRoute(t *testing.T, pool *pgxpool.Pool, f fixture, name, connection, kind, region string, priority int) (string, error) {
 	t.Helper()
 	var id string
-	err := pool.QueryRow(t.Context(), `INSERT INTO gateway_routes (organization_id,name,connection_id,kind,region,priority,created_by)
+	err := pool.QueryRow(tenant.System(t.Context()), `INSERT INTO gateway_routes (organization_id,name,connection_id,kind,region,priority,created_by)
 		VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`, f.org, name, connection, kind, region, priority, f.principal).Scan(&id)
 	return id, err
 }
@@ -39,7 +40,7 @@ func insertRoute(t *testing.T, pool *pgxpool.Pool, f fixture, name, connection, 
 func TestPoolsPlanPacingAndPolicyPostgres(t *testing.T) {
 	pool := testPool(t)
 	f := newFixture(t, pool)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	insertConnection(t, pool, f.org, "key-a", "anthropic", "organization", f.org, "api_key")
 	insertConnection(t, pool, f.org, "key-b", "anthropic", "organization", f.org, "api_key")
 	insertConnection(t, pool, f.org, "aws", "aws_bedrock", "organization", f.org, AWSSigV4AuthMethod)
@@ -196,7 +197,7 @@ func headers(values map[string]string) map[string][]string {
 func TestSubscriptionLimitsAndRetentionPostgres(t *testing.T) {
 	pool := testPool(t)
 	f := newFixture(t, pool)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	g := Grant{OrganizationID: f.org, ConnectionID: "alice-codex", OwnerID: f.principal}
 	reset := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 	for _, used := range []float64{10, 64} {

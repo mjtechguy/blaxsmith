@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Circuit breaker tuning (§4): a route opens after breakerFailures
@@ -366,6 +367,7 @@ func (s *States) Persist(ctx context.Context, db *pgxpool.Pool, interval time.Du
 
 // Flush writes every changed route's state once.
 func (s *States) Flush(ctx context.Context, db *pgxpool.Pool) error {
+	ctx = tenant.System(ctx) // one replica's state spans every organization it served; each row names its own.
 	type row struct {
 		org, route string
 		v          RouteView

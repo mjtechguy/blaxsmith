@@ -127,7 +127,7 @@ func EnsurePartitions(ctx context.Context, db *pgxpool.Pool) error {
 // retention for organizations without settings. Rollups and run totals are
 // kept.
 func PruneEvents(ctx context.Context, db *pgxpool.Pool, retention time.Duration) error {
-	ctx = tenant.System(ctx)
+	ctx = tenant.System(ctx) // retention runs over every organization, each with its own setting.
 	if retention < 24*time.Hour {
 		return ErrDenied
 	}

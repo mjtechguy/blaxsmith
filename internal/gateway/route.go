@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Route kinds (§4). personal_subscription is never stored as a route row
@@ -107,6 +108,7 @@ func subscriptionAuth(method string) bool {
 //
 // ponytail: two indexed reads per request while pools are on, no cache.
 func LoadPlan(ctx context.Context, db *pgxpool.Pool, g Grant) (Plan, error) {
+	ctx = tenant.Org(ctx, g.OrganizationID)
 	single := Plan{Routes: []Route{implicitRoute(g)}}
 	if db == nil || subscriptionAuth(g.AuthMethod) {
 		return single, nil
@@ -148,6 +150,7 @@ const poolForConnection = `SELECT p.id::text,p.name,p.strategy,p.concurrency_cap
 // poolRoutes lists a pool's routes over active organization connections.
 // Disabled routes are left out unless all is set (the admin view).
 func poolRoutes(ctx context.Context, db *pgxpool.Pool, orgID, poolID string, all bool) ([]Route, error) {
+	ctx = tenant.Org(ctx, orgID)
 	rows, err := db.Query(ctx, `SELECT r.id::text,r.name,r.kind,r.connection_id,c.auth_method,r.region,r.cloud_project,
 		r.model_map,r.weight,r.priority,r.concurrency_cap,r.requests_per_minute,r.tokens_per_minute,r.state
 		FROM gateway_pool_routes pr

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestGatewayRoutesPoolsAndMyLimits(t *testing.T) {
@@ -14,7 +15,7 @@ func TestGatewayRoutesPoolsAndMyLimits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org := organization(t, pool, "gw-routes")
 	owner := reviewer(t, pool, org, "owner", "gw-routes-owner")
 	member := reviewer(t, pool, org, "member", "gw-routes-member")

@@ -21,7 +21,7 @@ import (
 // workflow, and gateway, with both uuid and text organization_id columns.
 var scoped = []string{"identity_memberships", "identity_audit_events", "access_project_policies",
 	"workflow_projects", "gateway_org_settings", "access_organization_keys",
-	"gateway_budget_settings"}
+	"gateway_budget_settings", "gateway_pools", "gateway_subscription_limits"}
 
 func TestRowLevelSecurityPostgres(t *testing.T) {
 	pool := rlsPool(t)
@@ -51,6 +51,9 @@ func TestRowLevelSecurityPostgres(t *testing.T) {
 				VALUES ($1,$2,1,false,'{brokered}')`,
 			`INSERT INTO gateway_org_settings (organization_id,updated_by) VALUES ($1,$2)`,
 			`INSERT INTO gateway_budget_settings (organization_id,updated_by) VALUES ($1,$2)`,
+			`INSERT INTO gateway_pools (organization_id,name,family,created_by) VALUES ($1,'rls-pool','anthropic',$2)`,
+			`INSERT INTO gateway_subscription_limits (organization_id,connection_id,principal_id,window_name,used_pct)
+				VALUES ($1,'rls-connection',$2,'primary',1)`,
 			`INSERT INTO access_organization_keys (organization_id,version,master_key_id,algorithm,nonce,wrapped_key)
 				VALUES ($1,1,left($2,8),'AES-256-GCM',decode(repeat('00',12),'hex'),decode(repeat('00',48),'hex'))`,
 		} {

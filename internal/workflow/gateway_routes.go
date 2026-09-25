@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Admin → Routes & pools (docs/model-gateway-plan.md §4, §5, §9.1) and the
@@ -106,6 +107,7 @@ func routeError(err error) error {
 // GatewayRoutesAs lists routes with their live state, pools, paced stages,
 // and the connections and projects the forms offer (owners and admins).
 func (s *Store) GatewayRoutesAs(ctx context.Context, caller identity.Caller) (GatewayRoutesView, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := s.beginScoped(ctx, caller, ScopeOrganization, "")
 	if err != nil {
 		return GatewayRoutesView{}, adminScopeError(err)
@@ -258,6 +260,7 @@ func validRoute(r GatewayRoute) bool {
 // on update rotates it. Kind and connection never change after creation.
 func (s *Store) SaveGatewayRouteAs(ctx context.Context, caller identity.Caller, r GatewayRoute,
 	credential *CloudCredential, secrets *access.SecretStore) (GatewayRoute, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if r.Weight == 0 {
 		r.Weight = 1
 	}
@@ -375,6 +378,7 @@ func (s *Store) SaveGatewayRouteAs(ctx context.Context, caller identity.Caller, 
 
 // SetGatewayRouteStateAs drains, disables or re-enables a route (§9.1).
 func (s *Store) SetGatewayRouteStateAs(ctx context.Context, caller identity.Caller, routeID, state string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(routeID) || !validRouteState(state) {
 		return ErrInvalid
 	}
@@ -398,6 +402,7 @@ func (s *Store) SetGatewayRouteStateAs(ctx context.Context, caller identity.Call
 // routes and the projects it is granted to. Members must serve the pool's
 // family; the database refuses anything else.
 func (s *Store) SaveGatewayPoolAs(ctx context.Context, caller identity.Caller, p GatewayPool) (GatewayPool, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if p.Strategy == "" {
 		p.Strategy = "priority_headroom"
 	}
@@ -486,6 +491,7 @@ type SubscriptionLimits struct {
 // caller's own runs. Nobody else's subscriptions are ever included; admins
 // see only aggregate usage elsewhere, never these.
 func (s *Store) MySubscriptionLimitsAs(ctx context.Context, caller identity.Caller) ([]SubscriptionLimits, bool, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID) {
 		return nil, false, ErrInvalid
 	}
