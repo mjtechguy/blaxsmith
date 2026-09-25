@@ -39,6 +39,9 @@ const (
 	// AdminServiceListAuditEventsProcedure is the fully-qualified name of the AdminService's
 	// ListAuditEvents RPC.
 	AdminServiceListAuditEventsProcedure = "/blaxsmith.api.v1.AdminService/ListAuditEvents"
+	// AdminServiceListAuditActionsProcedure is the fully-qualified name of the AdminService's
+	// ListAuditActions RPC.
+	AdminServiceListAuditActionsProcedure = "/blaxsmith.api.v1.AdminService/ListAuditActions"
 	// AdminServiceHaltRunProcedure is the fully-qualified name of the AdminService's HaltRun RPC.
 	AdminServiceHaltRunProcedure = "/blaxsmith.api.v1.AdminService/HaltRun"
 	// AdminServiceRevokeGrantProcedure is the fully-qualified name of the AdminService's RevokeGrant
@@ -50,6 +53,7 @@ const (
 type AdminServiceClient interface {
 	GetAdminOverview(context.Context, *connect.Request[v1.GetAdminOverviewRequest]) (*connect.Response[v1.GetAdminOverviewResponse], error)
 	ListAuditEvents(context.Context, *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error)
+	ListAuditActions(context.Context, *connect.Request[v1.ListAuditActionsRequest]) (*connect.Response[v1.ListAuditActionsResponse], error)
 	HaltRun(context.Context, *connect.Request[v1.HaltRunRequest]) (*connect.Response[v1.HaltRunResponse], error)
 	RevokeGrant(context.Context, *connect.Request[v1.RevokeGrantRequest]) (*connect.Response[v1.RevokeGrantResponse], error)
 }
@@ -77,6 +81,12 @@ func NewAdminServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(adminServiceMethods.ByName("ListAuditEvents")),
 			connect.WithClientOptions(opts...),
 		),
+		listAuditActions: connect.NewClient[v1.ListAuditActionsRequest, v1.ListAuditActionsResponse](
+			httpClient,
+			baseURL+AdminServiceListAuditActionsProcedure,
+			connect.WithSchema(adminServiceMethods.ByName("ListAuditActions")),
+			connect.WithClientOptions(opts...),
+		),
 		haltRun: connect.NewClient[v1.HaltRunRequest, v1.HaltRunResponse](
 			httpClient,
 			baseURL+AdminServiceHaltRunProcedure,
@@ -96,6 +106,7 @@ func NewAdminServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 type adminServiceClient struct {
 	getAdminOverview *connect.Client[v1.GetAdminOverviewRequest, v1.GetAdminOverviewResponse]
 	listAuditEvents  *connect.Client[v1.ListAuditEventsRequest, v1.ListAuditEventsResponse]
+	listAuditActions *connect.Client[v1.ListAuditActionsRequest, v1.ListAuditActionsResponse]
 	haltRun          *connect.Client[v1.HaltRunRequest, v1.HaltRunResponse]
 	revokeGrant      *connect.Client[v1.RevokeGrantRequest, v1.RevokeGrantResponse]
 }
@@ -108,6 +119,11 @@ func (c *adminServiceClient) GetAdminOverview(ctx context.Context, req *connect.
 // ListAuditEvents calls blaxsmith.api.v1.AdminService.ListAuditEvents.
 func (c *adminServiceClient) ListAuditEvents(ctx context.Context, req *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error) {
 	return c.listAuditEvents.CallUnary(ctx, req)
+}
+
+// ListAuditActions calls blaxsmith.api.v1.AdminService.ListAuditActions.
+func (c *adminServiceClient) ListAuditActions(ctx context.Context, req *connect.Request[v1.ListAuditActionsRequest]) (*connect.Response[v1.ListAuditActionsResponse], error) {
+	return c.listAuditActions.CallUnary(ctx, req)
 }
 
 // HaltRun calls blaxsmith.api.v1.AdminService.HaltRun.
@@ -124,6 +140,7 @@ func (c *adminServiceClient) RevokeGrant(ctx context.Context, req *connect.Reque
 type AdminServiceHandler interface {
 	GetAdminOverview(context.Context, *connect.Request[v1.GetAdminOverviewRequest]) (*connect.Response[v1.GetAdminOverviewResponse], error)
 	ListAuditEvents(context.Context, *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error)
+	ListAuditActions(context.Context, *connect.Request[v1.ListAuditActionsRequest]) (*connect.Response[v1.ListAuditActionsResponse], error)
 	HaltRun(context.Context, *connect.Request[v1.HaltRunRequest]) (*connect.Response[v1.HaltRunResponse], error)
 	RevokeGrant(context.Context, *connect.Request[v1.RevokeGrantRequest]) (*connect.Response[v1.RevokeGrantResponse], error)
 }
@@ -147,6 +164,12 @@ func NewAdminServiceHandler(svc AdminServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(adminServiceMethods.ByName("ListAuditEvents")),
 		connect.WithHandlerOptions(opts...),
 	)
+	adminServiceListAuditActionsHandler := connect.NewUnaryHandler(
+		AdminServiceListAuditActionsProcedure,
+		svc.ListAuditActions,
+		connect.WithSchema(adminServiceMethods.ByName("ListAuditActions")),
+		connect.WithHandlerOptions(opts...),
+	)
 	adminServiceHaltRunHandler := connect.NewUnaryHandler(
 		AdminServiceHaltRunProcedure,
 		svc.HaltRun,
@@ -165,6 +188,8 @@ func NewAdminServiceHandler(svc AdminServiceHandler, opts ...connect.HandlerOpti
 			adminServiceGetAdminOverviewHandler.ServeHTTP(w, r)
 		case AdminServiceListAuditEventsProcedure:
 			adminServiceListAuditEventsHandler.ServeHTTP(w, r)
+		case AdminServiceListAuditActionsProcedure:
+			adminServiceListAuditActionsHandler.ServeHTTP(w, r)
 		case AdminServiceHaltRunProcedure:
 			adminServiceHaltRunHandler.ServeHTTP(w, r)
 		case AdminServiceRevokeGrantProcedure:
@@ -184,6 +209,10 @@ func (UnimplementedAdminServiceHandler) GetAdminOverview(context.Context, *conne
 
 func (UnimplementedAdminServiceHandler) ListAuditEvents(context.Context, *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.AdminService.ListAuditEvents is not implemented"))
+}
+
+func (UnimplementedAdminServiceHandler) ListAuditActions(context.Context, *connect.Request[v1.ListAuditActionsRequest]) (*connect.Response[v1.ListAuditActionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.AdminService.ListAuditActions is not implemented"))
 }
 
 func (UnimplementedAdminServiceHandler) HaltRun(context.Context, *connect.Request[v1.HaltRunRequest]) (*connect.Response[v1.HaltRunResponse], error) {

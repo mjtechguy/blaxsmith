@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowRight, BookCopy, KeyRound, Play } from "lucide-react";
 import { CreateFlow, SummaryList } from "../layouts";
+import { isMissing, NotFoundPage } from "../page";
 import { flowOrder, projectFlowSteps, SourceEditor, VerificationEditor, type FlowStepId } from "../project-settings";
 import { listRecipes, recipesKey } from "../recipes";
 import { suggestionSource, useRepositoryInspection } from "../repo-inspect";
@@ -43,6 +44,8 @@ function ProjectSetup() {
   const done = { details: true, source: Boolean(source.data), verification: Boolean(verification.data), recipe: Boolean(recipes.data?.recipes.length), access: Boolean(access.data?.access.length) };
 
   if (project.isPending || session.isPending) return <StatePanel kind="loading" title="Loading project" />;
+  if (project.isError && isMissing(project.error)) return <NotFoundPage title="Project not found" back={{ to: "/projects", label: "All projects" }}>
+    This project does not exist or is not in your organization.</NotFoundPage>;
   if (!project.data?.project) return <StatePanel kind="error" title="Project unavailable" retry={() => void project.refetch()} />;
   const p = project.data.project;
   return <CreateFlow title={`Set up ${p.name}`} description="Finish what a run needs. Every step can be changed later from the project’s Settings."

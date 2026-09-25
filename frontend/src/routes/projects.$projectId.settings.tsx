@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Outlet, useLocation } from "@tanstack/react-router";
 import { useGatewayEnabled } from "../gateway";
 import { SettingsLayout } from "../layouts";
+import { isMissing, NotFoundPage } from "../page";
 import { useScope } from "../workspace-ui";
 import { getProject } from "../workflow";
 
@@ -15,6 +16,8 @@ function ProjectSettings() {
   const base = `/projects/${projectId}/settings`;
   const gatewayEnabled = useGatewayEnabled();
   const current = pathname.endsWith("/source") ? "source" : pathname.endsWith("/verification") ? "verification" : pathname.endsWith("/model-access") ? "model-access" : "general";
+  if (project.isError && isMissing(project.error)) return <NotFoundPage title="Project not found" back={{ to: "/projects", label: "All projects" }}>
+    This project does not exist or is not in your organization.</NotFoundPage>;
   return <SettingsLayout title="Settings" description={project.data?.project ? `Configuration for ${project.data.project.name}. Each section saves on its own.` : "Project configuration."} current={current}
     sections={[
       { id: "general", label: "General", href: base },

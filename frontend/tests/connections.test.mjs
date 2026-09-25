@@ -77,3 +77,62 @@ test("effort choices follow the chosen model and preselect its default", async (
     globalThis.window = previousWindow;
   }
 });
+
+const session = (role) => ({ organizationId: "00000000-0000-4000-8000-000000000001", principalId: "00000000-0000-4000-8000-000000000002",
+  sessionId: "00000000-0000-4000-8000-000000000003", role, accessExpiresAt: new Date(Date.now() + 3_600_000).toISOString() });
+
+async function withApp(run) {
+  const saved = { window: globalThis.window, fetch: globalThis.fetch, localStorage: globalThis.localStorage, matchMedia: globalThis.matchMedia };
+  globalThis.window = { location: { origin: "https://blaxsmith.test" } };
+  globalThis.localStorage = { getItem: () => null, setItem: () => {} };
+  globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+  globalThis.fetch = async () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    await run(await server.ssrLoadModule("/tests/render-app.tsx"), server);
+  } finally {
+    await server.close();
+    Object.assign(globalThis, saved);
+  }
+}
+
+test("personal connections are open to every role; project ones follow the server's project-admin answer", async () => {
+  await withApp(async ({ renderApp }) => {
+    const org = session("viewer").organizationId;
+    const personal = [["connections", org, "personal", ""], []];
+    for (const role of ["viewer", "member", "admin", "owner"]) {
+      const html = await renderApp("/me/connections", session(role), [personal]);
+      assert.match(html, /href="\/me\/connections\/new\/subscription"/, `${role} can add a subscription`);
+      assert.match(html, /href="\/me\/connections\/new\/api-key"/, `${role} can add a personal key`);
+    }
+    const project = (canAdminister) => [["project", org, "p1"], { project: { id: "p1", slug: "p", name: "Payments", createdAt: "" }, canAdminister, canLaunch: true }];
+    const lists = [[["connections", org, "project", "p1"], []], [["connections", org, "project_available", "p1"], []]];
+    const member = await renderApp("/projects/p1/connections", session("member"), [project(false), ...lists]);
+    assert.doesNotMatch(member, /connections\/new\/(api-key|git)/, "a member who does not administer the project gets no create actions");
+    assert.match(member, /managed by project admins/);
+    const creator = await renderApp("/projects/p1/connections", session("member"), [project(true), ...lists]);
+    assert.match(creator, /href="\/projects\/p1\/connections\/new\/api-key"/, "the project's admin can add a key");
+    assert.match(await renderApp("/projects/p1/connections/new/api-key", session("member"), [project(false)]), /Adding project connections is restricted/);
+  });
+});
+
+test("connection titles drop the provider when the label already names it", async () => {
+  await withApp(async (_app, server) => {
+    const { connectionTitle } = await server.ssrLoadModule("/src/connections.ts");
+    assert.equal(connectionTitle({ provider: "openai", label: "OpenAI sandbox" }), "OpenAI sandbox");
+    assert.equal(connectionTitle({ provider: "openai", label: "Evaluation" }), "OpenAI · Evaluation");
+    assert.equal(connectionTitle({ provider: "anthropic", label: "" }), "Anthropic");
+  });
+});
+
+test("unknown detail IDs render one shared not-found page with an h1 and a way back", async () => {
+  await withApp(async ({ renderApp }) => {
+    const org = session("owner").organizationId;
+    const html = await renderApp("/me/connections/nope", session("owner"), [[["connections", org, "personal", ""], []]]);
+    assert.match(html, /<h1>Connection not found<\/h1>/);
+    assert.match(html, /href="\/me\/connections"[^>]*>.*My connections/s);
+    const orgConnection = await renderApp("/admin/connections/nope", session("owner"), [[["connections", org, "organization", ""], []]]);
+    assert.match(orgConnection, /<h1>Connection not found<\/h1>/);
+    assert.match(await renderApp("/no/such/page", session("owner")), /<h1>Page not found<\/h1>/);
+  });
+});

@@ -16,7 +16,7 @@ import { CollectionTable, DataTable, inSet, useUrlView, type GridColumn } from "
 import { TextField } from "./form-field";
 import type { Extension, ExtensionPermission, ExtensionTemplate, ExtensionVersion, PreviewExtensionInstallResponse } from "./gen/blaxsmith/api/v1/extensions_pb";
 import { CreateFlow, DetailLayout, SummaryList, type FlowStep } from "./layouts";
-import { PageHeader, PageShell } from "./page";
+import { isMissing, NotFoundPage, PageHeader, PageShell } from "./page";
 import { Card, CopyValue, Disclosure, EmptyState, StatePanel, sentence, tabFrom, Timestamp, type TabSpec } from "./ui";
 import {
   approvedPermissions, checkExtensionUpdate, extensionKey, extensionsKey, getExtension, grantExtension, installExtension, listExtensions,
@@ -319,6 +319,8 @@ export function ExtensionDetailPage({ extensionId, library = false }: { extensio
   const table = useTable({ features: versionFeatures, data: versions, columns, getRowId: (row) => row.id });
 
   if (detail.isPending) return <StatePanel kind="loading" title="Loading extension" />;
+  if ((detail.isError && isMissing(detail.error)) || (detail.isSuccess && !extension)) return <NotFoundPage title="Extension not found"
+    back={library ? { to: "/extensions", label: "Extensions" } : { to: "/admin/extensions", label: "Extensions" }}>It may have been removed, or the link is wrong.</NotFoundPage>;
   if (detail.isError || !extension) return <StatePanel kind="error" title="Extension unavailable" retry={() => void detail.refetch()}>This extension could not be loaded.</StatePanel>;
   const current = versions.find((v) => v.id === extension.currentVersionId);
   const versionNote = version && versions.length > 1 ? <> Showing v{version.version}; pick another on the <Link to={base as "/"} search={{ tab: "versions" } as never} className="text-action">Versions</Link> tab.</> : null;

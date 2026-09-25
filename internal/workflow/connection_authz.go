@@ -46,3 +46,23 @@ func (grantAuthorizer) CanAdministerProject(ctx context.Context, tx pgx.Tx, prin
 	}
 	return ok, err
 }
+
+// CanAdministerProject reports whether caller administers projectID by the
+// rule requireProjectAdmin enforces on project connection changes. It only
+// informs the UI; every mutation rechecks inside its own transaction.
+func (s *Store) CanAdministerProject(ctx context.Context, caller identity.Caller, projectID string) (bool, error) {
+	if !ids(caller.OrganizationID, caller.PrincipalID, projectID) {
+		return false, nil
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+	return s.authz.CanAdministerProject(ctx, tx, caller, projectID)
+}
+
+// CanLaunch is the role rule LaunchRun enforces.
+func CanLaunch(caller identity.Caller) bool {
+	return caller.Role == "owner" || caller.Role == "admin" || caller.Role == "member"
+}

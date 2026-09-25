@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/identity"
 )
 
 func connectionSecrets(t *testing.T, store *Store) *access.SecretStore {
@@ -39,6 +40,20 @@ func TestConnectionScopeRules(t *testing.T) {
 	theirs, err := store.CreateProjectAs(t.Context(), other, "conn-theirs", "Theirs")
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The UI's project-admin read matches the rule project connection writes enforce.
+	for _, c := range []struct {
+		name    string
+		caller  identity.Caller
+		project string
+		want    bool
+	}{{"owner", owner, theirs, true}, {"creator", member, mine, true}, {"other member", member, theirs, false}, {"viewer", viewer, mine, false}} {
+		if got, err := store.CanAdministerProject(t.Context(), c.caller, c.project); err != nil || got != c.want {
+			t.Fatalf("%s CanAdministerProject = %v, %v; want %v", c.name, got, err, c.want)
+		}
+	}
+	if CanLaunch(viewer) || !CanLaunch(member) {
+		t.Fatal("CanLaunch disagrees with LaunchRun's role rule")
 	}
 	key := []byte("sk-scope-secret-value")
 	if _, err := store.CreateAPIKeyConnectionAs(t.Context(), member, ScopeOrganization, "", "openai", "", key, testModels, "", secrets); !errors.Is(err, ErrConnectionDenied) {

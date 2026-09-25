@@ -26,7 +26,15 @@ const providerNames: Record<string, string> = {
   github: "GitHub", gitlab: "GitLab", codex: "Codex (ChatGPT)",
 };
 export const providerLabel = (provider: string) => providerNames[provider] ?? provider;
-export const scopeLabel = (scope: string) => scope === "organization" ? "Organization" : scope === "project" ? "Project" : scope === "personal" ? "Personal" : scope;
+// "OpenAI · Team key", or just the label when it already names the provider
+// ("OpenAI sandbox", not "OpenAI · OpenAI sandbox").
+export function connectionTitle(c: { provider: string; label: string }): string {
+  const provider = providerLabel(c.provider);
+  const label = c.label.trim();
+  if (!label) return provider;
+  return label.toLowerCase().includes(provider.toLowerCase()) ? label : `${provider} · ${label}`;
+}
+export const scopeLabel =(scope: string) => scope === "organization" ? "Organization" : scope === "project" ? "Project" : scope === "personal" ? "Personal" : scope;
 export const kindLabel = (kind: string) => kind === "api_key" ? "API key" : kind === "git" ? "Git" : kind === "subscription" ? "Subscription" : kind;
 
 // "valid, N models", the provider's error, or unchecked. Git has no models.

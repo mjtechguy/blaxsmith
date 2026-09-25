@@ -9,7 +9,7 @@ import { TextField } from "../form-field";
 import type { ProjectSource, ProjectVerification } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { AccessExplanation } from "../access-explain";
 import { useRepositoryInspection } from "../repo-inspect";
-import { PageHeader, PageShell } from "../page";
+import { isMissing, NotFoundPage, PageHeader, PageShell } from "../page";
 import { StageDag } from "../recipe-pages";
 import { getRecipe, getRecipeVersion, listRecipes, parseRecipe, recipeKey, recipesKey, recipeVersionKey, validateRecipe } from "../recipes";
 import { getLaunchAvailability, getProject, getProjectSource, getProjectVerification, launchAvailabilityQueryKey, launchRun, projectSourceQueryKey, projectVerificationQueryKey } from "../workflow";
@@ -26,14 +26,16 @@ function NewRun() {
   const source = useQuery({ queryKey: projectSourceQueryKey(org, projectId), enabled: Boolean(org && project.data?.project), queryFn: ({ signal }) => getProjectSource(projectId, signal) });
   const verification = useQuery({ queryKey: projectVerificationQueryKey(org, projectId), enabled: Boolean(org && project.data?.project), queryFn: ({ signal }) => getProjectVerification(projectId, signal) });
   const availability = useQuery({ queryKey: launchAvailabilityQueryKey(org, projectId), enabled: Boolean(org && project.data?.project), queryFn: ({ signal }) => getLaunchAvailability(projectId, signal) });
-  const mayLaunch = session.data?.role === "owner" || session.data?.role === "admin" || session.data?.role === "member";
+  const mayLaunch = Boolean(project.data?.canLaunch);
   const mayConfigure = session.data?.role === "owner" || session.data?.role === "admin";
 
+  if (project.isError && isMissing(project.error)) return <NotFoundPage title="Project not found" back={{ to: "/projects", label: "All projects" }}>
+    This project does not exist or is not in your organization.</NotFoundPage>;
   return <PageShell>
     <PageHeader eyebrow="Project / New run" title="New run" description={project.data?.project ? `Freeze a recipe from ${project.data.project.name} into a durable execution plan.` : "Freeze a committed recipe into a durable execution plan."} />
     <Link to="/projects/$projectId" params={{ projectId }} className="text-action"><ArrowLeft size={15} aria-hidden="true" /> Back to project</Link>
     {project.isPending || (project.isSuccess && (source.isPending || verification.isPending || availability.isPending)) ? <div className="state-panel" role="status"><RefreshCw className="spin" size={22} aria-hidden="true" /><h2>Checking run prerequisites</h2></div> : null}
-    {project.isError ? <div className="state-panel" role="alert"><h2>Project unavailable</h2><p>This project could not be loaded.</p><button type="button" className="secondary-button" onClick={() => void project.refetch()}>Try again</button></div> : null}
+    {project.isError && !isMissing(project.error) ? <div className="state-panel" role="alert"><h2>Project unavailable</h2><p>This project could not be loaded.</p><button type="button" className="secondary-button" onClick={() => void project.refetch()}>Try again</button></div> : null}
     {source.isError || verification.isError || availability.isError ? <div className="state-panel" role="alert"><h2>Prerequisites unavailable</h2><p>Source, verification, or run availability could not be loaded.</p><button type="button" className="secondary-button" onClick={() => { void source.refetch(); void verification.refetch(); void availability.refetch(); }}>Try again</button></div> : null}
     {project.data?.project && source.isSuccess && verification.isSuccess && availability.isSuccess && !mayLaunch ? <div className="state-panel" role="note"><h2>Run creation is restricted</h2><p>Organization owners, admins, and members can create runs.</p></div> : null}
     {project.data?.project && availability.data && mayLaunch && !availability.data.enabled ? <div className="state-panel" role="note"><h2>Run creation is unavailable</h2><p>{availability.data.reason}</p></div> : null}

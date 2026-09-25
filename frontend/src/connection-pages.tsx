@@ -9,7 +9,7 @@ import { AccessExplanation } from "./access-explain";
 import { ago } from "./admin";
 import { AddUse, ConfirmDialog, failure, HealthLine, RedactedText, ResourceGrants, StateBadge, useOrg } from "./connection-ui";
 import {
-  connectionModelsKey, grantConnection, kindLabel, listConnectionModels, modelsSummary, providerLabel, refreshConnectionModels,
+  connectionModelsKey, connectionTitle, grantConnection, kindLabel, listConnectionModels, modelsSummary, providerLabel, refreshConnectionModels,
   removeConnectionUse, revokeConnection, revokeConnectionGrant, scopeLabel, setRecommendedModels, type Scope,
 } from "./connections";
 import { CollectionTable, DataTable, inSet, useLocalView, useUrlView, type GridColumn } from "./data-table";
@@ -32,7 +32,7 @@ export function ConnectionCollection({ id, label, connections, empty, href, acti
   const [view, setView] = urlState ? url : local;
   const columns = useMemo<GridColumn<Connection>[]>(() => [
     { id: "provider", accessorFn: (c) => c.provider, header: "Provider", enableHiding: false, filterFn: inSet, cell: ({ row }) => <Link className="row-link" to={href(row.original) as "/"}>
-      <span className="task-stage"><strong>{providerLabel(row.original.provider)}{row.original.label ? ` · ${row.original.label}` : ""}</strong><small>{kindLabel(row.original.kind)}</small></span></Link> },
+      <span className="task-stage"><strong>{connectionTitle(row.original)}</strong><small>{kindLabel(row.original.kind)}</small></span></Link> },
     { id: "kind", accessorKey: "kind", header: "Kind", filterFn: inSet, cell: ({ row }) => kindLabel(row.original.kind) },
     { id: "scope", accessorKey: "scope", header: "Scope", filterFn: inSet, cell: ({ row }) => <span className="task-stage"><strong>{scopeLabel(row.original.scope)}</strong><small>{row.original.ownerName || row.original.ownerId.slice(0, 8)}</small></span> },
     { id: "account", accessorKey: "account", header: "Account", cell: ({ row }) => row.original.account ? <span className="mono"><RedactedText text={row.original.account} label="account" /></span> : "—" },
@@ -70,8 +70,10 @@ const connectionTabs = (c: Connection, scope: Scope): TabSpec[] => [
   { id: "activity", label: "Activity" },
 ];
 
-export function ConnectionDetailPage({ connection, scope, projectId = "", back, onRevoked }: {
-  connection: Connection; scope: Scope; projectId?: string; back: { href: string; label: string }; onRevoked: () => void;
+// canAdminister: whether the caller administers projectId (GetProject says);
+// adding or removing project model uses of shared connections needs it.
+export function ConnectionDetailPage({ connection, scope, projectId = "", canAdminister = true, back, onRevoked }: {
+  connection: Connection; scope: Scope; projectId?: string; canAdminister?: boolean; back: { href: string; label: string }; onRevoked: () => void;
 }) {
   const queryClient = useQueryClient();
   const { org } = useOrg();
@@ -90,7 +92,7 @@ export function ConnectionDetailPage({ connection, scope, projectId = "", back, 
   const base = useLocation({ select: (l) => l.pathname });
   const tabLink = (id: string, label: string) => <Link to={base as "/"} search={{ tab: id } as never} className="text-action">{label} <ArrowRight size={13} aria-hidden="true" /></Link>;
   const c = connection;
-  return <DetailLayout back={back} title={`${providerLabel(c.provider)}${c.label ? ` · ${c.label}` : ""}`} status={<StateBadge state={c.state} />}
+  return <DetailLayout back={back} title={connectionTitle(c)} status={<StateBadge state={c.state} />}
     facts={[
       { label: "Kind", value: kindLabel(c.kind) },
       { label: "Scope", value: `${scopeLabel(c.scope)}${c.ownerName ? ` · ${c.ownerName}` : ""}` },
@@ -133,7 +135,7 @@ export function ConnectionDetailPage({ connection, scope, projectId = "", back, 
       description="Each grant names one project, one user, or a minimum role. Owners and admins get no implicit use; viewers never. A project grant lets that project's admins attach it to runs."
       revokeNote="Revoking a project grant also removes that project's model uses of this connection."
       grant={(kind, project, grantee) => grantConnection(c.id, project, kind, grantee)} revoke={revokeConnectionGrant} onChanged={invalidate} /> : null}
-    {tab === "usage" ? <UsageTab connection={c} projectId={projectId} scope={scope} /> : null}
+    {tab === "usage" ? <UsageTab connection={c} projectId={projectId} scope={scope} canChange={c.scope === "personal" || canAdminister} /> : null}
     {tab === "activity" ? <Card title="Activity" description={isAdmin ? "Derived from this connection's recorded times. The complete history is in the audit log." : "Derived from this connection's recorded times."}
       actions={isAdmin ? <Link className="text-action" to="/admin/audit">Audit log <ArrowRight size={13} aria-hidden="true" /></Link> : undefined}>
       <ol className="timeline">{[
@@ -197,7 +199,7 @@ function ModelsTab({ connection }: { connection: Connection }) {
 
 const useFeatures = tableFeatures({});
 
-function UsageTab({ connection, projectId, scope }: { connection: Connection; projectId: string; scope: Scope }) {
+function UsageTab({ connection, projectId, scope, canChange }: { connection: Connection; projectId: string; scope: Scope; canChange: boolean }) {
   const queryClient = useQueryClient();
   const { org } = useOrg();
   const [pending, setPending] = useState<ConnectionUse | null>(null);
@@ -213,13 +215,14 @@ function UsageTab({ connection, projectId, scope }: { connection: Connection; pr
     { id: "model", header: "Model", cell: ({ row }) => <span className="mono">{row.original.model}</span> },
     { id: "for", header: "Serves", cell: ({ row }) => row.original.granteeKind === "user" ? "Your runs only" : "Project runs" },
     { id: "created", header: "Added", cell: ({ row }) => <Timestamp value={row.original.createdAt} /> },
-    { id: "actions", header: "Actions", cell: ({ row }) => <button type="button" className="text-action text-action-danger" disabled={remove.isPending} onClick={() => { setError(""); setPending(row.original); }}><Trash2 size={13} aria-hidden="true" /> Remove</button> },
-  ], [remove.isPending]);
+    ...(!canChange ? [] : [{ id: "actions", header: "Actions", cell: ({ row }) => <button type="button" className="text-action text-action-danger" disabled={remove.isPending} onClick={() => { setError(""); setPending(row.original); }}><Trash2 size={13} aria-hidden="true" /> Remove</button> } satisfies ColumnDef<typeof useFeatures, ConnectionUse>]),
+  ], [remove.isPending, canChange]);
   const table = useTable({ features: useFeatures, data: uses, columns, getRowId: (u) => u.id });
   return <section className="table-section" aria-labelledby="uses-heading">
     <div className="table-heading"><div><h2 id="uses-heading">Usage</h2><p>{connection.scope === "personal" ? "Projects where your own runs use this connection." : "Models project runs may use through this connection."}</p></div><span className="fetched-time">{uses.length} uses</span></div>
     <DataTable table={table} label="Model uses" empty="Not used by any project yet." />
-    {connection.state === "active" ? <Disclosure summary="Add a model use" className="card-body" defaultOpen={!uses.length}><AddUse connection={connection} projectId={projectId} /></Disclosure> : null}
+    {!canChange ? <p className="card-note">Project admins add and remove this project’s model uses.</p> : null}
+    {connection.state === "active" && canChange ? <Disclosure summary="Add a model use" className="card-body" defaultOpen={!uses.length}><AddUse connection={connection} projectId={projectId} /></Disclosure> : null}
     {pending ? <ConfirmDialog busy={remove.isPending} error={error} onClose={() => setPending(null)} onConfirm={() => remove.mutate(pending)} title="Remove model use" confirmLabel="Remove"
       body={<>Stop <strong>{pending.projectName}</strong> from using <strong className="mono">{pending.model}</strong> through this connection? Future attempts lose it; a running actor may still hold a delivered credential until stopped.</>} /> : null}
   </section>;

@@ -21,13 +21,32 @@ import { ModelSelect } from "./model-select";
 import { isBusy, type SignInState } from "./sign-in";
 import { SignInStatus, useSignIn } from "./sign-in-flow";
 import { Disclosure, sentence, Timestamp, useModalDialog } from "./ui";
-import { listProjects } from "./workflow";
+import { getProject, listProjects } from "./workflow";
 import { listMembersPage, membersPageKey } from "./workspace";
 import { personLabel } from "./account";
 
 export function useOrg() {
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   return { session, org: session.data?.organizationId || "" };
+}
+
+// The caller's effective permissions on a project, as GetProject reports them.
+export function useProjectAccess(projectId: string) {
+  const { org } = useOrg();
+  const project = useQuery({ queryKey: ["project", org, projectId], enabled: Boolean(org && projectId), queryFn: ({ signal }) => getProject(projectId, signal) });
+  return { project, canAdminister: Boolean(project.data?.canAdminister), canLaunch: Boolean(project.data?.canLaunch) };
+}
+
+// Project connection create pages: only project admins get the form.
+export function RequireProjectAdmin({ projectId, children }: { projectId: string; children: ReactNode }) {
+  const { project, canAdminister } = useProjectAccess(projectId);
+  if (project.isPending) return <Loading label="Loading project" />;
+  if (project.isError) return <LoadError label="Project unavailable" retry={() => void project.refetch()} />;
+  if (!canAdminister) return <div className="state-panel" role="note"><h1>Adding project connections is restricted</h1>
+    <p>Only this project’s admins add its connections. Your own keys and subscriptions go in My connections.</p>
+    <div className="page-actions"><Link className="secondary-button" to="/projects/$projectId/connections" params={{ projectId }}>Project connections</Link>
+      <Link className="primary-button" to="/me/connections">My connections</Link></div></div>;
+  return <>{children}</>;
 }
 
 export function failure(cause: unknown, fallback: string): string {
