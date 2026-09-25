@@ -9,6 +9,7 @@ import { listRecipes } from "./recipes";
 import { listMembers } from "./users";
 import { getProject, listProjects, listRuns } from "./workflow";
 import type { TableView } from "./table-state";
+import { useModalDialog } from "./ui";
 import { inboxKey, listInbox } from "./workspace";
 
 // The actionable Inbox the palette lists: the first page, newest first.
@@ -59,7 +60,8 @@ function PaletteDialog({ session, onClose }: { session: SessionIdentity; onClose
   const projectMatch = pathname.match(/^\/projects\/([^/]+)/)?.[1];
   const projectId = projectMatch && projectMatch !== "new" ? projectMatch : "";
 
-  useEffect(() => { dialog.current?.showModal(); input.current?.focus(); }, []);
+  useModalDialog(dialog);
+  useEffect(() => { input.current?.focus(); }, []);
   useEffect(() => { const t = window.setTimeout(() => setSearch(query.trim()), 150); return () => window.clearTimeout(t); }, [query]);
   useEffect(() => { setActive(0); }, [query]);
 

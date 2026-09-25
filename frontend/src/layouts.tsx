@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useBlocker } from "@tanstack/react-router";
 import { ArrowLeft, Check, CircleDot, RefreshCw } from "lucide-react";
 import { PageHeader, PageShell } from "./page";
-import { RouteTabs, type TabSpec } from "./ui";
+import { RouteTabs, useModalDialog, type TabSpec } from "./ui";
 
 export function DashboardLayout({ title, description, actions, tiles, slot, children }: {
   title: string; description?: string; actions?: ReactNode; tiles?: ReactNode; slot?: ReactNode; children: ReactNode;
@@ -77,7 +77,7 @@ export function useUnsavedGuard(dirty: boolean) {
 
 function ConfirmDiscard({ onStay, onLeave }: { onStay: () => void; onLeave: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => { dialog.current?.showModal(); }, []);
+  useModalDialog(dialog);
   return <dialog ref={dialog} className="review-confirm" aria-labelledby="discard-title" onCancel={(event) => { event.preventDefault(); onStay(); }}>
     <h3 id="discard-title">Discard unsaved changes?</h3>
     <p>Your edits on this page have not been saved. Leaving now discards them.</p>

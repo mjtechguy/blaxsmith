@@ -20,7 +20,7 @@ import { CreateFlow, type FlowStep } from "./layouts";
 import { ModelSelect } from "./model-select";
 import { isBusy, type SignInState } from "./sign-in";
 import { SignInStatus, useSignIn } from "./sign-in-flow";
-import { Disclosure, sentence } from "./ui";
+import { Disclosure, sentence, useModalDialog } from "./ui";
 import { listProjects } from "./workflow";
 
 export function useOrg() {
@@ -81,7 +81,7 @@ export function ConfirmDialog({ title, body, confirmLabel, busy, error, onConfir
   tone?: "danger" | "primary";
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => { dialog.current?.showModal(); }, []);
+  useModalDialog(dialog);
   return <dialog ref={dialog} className="review-confirm" aria-labelledby="connection-confirm-title"
     onCancel={(event) => { if (busy) event.preventDefault(); }} onClose={() => { if (!busy) onClose(); }}>
     <h3 id="connection-confirm-title">{title}</h3>

@@ -1,7 +1,7 @@
 // Shared display primitives for progressive disclosure: stat tiles, cards,
 // inline disclosures, copyable values, timestamps, "show more", empty states,
 // and route-backed tabs. No drawers: detail opens inline or on a routed page.
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { Check, ChevronRight, Copy, RefreshCw } from "lucide-react";
 import { ago } from "./admin";
@@ -9,6 +9,22 @@ import { usePrefs } from "./preferences";
 
 // Status and badge text is sentence case: "reconnect_required" -> "Reconnect required".
 export const sentence = (value: string) => { const text = value.replaceAll("_", " "); return text.charAt(0).toUpperCase() + text.slice(1); };
+
+// Opens a <dialog> modally on mount. A dialog removed by React (rather than
+// closed) does not return focus, so hand it back to whatever opened it unless
+// something else, such as a navigation, has taken focus since.
+export function useModalDialog(dialog: RefObject<HTMLDialogElement | null>) {
+  // Captured on first render, before showModal moves focus into the dialog.
+  const opener = useRef(globalThis.document?.activeElement);
+  useEffect(() => {
+    if (!dialog.current?.open) dialog.current?.showModal();
+    return () => {
+      const lost = !document.activeElement || document.activeElement === document.body;
+      const target = opener.current;
+      if (lost && target instanceof HTMLElement && target.isConnected) target.focus();
+    };
+  }, [dialog]);
+}
 
 export function StatTile({ label, value, meta, tone, href }: { label: string; value: ReactNode; meta?: ReactNode; tone?: "attention" | "danger" | "ok"; href?: string }) {
   const body = <><span className="stat-label">{label}</span><strong className="stat-value">{value}</strong>{meta ? <span className="stat-meta">{meta}</span> : null}</>;
