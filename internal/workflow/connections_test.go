@@ -49,7 +49,7 @@ func TestConnectionScopeRules(t *testing.T) {
 		project string
 		want    bool
 	}{{"owner", owner, theirs, true}, {"creator", member, mine, true}, {"other member", member, theirs, false}, {"viewer", viewer, mine, false}} {
-		if got, err := store.CanAdministerProject(t.Context(), c.caller, c.project); err != nil || got != c.want {
+		if got, err := store.CanAdministerProject(tenant.System(t.Context()), c.caller, c.project); err != nil || got != c.want {
 			t.Fatalf("%s CanAdministerProject = %v, %v; want %v", c.name, got, err, c.want)
 		}
 	}

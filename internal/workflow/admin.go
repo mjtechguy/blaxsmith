@@ -272,6 +272,7 @@ func (s *Store) ListAuditEvents(ctx context.Context, caller identity.Caller, f A
 // The recursive query walks identity_audit_by_action one action at a time,
 // so it stays cheap however many events share an action.
 func (s *Store) ListAuditActions(ctx context.Context, caller identity.Caller) ([]string, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := requireAdmin(caller); err != nil {
 		return nil, err
 	}

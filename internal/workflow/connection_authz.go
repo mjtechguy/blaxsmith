@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // ConnectionAuthorizer is the single seam for connection use and project
@@ -51,6 +52,7 @@ func (grantAuthorizer) CanAdministerProject(ctx context.Context, tx pgx.Tx, prin
 // rule requireProjectAdmin enforces on project connection changes. It only
 // informs the UI; every mutation rechecks inside its own transaction.
 func (s *Store) CanAdministerProject(ctx context.Context, caller identity.Caller, projectID string) (bool, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, projectID) {
 		return false, nil
 	}
