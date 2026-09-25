@@ -173,9 +173,9 @@ func TestMeteringRollupsAndPricesPostgres(t *testing.T) {
 		}
 	}
 	u := Usage{Input: 1_000_000, Output: 100_000, CacheRead: 1_000_000, ServedModel: "claude-opus-5-5", Reported: true}
-	record(u, "ok", 200, now)                           // $4 + $2 + $0.20 = $6.20
-	record(Usage{}, "error", 429, now.Add(time.Second)) // rate limited, no tokens
-	record(u, "ok", 200, now.Add(-24*time.Hour))        // yesterday
+	record(u, "ok", 200, now)                                // $4 + $2 + $0.20 = $6.20
+	record(Usage{}, "error", 429, now.Add(time.Second))      // rate limited, no tokens
+	record(u, "ok", 200, now.Add(-24*time.Hour-time.Minute)) // yesterday, clear of the 24h retention edge
 	if _, err := pool.Exec(ctx, `INSERT INTO gateway_price_overrides
 		(organization_id,provider,model,input_micros_per_mtok,output_micros_per_mtok,cache_read_micros_per_mtok,
 		 cache_write_micros_per_mtok,effective_from,created_by)

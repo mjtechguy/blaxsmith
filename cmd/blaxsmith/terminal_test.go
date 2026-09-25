@@ -288,15 +288,19 @@ func TestTerminalTakeoverPostgres(t *testing.T) {
 	if state := frame(aliceSocket); state["control"] != "human" {
 		t.Fatalf("demoted socket state: %v", state)
 	}
-	got := scripts(5)
-	writable := 0
+	// Bystanders (Bob, and Alice's demoted tab) are hidden while a human holds
+	// control: the native TUI is unredacted, so only the controller attaches.
+	got := scripts(4)
+	time.Sleep(50 * time.Millisecond)
+	got = fake.Commands("script")
+	live := 0
 	for _, p := range got {
-		if !readOnly(p) && !p.Killed {
-			writable++
+		if !p.Killed {
+			live++
 		}
 	}
-	if writable != 1 {
-		t.Fatalf("live writable attaches: %d (%+v)", writable, got)
+	if len(got) != 4 || live != 1 || readOnly(got[3]) {
+		t.Fatalf("attaches during takeover: live %d (%+v)", live, got)
 	}
 	for _, p := range fake.Snapshot() {
 		if strings.Contains(string(p.Stdin), "bob") {

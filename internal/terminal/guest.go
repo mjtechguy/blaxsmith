@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	pathpkg "path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -230,8 +231,20 @@ func (g *Guest) ReadFile(ctx context.Context, path string, max int) ([]byte, err
 	return out.Bytes(), nil
 }
 
+// guestPath rejects relative or unclean paths; callers pass constants or
+// regex-checked guest paths, this is the backstop.
+func guestPath(p string) error {
+	if !pathpkg.IsAbs(p) || pathpkg.Clean(p) != p {
+		return fmt.Errorf("%w: invalid path", ErrGuest)
+	}
+	return nil
+}
+
 // WriteFile replaces a small guest file (the lease-expires renewal notice).
 func (g *Guest) WriteFile(ctx context.Context, path string, data []byte, mode uint32) error {
+	if err := guestPath(path); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(g.ctx(ctx), execTimeout)
 	defer cancel()
 	stream, err := g.router.files.WriteFile(ctx)
@@ -254,6 +267,9 @@ func (g *Guest) ReadFileTo(ctx context.Context, path string, w io.Writer, max in
 }
 
 func (g *Guest) readFile(ctx context.Context, path string, w io.Writer, max int64, timeout time.Duration) error {
+	if err := guestPath(path); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(g.ctx(ctx), timeout)
 	defer cancel()
 	stream, err := g.router.files.ReadFile(ctx, &ateenv.ReadFileRequest{Path: path})

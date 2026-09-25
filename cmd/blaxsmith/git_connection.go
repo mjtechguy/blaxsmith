@@ -21,6 +21,11 @@ func (s *workflowService) ListGitConnections(ctx context.Context, req *connect.R
 	if err != nil {
 		return nil, err
 	}
+	// Only owners/admins attach organization Git connections to sources, so
+	// only they need to enumerate them (host and account are not public).
+	if caller.Role != "owner" && caller.Role != "admin" {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("git connections are admin-only"))
+	}
 	connections, err := s.store.ListGitConnections(ctx, caller.OrganizationID)
 	if err != nil {
 		return nil, workflowError(err)

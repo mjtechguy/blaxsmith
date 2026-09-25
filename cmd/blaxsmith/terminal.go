@@ -127,7 +127,9 @@ func terminalAccess(t workflow.AttemptTerminal, caller identity.Caller, member c
 	}
 	control := t.Human() && canControlRun(caller.Role) && t.HolderPrincipalID == caller.PrincipalID &&
 		member.Controls(t.HolderSessionID)
-	return terminal.Access{Control: control, State: state}
+	// During a human takeover only the controlling socket sees the terminal:
+	// the native TUI is unredacted and holds the leased credential.
+	return terminal.Access{Control: control, Hidden: t.Human() && !control, State: state}
 }
 
 func canControlRun(role string) bool { return role == "owner" || role == "admin" || role == "member" }
@@ -215,6 +217,8 @@ func (s *workflowService) HandBackAttempt(ctx context.Context, req *connect.Requ
 	}
 	opCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), guestOpTimeout)
 	defer cancel()
+	// Guest first, DB second: bystanders stay hidden until the release commits,
+	// so they never see the unredacted human TUI if the guest step fails.
 	if t.State == "running" {
 		guest, err := s.guests.Guest(t.Atespace, t.Actor)
 		if err == nil {

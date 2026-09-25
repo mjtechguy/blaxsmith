@@ -96,7 +96,12 @@ type State struct {
 // Access is one authorization decision for a socket.
 type Access struct {
 	Control bool // this socket may type and resize
-	State   State
+	// Hidden withholds terminal bytes: while a human controls the session the
+	// native TUI runs unredacted with the leased credential in its environment,
+	// so only the controlling socket may see it. Viewers get state frames only
+	// until control returns to the agent (whose rendered output is redacted).
+	Hidden bool
+	State  State
 }
 
 // Session serves one browser socket. Check must revalidate the session
@@ -208,6 +213,12 @@ func (s *Session) Serve(ctx context.Context, c *websocket.Conn) {
 	ticker := time.NewTicker(recheck)
 	defer ticker.Stop()
 	for {
+		if access.Hidden {
+			if !s.waitVisible(ctx, c, &access, ticker.C) {
+				return
+			}
+			continue
+		}
 		att, err := s.Guest.Attach(ctx, access.Control)
 		if err != nil {
 			s.fail(ctx, c, "terminal unavailable")
@@ -299,10 +310,8 @@ func (s *Session) pump(ctx context.Context, c *websocket.Conn, att *Attachment, 
 			s.fail(ctx, c, "terminal access revoked")
 			return false, nil
 		}
-		changed := next.State.Control != access.State.Control || next.State.AttemptStatus != access.State.AttemptStatus ||
-			(next.State.Holder == nil) != (access.State.Holder == nil) ||
-			(next.State.Holder != nil && access.State.Holder != nil && *next.State.Holder != *access.State.Holder)
-		mode := next.Control != access.Control
+		changed := stateChanged(access.State, next.State)
+		mode := next.Control != access.Control || next.Hidden != access.Hidden
 		*access = next
 		if changed || mode {
 			if !s.text(ctx, c, next.State) {
@@ -313,6 +322,38 @@ func (s *Session) pump(ctx context.Context, c *websocket.Conn, att *Attachment, 
 			return true, nil
 		}
 	}
+}
+
+func stateChanged(a, b State) bool {
+	return a.Control != b.Control || a.AttemptStatus != b.AttemptStatus || a.Stage != b.Stage ||
+		(a.Holder == nil) != (b.Holder == nil) || (a.Holder != nil && b.Holder != nil && *a.Holder != *b.Holder)
+}
+
+// waitVisible holds a hidden viewer without any attachment, relaying state
+// changes, until the session is visible again. It reports false when the
+// socket should close (context done, access revoked, or a write failed).
+// ponytail: other replicas notice a takeover only on their recheck tick; with
+// several app replicas, lower Recheck or fan Wake out across replicas.
+func (s *Session) waitVisible(ctx context.Context, c *websocket.Conn, access *Access, tick <-chan time.Time) bool {
+	for access.Hidden {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-s.Wake:
+		case <-tick:
+		}
+		next, err := s.Check(ctx)
+		if err != nil {
+			s.fail(ctx, c, "terminal access revoked")
+			return false
+		}
+		changed := stateChanged(access.State, next.State)
+		*access = next
+		if changed && !s.text(ctx, c, next.State) {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Session) text(ctx context.Context, c *websocket.Conn, v any) bool {

@@ -133,6 +133,9 @@ func (s *Store) LoadInputCommit(ctx context.Context, a Attempt) (string, error) 
 
 // RecordBranchTip records the run-branch tip right after a successful push,
 // independent of attempt fencing, so the next push's lease expects it.
+// An unconditional overwrite is safe: the push itself was force-with-lease
+// against the previous tip, so only the winner of that race reaches here, and
+// the remote now holds exactly this tip.
 func (s *Store) RecordBranchTip(ctx context.Context, orgID, runID, tip string) error {
 	if !ids(orgID, runID) || !commitPattern.MatchString(tip) {
 		return ErrInvalid

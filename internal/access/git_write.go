@@ -24,11 +24,11 @@ func AuthorizeGitWrite(ctx context.Context, tx pgx.Tx, organizationID, projectID
 		JOIN access_connections c ON c.organization_id=g.organization_id AND c.id=g.connection_id
 		JOIN access_provider_registrations p ON p.organization_id=c.organization_id AND p.id=c.provider_registration_id
 		WHERE g.organization_id=$1 AND g.project_id=$2 AND g.capability='git.write' AND g.resource=$3
-		AND g.grantee_kind='workload' AND g.grantee_id='`+DispatcherGrantee+`'
+		AND g.grantee_kind='workload' AND g.grantee_id=$5
 		AND g.revoked_at IS NULL AND (g.expires_at IS NULL OR g.expires_at>clock_timestamp())
 		AND c.state='active' AND p.state='active' AND p.provider_kind='git' AND p.origin=$4
 		ORDER BY g.created_at DESC,g.id LIMIT 1 FOR SHARE OF g,c,p`,
-		organizationID, projectID, repoURL, "https://"+strings.ToLower(u.Host)).
+		organizationID, projectID, repoURL, "https://"+strings.ToLower(u.Host), DispatcherGrantee).
 		Scan(&d.ConnectionID, &d.ProviderID, &d.ExternalAccountID, &d.GrantID, &d.DeliveryMode)
 	if err != nil {
 		return Decision{}, deniedOrError("git write grant", err)

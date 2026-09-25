@@ -41,6 +41,13 @@ func eventually(t *testing.T, what string, ok func() bool) {
 // serveSession runs Session behind a real WebSocket and returns a client.
 func serveSession(t *testing.T, guest *Guest, control *atomic.Bool, wake chan struct{}) *websocket.Conn {
 	t.Helper()
+	return serveAs(t, guest, control, wake, true)
+}
+
+// serveAs serves one socket; holder=false makes it a bystander that is hidden
+// while control is human.
+func serveAs(t *testing.T, guest *Guest, control *atomic.Bool, wake chan struct{}, holder bool) *websocket.Conn {
+	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, nil)
 		if err != nil {
@@ -52,7 +59,8 @@ func serveSession(t *testing.T, guest *Guest, control *atomic.Bool, wake chan st
 				holder := "principal"
 				state.Control, state.Holder = "human", &holder
 			}
-			return Access{Control: control.Load(), State: state}, nil
+			human := control.Load()
+			return Access{Control: human && holder, Hidden: human && !holder, State: state}, nil
 		}}
 		s.Serve(r.Context(), c)
 	}))
@@ -155,6 +163,36 @@ func TestControllerInputResizeAndHandoverReattach(t *testing.T) {
 	eventually(t, "view reattach", func() bool { return len(fake.Commands("script")) == 3 })
 	if argv := fake.Commands("script")[2].Argv; !strings.HasSuffix(argv[2], " -r") {
 		t.Fatalf("demoted attach is writable: %q", argv)
+	}
+}
+
+func TestBystanderHiddenDuringTakeover(t *testing.T) {
+	fake, guest := newFakeGuest(t)
+	var control atomic.Bool
+	wake := make(chan struct{}, 1)
+	c := serveAs(t, guest, &control, wake, false)
+	readText(t, c)
+	eventually(t, "view attach", func() bool { return len(fake.Commands("script")) == 1 })
+
+	control.Store(true) // someone else took over: the unredacted TUI must not reach this socket
+	wake <- struct{}{}
+	if state := readText(t, c); state["control"] != "human" {
+		t.Fatalf("takeover state: %v", state)
+	}
+	eventually(t, "view detach", func() bool { return fake.Snapshot()[0].Killed })
+	time.Sleep(50 * time.Millisecond)
+	if n := len(fake.Commands("script")); n != 1 {
+		t.Fatalf("hidden socket attached: %d attaches", n)
+	}
+
+	control.Store(false)
+	wake <- struct{}{}
+	if state := readText(t, c); state["control"] != "agent" {
+		t.Fatalf("handback state: %v", state)
+	}
+	eventually(t, "view reattach", func() bool { return len(fake.Commands("script")) == 2 })
+	if argv := fake.Commands("script")[1].Argv; !strings.HasSuffix(argv[2], " -r") {
+		t.Fatalf("reattach is writable: %q", argv)
 	}
 }
 
