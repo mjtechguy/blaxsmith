@@ -9,6 +9,7 @@ import { CreateFlow, SummaryList } from "../layouts";
 import { useScope } from "../workspace-ui";
 import { createProject } from "../workflow";
 import { projectFlowSteps } from "../project-settings";
+import { StatePanel } from "../ui";
 
 export const Route = createFileRoute("/projects/new")({ component: NewProject });
 const slugPattern = /^[a-z][a-z0-9-]{2,63}$/;
@@ -17,7 +18,7 @@ const slugFrom = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-"
 function NewProject() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { org } = useScope();
+  const { org, isMember } = useScope();
   const [error, setError] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
   const form = useForm({
@@ -50,7 +51,8 @@ function NewProject() {
       ]} />
       <p className="form-hint">Runs use files already committed to Git. A project does not create a persistent pod or terminal.</p>
     </>}</form.Subscribe>}>
-    <section className="editor-card" aria-labelledby="project-details-heading">
+    {!isMember ? <StatePanel kind="note" title="Project creation is restricted">Organization owners, admins, and members can create projects. <Link className="text-action" to="/projects">Back to projects</Link></StatePanel> : null}
+    {isMember ? <section className="editor-card" aria-labelledby="project-details-heading">
       <div className="editor-card-heading"><span className="project-symbol"><FolderPlus size={18} aria-hidden="true" /></span><div><h2 id="project-details-heading">Details</h2><p>How this project appears to your organization.</p></div></div>
       <form className="editor-form" onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
         <form.Field name="name" validators={{ onBlur: ({ value }) => value.trim().length >= 1 && value.trim().length <= 160 ? undefined : "Use 1–160 characters." }}>
@@ -66,6 +68,6 @@ function NewProject() {
           {([canSubmit, submitting]) => <button className="primary-button" type="submit" disabled={!canSubmit || submitting}>{submitting ? <RefreshCw size={15} className="spin" aria-hidden="true" /> : <FolderPlus size={15} aria-hidden="true" />}{submitting ? "Creating…" : "Create and continue"}</button>}
         </form.Subscribe></div>
       </form>
-    </section>
+    </section> : null}
   </CreateFlow>;
 }
