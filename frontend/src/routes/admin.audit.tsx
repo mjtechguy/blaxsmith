@@ -69,7 +69,9 @@ function AuditLog() {
       <CollectionTable id="admin-audit" label="Audit events" noun="events" columns={columns} data={rows} getRowId={(e) => e.id.toString()} view={view} onView={setView} paged={false} sortable={false}
         loading={events.isPending} refreshing={events.isFetching && !events.isPending}
         error={events.isError ? denied ? "Your session is not an organization owner or admin." : <>Audit events could not be loaded. <button type="button" className="text-action" onClick={() => void events.refetch()}>Try again</button></> : undefined}
-        empty={<EmptyState title={action || actor || projectId ? "No events match these filters" : "No events recorded"}>{action || actor || projectId ? "Clear a filter to see more." : null}</EmptyState>} />
+        empty={action || actor || projectId
+          ? <EmptyState title="No events match these filters" action={<button type="button" className="secondary-button" onClick={() => { setActorInput(""); void navigate({ to: "/admin/audit", search: {}, replace: true }); }}>Clear filters</button>}>Clear a filter to see more.</EmptyState>
+          : <EmptyState title="No events recorded">Sign-ins, grants, and administrative changes appear here as they happen.</EmptyState>} />
       <div className="table-footer"><span>{rows.length} loaded, newest first</span>{events.hasNextPage ? <button type="button" className="secondary-button" disabled={events.isFetchingNextPage} onClick={() => void events.fetchNextPage()}>{events.isFetchingNextPage ? "Loading…" : "Load more"}</button> : null}</div>
     </section>
   </PageShell>;

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Cable, KeyRound, UserRound } from "lucide-react";
+import { Cable, Plus } from "lucide-react";
 import { ConnectionCollection } from "../connection-pages";
 import { LoadError, Loading, useConnections } from "../connection-ui";
 import { PageHeader, PageShell } from "../page";
@@ -10,8 +10,8 @@ export const Route = createFileRoute("/me/connections/")({ component: MyConnecti
 function MyConnections() {
   const connections = useConnections("personal");
   const actions = <>
-    <Link className="primary-button" to="/me/connections/new/subscription"><UserRound size={15} aria-hidden="true" /> Add subscription</Link>
-    <Link className="secondary-button" to="/me/connections/new/api-key"><KeyRound size={15} aria-hidden="true" /> Add API key</Link>
+    <Link className="primary-button" to="/me/connections/new/subscription"><Plus size={15} aria-hidden="true" /> Add subscription</Link>
+    <Link className="secondary-button" to="/me/connections/new/api-key"><Plus size={15} aria-hidden="true" /> Add API key</Link>
   </>;
   return <PageShell>
     <PageHeader title="My connections" description="Your own subscriptions and API keys. They serve only runs you launch; nobody else can use them." actions={actions} />
