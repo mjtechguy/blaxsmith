@@ -69,7 +69,7 @@ export function navigation({ role, projectId, projectName, gatewayEnabled }: Nav
     { id: "admin-users", label: "Users", href: "/admin/users", icon: Users },
     { id: "admin-connections", label: "Connections", href: "/admin/connections", icon: KeyRound },
     { id: "admin-extensions", label: "Extensions", href: "/admin/extensions", icon: Package },
-    ...(gatewayEnabled ? [{ id: "admin-usage", label: "Usage & Gateway", href: "/admin/usage", icon: Gauge }] : []),
+    ...(gatewayEnabled ? [{ id: "admin-usage", label: "Usage & gateway", href: "/admin/usage", icon: Gauge }] : []),
     { id: "admin-audit", label: "Audit", href: "/admin/audit", icon: ScrollText },
     { id: "admin-settings", label: "Settings", href: "/admin/settings", icon: Settings, children: [
       { id: "admin-github-app", label: "GitHub app", href: "/admin/settings/github-app", icon: GitPullRequest },

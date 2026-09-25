@@ -7,6 +7,9 @@ import { Check, ChevronRight, Copy, RefreshCw } from "lucide-react";
 import { ago } from "./admin";
 import { usePrefs } from "./preferences";
 
+// Status and badge text is sentence case: "reconnect_required" -> "Reconnect required".
+export const sentence = (value: string) => { const text = value.replaceAll("_", " "); return text.charAt(0).toUpperCase() + text.slice(1); };
+
 export function StatTile({ label, value, meta, tone, href }: { label: string; value: ReactNode; meta?: ReactNode; tone?: "attention" | "danger" | "ok"; href?: string }) {
   const body = <><span className="stat-label">{label}</span><strong className="stat-value">{value}</strong>{meta ? <span className="stat-meta">{meta}</span> : null}</>;
   const className = `stat-tile${tone ? ` stat-${tone}` : ""}`;

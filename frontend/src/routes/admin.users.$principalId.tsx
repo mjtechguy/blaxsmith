@@ -7,7 +7,7 @@ import { auditKey, listAuditEvents } from "../admin";
 import { CollectionTable, useLocalView, type GridColumn } from "../data-table";
 import type { AdminAuditEvent } from "../gen/blaxsmith/api/v1/admin_pb";
 import { DetailLayout, SummaryList } from "../layouts";
-import { Card, CopyValue, EmptyState, StatePanel, tabFrom, Timestamp, type TabSpec } from "../ui";
+import { Card, CopyValue, EmptyState, sentence, StatePanel, tabFrom, Timestamp, type TabSpec } from "../ui";
 import { assignableRoles, canManage, listMembers, membersKey } from "../users";
 import { MemberActionDialog, memberStatusBadge, roleLabel, type MemberAction } from "../users-ui";
 import { useScope } from "../workspace-ui";
@@ -33,7 +33,7 @@ function UserDetail() {
   const ask = (kind: MemberAction["kind"]) => setAction({ kind, member });
 
   return <DetailLayout back={{ href: "/admin/users", label: "Users" }} title={personLabel(member)}
-    status={<><span className="state-badge">{roleLabel[member.role] ?? member.role}</span> <span className={`state-badge ${memberStatusBadge[member.status] ?? ""}`}>{member.status}</span></>}
+    status={<><span className="state-badge">{roleLabel[member.role] ?? member.role}</span> <span className={`state-badge ${memberStatusBadge[member.status] ?? ""}`}>{sentence(member.status)}</span></>}
     facts={[
       { label: "Email", value: member.email || <span className="muted">Not set</span> },
       { label: "Last login", value: member.lastLoginAt ? <Timestamp value={member.lastLoginAt} /> : "Never" },

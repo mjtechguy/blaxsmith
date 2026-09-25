@@ -7,7 +7,7 @@ import { auditActions, auditKey, listAuditEvents } from "../admin";
 import { CollectionTable, useLocalView, type GridColumn } from "../data-table";
 import type { AdminAuditEvent } from "../gen/blaxsmith/api/v1/admin_pb";
 import { PageHeader, PageShell } from "../page";
-import { CopyValue, EmptyState, Timestamp } from "../ui";
+import { CopyValue, EmptyState, sentence, Timestamp } from "../ui";
 import { useScope } from "../workspace-ui";
 import { listProjects } from "../workflow";
 
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/admin/audit")({
 const columns: GridColumn<AdminAuditEvent>[] = [
   { id: "when", accessorKey: "occurredAt", header: "When", enableHiding: false, cell: ({ row }) => <Timestamp value={row.original.occurredAt} /> },
   { id: "action", accessorKey: "action", header: "Event", cell: ({ row }) => <span className="mono">{row.original.action}</span> },
-  { id: "actor", accessorKey: "actorUsername", header: "Actor", cell: ({ row }) => row.original.actorUsername || <span className="state-badge">{row.original.actorKind}</span> },
+  { id: "actor", accessorKey: "actorUsername", header: "Actor", cell: ({ row }) => row.original.actorUsername || <span className="state-badge">{sentence(row.original.actorKind)}</span> },
   { id: "project", accessorKey: "projectName", header: "Project", cell: ({ row }) => row.original.projectName || "—" },
   { id: "subject", accessorKey: "subjectId", header: "Subject", cell: ({ row }) => <CopyValue value={row.original.subjectId} label="Subject ID" /> },
 ];

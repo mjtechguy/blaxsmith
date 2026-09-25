@@ -16,7 +16,7 @@ import type { LibraryRecipe, RecipeModelConnection, RecipeValidationError, Recip
 import { PageHeader, PageShell } from "./page";
 import { CollectionTable, inSet, useUrlView, type GridColumn } from "./data-table";
 import { DetailLayout, SummaryList } from "./layouts";
-import { Card, CopyValue, Disclosure, EmptyState, StatePanel, tabFrom, Timestamp, type TabSpec } from "./ui";
+import { Card, CopyValue, Disclosure, EmptyState, StatePanel, sentence, tabFrom, Timestamp, type TabSpec } from "./ui";
 import {
   cloneRecipe, createRecipe, createRecipeVersion, emptyRecipe, formatRecipe, getRecipe, getRecipeEditorOptions, grantRecipe, revokeRecipeGrant,
   getRecipeVersion, listProjectRecipeFiles, listRecipes, mayEditRecipes, parseRecipe, recipeFilesKey, recipeKey, recipeOptionsKey,
@@ -123,7 +123,7 @@ export function RecipeDetailPage({ projectId, recipeId }: { projectId?: string; 
       v{row.original.version}{row.original.id === current?.currentVersionId ? " · current" : ""}</button> },
     { id: "sha", header: "SHA-256", cell: ({ row }) => <CopyValue value={row.original.sha256} label="Version SHA-256" chars={12} /> },
     { id: "path", header: "Frozen as", cell: ({ row }) => <span className="mono">{row.original.frozenPath}</span> },
-    { id: "author", header: "Author", cell: ({ row }) => row.original.authorUsername || <span className="state-badge">seed</span> },
+    { id: "author", header: "Author", cell: ({ row }) => row.original.authorUsername || <span className="state-badge">Seed</span> },
     { id: "created", header: "Created", cell: ({ row }) => <Timestamp value={row.original.createdAt} /> },
     { id: "actions", header: "Actions", cell: ({ row }) => <span className="recipe-actions">
       {editable && row.original.id !== current?.currentVersionId ? <button type="button" className="text-action" disabled={Boolean(busy)} onClick={() => void markCurrent(row.original.id)}><Check size={14} aria-hidden="true" /> Mark current</button> : null}
@@ -196,8 +196,8 @@ const dagFeatures = tableFeatures({});
 const dagColumns: ColumnDef<typeof dagFeatures, StageRow>[] = [
   { id: "id", header: "Stage", cell: ({ row }) => <span><strong className="mono">{row.original.id}</strong>{row.original.template
     ? <><br /><span className="state-badge extension-badge" title={`Extension stage template ${row.original.template}`}><Package size={11} aria-hidden="true" /> {row.original.template}</span></> : null}</span> },
-  { id: "kind", header: "Kind", cell: ({ row }) => <span className="state-badge">{row.original.kind.replaceAll("_", " ")}</span> },
-  { id: "profile", header: "Profile", cell: ({ row }) => row.original.profile ? <span>{row.original.profile}<br /><small className="mono">{row.original.harness} · {row.original.model} · {row.original.effort}</small></span> : <span className="state-badge">human</span> },
+  { id: "kind", header: "Kind", cell: ({ row }) => <span className="state-badge">{sentence(row.original.kind)}</span> },
+  { id: "profile", header: "Profile", cell: ({ row }) => row.original.profile ? <span>{row.original.profile}<br /><small className="mono">{row.original.harness} · {row.original.model} · {row.original.effort}</small></span> : <span className="state-badge">Human</span> },
   { id: "deps", header: "Depends on", cell: ({ row }) => row.original.dependsOn.length ? <span className="mono">{row.original.dependsOn.join(", ")}</span> : "—" },
   { id: "loop", header: "Loop", cell: ({ row }) => row.original.loop || "—" },
 ];

@@ -17,7 +17,7 @@ import { TextField } from "./form-field";
 import type { Extension, ExtensionPermission, ExtensionTemplate, ExtensionVersion, PreviewExtensionInstallResponse } from "./gen/blaxsmith/api/v1/extensions_pb";
 import { CreateFlow, DetailLayout, SummaryList, type FlowStep } from "./layouts";
 import { PageHeader, PageShell } from "./page";
-import { Card, CopyValue, Disclosure, EmptyState, StatePanel, tabFrom, Timestamp, type TabSpec } from "./ui";
+import { Card, CopyValue, Disclosure, EmptyState, StatePanel, sentence, tabFrom, Timestamp, type TabSpec } from "./ui";
 import {
   approvedPermissions, checkExtensionUpdate, extensionKey, extensionsKey, getExtension, grantExtension, installExtension, listExtensions,
   permissionKinds, previewExtensionInstall, revokeExtensionGrant, type ExtensionSourceInput,
@@ -118,7 +118,7 @@ const templateFeatures = tableFeatures({});
 
 const templateColumns: ColumnDef<typeof templateFeatures, ExtensionTemplate>[] = [
   { id: "id", header: "Template", cell: ({ row }) => <span><strong>{row.original.title || row.original.id}</strong><br /><code>{row.original.reference}</code></span> },
-  { id: "mode", header: "Mode", cell: ({ row }) => <span className="state-badge">{row.original.mode}</span> },
+  { id: "mode", header: "Mode", cell: ({ row }) => <span className="state-badge">{sentence(row.original.mode)}</span> },
   { id: "harness", header: "Harness", cell: ({ row }) => <span className="mono">{row.original.harness}</span> },
   { id: "kinds", header: "Fills stages", cell: ({ row }) => <span className="mono">{row.original.kinds.join(", ")}</span> },
 ];

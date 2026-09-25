@@ -20,7 +20,7 @@ import { CreateFlow, type FlowStep } from "./layouts";
 import { ModelSelect } from "./model-select";
 import { isBusy, type SignInState } from "./sign-in";
 import { SignInStatus, useSignIn } from "./sign-in-flow";
-import { Disclosure } from "./ui";
+import { Disclosure, sentence } from "./ui";
 import { listProjects } from "./workflow";
 
 export function useOrg() {
@@ -38,7 +38,7 @@ export function failure(cause: unknown, fallback: string): string {
 
 export function StateBadge({ state }: { state: string }) {
   const tone = state === "active" ? "state-succeeded" : state === "reconnect_required" ? "state-waiting" : "state-failed";
-  return <span className={`state-badge ${tone}`}>{state.replaceAll("_", " ")}</span>;
+  return <span className={`state-badge ${tone}`}>{sentence(state)}</span>;
 }
 
 // A non-secret identity (account id, username, key label) stays blurred
@@ -59,7 +59,7 @@ export function HealthLine({ connection, compact = false }: { connection: Connec
   if (!h) return <StateBadge state={connection.state} />;
   const fix = healthFix(connection);
   return <span className={compact ? "health-line health-compact" : "health-line"}>
-    <span className={`state-badge ${healthTone[h.state] ?? ""}`}>{h.state}</span>
+    <span className={`state-badge ${healthTone[h.state] ?? ""}`}>{sentence(h.state)}</span>
     {!compact ? <span>{authLabel(h.auth)}{h.identity ? <> · <RedactedText text={h.identity} label="identity" /></> : null}</span> : null}
     {!compact ? <span>{h.checkedAt ? <>Checked <time dateTime={h.checkedAt}>{ago(h.checkedAt)}</time></> : "Never checked"}</span> : null}
     {h.message ? <span className={h.state === "error" ? "form-field-error" : undefined}>{h.message}</span> : null}

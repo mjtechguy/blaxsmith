@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Activity, Bot, Check, ChevronRight, Circle, CircleDashed, FilePen, ListChecks, Repeat, SquareTerminal, Wrench, X } from "lucide-react";
+import { sentence } from "./ui";
 import {
   attentionTitle, formatDuration, groupSummary, planProgress, statusLabels, workLog,
   type AgentStatus, type PlanItem, type Progress, type ToolRow, type WorkEntry,
@@ -79,7 +80,7 @@ function Entry({ entry }: { entry: WorkEntry }) {
       </li>;
     case "note": {
       const p = entry.event.p;
-      const title = entry.event.type === "cycle" ? `Cycle ${String(p.cycle ?? "")} · ${String(p.status ?? "")}` : entry.event.type;
+      const title = entry.event.type === "cycle" ? `Cycle ${String(p.cycle ?? "")} · ${String(p.status ?? "")}` : sentence(entry.event.type);
       return <li className="work-row">
         <span className="work-mark">{entry.event.type === "cycle" ? <Repeat size={13} aria-hidden="true" /> : <Activity size={13} aria-hidden="true" />}</span>
         <span className="work-main"><strong className="work-note">{title}</strong><small>{String(p.text ?? p.message ?? p.name ?? "")}</small></span>
