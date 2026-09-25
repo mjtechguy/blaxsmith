@@ -51,43 +51,38 @@ type Headroom struct {
 func HeadroomFor(ctx context.Context, db *pgxpool.Pool, orgID, poolID string, estimate int64) (Headroom, error) {
 	ctx = tenant.Org(ctx, orgID)
 	var name string
-	var poolCap int
-	if err := db.QueryRow(ctx, `SELECT name,concurrency_cap FROM gateway_pools WHERE organization_id=$1 AND id=$2`,
-		orgID, poolID).Scan(&name, &poolCap); err != nil {
+	var poolCap, inflight int
+	// Concurrency is every live replica's held slots (gateway_route_inflight).
+	if err := db.QueryRow(ctx, `SELECT p.name,p.concurrency_cap,COALESCE((SELECT sum(i.inflight) FROM gateway_route_inflight i
+			WHERE i.organization_id=p.organization_id AND i.slot='pool:'||p.id::text AND i.heartbeat_at>clock_timestamp()-$3::interval),0)
+		FROM gateway_pools p WHERE p.organization_id=$1 AND p.id=$2`,
+		orgID, poolID, slotHeartbeat).Scan(&name, &poolCap, &inflight); err != nil {
 		return Headroom{}, fmt.Errorf("gateway pool: %w", err)
 	}
-	rows, err := db.Query(ctx, `SELECT r.state,r.concurrency_cap,COALESCE(s.breaker,'closed'),s.cooldown_until,
-		COALESCE(s.inflight,0),COALESCE(s.metrics,'{}'),s.updated_at
+	rows, err := db.Query(ctx, `SELECT r.state,r.concurrency_cap,COALESCE(s.breaker,'closed'),s.opened_at,s.cooldown_until,
+		COALESCE((SELECT sum(i.inflight) FROM gateway_route_inflight i WHERE i.organization_id=r.organization_id
+			AND i.slot=r.id::text AND i.heartbeat_at>clock_timestamp()-$3::interval),0),COALESCE(s.metrics,'{}')
 		FROM gateway_pool_routes pr
 		JOIN gateway_routes r ON r.organization_id=pr.organization_id AND r.id=pr.route_id
 		LEFT JOIN gateway_route_state s ON s.organization_id=r.organization_id AND s.route_id=r.id::text
-		WHERE pr.organization_id=$1 AND pr.pool_id=$2 AND r.state<>'disabled'`, orgID, poolID)
+		WHERE pr.organization_id=$1 AND pr.pool_id=$2 AND r.state<>'disabled'`, orgID, poolID, slotHeartbeat)
 	if err != nil {
 		return Headroom{}, err
 	}
 	defer rows.Close()
 	now := time.Now()
 	var earliest time.Time
-	inflight, routes := 0, 0
+	routes := 0
 	ok := false
 	for rows.Next() {
 		var state, breaker string
 		var routeCap, busy int
-		var cooldown, updated *time.Time
+		var opened, cooldown *time.Time
 		var raw []byte
-		if err := rows.Scan(&state, &routeCap, &breaker, &cooldown, &busy, &raw, &updated); err != nil {
+		if err := rows.Scan(&state, &routeCap, &breaker, &opened, &cooldown, &busy, &raw); err != nil {
 			return Headroom{}, err
 		}
 		routes++
-		// State older than a minute is stale (no traffic, or the gateway is
-		// down): only its future reset and cooldown times still count.
-		if updated != nil && now.Sub(*updated) > time.Minute {
-			busy = 0
-			if breaker == BreakerOpen {
-				breaker = BreakerHalfOpen
-			}
-		}
-		inflight += busy
 		var metrics map[string]Metric
 		_ = json.Unmarshal(raw, &metrics)
 		var at time.Time
@@ -96,12 +91,8 @@ func HeadroomFor(ctx context.Context, db *pgxpool.Pool, orgID, poolID string, es
 				at = t
 			}
 		}
-		if breaker == BreakerOpen {
-			later(now.Add(breakerCooldown))
-		}
-		if cooldown != nil {
-			later(*cooldown)
-		}
+		// The shared view decides, as the gateway's admission does.
+		later((SharedView{Breaker: breaker, OpenedAt: timeOf(opened), CooldownUntil: timeOf(cooldown)}).availableAt(now))
 		for _, m := range metrics {
 			if m.exhausted(estimate, now) {
 				later(m.ResetAt)

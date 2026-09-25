@@ -104,10 +104,10 @@ func serveGateway(args []string) error {
 	// gateway uses it for an owner's own run when the organization serves
 	// personal subscription routes (docs/model-gateway-plan.md §6).
 	authorizer := &gateway.Authorizer{DB: pool, Secrets: secrets, OAuth: &access.OAuthRefresher{DB: pool, Secrets: secrets}}
-	states := gateway.NewStates()
+	states, shared := gateway.NewStates(), gateway.NewShared(pool)
 	proxy := &gateway.Server{DB: pool, Authorize: authorizer.Authorize, Prices: &gateway.PriceBook{DB: pool},
 		Upstream: upstreams, TokenRate: *tokenRate, TokenBurst: int(*tokenRate * 2),
-		OrgRate: *orgRate, OrgBurst: int(*orgRate * 2), States: states, RouteKey: authorizer.RouteKey,
+		OrgRate: *orgRate, OrgBurst: int(*orgRate * 2), States: states, Shared: shared, RouteKey: authorizer.RouteKey,
 		Plan: func(ctx context.Context, g gateway.Grant) (gateway.Plan, error) {
 			return gateway.LoadPlan(ctx, pool, g)
 		}}
@@ -143,6 +143,7 @@ func serveGateway(args []string) error {
 	}
 	go gatewayMaintenance(ctx, pool, *retention)
 	go states.Persist(ctx, pool, 5*time.Second)
+	go shared.KeepAlive(ctx, 5*time.Second)
 	done := make(chan error, 1)
 	go func() {
 		<-ctx.Done()

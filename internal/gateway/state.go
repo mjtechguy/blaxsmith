@@ -61,12 +61,12 @@ type routeState struct {
 	dirty                        bool
 }
 
-// States is the in-memory route state for this gateway replica, persisted to
-// gateway_route_state for the UI, the dispatcher and other replicas.
-//
-// ponytail: per replica, last writer wins in gateway_route_state. With
-// several replicas each sees its own breaker and concurrency; move to a
-// shared store when the gateway scales out.
+// States is this replica's fast in-memory route state: rate-limit metrics,
+// its own breaker window, concurrency and prompt-cache affinity. Metrics and
+// 15-minute counts are persisted to gateway_route_state for the UI and the
+// dispatcher. Admission-critical state (cooldowns, the breaker, concurrency
+// and configured quotas) is also shared across replicas through Shared,
+// whose view Order takes as input.
 type States struct {
 	mu       sync.Mutex
 	routes   map[string]*routeState // org/route
@@ -140,7 +140,7 @@ func (st *routeState) headroom(now time.Time) float64 {
 // maxRouteTries of them, or when the earliest route frees up if none can
 // take it now. Unhealthy, cooling-down, over-cap, exhausted and
 // model- or endpoint-unsupported routes are filtered out (§4).
-func (s *States) Order(org string, plan Plan, model, attempt, path string) ([]Route, time.Time) {
+func (s *States) Order(org string, plan Plan, model, attempt, path string, shared map[string]SharedView) ([]Route, time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
@@ -162,7 +162,13 @@ func (s *States) Order(org string, plan Plan, model, attempt, path string) ([]Ro
 			continue
 		}
 		st := s.get(org, r.ID)
-		if at := st.availableAt(r, 1, now); !at.IsZero() {
+		at := st.availableAt(r, 1, now)
+		if v, ok := shared[r.ID]; ok {
+			if vat := v.availableAt(now); vat.After(at) {
+				at = vat // both this replica's view and the shared one must allow it.
+			}
+		}
+		if !at.IsZero() {
 			if wait.IsZero() || at.Before(wait) {
 				wait = at
 			}
@@ -212,10 +218,16 @@ func (s *States) Order(org string, plan Plan, model, attempt, path string) ([]Ro
 	return out, wait
 }
 
+// Outcome is what one finished request means for the shared state.
+type Outcome struct {
+	CooldownUntil time.Time // a 429's retry-after, or an exhausted metric's reset
+	Opened        bool      // this replica's breaker opened
+}
+
 // Begin counts a request against the route and returns the function that
 // records its outcome: the HTTP status (0 for a transport failure), the
 // response headers, and the tokens it used.
-func (s *States) Begin(org string, r Route, attempt string) func(status int, h http.Header, tokens int64) {
+func (s *States) Begin(org string, r Route, attempt string) func(status int, h http.Header, tokens int64) Outcome {
 	s.mu.Lock()
 	st := s.get(org, r.ID)
 	st.inflight++
@@ -228,12 +240,14 @@ func (s *States) Begin(org string, r Route, attempt string) func(status int, h h
 	st.dirty = true
 	s.mu.Unlock()
 	var once sync.Once
-	return func(status int, h http.Header, tokens int64) {
-		once.Do(func() { s.finish(org, r, attempt, st, status, h, tokens) })
+	var out Outcome
+	return func(status int, h http.Header, tokens int64) Outcome {
+		once.Do(func() { out = s.finish(org, r, attempt, st, status, h, tokens) })
+		return out
 	}
 }
 
-func (s *States) finish(org string, r Route, attempt string, st *routeState, status int, h http.Header, tokens int64) {
+func (s *States) finish(org string, r Route, attempt string, st *routeState, status int, h http.Header, tokens int64) (out Outcome) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
@@ -264,6 +278,14 @@ func (s *States) finish(org string, r Route, attempt string, st *routeState, sta
 			st.cooldownUntil = now.Add(defaultRateCooldown)
 		}
 	}
+	if st.cooldownUntil.After(now) {
+		out.CooldownUntil = st.cooldownUntil
+	}
+	for _, m := range st.metrics {
+		if m.exhausted(1, now) && m.ResetAt.After(out.CooldownUntil) {
+			out.CooldownUntil = m.ResetAt // every replica waits for a known reset.
+		}
+	}
 	// 429 is quota, not ill health: it cools the route but never trips the breaker.
 	failed := status == 0 || status == http.StatusRequestTimeout || status >= 500
 	st.results = append(st.results, result{at: now, failed: failed || status == http.StatusTooManyRequests})
@@ -275,8 +297,9 @@ func (s *States) finish(org string, r Route, attempt string, st *routeState, sta
 		st.consecutive++
 		if st.breaker == BreakerHalfOpen || st.consecutive >= breakerFailures || windowFailing(st.results, now) {
 			st.breaker, st.openedAt = BreakerOpen, now
+			out.Opened = true
 		}
-		return
+		return out
 	}
 	st.consecutive = 0
 	if status < 400 {
@@ -288,6 +311,7 @@ func (s *States) finish(org string, r Route, attempt string, st *routeState, sta
 			s.affinity[attempt] = r.ID
 		}
 	}
+	return out
 }
 
 func windowFailing(results []result, now time.Time) bool {
@@ -388,8 +412,7 @@ func (s *States) Flush(ctx context.Context, db *pgxpool.Pool) error {
 		if _, err := db.Exec(ctx, `INSERT INTO gateway_route_state AS s
 			(organization_id,route_id,breaker,cooldown_until,inflight,metrics,requests_15m,errors_15m,last_status,last_429_at,updated_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,clock_timestamp())
-			ON CONFLICT (organization_id,route_id) DO UPDATE SET breaker=EXCLUDED.breaker,
-			cooldown_until=EXCLUDED.cooldown_until, inflight=EXCLUDED.inflight, metrics=EXCLUDED.metrics,
+			ON CONFLICT (organization_id,route_id) DO UPDATE SET inflight=EXCLUDED.inflight, metrics=EXCLUDED.metrics,
 			requests_15m=EXCLUDED.requests_15m, errors_15m=EXCLUDED.errors_15m, last_status=EXCLUDED.last_status,
 			last_429_at=COALESCE(EXCLUDED.last_429_at,s.last_429_at), updated_at=EXCLUDED.updated_at`,
 			r.org, r.route, r.v.Breaker, nullTime(r.v.CooldownUntil), r.v.Inflight, metrics, r.v.Requests15m,

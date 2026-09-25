@@ -63,6 +63,9 @@ type Server struct {
 	RouteKey func(context.Context, Grant, Route) ([]byte, error)
 	// States holds live route state; nil starts an empty one.
 	States *States
+	// Shared makes cooldowns, breakers, concurrency caps and quotas
+	// consistent across gateway replicas; nil keeps them per process (tests).
+	Shared *Shared
 	// RecordLimits overrides persisting subscription windows (tests).
 	RecordLimits func(context.Context, Grant, []Window) error
 	// VertexTokenURL overrides Google's token endpoint (tests only).

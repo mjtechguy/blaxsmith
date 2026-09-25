@@ -36,7 +36,13 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, family, path stri
 		}
 		plan = p
 	}
-	routes, wait := s.States.Order(grant.OrganizationID, plan, firstNonEmpty(requested, grant.Model), grant.AttemptID, path)
+	ids := make([]string, 0, len(plan.Routes))
+	for _, route := range plan.Routes {
+		ids = append(ids, route.ID)
+	}
+	// Every replica's cooldowns and breakers, read with a short TTL.
+	views := s.Shared.Views(r.Context(), grant.OrganizationID, ids)
+	routes, wait := s.States.Order(grant.OrganizationID, plan, firstNonEmpty(requested, grant.Model), grant.AttemptID, path, views)
 	if len(routes) == 0 && wait.IsZero() {
 		writeError(w, family, http.StatusNotFound, "not_found_error", "No route for this stage serves this model or endpoint.")
 		return
@@ -49,16 +55,28 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, family, path stri
 			"No route has headroom for this request right now; retry after the indicated delay.")
 		return
 	}
+	tries := 0
 	for i, route := range routes {
+		// Across replicas: the breaker's single probe, concurrency slots and
+		// configured per-minute quotas. A route without one is skipped.
+		admitted, err := s.Shared.admit(r.Context(), grant.OrganizationID, plan, route, views[route.ID])
+		if err != nil {
+			continue
+		}
 		event := Event{Grant: grant, PoolID: plan.PoolID, RouteID: route.ID, RouteKind: route.Kind, API: apiFor(path),
-			RequestedModel: requested, StartedAt: time.Now(), Streamed: streamed, RetryCount: i}
-		if i == 0 {
+			RequestedModel: requested, StartedAt: time.Now(), Streamed: streamed, RetryCount: tries}
+		if tries == 0 {
 			event.StartedAt = started
 		}
-		if s.try(w, r, family, path, body, grant, route, &event, i == len(routes)-1) {
+		tries++
+		if s.try(w, r, family, path, body, grant, route, &event, i == len(routes)-1, admitted) {
 			return
 		}
 	}
+	// Every route was busy on other replicas, or failed over without an answer.
+	w.Header().Set("Retry-After", "1")
+	writeError(w, family, http.StatusTooManyRequests, "rate_limit_error",
+		"No route has headroom for this request right now; retry after the indicated delay.")
 }
 
 // retryable statuses fail over to the next route before the first byte (§4).
@@ -71,10 +89,11 @@ func retryable(status int) bool {
 // route; otherwise it has answered the client. Every sent request is
 // metered as its own usage event.
 func (s *Server) try(w http.ResponseWriter, r *http.Request, family, path string, body []byte, grant Grant,
-	route Route, event *Event, last bool) bool {
+	route Route, event *Event, last bool, admitted func()) bool {
 	started := event.StartedAt
 	upstream, eventStream, err := s.upstreamRequest(r, family, path, body, grant, route)
 	if err != nil {
+		admitted()
 		log.Printf("gateway route %s: %v", route.ID, err) // never the credential or body.
 		if last {
 			writeError(w, family, http.StatusBadGateway, "api_error", "The gateway could not build a request for this route.")
@@ -86,7 +105,15 @@ func (s *Server) try(w http.ResponseWriter, r *http.Request, family, path string
 	status := 0
 	defer func() {
 		u := event.Usage
-		release(status, header, u.Input+u.Output+u.CacheRead+u.CacheWrite)
+		tokens := u.Input + u.Output + u.CacheRead + u.CacheWrite
+		outcome := release(status, header, tokens)
+		admitted()
+		if s.Shared != nil {
+			if err := s.Shared.Observe(r.Context(), grant.OrganizationID, route.ID, status, outcome.CooldownUntil, outcome.Opened); err != nil {
+				log.Printf("gateway shared route state: %v", err)
+			}
+			s.Shared.used(r.Context(), grant.OrganizationID, route, tokens)
+		}
 		s.finish(r.Context(), event, started)
 	}()
 	client := s.Client

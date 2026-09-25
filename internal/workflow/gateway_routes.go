@@ -124,7 +124,7 @@ func (s *Store) GatewayRoutesAs(ctx context.Context, caller identity.Caller) (Ga
 	rows, err := tx.Query(ctx, `SELECT r.id::text,r.name,r.kind,r.connection_id,COALESCE(c.label,''),r.region,r.cloud_project,
 		r.model_map,r.weight,r.priority,r.concurrency_cap,r.requests_per_minute,r.tokens_per_minute,r.state,
 		ARRAY(SELECT pr.pool_id::text FROM gateway_pool_routes pr WHERE pr.organization_id=r.organization_id AND pr.route_id=r.id ORDER BY 1),
-		COALESCE(st.breaker,'closed'),st.cooldown_until,COALESCE(st.inflight,0),COALESCE(st.metrics,'{}'),
+		COALESCE(st.breaker,'closed'),st.cooldown_until,COALESCE((SELECT sum(i.inflight) FROM gateway_route_inflight i WHERE i.organization_id=r.organization_id AND i.slot=r.id::text AND i.heartbeat_at>clock_timestamp()-interval '30 seconds'),st.inflight,0),COALESCE(st.metrics,'{}'),
 		COALESCE(st.requests_15m,0),COALESCE(st.errors_15m,0),st.last_429_at,st.updated_at
 		FROM gateway_routes r
 		LEFT JOIN access_connections c ON c.organization_id=r.organization_id::text AND c.id=r.connection_id

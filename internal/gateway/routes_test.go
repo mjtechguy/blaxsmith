@@ -231,19 +231,19 @@ func TestCircuitBreakerOpensAndHalfOpens(t *testing.T) {
 	for range breakerFailures {
 		states.Begin("org", r, "")(http.StatusBadGateway, nil, 0)
 	}
-	if routes, wait := states.Order("org", plan, "m", "a", "/v1/messages"); len(routes) != 0 || !wait.Equal(now.Add(breakerCooldown)) {
+	if routes, wait := states.Order("org", plan, "m", "a", "/v1/messages", nil); len(routes) != 0 || !wait.Equal(now.Add(breakerCooldown)) {
 		t.Fatalf("open breaker still selected: %v %v", routes, wait)
 	}
 	if v := states.View("org", "r1"); v.Breaker != BreakerOpen || v.Errors15m != breakerFailures {
 		t.Fatalf("breaker view: %+v", v)
 	}
 	now = now.Add(breakerCooldown)
-	routes, _ := states.Order("org", plan, "m", "a", "/v1/messages")
+	routes, _ := states.Order("org", plan, "m", "a", "/v1/messages", nil)
 	if len(routes) != 1 {
 		t.Fatal("half-open breaker let no probe through")
 	}
 	done := states.Begin("org", r, "")
-	if routes, _ := states.Order("org", plan, "m", "a", "/v1/messages"); len(routes) != 0 {
+	if routes, _ := states.Order("org", plan, "m", "a", "/v1/messages", nil); len(routes) != 0 {
 		t.Fatal("half-open breaker let a second probe through")
 	}
 	done(http.StatusOK, nil, 10)
@@ -256,19 +256,19 @@ func TestCircuitBreakerOpensAndHalfOpens(t *testing.T) {
 	drain := Route{ID: "drain", Kind: KindAnthropic, State: "draining", Priority: 0}
 	plan = Plan{Strategy: StrategyPriorityHeadroom, Routes: []Route{drain, capped}}
 	release := states.Begin("org", capped, "")
-	if routes, _ := states.Order("org", plan, "m", "a", "/v1/messages"); len(routes) != 1 || routes[0].ID != "drain" {
+	if routes, _ := states.Order("org", plan, "m", "a", "/v1/messages", nil); len(routes) != 1 || routes[0].ID != "drain" {
 		t.Fatalf("capped route selected while full: %v", routes)
 	}
 	release(200, nil, 0)
-	if routes, _ := states.Order("org", plan, "m", "a", "/v1/messages"); len(routes) != 2 || routes[0].ID != "capped" {
+	if routes, _ := states.Order("org", plan, "m", "a", "/v1/messages", nil); len(routes) != 2 || routes[0].ID != "capped" {
 		t.Fatalf("draining route preferred: %v", routes)
 	}
 	// Bedrock needs a model mapping and serves only Messages.
 	bedrock := Route{ID: "br", Kind: KindBedrock, State: "enabled", ModelMap: map[string]string{"claude-opus-5-5": "anthropic.claude-opus-5-5-v1:0"}}
-	if routes, _ := states.Order("org", Plan{Routes: []Route{bedrock}}, "claude-sonnet-5", "a", "/v1/messages"); len(routes) != 0 {
+	if routes, _ := states.Order("org", Plan{Routes: []Route{bedrock}}, "claude-sonnet-5", "a", "/v1/messages", nil); len(routes) != 0 {
 		t.Fatal("unmapped model served on Bedrock")
 	}
-	if routes, _ := states.Order("org", Plan{Routes: []Route{bedrock}}, "claude-opus-5-5", "a", "/v1/messages/count_tokens"); len(routes) != 0 {
+	if routes, _ := states.Order("org", Plan{Routes: []Route{bedrock}}, "claude-opus-5-5", "a", "/v1/messages/count_tokens", nil); len(routes) != 0 {
 		t.Fatal("Bedrock route offered an endpoint it cannot serve")
 	}
 }
