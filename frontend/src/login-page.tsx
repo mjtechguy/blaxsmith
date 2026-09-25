@@ -29,7 +29,7 @@ export function LoginPage() {
     },
   });
 
-  return <AuthFrame>
+  return <AuthFrame title="Sign in">
     <div className="auth-heading"><p className="eyebrow">Welcome back</p><h2>Sign in to your workspace</h2><p>Use the email and password for your account.</p></div>
     <form className="auth-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
       <div className="auth-fields">

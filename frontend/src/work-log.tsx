@@ -12,18 +12,26 @@ export function StatusPill({ status, title }: { status: AgentStatus | null; titl
   return <span className={`status-pill status-${status}`} title={title}>{statusLabels[status]}{title ? <span className="sr-only"> ({title})</span> : null}</span>;
 }
 
-// Prefixes the tab title with the number of things waiting on the viewer and
-// sets the app badge where the browser supports it (installed PWAs).
-// null leaves the title alone (a parent route while a child route owns it).
+// The tab title is "<count> <page> · Blaxsmith". The shell owns the page part
+// (from the breadcrumbs); pages that know what is waiting on the viewer own
+// the count, and also set the app badge where supported (installed PWAs).
+const tabTitle = { page: "", count: 0 };
+const renderTitle = () => { document.title = attentionTitle(tabTitle.count, tabTitle.page ? `${tabTitle.page} · Blaxsmith` : "Blaxsmith"); };
+
+export function usePageTitle(page: string) {
+  useEffect(() => { tabTitle.page = page; renderTitle(); }, [page]);
+}
+
+// null leaves the count alone (a parent route while a child route owns it).
 export function useAttentionTitle(count: number | null) {
   useEffect(() => {
     if (count === null) return;
-    const base = document.title.replace(/^\(\d+\+?\) /, "");
-    document.title = attentionTitle(count, base);
+    tabTitle.count = count;
+    renderTitle();
     const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
     if (count > 0) void nav.setAppBadge?.(count).catch(() => undefined);
     else void nav.clearAppBadge?.().catch(() => undefined);
-    return () => { document.title = base; void nav.clearAppBadge?.().catch(() => undefined); };
+    return () => { tabTitle.count = 0; renderTitle(); void nav.clearAppBadge?.().catch(() => undefined); };
   }, [count]);
 }
 

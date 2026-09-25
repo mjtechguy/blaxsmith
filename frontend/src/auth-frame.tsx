@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { Hammer, RefreshCw } from "lucide-react";
+import { usePageTitle } from "./work-log";
 
-export function AuthFrame({ children }: { children: ReactNode }) {
+export function AuthFrame({ children, title = "" }: { children: ReactNode; title?: string }) {
+  usePageTitle(title);
   return <main className="auth-frame" id="main-content">
     <aside className="auth-story" aria-label="About Blaxsmith">
       <div className="auth-grid" aria-hidden="true" />

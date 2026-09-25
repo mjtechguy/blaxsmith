@@ -46,7 +46,7 @@ function SetEmail() {
     }
   };
 
-  return <AuthFrame>
+  return <AuthFrame title="Set your email">
     <div className="auth-heading"><p className="eyebrow">One more step</p><h2>Set your email</h2>
       <p>Accounts now sign in with an email instead of a username. Your username worked this once; add the email you will use from now on. Other sessions for this account are signed out.</p></div>
     <form className="auth-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>

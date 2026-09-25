@@ -67,7 +67,7 @@ function AccountSetup() {
   }
   const info = link.data;
   const reset = info.purpose === "reset";
-  return <AuthFrame>
+  return <AuthFrame title={reset ? "Reset password" : "Set up your account"}>
     <div className="auth-heading"><p className="eyebrow">{reset ? "Password reset" : "Account setup"}</p>
       <h2>{reset ? "Choose a new password" : `Welcome${info.displayName ? `, ${info.displayName}` : ""}`}</h2>
       <p>{reset ? "Set a new password for your account" : "Choose a password for your account"} in <strong>{info.organizationName}</strong>. This link expires {new Date(info.expiresAt).toLocaleString()}.</p></div>
