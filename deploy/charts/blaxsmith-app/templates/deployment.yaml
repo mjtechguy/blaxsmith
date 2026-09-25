@@ -18,6 +18,13 @@
 {{- if and .Values.dispatch.guestRouter (not .Values.dispatch.enabled) -}}
 {{- fail "dispatch.guestRouter requires dispatch.enabled (its router CA and connector token come from dispatch.credentialsSecretName)" -}}
 {{- end -}}
+{{- $gt := .Values.dispatch.guestRouterToken -}}
+{{- if and $gt.projected (not .Values.dispatch.guestRouter) -}}
+{{- fail "dispatch.guestRouterToken.projected requires dispatch.guestRouter" -}}
+{{- end -}}
+{{- if and $gt.projected (or (lt (int $gt.expirationSeconds) 600) (gt (int $gt.expirationSeconds) 86400) (not $gt.audience)) -}}
+{{- fail "dispatch.guestRouterToken needs an audience and expirationSeconds between 600 and 86400" -}}
+{{- end -}}
 {{- if .Values.dispatch.enabled -}}
 {{- $d := .Values.dispatch -}}
 {{- range $value := list $d.credentialsSecretName $.Values.accessKeySecretName $d.tools.image $d.tunnel.targetHost $d.ax.cliSHA256 $d.substrate.cliSHA256 $d.substrate.endpoint $d.bootstrap.routerURL $d.clusterID $d.leaseTTL $d.workerImage $d.workerPool $d.snapshotStorage $d.workspace $d.gateway -}}
@@ -72,6 +79,9 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       automountServiceAccountToken: false
+      {{- if $gt.projected }}
+      serviceAccountName: {{ .Release.Name }}-app
+      {{- end }}
       {{- if .Values.ha.enabled }}
       topologySpreadConstraints:
         - maxSkew: 1
@@ -211,7 +221,11 @@ spec:
             - name: BLAXSMITH_GUEST_ROUTER_CA_FILE
               value: /run/blaxsmith/dispatch/router-ca.pem
             - name: BLAXSMITH_GUEST_ROUTER_TOKEN_FILE
+              {{- if $gt.projected }}
+              value: /run/blaxsmith/guest-router/token
+              {{- else }}
               value: /run/blaxsmith/dispatch/bootstrap-token
+              {{- end }}
             {{- end }}
           ports:
             - name: https
@@ -272,6 +286,11 @@ spec:
               readOnly: true
             - name: dispatch-credentials
               mountPath: /run/blaxsmith/dispatch
+              readOnly: true
+            {{- end }}
+            {{- if $gt.projected }}
+            - name: guest-router-token
+              mountPath: /run/blaxsmith/guest-router
               readOnly: true
             {{- end }}
         {{- if .Values.dispatch.enabled }}
@@ -355,4 +374,16 @@ spec:
                 path: bootstrap-token
               - key: bootstrap-signer
                 path: bootstrap-signer
+        {{- end }}
+        {{- if $gt.projected }}
+        # Kubelet-rotated token for this pod's own ServiceAccount; the router
+        # accepts it on guest routes via --guest-client-username.
+        - name: guest-router-token
+          projected:
+            defaultMode: 288
+            sources:
+              - serviceAccountToken:
+                  audience: {{ $gt.audience | quote }}
+                  expirationSeconds: {{ int $gt.expirationSeconds }}
+                  path: token
         {{- end }}

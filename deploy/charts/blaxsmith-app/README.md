@@ -101,11 +101,15 @@ Kubernetes port-forward permission is needed. Both the AX service and the
 Substrate/router endpoints must be reachable from the app namespace.
 
 `dispatch.guestRouter` (terminals, takeover, guest result reads) requires
-dispatch and reuses `router-ca.pem` and `bootstrap-token`: the app calls the
-router's HTTPS listener with TLS pinned to that CA and the token as a bearer
-on every RPC, never plaintext. The router must run the
-`guest-router-auth.patch` build with `--guest-client-auth`, which checks and
-strips the token before the guest; see `deploy/dev/README.md`.
+dispatch: the app calls the router's HTTPS listener with TLS pinned to
+`router-ca.pem` and a bearer token on every RPC, never plaintext. The token is
+`bootstrap-token` unless `dispatch.guestRouterToken.projected=true`, which
+creates the `<release>-app` ServiceAccount (no RBAC) and mounts a
+kubelet-rotated projected token for it (`audience`, `expirationSeconds`)
+instead, so nothing needs re-minting. The router must run the
+`guest-router-auth.patch` build with `--guest-client-auth` and, for the
+projected token, `--guest-client-username=system:serviceaccount:<namespace>:<release>-app`;
+it checks and strips the token before the guest. See `deploy/dev/README.md`.
 
 Example values (replace all example digests and IDs with the pinned values
 for the target dev cluster):

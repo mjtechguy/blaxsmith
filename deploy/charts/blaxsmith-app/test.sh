@@ -143,10 +143,31 @@ helm template app "$chart" "$@" $dispatch_args \
 grep -F -q 'value: "router.ate-system.svc:443"' "$rendered"
 grep -F -A1 'name: BLAXSMITH_GUEST_ROUTER_CA_FILE' "$rendered" | grep -F -q '/run/blaxsmith/dispatch/router-ca.pem'
 grep -F -A1 'name: BLAXSMITH_GUEST_ROUTER_TOKEN_FILE' "$rendered" | grep -F -q '/run/blaxsmith/dispatch/bootstrap-token'
+if grep -F -q 'kind: ServiceAccount' "$rendered" || grep -F -q 'serviceAccountName:' "$rendered"; then
+  echo 'guest router ServiceAccount rendered without the projected token option' >&2
+  exit 1
+fi
 if helm template app "$chart" "$@" --set-string dispatch.guestRouter=router.ate-system.svc:443 >/dev/null 2>&1; then
   echo 'guest router unexpectedly accepted without dispatch credentials' >&2
   exit 1
 fi
+helm template app "$chart" "$@" $dispatch_args --set-string dispatch.guestRouter=router.ate-system.svc:443 \
+  --set dispatch.guestRouterToken.projected=true > "$rendered"
+grep -F -q 'kind: ServiceAccount' "$rendered"
+grep -F -q 'serviceAccountName: app-app' "$rendered"
+grep -F -q 'automountServiceAccountToken: false' "$rendered"
+grep -F -A1 'name: BLAXSMITH_GUEST_ROUTER_TOKEN_FILE' "$rendered" | grep -F -q '/run/blaxsmith/guest-router/token'
+grep -F -q 'mountPath: /run/blaxsmith/guest-router' "$rendered"
+grep -F -A3 'serviceAccountToken:' "$rendered" | grep -F -q 'audience: "blaxsmith-bootstrap"'
+grep -F -A3 'serviceAccountToken:' "$rendered" | grep -F -q 'expirationSeconds: 3600'
+for invalid in '--set dispatch.guestRouterToken.expirationSeconds=300' \
+  '--set-string dispatch.guestRouterToken.audience=' '--set-string dispatch.guestRouter='; do
+  if helm template app "$chart" "$@" $dispatch_args --set-string dispatch.guestRouter=router.ate-system.svc:443 \
+    --set dispatch.guestRouterToken.projected=true $invalid >/dev/null 2>&1; then
+    echo "invalid projected guest token values unexpectedly accepted: $invalid" >&2
+    exit 1
+  fi
+done
 helm template app "$chart" "$@" $dispatch_args --set dispatch.egressMode=open-dev \
   --set dispatch.dev.allowOpenEgress=true > "$rendered"
 grep -F -q -- '- --enable-dispatch' "$rendered"

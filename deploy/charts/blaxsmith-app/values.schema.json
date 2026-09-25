@@ -64,6 +64,15 @@
         "clusterID": { "type": "string" },
         "leaseTTL": { "type": "string" },
         "guestRouter": { "type": "string", "pattern": "^$|^[a-z0-9]([-a-z0-9.]*[a-z0-9])?:[0-9]{1,5}$" },
+        "guestRouterToken": {
+          "type": "object",
+          "properties": {
+            "projected": { "type": "boolean" },
+            "audience": { "type": "string" },
+            "expirationSeconds": { "type": "integer", "minimum": 600, "maximum": 86400 }
+          },
+          "additionalProperties": false
+        },
         "workerImage": { "type": "string" },
         "workerPool": { "type": "string" },
         "snapshotStorage": { "type": "string" },

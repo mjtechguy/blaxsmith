@@ -35,6 +35,9 @@ git -C "$REPO" archive "$REF" deploy/charts/blaxsmith-app | tar -x -C "$chart"
 helm lint "$chart/deploy/charts/blaxsmith-app" -f "$VALUES"
 helm template preview "$chart/deploy/charts/blaxsmith-app" --namespace blaxsmith-preview -f "$VALUES" > "/tmp/preview-$S.yaml"
 grep -A1 'name: BLAXSMITH_GUEST_ROUTER' "/tmp/preview-$S.yaml" | grep -qF "$GUEST"
+# Self-renewing guest identity (router: --guest-client-username=...:preview-app, step 12).
+grep -A1 'name: BLAXSMITH_GUEST_ROUTER_TOKEN_FILE' "/tmp/preview-$S.yaml" | grep -qF /run/blaxsmith/guest-router/token
+grep -qF 'serviceAccountName: preview-app' "/tmp/preview-$S.yaml"
 grep -qF "$APP" "/tmp/preview-$S.yaml" && grep -qF "$WORKER" "/tmp/preview-$S.yaml"
 remote="KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl -n blaxsmith-preview"
 ssh -i "$KEY" "$NODE" "$remote diff -f -" < "/tmp/preview-$S.yaml" || true
