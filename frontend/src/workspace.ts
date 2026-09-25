@@ -34,6 +34,6 @@ export const runStates = [
 ];
 export const inboxKinds = [
   { value: "approval", label: "Approval" }, { value: "question", label: "Question" }, { value: "escalation", label: "Escalation" },
-  { value: "interview_round", label: "Interview" }, { value: "review", label: "Final review" },
+  { value: "interview_round", label: "Interview" }, { value: "review", label: "Final review" }, { value: "budget_alert", label: "Budget alert" },
 ];
 export const kindLabel = (kind: string) => inboxKinds.find((k) => k.value === kind)?.label ?? kind.replaceAll("_", " ");

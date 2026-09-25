@@ -1,10 +1,11 @@
 // Shared cells and rows for the cross-project work views (Home, Inbox, Runs).
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, CheckCircle2, CircleHelp, GitBranch, MessageSquare, ShieldAlert, TriangleAlert } from "lucide-react";
+import { ArrowRight, BellRing, CheckCircle2, CircleHelp, GitBranch, MessageSquare, ShieldAlert, TriangleAlert } from "lucide-react";
 import { statusOrder, type AgentStatus } from "./agent-view";
 import { currentSession, sessionQueryKey } from "./auth";
+import { acknowledgeBudgetAlert } from "./budgets";
 import { inSet, type GridColumn } from "./data-table";
 import type { InboxItem, WorkspaceRun } from "./gen/blaxsmith/api/v1/workspace_pb";
 import { StatusPill } from "./work-log";
@@ -30,14 +31,29 @@ export function RunStateBadge({ state }: { state: string }) {
 }
 
 // Where an inbox item is handled: the run's review tab, its stage, or its inbox on the overview.
+// A budget alert opens where its spend is shown: the project's usage, the
+// admin alert feed (organization budgets), or My usage (user budgets).
 export function InboxLink({ item, children, className = "text-action" }: { item: InboxItem; children: React.ReactNode; className?: string }) {
+  if (item.kind === "budget_alert") {
+    if (item.stage === "project" && item.projectId) return <Link className={className} to="/projects/$projectId/usage" params={{ projectId: item.projectId }}>{children}</Link>;
+    return <Link className={className} to={item.stage === "user" ? "/me/usage" : "/admin/alerts"}>{children}</Link>;
+  }
   const params = { projectId: item.projectId, runId: item.runId };
   if (item.kind === "review") return <Link className={className} to="/projects/$projectId/runs/$runId" params={params} search={{ tab: "review" } as never}>{children}</Link>;
   if (item.kind === "interview_round") return <Link className={className} to="/projects/$projectId/runs/$runId" params={params} search={{ tab: "stages", stage: item.stage } as never}>{children}</Link>;
   return <Link className={className} to="/projects/$projectId/runs/$runId" params={params} hash="inbox-heading">{children}</Link>;
 }
 
-const kindIcon = { approval: ShieldAlert, escalation: TriangleAlert, review: CheckCircle2, interview_round: MessageSquare, question: CircleHelp } as const;
+const kindIcon = { approval: ShieldAlert, escalation: TriangleAlert, review: CheckCircle2, interview_round: MessageSquare, question: CircleHelp, budget_alert: BellRing } as const;
+
+// Acknowledging a budget alert closes it for every recipient.
+function AcknowledgeAlert({ item }: { item: InboxItem }) {
+  const queryClient = useQueryClient();
+  const ack = useMutation({ mutationFn: () => acknowledgeBudgetAlert(item.id),
+    onSuccess: () => Promise.all([queryClient.invalidateQueries({ queryKey: ["workspace-inbox"] }), queryClient.invalidateQueries({ queryKey: ["workspace-home"] })]) });
+  return <button type="button" className="text-action" disabled={ack.isPending} aria-label={`Acknowledge: ${item.title}`} onClick={() => ack.mutate()}>
+    {ack.isError ? "Try again" : ack.isPending ? "Acknowledging…" : "Acknowledge"}</button>;
+}
 
 export function KindMark({ kind }: { kind: string }) {
   const Icon = kindIcon[kind as keyof typeof kindIcon] ?? CircleHelp;
@@ -50,10 +66,11 @@ export function inboxColumns(now?: number): GridColumn<InboxItem>[] {
       <span><InboxLink item={row.original} className="row-title">{row.original.title || kindLabel(row.original.kind)}</InboxLink>
         <small>{kindLabel(row.original.kind)}{row.original.blocking ? " · blocking" : ""}{row.original.canAct ? "" : " · view only"}</small></span></span> },
     { id: "kind", accessorKey: "kind", header: "Kind", filterFn: inSet, cell: ({ row }) => <span className={`state-badge kind-badge-${row.original.kind}`}>{kindLabel(row.original.kind)}</span> },
-    { id: "project", accessorKey: "projectName", header: "Project", cell: ({ row }) => <Link className="text-link" to="/projects/$projectId" params={{ projectId: row.original.projectId }}>{row.original.projectName}</Link> },
-    { id: "run", accessorKey: "runLaunchKey", header: "Run · stage", cell: ({ row }) => <span className="task-stage"><strong>{row.original.runLaunchKey}</strong><small>{row.original.stage || "Final review"}</small></span> },
+    { id: "project", accessorKey: "projectName", header: "Project", cell: ({ row }) => !row.original.projectId ? <span className="muted">—</span> : <Link className="text-link" to="/projects/$projectId" params={{ projectId: row.original.projectId }}>{row.original.projectName}</Link> },
+    { id: "run", accessorKey: "runLaunchKey", header: "Run · stage", cell: ({ row }) => row.original.kind === "budget_alert"
+      ? <span className="task-stage"><strong>Model gateway</strong><small>{sentence(row.original.stage)} budget</small></span> : <span className="task-stage"><strong>{row.original.runLaunchKey}</strong><small>{row.original.stage || "Final review"}</small></span> },
     { id: "age", accessorKey: "createdAt", header: "Waiting", enableSorting: false, cell: ({ row }) => <Timestamp value={row.original.createdAt} now={now} /> },
-    { id: "act", header: "Action", enableSorting: false, enableHiding: false, cell: ({ row }) => <InboxLink item={row.original}>{row.original.canAct ? "Open" : "View"} <ArrowRight size={13} aria-hidden="true" /></InboxLink> },
+    { id: "act", header: "Action", enableSorting: false, enableHiding: false, cell: ({ row }) => row.original.kind === "budget_alert" && row.original.canAct ? <AcknowledgeAlert item={row.original} /> : <InboxLink item={row.original}>{row.original.canAct ? "Open" : "View"} <ArrowRight size={13} aria-hidden="true" /></InboxLink> },
   ];
 }
 

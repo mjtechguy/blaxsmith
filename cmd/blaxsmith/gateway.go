@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/gateway"
+	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
 // appGatewayURL is the model gateway origin sandboxes call, set by the Helm
@@ -152,7 +153,8 @@ func serveGateway(args []string) error {
 	return err
 }
 
-// gatewayMaintenance keeps partitions ahead, rolls usage up every minute,
+// gatewayMaintenance keeps partitions ahead, rolls usage up every minute
+// (then evaluates soft budgets against the fresh rollups),
 // and prunes raw events past retention once a day.
 func gatewayMaintenance(ctx context.Context, pool *pgxpool.Pool, retention time.Duration) {
 	tick := time.NewTicker(time.Minute)
@@ -165,6 +167,8 @@ func gatewayMaintenance(ctx context.Context, pool *pgxpool.Pool, retention time.
 		}
 		if err := gateway.Rollup(ctx, pool, now.Add(-24*time.Hour)); err != nil && ctx.Err() == nil {
 			log.Printf("gateway rollup: %v", err)
+		} else if _, err := workflow.EvaluateBudgets(ctx, pool, now); err != nil && ctx.Err() == nil {
+			log.Printf("gateway budgets: %v", err)
 		}
 		if now.Sub(lastPrune) > 24*time.Hour {
 			if err := gateway.PruneEvents(ctx, pool, retention); err != nil && ctx.Err() == nil {

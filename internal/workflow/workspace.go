@@ -54,7 +54,7 @@ type RunFilter struct {
 const workspaceMaxOffset = 10000
 
 var (
-	inboxKinds = []string{"question", "approval", "escalation", "interview_round", "review"}
+	inboxKinds = []string{"question", "approval", "escalation", "interview_round", "review", "budget_alert"}
 	runStates  = []string{"queued", "active", "cancel_requested", "cancelled", "failed", "succeeded"}
 	runSorts   = map[string]string{"created_at": "r.created_at", "launch_key": `r.launch_key COLLATE "C"`,
 		"state": "r.state", "project": `p.name COLLATE "C"`}
@@ -102,9 +102,11 @@ func validChoices(values, allowed []string) bool {
 	return true
 }
 
-// inboxItems is the union of open interactions on queued or active runs and
-// undecided current review packages on succeeded runs. A review blocks the
-// run's completion, so it counts as blocking.
+// inboxItems is the union of open interactions on queued or active runs,
+// undecided current review packages on succeeded runs, and open, unsnoozed
+// model-gateway budget alerts the caller receives ($8 principal, $9 org owner
+// or admin; see alertRecipient). A review blocks the run's completion, so it
+// counts as blocking; a budget alert never blocks.
 const inboxItems = `WITH items AS (
 	SELECT i.id::text AS id,i.kind,i.run_id,r.project_id,p.name AS project_name,r.launch_key,t.task_key AS stage,
 		left(COALESCE(i.payload->>'title',''),300) AS title,COALESCE((i.payload->>'blocking')::boolean,false) AS blocking,
@@ -122,6 +124,16 @@ const inboxItems = `WITH items AS (
 	JOIN workflow_projects p ON p.organization_id=r.organization_id AND p.id=r.project_id
 	WHERE r.organization_id=$1 AND r.state='succeeded' AND NOT EXISTS (SELECT 1 FROM workflow_review_decisions d
 		WHERE d.organization_id=r.organization_id AND d.run_id=r.id AND d.package_id=r.review_package_id)
+	UNION ALL
+	SELECT a.id::text,'budget_alert',NULL::uuid,a.project_id,COALESCE(p.name,''),'',a.scope,
+		left(b.name||' passed '||a.threshold_pct||'% of its monthly budget',300),false,a.created_at,$2::boolean
+	FROM gateway_alerts a
+	JOIN gateway_budgets b ON b.organization_id=a.organization_id AND b.id=a.budget_id
+	LEFT JOIN workflow_projects p ON p.organization_id=a.organization_id AND p.id=a.project_id
+	WHERE a.organization_id=$1 AND a.acknowledged_at IS NULL AND (a.snoozed_until IS NULL OR a.snoozed_until<=clock_timestamp())
+	AND ($9::boolean OR (a.scope='user' AND a.principal_id::text=$8::text) OR (a.scope='project' AND EXISTS (
+		SELECT 1 FROM workflow_project_admins pa WHERE pa.organization_id=a.organization_id AND pa.project_id=a.project_id
+		AND pa.principal_id=$8::text)))
 ), filtered AS (
 	SELECT * FROM items WHERE (cardinality($4::text[])=0 OR kind=ANY($4::text[]))
 	AND ($5='' OR project_id=NULLIF($5,'')::uuid)
@@ -153,7 +165,8 @@ func (s *Store) inbox(ctx context.Context, caller identity.Caller, f InboxFilter
 	if kinds == nil {
 		kinds = []string{}
 	}
-	args := []any{caller.OrganizationID, answer, review, kinds, f.ProjectID, search, f.ActionableOnly}
+	args := []any{caller.OrganizationID, answer, review, kinds, f.ProjectID, search, f.ActionableOnly,
+		caller.PrincipalID, review}
 	var total int32
 	if err := s.pool.QueryRow(ctx, inboxItems+` SELECT count(*)::integer FROM filtered`, args...).Scan(&total); err != nil {
 		return nil, 0, err
@@ -162,8 +175,8 @@ func (s *Store) inbox(ctx context.Context, caller identity.Caller, f InboxFilter
 	if limit == 0 || total == 0 {
 		return items, total, nil
 	}
-	rows, err := s.pool.Query(ctx, inboxItems+` SELECT id,kind,run_id,project_id,project_name,launch_key,stage,title,
-		blocking,created_at,can_act FROM filtered ORDER BY blocking DESC,created_at,id LIMIT $8 OFFSET $9`,
+	rows, err := s.pool.Query(ctx, inboxItems+` SELECT id,kind,COALESCE(run_id::text,''),COALESCE(project_id::text,''),
+		project_name,launch_key,stage,title,blocking,created_at,can_act FROM filtered ORDER BY blocking DESC,created_at,id LIMIT $10 OFFSET $11`,
 		append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, err

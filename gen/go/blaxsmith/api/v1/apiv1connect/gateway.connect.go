@@ -50,6 +50,24 @@ const (
 	// GatewayAdminServiceSetModelPriceOverrideProcedure is the fully-qualified name of the
 	// GatewayAdminService's SetModelPriceOverride RPC.
 	GatewayAdminServiceSetModelPriceOverrideProcedure = "/blaxsmith.api.v1.GatewayAdminService/SetModelPriceOverride"
+	// GatewayAdminServiceListBudgetsProcedure is the fully-qualified name of the GatewayAdminService's
+	// ListBudgets RPC.
+	GatewayAdminServiceListBudgetsProcedure = "/blaxsmith.api.v1.GatewayAdminService/ListBudgets"
+	// GatewayAdminServiceSetBudgetsEnabledProcedure is the fully-qualified name of the
+	// GatewayAdminService's SetBudgetsEnabled RPC.
+	GatewayAdminServiceSetBudgetsEnabledProcedure = "/blaxsmith.api.v1.GatewayAdminService/SetBudgetsEnabled"
+	// GatewayAdminServiceCreateBudgetProcedure is the fully-qualified name of the GatewayAdminService's
+	// CreateBudget RPC.
+	GatewayAdminServiceCreateBudgetProcedure = "/blaxsmith.api.v1.GatewayAdminService/CreateBudget"
+	// GatewayAdminServiceUpdateBudgetProcedure is the fully-qualified name of the GatewayAdminService's
+	// UpdateBudget RPC.
+	GatewayAdminServiceUpdateBudgetProcedure = "/blaxsmith.api.v1.GatewayAdminService/UpdateBudget"
+	// GatewayAdminServiceArchiveBudgetProcedure is the fully-qualified name of the
+	// GatewayAdminService's ArchiveBudget RPC.
+	GatewayAdminServiceArchiveBudgetProcedure = "/blaxsmith.api.v1.GatewayAdminService/ArchiveBudget"
+	// GatewayAdminServiceListBudgetAlertsProcedure is the fully-qualified name of the
+	// GatewayAdminService's ListBudgetAlerts RPC.
+	GatewayAdminServiceListBudgetAlertsProcedure = "/blaxsmith.api.v1.GatewayAdminService/ListBudgetAlerts"
 	// UsageServiceGetGatewayStatusProcedure is the fully-qualified name of the UsageService's
 	// GetGatewayStatus RPC.
 	UsageServiceGetGatewayStatusProcedure = "/blaxsmith.api.v1.UsageService/GetGatewayStatus"
@@ -63,6 +81,15 @@ const (
 	// UsageServiceSetProjectDeliveryProcedure is the fully-qualified name of the UsageService's
 	// SetProjectDelivery RPC.
 	UsageServiceSetProjectDeliveryProcedure = "/blaxsmith.api.v1.UsageService/SetProjectDelivery"
+	// UsageServiceGetProjectUsageProcedure is the fully-qualified name of the UsageService's
+	// GetProjectUsage RPC.
+	UsageServiceGetProjectUsageProcedure = "/blaxsmith.api.v1.UsageService/GetProjectUsage"
+	// UsageServiceAcknowledgeBudgetAlertProcedure is the fully-qualified name of the UsageService's
+	// AcknowledgeBudgetAlert RPC.
+	UsageServiceAcknowledgeBudgetAlertProcedure = "/blaxsmith.api.v1.UsageService/AcknowledgeBudgetAlert"
+	// UsageServiceSnoozeBudgetAlertProcedure is the fully-qualified name of the UsageService's
+	// SnoozeBudgetAlert RPC.
+	UsageServiceSnoozeBudgetAlertProcedure = "/blaxsmith.api.v1.UsageService/SnoozeBudgetAlert"
 )
 
 // GatewayAdminServiceClient is a client for the blaxsmith.api.v1.GatewayAdminService service.
@@ -72,6 +99,12 @@ type GatewayAdminServiceClient interface {
 	GetUsageOverview(context.Context, *connect.Request[v1.GetUsageOverviewRequest]) (*connect.Response[v1.GetUsageOverviewResponse], error)
 	ListModelPrices(context.Context, *connect.Request[v1.ListModelPricesRequest]) (*connect.Response[v1.ListModelPricesResponse], error)
 	SetModelPriceOverride(context.Context, *connect.Request[v1.SetModelPriceOverrideRequest]) (*connect.Response[v1.SetModelPriceOverrideResponse], error)
+	ListBudgets(context.Context, *connect.Request[v1.ListBudgetsRequest]) (*connect.Response[v1.ListBudgetsResponse], error)
+	SetBudgetsEnabled(context.Context, *connect.Request[v1.SetBudgetsEnabledRequest]) (*connect.Response[v1.SetBudgetsEnabledResponse], error)
+	CreateBudget(context.Context, *connect.Request[v1.CreateBudgetRequest]) (*connect.Response[v1.CreateBudgetResponse], error)
+	UpdateBudget(context.Context, *connect.Request[v1.UpdateBudgetRequest]) (*connect.Response[v1.UpdateBudgetResponse], error)
+	ArchiveBudget(context.Context, *connect.Request[v1.ArchiveBudgetRequest]) (*connect.Response[v1.ArchiveBudgetResponse], error)
+	ListBudgetAlerts(context.Context, *connect.Request[v1.ListBudgetAlertsRequest]) (*connect.Response[v1.ListBudgetAlertsResponse], error)
 }
 
 // NewGatewayAdminServiceClient constructs a client for the blaxsmith.api.v1.GatewayAdminService
@@ -115,6 +148,42 @@ func NewGatewayAdminServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(gatewayAdminServiceMethods.ByName("SetModelPriceOverride")),
 			connect.WithClientOptions(opts...),
 		),
+		listBudgets: connect.NewClient[v1.ListBudgetsRequest, v1.ListBudgetsResponse](
+			httpClient,
+			baseURL+GatewayAdminServiceListBudgetsProcedure,
+			connect.WithSchema(gatewayAdminServiceMethods.ByName("ListBudgets")),
+			connect.WithClientOptions(opts...),
+		),
+		setBudgetsEnabled: connect.NewClient[v1.SetBudgetsEnabledRequest, v1.SetBudgetsEnabledResponse](
+			httpClient,
+			baseURL+GatewayAdminServiceSetBudgetsEnabledProcedure,
+			connect.WithSchema(gatewayAdminServiceMethods.ByName("SetBudgetsEnabled")),
+			connect.WithClientOptions(opts...),
+		),
+		createBudget: connect.NewClient[v1.CreateBudgetRequest, v1.CreateBudgetResponse](
+			httpClient,
+			baseURL+GatewayAdminServiceCreateBudgetProcedure,
+			connect.WithSchema(gatewayAdminServiceMethods.ByName("CreateBudget")),
+			connect.WithClientOptions(opts...),
+		),
+		updateBudget: connect.NewClient[v1.UpdateBudgetRequest, v1.UpdateBudgetResponse](
+			httpClient,
+			baseURL+GatewayAdminServiceUpdateBudgetProcedure,
+			connect.WithSchema(gatewayAdminServiceMethods.ByName("UpdateBudget")),
+			connect.WithClientOptions(opts...),
+		),
+		archiveBudget: connect.NewClient[v1.ArchiveBudgetRequest, v1.ArchiveBudgetResponse](
+			httpClient,
+			baseURL+GatewayAdminServiceArchiveBudgetProcedure,
+			connect.WithSchema(gatewayAdminServiceMethods.ByName("ArchiveBudget")),
+			connect.WithClientOptions(opts...),
+		),
+		listBudgetAlerts: connect.NewClient[v1.ListBudgetAlertsRequest, v1.ListBudgetAlertsResponse](
+			httpClient,
+			baseURL+GatewayAdminServiceListBudgetAlertsProcedure,
+			connect.WithSchema(gatewayAdminServiceMethods.ByName("ListBudgetAlerts")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -125,6 +194,12 @@ type gatewayAdminServiceClient struct {
 	getUsageOverview      *connect.Client[v1.GetUsageOverviewRequest, v1.GetUsageOverviewResponse]
 	listModelPrices       *connect.Client[v1.ListModelPricesRequest, v1.ListModelPricesResponse]
 	setModelPriceOverride *connect.Client[v1.SetModelPriceOverrideRequest, v1.SetModelPriceOverrideResponse]
+	listBudgets           *connect.Client[v1.ListBudgetsRequest, v1.ListBudgetsResponse]
+	setBudgetsEnabled     *connect.Client[v1.SetBudgetsEnabledRequest, v1.SetBudgetsEnabledResponse]
+	createBudget          *connect.Client[v1.CreateBudgetRequest, v1.CreateBudgetResponse]
+	updateBudget          *connect.Client[v1.UpdateBudgetRequest, v1.UpdateBudgetResponse]
+	archiveBudget         *connect.Client[v1.ArchiveBudgetRequest, v1.ArchiveBudgetResponse]
+	listBudgetAlerts      *connect.Client[v1.ListBudgetAlertsRequest, v1.ListBudgetAlertsResponse]
 }
 
 // GetGatewaySettings calls blaxsmith.api.v1.GatewayAdminService.GetGatewaySettings.
@@ -152,6 +227,36 @@ func (c *gatewayAdminServiceClient) SetModelPriceOverride(ctx context.Context, r
 	return c.setModelPriceOverride.CallUnary(ctx, req)
 }
 
+// ListBudgets calls blaxsmith.api.v1.GatewayAdminService.ListBudgets.
+func (c *gatewayAdminServiceClient) ListBudgets(ctx context.Context, req *connect.Request[v1.ListBudgetsRequest]) (*connect.Response[v1.ListBudgetsResponse], error) {
+	return c.listBudgets.CallUnary(ctx, req)
+}
+
+// SetBudgetsEnabled calls blaxsmith.api.v1.GatewayAdminService.SetBudgetsEnabled.
+func (c *gatewayAdminServiceClient) SetBudgetsEnabled(ctx context.Context, req *connect.Request[v1.SetBudgetsEnabledRequest]) (*connect.Response[v1.SetBudgetsEnabledResponse], error) {
+	return c.setBudgetsEnabled.CallUnary(ctx, req)
+}
+
+// CreateBudget calls blaxsmith.api.v1.GatewayAdminService.CreateBudget.
+func (c *gatewayAdminServiceClient) CreateBudget(ctx context.Context, req *connect.Request[v1.CreateBudgetRequest]) (*connect.Response[v1.CreateBudgetResponse], error) {
+	return c.createBudget.CallUnary(ctx, req)
+}
+
+// UpdateBudget calls blaxsmith.api.v1.GatewayAdminService.UpdateBudget.
+func (c *gatewayAdminServiceClient) UpdateBudget(ctx context.Context, req *connect.Request[v1.UpdateBudgetRequest]) (*connect.Response[v1.UpdateBudgetResponse], error) {
+	return c.updateBudget.CallUnary(ctx, req)
+}
+
+// ArchiveBudget calls blaxsmith.api.v1.GatewayAdminService.ArchiveBudget.
+func (c *gatewayAdminServiceClient) ArchiveBudget(ctx context.Context, req *connect.Request[v1.ArchiveBudgetRequest]) (*connect.Response[v1.ArchiveBudgetResponse], error) {
+	return c.archiveBudget.CallUnary(ctx, req)
+}
+
+// ListBudgetAlerts calls blaxsmith.api.v1.GatewayAdminService.ListBudgetAlerts.
+func (c *gatewayAdminServiceClient) ListBudgetAlerts(ctx context.Context, req *connect.Request[v1.ListBudgetAlertsRequest]) (*connect.Response[v1.ListBudgetAlertsResponse], error) {
+	return c.listBudgetAlerts.CallUnary(ctx, req)
+}
+
 // GatewayAdminServiceHandler is an implementation of the blaxsmith.api.v1.GatewayAdminService
 // service.
 type GatewayAdminServiceHandler interface {
@@ -160,6 +265,12 @@ type GatewayAdminServiceHandler interface {
 	GetUsageOverview(context.Context, *connect.Request[v1.GetUsageOverviewRequest]) (*connect.Response[v1.GetUsageOverviewResponse], error)
 	ListModelPrices(context.Context, *connect.Request[v1.ListModelPricesRequest]) (*connect.Response[v1.ListModelPricesResponse], error)
 	SetModelPriceOverride(context.Context, *connect.Request[v1.SetModelPriceOverrideRequest]) (*connect.Response[v1.SetModelPriceOverrideResponse], error)
+	ListBudgets(context.Context, *connect.Request[v1.ListBudgetsRequest]) (*connect.Response[v1.ListBudgetsResponse], error)
+	SetBudgetsEnabled(context.Context, *connect.Request[v1.SetBudgetsEnabledRequest]) (*connect.Response[v1.SetBudgetsEnabledResponse], error)
+	CreateBudget(context.Context, *connect.Request[v1.CreateBudgetRequest]) (*connect.Response[v1.CreateBudgetResponse], error)
+	UpdateBudget(context.Context, *connect.Request[v1.UpdateBudgetRequest]) (*connect.Response[v1.UpdateBudgetResponse], error)
+	ArchiveBudget(context.Context, *connect.Request[v1.ArchiveBudgetRequest]) (*connect.Response[v1.ArchiveBudgetResponse], error)
+	ListBudgetAlerts(context.Context, *connect.Request[v1.ListBudgetAlertsRequest]) (*connect.Response[v1.ListBudgetAlertsResponse], error)
 }
 
 // NewGatewayAdminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -199,6 +310,42 @@ func NewGatewayAdminServiceHandler(svc GatewayAdminServiceHandler, opts ...conne
 		connect.WithSchema(gatewayAdminServiceMethods.ByName("SetModelPriceOverride")),
 		connect.WithHandlerOptions(opts...),
 	)
+	gatewayAdminServiceListBudgetsHandler := connect.NewUnaryHandler(
+		GatewayAdminServiceListBudgetsProcedure,
+		svc.ListBudgets,
+		connect.WithSchema(gatewayAdminServiceMethods.ByName("ListBudgets")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gatewayAdminServiceSetBudgetsEnabledHandler := connect.NewUnaryHandler(
+		GatewayAdminServiceSetBudgetsEnabledProcedure,
+		svc.SetBudgetsEnabled,
+		connect.WithSchema(gatewayAdminServiceMethods.ByName("SetBudgetsEnabled")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gatewayAdminServiceCreateBudgetHandler := connect.NewUnaryHandler(
+		GatewayAdminServiceCreateBudgetProcedure,
+		svc.CreateBudget,
+		connect.WithSchema(gatewayAdminServiceMethods.ByName("CreateBudget")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gatewayAdminServiceUpdateBudgetHandler := connect.NewUnaryHandler(
+		GatewayAdminServiceUpdateBudgetProcedure,
+		svc.UpdateBudget,
+		connect.WithSchema(gatewayAdminServiceMethods.ByName("UpdateBudget")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gatewayAdminServiceArchiveBudgetHandler := connect.NewUnaryHandler(
+		GatewayAdminServiceArchiveBudgetProcedure,
+		svc.ArchiveBudget,
+		connect.WithSchema(gatewayAdminServiceMethods.ByName("ArchiveBudget")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gatewayAdminServiceListBudgetAlertsHandler := connect.NewUnaryHandler(
+		GatewayAdminServiceListBudgetAlertsProcedure,
+		svc.ListBudgetAlerts,
+		connect.WithSchema(gatewayAdminServiceMethods.ByName("ListBudgetAlerts")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blaxsmith.api.v1.GatewayAdminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case GatewayAdminServiceGetGatewaySettingsProcedure:
@@ -211,6 +358,18 @@ func NewGatewayAdminServiceHandler(svc GatewayAdminServiceHandler, opts ...conne
 			gatewayAdminServiceListModelPricesHandler.ServeHTTP(w, r)
 		case GatewayAdminServiceSetModelPriceOverrideProcedure:
 			gatewayAdminServiceSetModelPriceOverrideHandler.ServeHTTP(w, r)
+		case GatewayAdminServiceListBudgetsProcedure:
+			gatewayAdminServiceListBudgetsHandler.ServeHTTP(w, r)
+		case GatewayAdminServiceSetBudgetsEnabledProcedure:
+			gatewayAdminServiceSetBudgetsEnabledHandler.ServeHTTP(w, r)
+		case GatewayAdminServiceCreateBudgetProcedure:
+			gatewayAdminServiceCreateBudgetHandler.ServeHTTP(w, r)
+		case GatewayAdminServiceUpdateBudgetProcedure:
+			gatewayAdminServiceUpdateBudgetHandler.ServeHTTP(w, r)
+		case GatewayAdminServiceArchiveBudgetProcedure:
+			gatewayAdminServiceArchiveBudgetHandler.ServeHTTP(w, r)
+		case GatewayAdminServiceListBudgetAlertsProcedure:
+			gatewayAdminServiceListBudgetAlertsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -240,6 +399,30 @@ func (UnimplementedGatewayAdminServiceHandler) SetModelPriceOverride(context.Con
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.SetModelPriceOverride is not implemented"))
 }
 
+func (UnimplementedGatewayAdminServiceHandler) ListBudgets(context.Context, *connect.Request[v1.ListBudgetsRequest]) (*connect.Response[v1.ListBudgetsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.ListBudgets is not implemented"))
+}
+
+func (UnimplementedGatewayAdminServiceHandler) SetBudgetsEnabled(context.Context, *connect.Request[v1.SetBudgetsEnabledRequest]) (*connect.Response[v1.SetBudgetsEnabledResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.SetBudgetsEnabled is not implemented"))
+}
+
+func (UnimplementedGatewayAdminServiceHandler) CreateBudget(context.Context, *connect.Request[v1.CreateBudgetRequest]) (*connect.Response[v1.CreateBudgetResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.CreateBudget is not implemented"))
+}
+
+func (UnimplementedGatewayAdminServiceHandler) UpdateBudget(context.Context, *connect.Request[v1.UpdateBudgetRequest]) (*connect.Response[v1.UpdateBudgetResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.UpdateBudget is not implemented"))
+}
+
+func (UnimplementedGatewayAdminServiceHandler) ArchiveBudget(context.Context, *connect.Request[v1.ArchiveBudgetRequest]) (*connect.Response[v1.ArchiveBudgetResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.ArchiveBudget is not implemented"))
+}
+
+func (UnimplementedGatewayAdminServiceHandler) ListBudgetAlerts(context.Context, *connect.Request[v1.ListBudgetAlertsRequest]) (*connect.Response[v1.ListBudgetAlertsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.ListBudgetAlerts is not implemented"))
+}
+
 // UsageServiceClient is a client for the blaxsmith.api.v1.UsageService service.
 type UsageServiceClient interface {
 	GetGatewayStatus(context.Context, *connect.Request[v1.GetGatewayStatusRequest]) (*connect.Response[v1.GetGatewayStatusResponse], error)
@@ -247,6 +430,11 @@ type UsageServiceClient interface {
 	GetRunCost(context.Context, *connect.Request[v1.GetRunCostRequest]) (*connect.Response[v1.GetRunCostResponse], error)
 	GetProjectDelivery(context.Context, *connect.Request[v1.GetProjectDeliveryRequest]) (*connect.Response[v1.GetProjectDeliveryResponse], error)
 	SetProjectDelivery(context.Context, *connect.Request[v1.SetProjectDeliveryRequest]) (*connect.Response[v1.SetProjectDeliveryResponse], error)
+	GetProjectUsage(context.Context, *connect.Request[v1.GetProjectUsageRequest]) (*connect.Response[v1.GetProjectUsageResponse], error)
+	// A budget alert's recipients (organization owners and admins, the
+	// budget's user, the project's administrators) acknowledge or snooze it.
+	AcknowledgeBudgetAlert(context.Context, *connect.Request[v1.AcknowledgeBudgetAlertRequest]) (*connect.Response[v1.AcknowledgeBudgetAlertResponse], error)
+	SnoozeBudgetAlert(context.Context, *connect.Request[v1.SnoozeBudgetAlertRequest]) (*connect.Response[v1.SnoozeBudgetAlertResponse], error)
 }
 
 // NewUsageServiceClient constructs a client for the blaxsmith.api.v1.UsageService service. By
@@ -290,16 +478,37 @@ func NewUsageServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(usageServiceMethods.ByName("SetProjectDelivery")),
 			connect.WithClientOptions(opts...),
 		),
+		getProjectUsage: connect.NewClient[v1.GetProjectUsageRequest, v1.GetProjectUsageResponse](
+			httpClient,
+			baseURL+UsageServiceGetProjectUsageProcedure,
+			connect.WithSchema(usageServiceMethods.ByName("GetProjectUsage")),
+			connect.WithClientOptions(opts...),
+		),
+		acknowledgeBudgetAlert: connect.NewClient[v1.AcknowledgeBudgetAlertRequest, v1.AcknowledgeBudgetAlertResponse](
+			httpClient,
+			baseURL+UsageServiceAcknowledgeBudgetAlertProcedure,
+			connect.WithSchema(usageServiceMethods.ByName("AcknowledgeBudgetAlert")),
+			connect.WithClientOptions(opts...),
+		),
+		snoozeBudgetAlert: connect.NewClient[v1.SnoozeBudgetAlertRequest, v1.SnoozeBudgetAlertResponse](
+			httpClient,
+			baseURL+UsageServiceSnoozeBudgetAlertProcedure,
+			connect.WithSchema(usageServiceMethods.ByName("SnoozeBudgetAlert")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // usageServiceClient implements UsageServiceClient.
 type usageServiceClient struct {
-	getGatewayStatus   *connect.Client[v1.GetGatewayStatusRequest, v1.GetGatewayStatusResponse]
-	getMyUsage         *connect.Client[v1.GetMyUsageRequest, v1.GetMyUsageResponse]
-	getRunCost         *connect.Client[v1.GetRunCostRequest, v1.GetRunCostResponse]
-	getProjectDelivery *connect.Client[v1.GetProjectDeliveryRequest, v1.GetProjectDeliveryResponse]
-	setProjectDelivery *connect.Client[v1.SetProjectDeliveryRequest, v1.SetProjectDeliveryResponse]
+	getGatewayStatus       *connect.Client[v1.GetGatewayStatusRequest, v1.GetGatewayStatusResponse]
+	getMyUsage             *connect.Client[v1.GetMyUsageRequest, v1.GetMyUsageResponse]
+	getRunCost             *connect.Client[v1.GetRunCostRequest, v1.GetRunCostResponse]
+	getProjectDelivery     *connect.Client[v1.GetProjectDeliveryRequest, v1.GetProjectDeliveryResponse]
+	setProjectDelivery     *connect.Client[v1.SetProjectDeliveryRequest, v1.SetProjectDeliveryResponse]
+	getProjectUsage        *connect.Client[v1.GetProjectUsageRequest, v1.GetProjectUsageResponse]
+	acknowledgeBudgetAlert *connect.Client[v1.AcknowledgeBudgetAlertRequest, v1.AcknowledgeBudgetAlertResponse]
+	snoozeBudgetAlert      *connect.Client[v1.SnoozeBudgetAlertRequest, v1.SnoozeBudgetAlertResponse]
 }
 
 // GetGatewayStatus calls blaxsmith.api.v1.UsageService.GetGatewayStatus.
@@ -327,6 +536,21 @@ func (c *usageServiceClient) SetProjectDelivery(ctx context.Context, req *connec
 	return c.setProjectDelivery.CallUnary(ctx, req)
 }
 
+// GetProjectUsage calls blaxsmith.api.v1.UsageService.GetProjectUsage.
+func (c *usageServiceClient) GetProjectUsage(ctx context.Context, req *connect.Request[v1.GetProjectUsageRequest]) (*connect.Response[v1.GetProjectUsageResponse], error) {
+	return c.getProjectUsage.CallUnary(ctx, req)
+}
+
+// AcknowledgeBudgetAlert calls blaxsmith.api.v1.UsageService.AcknowledgeBudgetAlert.
+func (c *usageServiceClient) AcknowledgeBudgetAlert(ctx context.Context, req *connect.Request[v1.AcknowledgeBudgetAlertRequest]) (*connect.Response[v1.AcknowledgeBudgetAlertResponse], error) {
+	return c.acknowledgeBudgetAlert.CallUnary(ctx, req)
+}
+
+// SnoozeBudgetAlert calls blaxsmith.api.v1.UsageService.SnoozeBudgetAlert.
+func (c *usageServiceClient) SnoozeBudgetAlert(ctx context.Context, req *connect.Request[v1.SnoozeBudgetAlertRequest]) (*connect.Response[v1.SnoozeBudgetAlertResponse], error) {
+	return c.snoozeBudgetAlert.CallUnary(ctx, req)
+}
+
 // UsageServiceHandler is an implementation of the blaxsmith.api.v1.UsageService service.
 type UsageServiceHandler interface {
 	GetGatewayStatus(context.Context, *connect.Request[v1.GetGatewayStatusRequest]) (*connect.Response[v1.GetGatewayStatusResponse], error)
@@ -334,6 +558,11 @@ type UsageServiceHandler interface {
 	GetRunCost(context.Context, *connect.Request[v1.GetRunCostRequest]) (*connect.Response[v1.GetRunCostResponse], error)
 	GetProjectDelivery(context.Context, *connect.Request[v1.GetProjectDeliveryRequest]) (*connect.Response[v1.GetProjectDeliveryResponse], error)
 	SetProjectDelivery(context.Context, *connect.Request[v1.SetProjectDeliveryRequest]) (*connect.Response[v1.SetProjectDeliveryResponse], error)
+	GetProjectUsage(context.Context, *connect.Request[v1.GetProjectUsageRequest]) (*connect.Response[v1.GetProjectUsageResponse], error)
+	// A budget alert's recipients (organization owners and admins, the
+	// budget's user, the project's administrators) acknowledge or snooze it.
+	AcknowledgeBudgetAlert(context.Context, *connect.Request[v1.AcknowledgeBudgetAlertRequest]) (*connect.Response[v1.AcknowledgeBudgetAlertResponse], error)
+	SnoozeBudgetAlert(context.Context, *connect.Request[v1.SnoozeBudgetAlertRequest]) (*connect.Response[v1.SnoozeBudgetAlertResponse], error)
 }
 
 // NewUsageServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -373,6 +602,24 @@ func NewUsageServiceHandler(svc UsageServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(usageServiceMethods.ByName("SetProjectDelivery")),
 		connect.WithHandlerOptions(opts...),
 	)
+	usageServiceGetProjectUsageHandler := connect.NewUnaryHandler(
+		UsageServiceGetProjectUsageProcedure,
+		svc.GetProjectUsage,
+		connect.WithSchema(usageServiceMethods.ByName("GetProjectUsage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	usageServiceAcknowledgeBudgetAlertHandler := connect.NewUnaryHandler(
+		UsageServiceAcknowledgeBudgetAlertProcedure,
+		svc.AcknowledgeBudgetAlert,
+		connect.WithSchema(usageServiceMethods.ByName("AcknowledgeBudgetAlert")),
+		connect.WithHandlerOptions(opts...),
+	)
+	usageServiceSnoozeBudgetAlertHandler := connect.NewUnaryHandler(
+		UsageServiceSnoozeBudgetAlertProcedure,
+		svc.SnoozeBudgetAlert,
+		connect.WithSchema(usageServiceMethods.ByName("SnoozeBudgetAlert")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blaxsmith.api.v1.UsageService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case UsageServiceGetGatewayStatusProcedure:
@@ -385,6 +632,12 @@ func NewUsageServiceHandler(svc UsageServiceHandler, opts ...connect.HandlerOpti
 			usageServiceGetProjectDeliveryHandler.ServeHTTP(w, r)
 		case UsageServiceSetProjectDeliveryProcedure:
 			usageServiceSetProjectDeliveryHandler.ServeHTTP(w, r)
+		case UsageServiceGetProjectUsageProcedure:
+			usageServiceGetProjectUsageHandler.ServeHTTP(w, r)
+		case UsageServiceAcknowledgeBudgetAlertProcedure:
+			usageServiceAcknowledgeBudgetAlertHandler.ServeHTTP(w, r)
+		case UsageServiceSnoozeBudgetAlertProcedure:
+			usageServiceSnoozeBudgetAlertHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -412,4 +665,16 @@ func (UnimplementedUsageServiceHandler) GetProjectDelivery(context.Context, *con
 
 func (UnimplementedUsageServiceHandler) SetProjectDelivery(context.Context, *connect.Request[v1.SetProjectDeliveryRequest]) (*connect.Response[v1.SetProjectDeliveryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.UsageService.SetProjectDelivery is not implemented"))
+}
+
+func (UnimplementedUsageServiceHandler) GetProjectUsage(context.Context, *connect.Request[v1.GetProjectUsageRequest]) (*connect.Response[v1.GetProjectUsageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.UsageService.GetProjectUsage is not implemented"))
+}
+
+func (UnimplementedUsageServiceHandler) AcknowledgeBudgetAlert(context.Context, *connect.Request[v1.AcknowledgeBudgetAlertRequest]) (*connect.Response[v1.AcknowledgeBudgetAlertResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.UsageService.AcknowledgeBudgetAlert is not implemented"))
+}
+
+func (UnimplementedUsageServiceHandler) SnoozeBudgetAlert(context.Context, *connect.Request[v1.SnoozeBudgetAlertRequest]) (*connect.Response[v1.SnoozeBudgetAlertResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.UsageService.SnoozeBudgetAlert is not implemented"))
 }

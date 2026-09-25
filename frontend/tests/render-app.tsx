@@ -34,8 +34,9 @@ export async function renderDetailFixture() {
 }
 
 // Renders one component inside a router (so Link works) at a path.
-export async function renderInRouter(node: ReactNode, path = "/") {
+export async function renderInRouter(node: ReactNode, path = "/", seed: Array<[readonly unknown[], unknown]> = []) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } } });
+  for (const [key, data] of seed) queryClient.setQueryData(key, data);
   const rootRoute = createRootRoute({ component: () => <>{node}</> });
   const router = createRouter({ routeTree: rootRoute, history: createMemoryHistory({ initialEntries: [path] }) });
   await router.load();

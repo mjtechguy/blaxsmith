@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { AlertTriangle, Waypoints } from "lucide-react";
 import { useOrg } from "../connection-ui";
 import { CollectionTable, useLocalView, type GridColumn } from "../data-table";
@@ -95,9 +95,13 @@ function SettingsEditor({ data, org, saved, setSaved }: { data: GetGatewaySettin
 
 function LaterPhases() {
   return <>
+    <section className="editor-card" aria-labelledby="gateway-budgets-heading">
+      <div className="editor-card-heading"><div><h2 id="gateway-budgets-heading">Budgets & alerts</h2>
+        <p>Soft monthly budgets per organization, project or user with threshold alerts to the inbox and the audit log. No blocking. Switch alerts on and manage budgets in <Link className="text-link" to="/admin/budgets">Admin → Budgets</Link>.</p></div></div>
+    </section>
     <section className="editor-card" aria-labelledby="gateway-later-heading">
       <div className="editor-card-heading"><div><h2 id="gateway-later-heading">Later phases</h2><p>Planned switches, shown so you can see what is coming. None of them can be turned on yet.</p></div></div>
-      <ul className="flag-list">{laterFlags.map((flag) => <li key={flag.id} className="flag-row is-disabled">
+      <ul className="flag-list">{laterFlags.filter((flag) => flag.id !== "budgets").map((flag) => <li key={flag.id} className="flag-row is-disabled">
         <div><span className="flag-title" id={`later-${flag.id}`}>{flag.label} <span className="soon-badge">Coming in {flag.phase}</span></span><p>{flag.text}</p></div>
         <input type="checkbox" role="switch" className="switch" checked={false} disabled aria-labelledby={`later-${flag.id}`} readOnly /></li>)}</ul>
     </section>

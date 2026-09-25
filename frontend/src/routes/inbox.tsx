@@ -25,7 +25,7 @@ function InboxPage() {
   const setAll = (value: boolean) => void navigate({ to: "/inbox", search: ((prev: Record<string, unknown>) => ({ ...prev, all: value ? 1 : undefined, page: undefined })) as never, replace: true });
 
   return <PageShell>
-    <PageHeader title="Inbox" description="Questions, approvals, escalations, and final reviews across every project. Answer on the run page, where the full context is." />
+    <PageHeader title="Inbox" description="Questions, approvals, escalations, and final reviews across every project, plus model-gateway budget alerts. Answer on the run page, where the full context is." />
     <div className="segmented" role="group" aria-label="Which items">
       <button type="button" aria-pressed={!all} onClick={() => setAll(false)}>Waiting on you</button>
       <button type="button" aria-pressed={all} onClick={() => setAll(true)}>All open</button>
