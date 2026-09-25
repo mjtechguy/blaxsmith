@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Event is one completed or failed upstream request (§7). It holds counts
@@ -27,6 +28,7 @@ type Event struct {
 
 // Record writes the event and bumps the run's totals in one transaction.
 func Record(ctx context.Context, db *pgxpool.Pool, e Event) error {
+	ctx = tenant.Org(ctx, e.Grant.OrganizationID)
 	if db == nil {
 		return ErrDenied
 	}
@@ -79,6 +81,7 @@ func Record(ctx context.Context, db *pgxpool.Pool, e Event) error {
 // onward. It is idempotent: each tick recomputes today and yesterday, so a
 // stream that crosses midnight is still counted on the day it started.
 func Rollup(ctx context.Context, db *pgxpool.Pool, since time.Time) error {
+	ctx = tenant.System(ctx)
 	day := since.UTC().Truncate(24 * time.Hour)
 	tx, err := db.Begin(ctx)
 	if err != nil {
@@ -109,6 +112,7 @@ func Rollup(ctx context.Context, db *pgxpool.Pool, since time.Time) error {
 // EnsurePartitions creates this month's and the next two months' event
 // partitions; the migration seeds them and the rollup loop keeps ahead.
 func EnsurePartitions(ctx context.Context, db *pgxpool.Pool) error {
+	ctx = tenant.System(ctx)
 	_, err := db.Exec(ctx, `SELECT gateway_ensure_usage_partition((date_trunc('month', clock_timestamp()) + make_interval(months => m))::date)
 		FROM generate_series(0, 2) AS m`)
 	return err
@@ -117,6 +121,7 @@ func EnsurePartitions(ctx context.Context, db *pgxpool.Pool) error {
 // PruneEvents drops raw events older than the retention period (§7, 90 days
 // by default). Rollups and run totals are kept.
 func PruneEvents(ctx context.Context, db *pgxpool.Pool, retention time.Duration) error {
+	ctx = tenant.System(ctx)
 	if retention < 24*time.Hour {
 		return ErrDenied
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 const accessLifetime = 10 * time.Minute
@@ -159,6 +160,7 @@ var ErrOrganizationRequired = errors.New("choose the organization to sign in to"
 // passwords all fail the same way after the same Argon2 work. slug may be
 // empty when the account has a single organization.
 func (m *SessionManager) LoginLocal(ctx context.Context, slug, login string, password []byte, source netip.Addr, userAgent string) (Tokens, error) {
+	ctx = tenant.System(ctx) // no organization is known until the credential is matched
 	login = strings.ToLower(strings.TrimSpace(login))
 	slug = strings.TrimSpace(slug)
 	email, emailErr := NormalizeEmail(login)
@@ -322,6 +324,7 @@ func (m *SessionManager) ValidateAccess(ctx context.Context, raw string) (Caller
 		claims.IssuedAt == nil || claims.ExpiresAt == nil || claims.ExpiresAt.Sub(claims.IssuedAt.Time) > accessLifetime {
 		return Caller{}, ErrUnauthenticated
 	}
+	ctx = tenant.Org(ctx, claims.OrganizationID)
 	var role string
 	var emailRequired bool
 	err = m.db.QueryRow(ctx, `SELECT m.role,s.email_required FROM identity_sessions s
@@ -345,6 +348,7 @@ func (m *SessionManager) ValidateAccess(ctx context.Context, raw string) (Caller
 }
 
 func (m *SessionManager) Refresh(ctx context.Context, raw string) (Tokens, error) {
+	ctx = tenant.System(ctx) // no organization is known until the credential is matched
 	if m == nil {
 		return Tokens{}, ErrUnauthenticated
 	}
@@ -451,6 +455,7 @@ func (m *SessionManager) Refresh(ctx context.Context, raw string) (Tokens, error
 }
 
 func (m *SessionManager) Revoke(ctx context.Context, caller Caller) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if m == nil || caller.OrganizationID == "" || caller.PrincipalID == "" || caller.SessionID == "" {
 		return ErrUnauthenticated
 	}
@@ -479,6 +484,7 @@ func (m *SessionManager) Revoke(ctx context.Context, caller Caller) error {
 
 // RevokeRefresh supports logout even after the short access token expires.
 func (m *SessionManager) RevokeRefresh(ctx context.Context, raw string) error {
+	ctx = tenant.System(ctx) // no organization is known until the credential is matched
 	if m == nil {
 		return ErrUnauthenticated
 	}

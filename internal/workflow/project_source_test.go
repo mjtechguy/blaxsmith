@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net"
 	"testing"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestValidatePublicGitSource(t *testing.T) {
@@ -18,7 +20,7 @@ func TestValidatePublicGitSource(t *testing.T) {
 		{"https://github.com/owner/repo.git", "main"},
 		{"https://gitlab.com/group/subgroup/repo", "release/v1.2"},
 	} {
-		url, ref, err := validatePublicGitSource(t.Context(), tc.url, tc.ref, lookup)
+		url, ref, err := validatePublicGitSource(tenant.System(t.Context()), tc.url, tc.ref, lookup)
 		if err != nil || url != tc.url || ref != tc.ref {
 			t.Fatalf("valid source %q %q: %q %q %v", tc.url, tc.ref, url, ref, err)
 		}
@@ -39,7 +41,7 @@ func TestValidatePublicGitSource(t *testing.T) {
 		{"https://github.com/owner/repo", "a..b"},
 		{"https://github.com/owner/repo", "feature/.lock"},
 	} {
-		if _, _, err := validatePublicGitSource(t.Context(), tc.url, tc.ref, lookup); !errors.Is(err, ErrInvalid) {
+		if _, _, err := validatePublicGitSource(tenant.System(t.Context()), tc.url, tc.ref, lookup); !errors.Is(err, ErrInvalid) {
 			t.Errorf("unsafe source %q %q: %v", tc.url, tc.ref, err)
 		}
 	}
@@ -47,16 +49,16 @@ func TestValidatePublicGitSource(t *testing.T) {
 		lookup := func(context.Context, string) ([]net.IPAddr, error) {
 			return []net.IPAddr{{IP: net.ParseIP(address)}}, nil
 		}
-		if _, _, err := validatePublicGitSource(t.Context(), "https://github.com/owner/repo", "", lookup); !errors.Is(err, ErrSourceRoute) {
+		if _, _, err := validatePublicGitSource(tenant.System(t.Context()), "https://github.com/owner/repo", "", lookup); !errors.Is(err, ErrSourceRoute) {
 			t.Errorf("non-public route %s: %v", address, err)
 		}
 	}
-	if _, _, err := validatePublicGitSource(t.Context(), "https://github.com/owner/repo", "", func(context.Context, string) ([]net.IPAddr, error) {
+	if _, _, err := validatePublicGitSource(tenant.System(t.Context()), "https://github.com/owner/repo", "", func(context.Context, string) ([]net.IPAddr, error) {
 		return []net.IPAddr{{IP: net.ParseIP("140.82.112.3")}, {IP: net.ParseIP("10.1.2.3")}}, nil
 	}); !errors.Is(err, ErrSourceRoute) {
 		t.Errorf("mixed public/internal DNS answer: %v", err)
 	}
-	if _, _, err := validatePublicGitSource(t.Context(), "https://github.com/owner/repo", "", func(context.Context, string) ([]net.IPAddr, error) {
+	if _, _, err := validatePublicGitSource(tenant.System(t.Context()), "https://github.com/owner/repo", "", func(context.Context, string) ([]net.IPAddr, error) {
 		return nil, errors.New("DNS unavailable")
 	}); !errors.Is(err, ErrSourceRoute) {
 		t.Errorf("DNS failure: %v", err)

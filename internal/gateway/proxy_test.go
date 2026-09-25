@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 const testToken = "bxgw_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -48,7 +50,7 @@ func (r *recorder) last(t *testing.T) Event {
 func chunkedUpstream(t *testing.T, contentType string, chunks []string, seen *http.Request, firstRead <-chan struct{}) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		*seen = *r.Clone(context.Background())
+		*seen = *r.Clone(tenant.System(context.Background()))
 		body, _ := io.ReadAll(r.Body)
 		seen.Body = io.NopCloser(bytes.NewReader(body))
 		w.Header().Set("Content-Type", contentType)

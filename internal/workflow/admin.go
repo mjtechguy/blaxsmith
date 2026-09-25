@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // ErrAdminDenied means the caller is not an organization owner or admin.
@@ -78,6 +79,7 @@ const adminLimit = 200
 
 // AdminOverview reads the operator dashboard for the caller's organization.
 func (s *Store) AdminOverview(ctx context.Context, caller identity.Caller) (AdminOverview, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := requireAdmin(caller); err != nil {
 		return AdminOverview{}, err
 	}
@@ -220,6 +222,7 @@ func (s *Store) liveAttempts(ctx context.Context, org string, limit int) ([]Admi
 
 // ListAuditEvents pages the organization's audit log newest first.
 func (s *Store) ListAuditEvents(ctx context.Context, caller identity.Caller, f AuditFilter) ([]AdminAuditEvent, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := requireAdmin(caller); err != nil {
 		return nil, err
 	}
@@ -266,6 +269,7 @@ func (s *Store) ListAuditEvents(ctx context.Context, caller identity.Caller, f A
 // HaltRunAs requests cancellation of a queued or active run for an owner or
 // admin. The completion sweep stops live attempts; Progress then closes it.
 func (s *Store) HaltRunAs(ctx context.Context, caller identity.Caller, runID string) (string, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := requireAdmin(caller); err != nil {
 		return "", err
 	}
@@ -297,6 +301,7 @@ func (s *Store) HaltRunAs(ctx context.Context, caller identity.Caller, runID str
 // takes the existing model-access revocation path; a Git grant is revoked
 // with its bindings' leases. The connection itself stays for other projects.
 func (s *Store) RevokeGrantAs(ctx context.Context, caller identity.Caller, grantID string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := requireAdmin(caller); err != nil {
 		return err
 	}

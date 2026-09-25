@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 )
 
@@ -30,6 +31,7 @@ type ProjectModelGrant struct {
 // owns that connection and is its grantee; otherwise the project's workload
 // selection applies, as before. initiator is empty for runs without one.
 func (s *Store) ResolveModelGrant(ctx context.Context, orgID, projectID, initiator, provider, model string) (ProjectModelGrant, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if initiator != "" && ids(initiator) {
 		var grant ProjectModelGrant
 		err := s.pool.QueryRow(ctx, `SELECT g.id,g.grantee_id FROM access_grants g
@@ -52,6 +54,7 @@ func (s *Store) ResolveModelGrant(ctx context.Context, orgID, projectID, initiat
 
 // RunInitiator returns the principal who launched runID, or "".
 func (s *Store) RunInitiator(ctx context.Context, orgID, runID string) (string, error) {
+	ctx = tenant.Org(ctx, orgID)
 	var initiator *string
 	err := s.pool.QueryRow(ctx, `SELECT initiator_principal_id FROM workflow_runs WHERE organization_id=$1 AND id=$2`,
 		orgID, runID).Scan(&initiator)
@@ -62,6 +65,7 @@ func (s *Store) RunInitiator(ctx context.Context, orgID, runID string) (string, 
 }
 
 func (s *Store) GetProjectModelGrant(ctx context.Context, orgID, projectID, provider, model string) (ProjectModelGrant, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, projectID) || provider == "" || model == "" {
 		return ProjectModelGrant{}, ErrInvalid
 	}
@@ -107,6 +111,7 @@ func LockDispatchSelections(ctx context.Context, tx pgx.Tx, orgID, projectID, ru
 }
 
 func (s *Store) GetApprovedToolRuntime(ctx context.Context, orgID, harness, model, effort string) (ApprovedToolRuntime, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID) || harness == "" || model == "" || effort == "" {
 		return ApprovedToolRuntime{}, ErrInvalid
 	}

@@ -7,11 +7,13 @@ import (
 	"errors"
 	"net/netip"
 	"testing"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestEmailIdentityPostgres(t *testing.T) {
 	pool := identityTestPool(t)
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	password := []byte("correct horse battery staple")
 	owner, err := BootstrapOwner(ctx, pool, "  Alice@Example.COM ", "engineering", "Engineering", password)
 	if err != nil {

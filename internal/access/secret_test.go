@@ -7,10 +7,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestSecretStorePostgres(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	pool := testPool(t)
 	if _, err := pool.Exec(ctx, `INSERT INTO access_provider_registrations
 		(organization_id,id,provider_kind,origin,delivery_modes,state)

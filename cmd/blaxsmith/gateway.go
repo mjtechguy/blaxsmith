@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/gateway"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // appGatewayURL is the model gateway origin sandboxes call, set by the Helm
@@ -80,7 +81,7 @@ func serveGateway(args []string) error {
 	if err := validateDatabaseTransport(config, *localDB); err != nil {
 		return err
 	}
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := pgxpool.NewWithConfig(ctx, tenant.Configure(config))
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
@@ -155,6 +156,7 @@ func serveGateway(args []string) error {
 // gatewayMaintenance keeps partitions ahead, rolls usage up every minute,
 // and prunes raw events past retention once a day.
 func gatewayMaintenance(ctx context.Context, pool *pgxpool.Pool, retention time.Duration) {
+	ctx = tenant.System(ctx)
 	tick := time.NewTicker(time.Minute)
 	defer tick.Stop()
 	var lastPrune time.Time

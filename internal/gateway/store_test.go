@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -21,7 +22,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if dsn == "" {
 		t.Skip("set BLAXSMITH_TEST_DATABASE_URL for PostgreSQL gateway tests")
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	admin, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +35,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanup, cancel := context.WithTimeout(tenant.System(context.Background()), 10*time.Second)
 		defer cancel()
 		_, _ = admin.Exec(cleanup, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE")
 	})
@@ -43,7 +44,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	config.ConnConfig.RuntimeParams["search_path"] = schema
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := pgxpool.NewWithConfig(ctx, tenant.Configure(config))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +59,7 @@ type fixture struct{ org, principal, project, run, task, attempt string }
 
 func newFixture(t *testing.T, pool *pgxpool.Pool) fixture {
 	t.Helper()
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	var f fixture
 	if err := pool.QueryRow(ctx, `INSERT INTO identity_organizations (id,slug,name) VALUES (gen_random_uuid(),'gw-org','Gateway')
 		RETURNING id`).Scan(&f.org); err != nil {
@@ -98,7 +99,7 @@ func newFixture(t *testing.T, pool *pgxpool.Pool) fixture {
 func TestEffectiveDeliveryFlagsPostgres(t *testing.T) {
 	pool := testPool(t)
 	f := newFixture(t, pool)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	const base = "https://gw.example"
 	check := func(want string, url string) Delivery {
 		t.Helper()
@@ -157,7 +158,7 @@ func TestEffectiveDeliveryFlagsPostgres(t *testing.T) {
 func TestMeteringRollupsAndPricesPostgres(t *testing.T) {
 	pool := testPool(t)
 	f := newFixture(t, pool)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	grant := Grant{OrganizationID: f.org, ProjectID: f.project, RunID: f.run, AttemptID: f.attempt, TaskID: f.task,
 		StageKey: "implement", PrincipalID: f.principal, Harness: "claude-code", Provider: "anthropic", Model: "claude-opus-5-5"}
 	book := &PriceBook{DB: pool, TTL: time.Millisecond}

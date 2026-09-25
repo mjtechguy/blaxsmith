@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -80,6 +81,7 @@ type watchLine struct {
 
 // Cursor is the last persisted guest watch sequence for an attempt.
 func (s *Store) Cursor(ctx context.Context, a workflow.Attempt) (int64, error) {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	var seq int64
 	err := s.pool.QueryRow(ctx, `SELECT seq FROM workflow_interaction_cursors WHERE organization_id=$1 AND attempt_id=$2`,
 		a.OrganizationID, a.ID).Scan(&seq)
@@ -93,6 +95,7 @@ func (s *Store) Cursor(ctx context.Context, a workflow.Attempt) (int64, error) {
 // are replays and are skipped; the cursor advances in the same transaction.
 // A malformed line returns ErrInvalid; the caller logs and continues.
 func (s *Store) Persist(ctx context.Context, a workflow.Attempt, raw []byte) error {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	var line watchLine
 	if len(raw) > 128<<10 || json.Unmarshal(raw, &line) != nil || line.Seq < 1 ||
 		!ids(a.OrganizationID, a.RunID, a.TaskID, a.ID) {
@@ -179,6 +182,7 @@ func (s *Store) Persist(ctx context.Context, a workflow.Attempt, raw []byte) err
 
 // CancelOpen closes an attempt's open interactions once the attempt stops.
 func (s *Store) CancelOpen(ctx context.Context, a workflow.Attempt) error {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -221,6 +225,7 @@ func scanRecord(row pgx.Row, extra ...any) (Record, error) {
 // ListInteractions returns a run's interactions oldest first. The caller must
 // have authorized view access to the run in orgID.
 func (s *Store) ListInteractions(ctx context.Context, orgID, runID string) ([]Record, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) {
 		return nil, workflow.ErrInvalid
 	}
@@ -273,6 +278,7 @@ func lockRunControl(ctx context.Context, tx pgx.Tx, caller identity.Caller) erro
 // Answer records the first answer to an open interaction. The answer is
 // committed before any delivery; later answers get ErrConflict.
 func (s *Store) Answer(ctx context.Context, caller identity.Caller, interactionID string, optionIDs []string, text string) (Record, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(interactionID) {
 		return Record{}, workflow.ErrInvalid
 	}
@@ -338,6 +344,7 @@ func (s *Store) Answer(ctx context.Context, caller identity.Caller, interactionI
 // Steer persists a steering message for a running attempt; the watcher
 // delivers it via `bx steer` and redelivers until acknowledged.
 func (s *Store) Steer(ctx context.Context, caller identity.Caller, attemptID, kind, text, reason string, n int32) (string, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	text, reason = strings.TrimSpace(text), strings.TrimSpace(reason)
 	msg := map[string]any{"kind": kind}
 	switch {
@@ -408,6 +415,7 @@ type Delivery struct {
 
 // Pending lists undelivered answers then steers for an attempt, oldest first.
 func (s *Store) Pending(ctx context.Context, a workflow.Attempt) ([]Delivery, []Delivery, error) {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	var answers, steers []Delivery
 	rows, err := s.pool.Query(ctx, `SELECT id,origin_key,answer FROM workflow_interactions
 		WHERE organization_id=$1 AND attempt_id=$2 AND state='answered' AND delivered_at IS NULL
@@ -445,12 +453,14 @@ func (s *Store) Pending(ctx context.Context, a workflow.Attempt) ([]Delivery, []
 }
 
 func (s *Store) MarkAnswerDelivered(ctx context.Context, orgID, id string) error {
+	ctx = tenant.Org(ctx, orgID)
 	_, err := s.pool.Exec(ctx, `UPDATE workflow_interactions SET delivered_at=clock_timestamp()
 		WHERE organization_id=$1 AND id=$2 AND state='answered' AND delivered_at IS NULL`, orgID, id)
 	return err
 }
 
 func (s *Store) MarkSteerDelivered(ctx context.Context, orgID, id string) error {
+	ctx = tenant.Org(ctx, orgID)
 	_, err := s.pool.Exec(ctx, `UPDATE workflow_attempt_steers SET delivered_at=clock_timestamp()
 		WHERE organization_id=$1 AND id=$2 AND delivered_at IS NULL`, orgID, id)
 	return err
@@ -487,6 +497,7 @@ func (s *Store) subscribe(attemptID string) (<-chan struct{}, func()) {
 // Raise opens a platform escalation for a stage. A non-empty ix.ID makes the
 // call idempotent per (run, stage, id); the existing interaction is returned.
 func (s *Store) Raise(ctx context.Context, orgID, runID, stageKey string, ix Interaction) (string, error) {
+	ctx = tenant.Org(ctx, orgID)
 	ix.Kind = "escalation"
 	if ix.ID == "" {
 		var b [12]byte
@@ -537,6 +548,7 @@ func (s *Store) Raise(ctx context.Context, orgID, runID, stageKey string, ix Int
 // registered engine callback. It is safe to call concurrently: each row is
 // claimed with SKIP LOCKED for the duration of its callback.
 func (s *Store) DeliverEscalations(ctx context.Context) {
+	ctx = tenant.System(ctx)
 	s.mu.RLock()
 	fn := s.onAnswer
 	s.mu.RUnlock()

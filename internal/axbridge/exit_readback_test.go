@@ -14,6 +14,7 @@ import (
 
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -48,11 +49,11 @@ func TestCommandExitReaderRequiresCurrentActorRoute(t *testing.T) {
 	reader := CommandExitReader{Client: server.Client(), RouterURL: server.URL,
 		Token: func(context.Context) (string, error) { return "token", nil }}
 	actor := bootstrap.Actor{Atespace: "space", Name: "actor", UID: "uid"}
-	if _, err := reader.read(t.Context(), actor); !errors.Is(err, ErrPending) || called != 1 {
+	if _, err := reader.read(tenant.System(t.Context()), actor); !errors.Is(err, ErrPending) || called != 1 {
 		t.Fatalf("pending readback = %v, calls=%d", err, called)
 	}
 	reader.RouterURL = "http://insecure.example"
-	if _, err := reader.read(t.Context(), actor); !errors.Is(err, workflow.ErrInvalid) || called != 1 {
+	if _, err := reader.read(tenant.System(t.Context()), actor); !errors.Is(err, workflow.ErrInvalid) || called != 1 {
 		t.Fatalf("plaintext route accepted: %v", err)
 	}
 	redirected := false
@@ -64,7 +65,7 @@ func TestCommandExitReaderRequiresCurrentActorRoute(t *testing.T) {
 	defer redirect.Close()
 	reader.RouterURL = redirect.URL
 	reader.Client = redirect.Client()
-	if _, err := reader.read(t.Context(), actor); !errors.Is(err, ErrMismatch) || redirected {
+	if _, err := reader.read(tenant.System(t.Context()), actor); !errors.Is(err, ErrMismatch) || redirected {
 		t.Fatalf("redirect followed or accepted: %v, redirected=%v", err, redirected)
 	}
 }
@@ -77,27 +78,27 @@ func TestCommandExitConnectorRecordsOnlyBoundObservation(t *testing.T) {
 			t.Fatal(err)
 		}
 		var org string
-		if err := pool.QueryRow(t.Context(), `INSERT INTO identity_organizations (id,slug,name)
+		if err := pool.QueryRow(tenant.System(t.Context()), `INSERT INTO identity_organizations (id,slug,name)
 		VALUES (gen_random_uuid(),'exit-org','Exit Org') RETURNING id`).Scan(&org); err != nil {
 			t.Fatal(err)
 		}
-		project, err := store.CreateProject(t.Context(), org, "exit-project", "Exit Project")
+		project, err := store.CreateProject(tenant.System(t.Context()), org, "exit-project", "Exit Project")
 		if err != nil {
 			t.Fatal(err)
 		}
-		run, err := store.CreateRun(t.Context(), workflow.RunInput{OrganizationID: org, ProjectID: project,
+		run, err := store.CreateRun(tenant.System(t.Context()), workflow.RunInput{OrganizationID: org, ProjectID: project,
 			LaunchKey: "exit-run", SourceCommit: strings.Repeat("a", 40), BundleSHA256: strings.Repeat("b", 64), VerificationSHA256: strings.Repeat("c", 64)})
 		if err != nil {
 			t.Fatal(err)
 		}
-		taskID, err := store.AddTask(t.Context(), org, run.ID, "implement", strings.Repeat("d", 64), 1)
+		taskID, err := store.AddTask(tenant.System(t.Context()), org, run.ID, "implement", strings.Repeat("d", 64), 1)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := pool.Exec(t.Context(), `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, org, run.ID); err != nil {
+		if _, err := pool.Exec(tenant.System(t.Context()), `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, org, run.ID); err != nil {
 			t.Fatal(err)
 		}
-		attempt, err := store.ReserveAttempt(t.Context(), org, run.ID, taskID)
+		attempt, err := store.ReserveAttempt(tenant.System(t.Context()), org, run.ID, taskID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -118,15 +119,15 @@ func TestCommandExitConnectorRecordsOnlyBoundObservation(t *testing.T) {
 		}
 		task.Status.Phase, task.Status.Actor = "Running", name
 		ax.task = &task
-		if err := store.BindRuntime(t.Context(), attempt, workflow.RuntimeBinding{AXAtespace: space, AXTask: name,
+		if err := store.BindRuntime(tenant.System(t.Context()), attempt, workflow.RuntimeBinding{AXAtespace: space, AXTask: name,
 			ActorUID: runtime.Actor.UID, TemplateUID: runtime.TemplateUID, Image: image, WorkerPool: "pool-a",
 			CommandSHA256: runnerexit.CommandSHA256(syntheticCommand)}); err != nil {
 			t.Fatal(err)
 		}
-		if err := store.ConfirmStarting(t.Context(), attempt); err != nil {
+		if err := store.ConfirmStarting(tenant.System(t.Context()), attempt); err != nil {
 			t.Fatal(err)
 		}
-		if err := store.ConfirmStarted(t.Context(), attempt); err != nil {
+		if err := store.ConfirmStarted(tenant.System(t.Context()), attempt); err != nil {
 			t.Fatal(err)
 		}
 		var nonceBytes [32]byte
@@ -160,12 +161,12 @@ func TestCommandExitConnectorRecordsOnlyBoundObservation(t *testing.T) {
 			}},
 			Collector: workflow.CommandExitCollector{Store: store, SignerID: "pool-a/connector", PublicKey: public, WorkerPool: "pool-a"}}
 		observation.CommandSHA256 = strings.Repeat("f", 64)
-		if err := connector.Collect(t.Context(), attempt); !errors.Is(err, ErrMismatch) || proved != 0 {
+		if err := connector.Collect(tenant.System(t.Context()), attempt); !errors.Is(err, ErrMismatch) || proved != 0 {
 			t.Fatalf("wrong command accepted: %v", err)
 		}
 		observation.CommandSHA256 = runnerexit.CommandSHA256(syntheticCommand)
 		connector.Activation = testActivation{func(bootstrap.Scope, bootstrap.Runtime, string) error { return bootstrap.ErrDenied }}
-		if err := connector.Collect(t.Context(), attempt); !errors.Is(err, bootstrap.ErrDenied) {
+		if err := connector.Collect(tenant.System(t.Context()), attempt); !errors.Is(err, bootstrap.ErrDenied) {
 			t.Fatalf("unproved activation accepted: %v", err)
 		}
 		connector.Activation = testActivation{func(scope bootstrap.Scope, got bootstrap.Runtime, n string) error {
@@ -175,25 +176,25 @@ func TestCommandExitConnectorRecordsOnlyBoundObservation(t *testing.T) {
 			}
 			return nil
 		}}
-		if err := connector.Collect(t.Context(), attempt); err != nil {
+		if err := connector.Collect(tenant.System(t.Context()), attempt); err != nil {
 			t.Fatal(err)
 		}
-		if err := connector.Collect(t.Context(), attempt); err != nil {
+		if err := connector.Collect(tenant.System(t.Context()), attempt); err != nil {
 			t.Fatalf("same readback was not idempotent: %v", err)
 		}
 		var count int
-		if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM workflow_command_exits WHERE organization_id=$1 AND attempt_id=$2`, org, attempt.ID).Scan(&count); err != nil || count != 1 {
+		if err := pool.QueryRow(tenant.System(t.Context()), `SELECT count(*) FROM workflow_command_exits WHERE organization_id=$1 AND attempt_id=$2`, org, attempt.ID).Scan(&count); err != nil || count != 1 {
 			t.Fatalf("exit receipt = %d, %v", count, err)
 		}
-		if _, state, _, err := store.CurrentAttempt(t.Context(), attempt); err != nil || state != "running" {
+		if _, state, _, err := store.CurrentAttempt(tenant.System(t.Context()), attempt); err != nil || state != "running" {
 			t.Fatalf("exit alone finished task: %s, %v", state, err)
 		}
 		connector.Collector.PublicKey = make(ed25519.PublicKey, ed25519.PublicKeySize)
-		if err := connector.Reconcile(t.Context(), attempt); !errors.Is(err, workflow.ErrConflict) {
+		if err := connector.Reconcile(tenant.System(t.Context()), attempt); !errors.Is(err, workflow.ErrConflict) {
 			t.Fatalf("receipt with wrong signing key was trusted: %v", err)
 		}
 		connector.Collector.PublicKey = public
-		running, err := store.ListRunningAttempts(t.Context(), "", "", 1)
+		running, err := store.ListRunningAttempts(tenant.System(t.Context()), "", "", 1)
 		if err != nil || len(running) != 1 || running[0].ID != attempt.ID {
 			t.Fatalf("running attempt scan = %+v, %v", running, err)
 		}
@@ -205,11 +206,11 @@ func TestCommandExitConnectorRecordsOnlyBoundObservation(t *testing.T) {
 			}
 			return &connector, nil
 		}}
-		batch, err := sweep.Sweep(t.Context(), "", "", 1)
+		batch, err := sweep.Sweep(tenant.System(t.Context()), "", "", 1)
 		if err != nil || batch.Examined != 1 || batch.AfterAttemptID != attempt.ID {
 			t.Fatalf("completion sweep did not advance cursor: %+v, %v", batch, err)
 		}
-		running, err = store.ListRunningAttempts(t.Context(), "", "", 1)
+		running, err = store.ListRunningAttempts(tenant.System(t.Context()), "", "", 1)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -223,17 +224,17 @@ func TestCommandExitConnectorRecordsOnlyBoundObservation(t *testing.T) {
 				return []byte(`{"schema":"blaxsmith.attempt-result/v1alpha1","summary":"done","revision":"` +
 					strings.Repeat("b", 40) + `","verdict":""}`), nil
 			}
-			batch, err = sweep.Sweep(t.Context(), "", "", 1)
+			batch, err = sweep.Sweep(tenant.System(t.Context()), "", "", 1)
 			if err != nil || batch.Waiting != 1 || revoked != 1 || reads != 1 {
 				t.Fatalf("clean result did not start actor stop: %+v, revoked=%d, %v", batch, revoked, err)
 			}
 			gone = true
-			batch, err = sweep.Sweep(t.Context(), "", "", 1)
+			batch, err = sweep.Sweep(tenant.System(t.Context()), "", "", 1)
 			if err != nil || batch.Stopped != 1 || reads != 1 {
 				t.Fatalf("recorded result did not resume stop without a guest read: %+v, reads=%d, %v", batch, reads, err)
 			}
 			var attemptState, taskState string
-			if err := pool.QueryRow(t.Context(), `SELECT a.state,t.state FROM workflow_attempts a JOIN workflow_tasks t
+			if err := pool.QueryRow(tenant.System(t.Context()), `SELECT a.state,t.state FROM workflow_attempts a JOIN workflow_tasks t
 				ON t.organization_id=a.organization_id AND t.id=a.task_id WHERE a.organization_id=$1 AND a.id=$2`,
 				org, attempt.ID).Scan(&attemptState, &taskState); err != nil || attemptState != "succeeded" || taskState != "succeeded" {
 				t.Fatalf("stopped clean result was not accepted: %s/%s, %v", attemptState, taskState, err)
@@ -243,15 +244,15 @@ func TestCommandExitConnectorRecordsOnlyBoundObservation(t *testing.T) {
 				t.Fatalf("failed exit skipped actor-gone proof: %+v, running=%d, revoked=%d", batch, len(running), revoked)
 			}
 			gone = true
-			batch, err = sweep.Sweep(t.Context(), "", "", 1)
+			batch, err = sweep.Sweep(tenant.System(t.Context()), "", "", 1)
 			if err != nil || batch.Stopped != 1 || revoked != 2 {
 				t.Fatalf("durable signed receipt did not resume stop: %+v, revoked=%d, %v", batch, revoked, err)
 			}
-			running, err = store.ListRunningAttempts(t.Context(), "", "", 1)
+			running, err = store.ListRunningAttempts(tenant.System(t.Context()), "", "", 1)
 			if err != nil || len(running) != 0 {
 				t.Fatalf("stopped attempt remained in scan: %+v, %v", running, err)
 			}
-			if _, _, _, err := store.CurrentAttempt(t.Context(), attempt); !errors.Is(err, workflow.ErrFenced) {
+			if _, _, _, err := store.CurrentAttempt(tenant.System(t.Context()), attempt); !errors.Is(err, workflow.ErrFenced) {
 				t.Fatalf("stopped attempt still owns task: %v", err)
 			}
 		}

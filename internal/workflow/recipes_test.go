@@ -13,22 +13,23 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // grantRecipe records an organization recipe grant through lane U's
 // access.GrantResource and returns the grant ID.
 func grantRecipe(t *testing.T, store *Store, owner identity.Caller, recipeID string, to access.Grantee) string {
 	t.Helper()
-	tx, err := store.pool.Begin(t.Context())
+	tx, err := store.pool.Begin(tenant.System(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback(context.Background())
-	id, err := access.GrantResource(t.Context(), tx, owner, access.ResourceRecipe, recipeID, to)
+	defer tx.Rollback(tenant.System(context.Background()))
+	id, err := access.GrantResource(tenant.System(t.Context()), tx, owner, access.ResourceRecipe, recipeID, to)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.Commit(t.Context()); err != nil {
+	if err := tx.Commit(tenant.System(t.Context())); err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -37,7 +38,7 @@ func grantRecipe(t *testing.T, store *Store, owner identity.Caller, recipeID str
 // seedGrants lists live member-role grants on an organization recipe.
 func seedGrants(t *testing.T, store *Store, org, recipeID string) []string {
 	t.Helper()
-	rows, err := store.pool.Query(t.Context(), `SELECT id::text FROM access_resource_grants WHERE organization_id=$1
+	rows, err := store.pool.Query(tenant.System(t.Context()), `SELECT id::text FROM access_resource_grants WHERE organization_id=$1
 		AND resource_kind='recipe' AND resource_id=$2 AND grantee_role='member' AND revoked_at IS NULL`, org, recipeID)
 	if err != nil {
 		t.Fatal(err)
@@ -51,15 +52,15 @@ func seedGrants(t *testing.T, store *Store, org, recipeID string) []string {
 
 func revokeRecipeGrant(t *testing.T, store *Store, owner identity.Caller, grantID string) {
 	t.Helper()
-	tx, err := store.pool.Begin(t.Context())
+	tx, err := store.pool.Begin(tenant.System(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback(context.Background())
-	if err := access.RevokeResourceGrant(t.Context(), tx, owner, grantID); err != nil {
+	defer tx.Rollback(tenant.System(context.Background()))
+	if err := access.RevokeResourceGrant(tenant.System(t.Context()), tx, owner, grantID); err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.Commit(t.Context()); err != nil {
+	if err := tx.Commit(tenant.System(t.Context())); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -75,13 +76,13 @@ func guildRecipe(t *testing.T) []byte {
 
 func seededGuild(t *testing.T, store *Store, caller identity.Caller) (LibraryRecipe, RecipeVersion) {
 	t.Helper()
-	recipes, err := store.ListRecipes(t.Context(), caller, "")
+	recipes, err := store.ListRecipes(tenant.System(t.Context()), caller, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range recipes {
 		if r.Name == "Guild engineering" {
-			v, err := store.GetRecipeVersion(t.Context(), caller, r.CurrentVersionID)
+			v, err := store.GetRecipeVersion(tenant.System(t.Context()), caller, r.CurrentVersionID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -94,7 +95,7 @@ func seededGuild(t *testing.T, store *Store, caller identity.Caller) (LibraryRec
 
 func TestRecipeSeedIsIdempotentAndVersionsAreImmutable(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)
@@ -204,7 +205,7 @@ func TestRecipeSeedIsIdempotentAndVersionsAreImmutable(t *testing.T) {
 
 func TestRecipeValidationErrorsAreSurfaced(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)
@@ -240,7 +241,7 @@ func TestRecipeValidationErrorsAreSurfaced(t *testing.T) {
 
 func TestRecipeScopesAndPermissions(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)
@@ -355,7 +356,7 @@ func TestRecipeScopesAndPermissions(t *testing.T) {
 
 func TestLaunchFromLibraryFreezesSameDigestAsFile(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)
@@ -437,7 +438,7 @@ func TestLaunchFromLibraryFreezesSameDigestAsFile(t *testing.T) {
 
 func TestRecipeGrantsAreManagedAndAudited(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)

@@ -1,11 +1,16 @@
 package workflow
 
-import "context"
+import (
+	"context"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
+)
 
 // WithAttemptDispatchLock serializes external AX operations for one attempt
 // across scheduler processes. A transaction-scoped PostgreSQL advisory lock
 // is released even when a process loses its database connection.
 func (s *Store) WithAttemptDispatchLock(ctx context.Context, a Attempt, fn func(context.Context) error) error {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if !validAttempt(a) || fn == nil {
 		return ErrInvalid
 	}

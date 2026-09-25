@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/runbranch"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -33,7 +34,7 @@ func runGit(t *testing.T, dir string, args ...string) string {
 // local bare "project repo" and a fake guest bundle reader.
 func TestRunBranchDeliveryPostgres(t *testing.T) {
 	pool := terminalTestPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context()) // fixtures and assertions read every organization
 	store, err := workflow.New(pool)
 	if err != nil {
 		t.Fatal(err)

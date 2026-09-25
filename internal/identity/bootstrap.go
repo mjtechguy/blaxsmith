@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var ErrBootstrapped = errors.New("installation already has identity data")
@@ -28,6 +29,7 @@ type FirstOwner struct {
 // invariant does not grant a public setup endpoint or bypass a later session.
 // The owner signs in with email; the internal handle derives from it.
 func BootstrapOwner(ctx context.Context, pool *pgxpool.Pool, email, slug, name string, password []byte) (FirstOwner, error) {
+	ctx = tenant.System(ctx)
 	email, emailErr := NormalizeEmail(email)
 	if pool == nil || emailErr != nil || !organizationSlug.MatchString(slug) ||
 		strings.TrimSpace(name) == "" || utf8.RuneCountInString(name) > 160 || !utf8.ValidString(name) ||

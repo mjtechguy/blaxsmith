@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var ErrAttemptControlDenied = errors.New("attempt control denied")
@@ -41,6 +42,7 @@ func scanAttemptTerminal(row pgx.Row, orgID, attemptID string) (AttemptTerminal,
 
 // GetAttemptTerminal is tenant-scoped; any live member may view.
 func (s *Store) GetAttemptTerminal(ctx context.Context, orgID, attemptID string) (AttemptTerminal, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, attemptID) {
 		return AttemptTerminal{}, ErrInvalid
 	}
@@ -71,6 +73,7 @@ const takeOverAllowed = `SELECT NOT EXISTS (SELECT 1 FROM access_bindings b
 // CanTakeOverAttempt reports whether the caller's role and model connection
 // ownership allow a takeover. It does not check that the attempt is running.
 func (s *Store) CanTakeOverAttempt(ctx context.Context, caller identity.Caller, attemptID string) (bool, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, attemptID) ||
 		(caller.Role != "owner" && caller.Role != "admin" && caller.Role != "member") {
 		return false, nil
@@ -85,6 +88,7 @@ func (s *Store) CanTakeOverAttempt(ctx context.Context, caller identity.Caller, 
 // other holder is ErrConflict. The caller must hold run-control (not viewer)
 // and pass the key-disclosure rule (takeOverAllowed).
 func (s *Store) TakeOverAttempt(ctx context.Context, caller identity.Caller, attemptID string) (t AttemptTerminal, changed bool, err error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if caller.Role != "owner" && caller.Role != "admin" && caller.Role != "member" {
 		return AttemptTerminal{}, false, ErrAttemptControlDenied
 	}
@@ -118,6 +122,7 @@ func (s *Store) TakeOverAttempt(ctx context.Context, caller identity.Caller, att
 // ReleaseAttemptControl returns control to the agent. Only the holder
 // principal may release, and only at the generation it observed.
 func (s *Store) ReleaseAttemptControl(ctx context.Context, caller identity.Caller, attemptID string, generation int64) (AttemptTerminal, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, t, err := s.lockAttemptControl(ctx, caller, attemptID, false)
 	if err != nil {
 		return AttemptTerminal{}, err

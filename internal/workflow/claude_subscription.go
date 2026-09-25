@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // claudeSetupToken is the shape `claude setup-token` prints. Only the shape is
@@ -18,6 +19,7 @@ var claudeSetupToken = regexp.MustCompile(`^sk-ant-oat[A-Za-z0-9_-]{8,500}$`)
 // ClaudeSubscriptionAllowed reports whether members may use their own Claude
 // subscription for their own runs. Any member may read it.
 func (s *Store) ClaudeSubscriptionAllowed(ctx context.Context, caller identity.Caller) (bool, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID) {
 		return false, ErrInvalid
 	}
@@ -33,6 +35,7 @@ func (s *Store) ClaudeSubscriptionAllowed(ctx context.Context, caller identity.C
 // SetClaudeSubscriptionAllowedAs flips the org switch. Owners and admins only;
 // the live session and role are rechecked, and the change is audited.
 func (s *Store) SetClaudeSubscriptionAllowedAs(ctx context.Context, caller identity.Caller, allowed bool) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if caller.Role != "owner" && caller.Role != "admin" {
 		return ErrConnectionDenied
 	}
@@ -83,6 +86,7 @@ func requireClaudeSubscriptionAllowed(ctx context.Context, tx pgx.Tx, orgID stri
 // (user grants, native_raw), and access.deliveryAllowed keeps it owner-only.
 func (s *Store) CreateClaudeSubscriptionAs(ctx context.Context, caller identity.Caller, token []byte,
 	secrets *access.SecretStore) (Connection, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if secrets == nil || !claudeSetupToken.Match(token) {
 		return Connection{}, ErrInvalid
 	}

@@ -25,6 +25,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/interact"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/terminal"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
@@ -44,6 +45,10 @@ func serveApp(args []string) error {
 }
 
 func serveAppContext(ctx context.Context, args []string) error {
+	// Startup and the background loops started here are cross-organization.
+	// Request handlers get fresh contexts from net/http, so a request reaches
+	// organization rows only through store calls that scope to its caller.
+	ctx = tenant.System(ctx)
 	config, err := parseAppConfig(args)
 	if err != nil {
 		return err
@@ -85,7 +90,7 @@ func serveAppContext(ctx context.Context, args []string) error {
 	}
 	startupCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	pool, err := pgxpool.NewWithConfig(startupCtx, dbConfig)
+	pool, err := pgxpool.NewWithConfig(startupCtx, tenant.Configure(dbConfig))
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
@@ -101,6 +106,11 @@ func serveAppContext(ctx context.Context, args []string) error {
 	}
 	if migrationErr != nil {
 		return fmt.Errorf("verify database migrations: %w", migrationErr)
+	}
+	var bypassRLS bool
+	if err := pool.QueryRow(startupCtx, `SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname=current_user`).
+		Scan(&bypassRLS); err == nil && bypassRLS {
+		log.Printf("database role bypasses row-level security; tenant isolation relies on query filters alone")
 	}
 	manager, err := identity.NewSessionManager(pool, config.origin, signer, previous...)
 	if err != nil {

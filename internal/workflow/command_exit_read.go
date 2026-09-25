@@ -11,12 +11,14 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Load returns an already recorded connector receipt for the exact current
 // owner. Re-verifying its signature lets reconciliation resume after AX delete
 // without trusting an unsigned database row or a stale attempt.
 func (c CommandExitCollector) Load(ctx context.Context, a Attempt) (runnerexit.ExitReport, RuntimeBinding, error) {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if c.Store == nil || c.SignerID == "" || c.WorkerPool == "" ||
 		len(c.PublicKey) != ed25519.PublicKeySize || !validAttempt(a) {
 		return runnerexit.ExitReport{}, RuntimeBinding{}, ErrInvalid

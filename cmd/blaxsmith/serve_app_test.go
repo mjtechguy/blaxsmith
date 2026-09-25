@@ -38,6 +38,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -109,7 +110,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if dsn == "" {
 		t.Skip("set BLAXSMITH_TEST_DATABASE_URL")
 	}
-	ctx := context.Background()
+	ctx := tenant.System(context.Background()) // fixtures and assertions read every organization
 	admin, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +139,7 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	query.Set("search_path", schema)
 	databaseURL.RawQuery = query.Encode()
 	t.Setenv("BLAXSMITH_DATABASE_URL", databaseURL.String())
-	pool, err := pgxpool.New(ctx, databaseURL.String())
+	pool, err := tenant.NewPool(ctx, databaseURL.String())
 	if err != nil {
 		t.Fatal(err)
 	}

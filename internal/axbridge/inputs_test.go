@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"testing"
 
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 	"gopkg.in/yaml.v3"
 )
@@ -47,7 +48,7 @@ func TestToolInputsRequireNarrowNativeWorkspaceAndGateway(t *testing.T) {
 		}}
 	check := func(want bool) {
 		t.Helper()
-		err := bridge.CheckToolInputs(t.Context(), org, "https://github.com/owner/repo", "openai")
+		err := bridge.CheckToolInputs(tenant.System(t.Context()), org, "https://github.com/owner/repo", "openai")
 		if (err == nil) != want {
 			t.Fatalf("AX input check = %v, want pass %t", err, want)
 		}
@@ -94,7 +95,7 @@ func TestOpenCodeGoGatewayAllowsOnlyOpenCodeHost(t *testing.T) {
 		t.Fatalf("OpenCode Go egress host: %q", providerHost("opencode-go"))
 	}
 	for provider, want := range map[string]bool{"opencode-go": true, "opencode": true, "openai": false, "opencode-zen": false} {
-		err := bridge.checkGateway(t.Context(), gateway, "public-egress", space, "https://github.com/owner/repo", bridge.modelEgressHost(provider))
+		err := bridge.checkGateway(tenant.System(t.Context()), gateway, "public-egress", space, "https://github.com/owner/repo", bridge.modelEgressHost(provider))
 		if (err == nil) != want {
 			t.Fatalf("%s gateway check = %v, want pass %t", provider, err, want)
 		}
@@ -108,20 +109,20 @@ func TestOpenGatewayRequiresExplicitDevelopmentMode(t *testing.T) {
 		Metadata: TaskMetadata{Name: "public-egress", Atespace: space},
 		Spec:     GatewaySpec{Egress: &GatewayEgress{Allowlist: &GatewayAllowlist{Hosts: []GatewayHostRule{{Host: "*"}}}}}}
 	bridge := Bridge{GatewayEgressMode: "open-dev"}
-	if err := bridge.checkGateway(t.Context(), gateway, "public-egress", space, repo, "openai"); err != nil {
+	if err := bridge.checkGateway(tenant.System(t.Context()), gateway, "public-egress", space, repo, "openai"); err != nil {
 		t.Fatalf("explicit development open Gateway rejected: %v", err)
 	}
 	bridge.GatewayEgressMode = "exact"
-	if err := bridge.checkGateway(t.Context(), gateway, "public-egress", space, repo, "openai"); !errors.Is(err, ErrInputs) {
+	if err := bridge.checkGateway(tenant.System(t.Context()), gateway, "public-egress", space, repo, "openai"); !errors.Is(err, ErrInputs) {
 		t.Fatalf("open Gateway accepted in exact mode: %v", err)
 	}
 	bridge.GatewayEgressMode = "open-dev"
 	gateway.Spec.Egress.Allowlist.Hosts[0].Port = 443
-	if err := bridge.checkGateway(t.Context(), gateway, "public-egress", space, repo, "openai"); !errors.Is(err, ErrInputs) {
+	if err := bridge.checkGateway(tenant.System(t.Context()), gateway, "public-egress", space, repo, "openai"); !errors.Is(err, ErrInputs) {
 		t.Fatalf("port-restricted wildcard unexpectedly accepted: %v", err)
 	}
 	gateway.Spec.Egress.Allowlist.Hosts = []GatewayHostRule{{Host: "*"}, {Host: "8.8.8.8/32"}}
-	if err := bridge.checkGateway(t.Context(), gateway, "public-egress", space, repo, "openai"); !errors.Is(err, ErrInputs) {
+	if err := bridge.checkGateway(tenant.System(t.Context()), gateway, "public-egress", space, repo, "openai"); !errors.Is(err, ErrInputs) {
 		t.Fatalf("wildcard mixed with extra egress rules accepted: %v", err)
 	}
 }
@@ -136,12 +137,12 @@ func TestOpenDevGatewayDoesNotRelaxWorkspaceValidation(t *testing.T) {
 		Spec:     GatewaySpec{Egress: &GatewayEgress{Allowlist: &GatewayAllowlist{Hosts: []GatewayHostRule{{Host: "*"}}}}}}
 	bridge := Bridge{AX: &inputAX{workspace: workspace, gateway: gateway}, Workspace: "source",
 		Gateway: "public-egress", GatewayEgressMode: "open-dev"}
-	if err := bridge.CheckToolInputs(t.Context(), org, "https://github.com/owner/repo", "openai"); err != nil {
+	if err := bridge.CheckToolInputs(tenant.System(t.Context()), org, "https://github.com/owner/repo", "openai"); err != nil {
 		t.Fatal(err)
 	}
 	workspace.Spec["ambient"] = true
 	bridge.AX = &inputAX{workspace: workspace, gateway: gateway}
-	if err := bridge.CheckToolInputs(t.Context(), org, "https://github.com/owner/repo", "openai"); !errors.Is(err, ErrInputs) {
+	if err := bridge.CheckToolInputs(tenant.System(t.Context()), org, "https://github.com/owner/repo", "openai"); !errors.Is(err, ErrInputs) {
 		t.Fatalf("open-dev mode bypassed Workspace checks: %v", err)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestRuntimeBoundSuccessRequiresCleanExitPostgres(t *testing.T) {
@@ -21,7 +22,7 @@ func TestRuntimeBoundSuccessRequiresCleanExitPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	org := organization(t, pool, "exit-gate")
-	project, err := store.CreateProject(t.Context(), org, "exit-gate", "Exit gate")
+	project, err := store.CreateProject(tenant.System(t.Context()), org, "exit-gate", "Exit gate")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +44,7 @@ func TestRuntimeBoundSuccessRequiresCleanExitPostgres(t *testing.T) {
 		{name: "clean", receipt: true, allow: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := t.Context()
+			ctx := tenant.System(t.Context())
 			run, err := store.CreateRun(ctx, RunInput{OrganizationID: org, ProjectID: project,
 				LaunchKey: test.name, SourceCommit: strings.Repeat("a", 40),
 				BundleSHA256: strings.Repeat("b", 64), VerificationSHA256: strings.Repeat("c", 64)})

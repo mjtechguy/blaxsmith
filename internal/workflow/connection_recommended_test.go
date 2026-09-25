@@ -4,11 +4,13 @@ import (
 	"errors"
 	"slices"
 	"testing"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestRecommendedModelsArePinnedByManagers(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)

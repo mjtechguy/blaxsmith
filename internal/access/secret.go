@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var ErrStale = errors.New("secret version changed")
@@ -61,6 +62,7 @@ func NewSecretStore(db *pgxpool.Pool, current string, keys map[string][]byte) (*
 // connection with no secret yet. The caller retains and must clear plaintext.
 func (s *SecretStore) Rotate(ctx context.Context, organizationID, connectionID string,
 	expectedVersion int64, plaintext []byte, expiresAt *time.Time) (int64, error) {
+	ctx = tenant.Org(ctx, organizationID)
 	if s == nil || organizationID == "" || connectionID == "" || expectedVersion < 0 ||
 		len(plaintext) == 0 || len(plaintext) > maxSecretBytes {
 		return 0, ErrDenied

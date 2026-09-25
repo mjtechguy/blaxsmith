@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestConnectorRequiresCompleteCredentialDelivery(t *testing.T) {
@@ -31,11 +32,11 @@ func TestConnectorRequiresCompleteCredentialDelivery(t *testing.T) {
 		Current:   func(context.Context) (Runtime, error) { return expected, nil },
 		Authorize: func(context.Context, pgx.Tx, Runtime, Challenge) error { return nil }}
 	connector.GitSetup = func(context.Context, pgx.Tx, Runtime) (GitSetup, error) { return GitSetup{}, nil }
-	if err := connector.Open(t.Context(), Scope{}, expected); !errors.Is(err, ErrDenied) {
+	if err := connector.Open(tenant.System(t.Context()), Scope{}, expected); !errors.Is(err, ErrDenied) {
 		t.Fatalf("credential delivery without lease reservation accepted: %v", err)
 	}
 	connector.Reserve = func(context.Context, pgx.Tx, Redeemed) error { return nil }
-	if err := connector.Open(t.Context(), Scope{}, expected); !errors.Is(err, ErrDenied) {
+	if err := connector.Open(tenant.System(t.Context()), Scope{}, expected); !errors.Is(err, ErrDenied) {
 		t.Fatalf("credential delivery without lease acknowledgement accepted: %v", err)
 	}
 }
@@ -59,7 +60,7 @@ func TestConnectorDoesNotFollowRedirectWithToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	connector := Connector{Client: router.Client(), Token: func(context.Context) (string, error) { return "test-token", nil }}
-	_, _, _, err = connector.request(context.Background(), parsed, Offer{ActorAtespace: "a", ActorName: "b", ActorUID: "c"}, http.MethodGet, "/blaxsmith/bootstrap/challenge", nil)
+	_, _, _, err = connector.request(tenant.System(context.Background()), parsed, Offer{ActorAtespace: "a", ActorName: "b", ActorUID: "c"}, http.MethodGet, "/blaxsmith/bootstrap/challenge", nil)
 	if err == nil || errors.Is(err, ErrDenied) || forwarded {
 		t.Fatalf("redirect was followed or accepted: err=%v, forwarded=%t", err, forwarded)
 	}

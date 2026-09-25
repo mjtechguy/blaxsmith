@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var githubClientID = regexp.MustCompile(`^[A-Za-z0-9._-]{8,64}$`)
@@ -21,6 +22,7 @@ type GitHubApp struct {
 }
 
 func (s *Store) GetGitHubApp(ctx context.Context, orgID string) (GitHubApp, error) {
+	ctx = tenant.Org(ctx, orgID)
 	var app GitHubApp
 	err := s.pool.QueryRow(ctx, `SELECT c.id,c.external_account_id,c.active_secret_version IS NOT NULL
 		FROM access_connections c JOIN access_provider_registrations p
@@ -37,6 +39,7 @@ func (s *Store) GetGitHubApp(ctx context.Context, orgID string) (GitHubApp, erro
 // secret keeps the stored one; a new client id without a secret is refused.
 func (s *Store) SetGitHubAppAs(ctx context.Context, caller identity.Caller, clientID string, secret []byte,
 	secrets *access.SecretStore) (GitHubApp, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !githubClientID.MatchString(clientID) || len(secret) > 512 || strings.ContainsAny(string(secret), "\r\n\x00 ") || secrets == nil {
 		return GitHubApp{}, ErrInvalid
 	}
@@ -85,6 +88,7 @@ func (s *Store) SetGitHubAppAs(ctx context.Context, caller identity.Caller, clie
 // GitHubAppSecret reads the client secret for the platform's own token
 // exchange. The caller must Clear it.
 func (s *Store) GitHubAppSecret(ctx context.Context, orgID string, secrets *access.SecretStore) (string, access.Secret, error) {
+	ctx = tenant.Org(ctx, orgID)
 	app, err := s.GetGitHubApp(ctx, orgID)
 	if err != nil || !app.Configured || secrets == nil {
 		return "", access.Secret{}, errors.Join(ErrNotFound, err)

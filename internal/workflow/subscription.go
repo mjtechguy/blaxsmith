@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // ErrSubscriptionPolicy means the project has not enabled subscription logins.
@@ -22,6 +23,7 @@ type SubscriptionConnection struct {
 // ListSubscriptionConnections returns only the caller's own logins and never
 // secret material.
 func (s *Store) ListSubscriptionConnections(ctx context.Context, caller identity.Caller, projectID string) ([]SubscriptionConnection, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, projectID) {
 		return nil, ErrInvalid
 	}
@@ -59,6 +61,7 @@ func (s *Store) ListSubscriptionConnections(ctx context.Context, caller identity
 // project's oauth_access policy as they connect; other members need it enabled.
 func (s *Store) CreateSubscriptionConnectionAs(ctx context.Context, caller identity.Caller, projectID, provider, model string,
 	credential []byte, secrets *access.SecretStore) (SubscriptionConnection, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if provider == "anthropic" {
 		return SubscriptionConnection{}, access.ErrClaudeSubscriptionDisabled
 	}
@@ -143,6 +146,7 @@ func (s *Store) CreateSubscriptionConnectionAs(ctx context.Context, caller ident
 // RevokeSubscriptionConnectionAs lets the owner (or an org owner/admin, who
 // can disable but never read it) stop every grant and lease of one login.
 func (s *Store) RevokeSubscriptionConnectionAs(ctx context.Context, caller identity.Caller, connectionID string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID) || !uuidPattern.MatchString(connectionID) {
 		return ErrInvalid
 	}

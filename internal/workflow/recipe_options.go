@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 type ModelConnection struct {
@@ -17,6 +18,7 @@ type ModelConnection struct {
 // editor. Only recipe editors (organization owners/admins) see connections.
 // It returns no secret material.
 func (s *Store) RecipeModelConnections(ctx context.Context, caller identity.Caller) ([]ModelConnection, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID) {
 		return nil, ErrInvalid
 	}

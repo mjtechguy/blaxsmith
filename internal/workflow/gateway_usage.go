@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Model gateway settings and usage reads (docs/model-gateway-plan.md §9,
@@ -57,6 +58,7 @@ func (s *Store) readGatewaySettings(ctx context.Context, q pgx.Tx, orgID string,
 
 // GatewaySettingsAs reads the organization's switches (owners and admins).
 func (s *Store) GatewaySettingsAs(ctx context.Context, caller identity.Caller) (GatewaySettingsView, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := s.beginScoped(ctx, caller, ScopeOrganization, "")
 	if err != nil {
 		return GatewaySettingsView{}, adminScopeError(err)
@@ -71,6 +73,7 @@ func (s *Store) GatewaySettingsAs(ctx context.Context, caller identity.Caller) (
 // in-flight streams finish; the next request is rejected (gateway authz).
 func (s *Store) UpdateGatewaySettingsAs(ctx context.Context, caller identity.Caller, next GatewaySettings,
 	expectedVersion int64, installed bool) (GatewaySettingsView, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !validDeliveryMode(next.DefaultDeliveryMode) || expectedVersion < 0 {
 		return GatewaySettingsView{}, ErrInvalid
 	}
@@ -131,6 +134,7 @@ func adminScopeError(err error) error {
 // GatewayEnabled reports the master switch; UI outside the settings page is
 // hidden while it is off.
 func (s *Store) GatewayEnabled(ctx context.Context, orgID string) (bool, error) {
+	ctx = tenant.Org(ctx, orgID)
 	var enabled bool
 	err := s.pool.QueryRow(ctx, `SELECT enabled FROM gateway_org_settings WHERE organization_id=$1`, orgID).Scan(&enabled)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -173,6 +177,7 @@ func (s *Store) projectDelivery(ctx context.Context, tx pgx.Tx, caller identity.
 
 // ProjectDeliveryAs lets any member read the project's delivery mode.
 func (s *Store) ProjectDeliveryAs(ctx context.Context, caller identity.Caller, projectID string) (ProjectDelivery, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, projectID) {
 		return ProjectDelivery{}, ErrInvalid
 	}
@@ -194,6 +199,7 @@ func (s *Store) ProjectDeliveryAs(ctx context.Context, caller identity.Caller, p
 // Settings → Model access). Empty clears it back to the organization default.
 // Refused while the organization enforces its default.
 func (s *Store) SetProjectDeliveryAs(ctx context.Context, caller identity.Caller, projectID, mode string) (ProjectDelivery, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if mode != "" && !validDeliveryMode(mode) {
 		return ProjectDelivery{}, ErrInvalid
 	}
@@ -303,6 +309,7 @@ func (s *Store) slices(ctx context.Context, tx pgx.Tx, query string, args ...any
 
 // UsageOverviewAs is the Admin → Usage & Gateway dashboard (owners, admins).
 func (s *Store) UsageOverviewAs(ctx context.Context, caller identity.Caller, days int, seriesBy string) (UsageOverview, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if seriesBy == "" {
 		seriesBy = "project"
 	}
@@ -427,6 +434,7 @@ type MyUsage struct {
 
 // MyUsageAs is account menu → My usage: only the caller's own runs.
 func (s *Store) MyUsageAs(ctx context.Context, caller identity.Caller, days int) (MyUsage, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID) {
 		return MyUsage{}, ErrInvalid
 	}
@@ -489,6 +497,7 @@ type RunCost struct {
 
 // RunCostAs is the run page Cost tab: any member of the run's organization.
 func (s *Store) RunCostAs(ctx context.Context, caller identity.Caller, runID string) (RunCost, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !uuidPattern.MatchString(runID) {
 		return RunCost{}, ErrInvalid
 	}
@@ -569,6 +578,7 @@ var priceProvider = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 // ModelPricesAs lists bundled manifest prices with any effective override on top.
 func (s *Store) ModelPricesAs(ctx context.Context, caller identity.Caller) ([]ModelPrice, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := s.beginScoped(ctx, caller, ScopeOrganization, "")
 	if err != nil {
 		return nil, adminScopeError(err)
@@ -622,6 +632,7 @@ func (s *Store) ModelPricesAs(ctx context.Context, caller identity.Caller) ([]Mo
 
 // SetModelPriceOverrideAs records contracted rates, effective now (audited).
 func (s *Store) SetModelPriceOverrideAs(ctx context.Context, caller identity.Caller, p ModelPrice) (ModelPrice, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	const maxRate = 1_000_000_000 // $1000 per MTok.
 	if !priceProvider.MatchString(p.Provider) || access.ModelOrigin(p.Provider) == "" || !priceModel.MatchString(p.Model) ||
 		p.Input < 0 || p.Output < 0 || p.CacheRead < 0 || p.CacheWrite < 0 ||
