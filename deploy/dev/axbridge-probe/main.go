@@ -25,6 +25,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/axbridge"
 	"github.com/mjtechguy/blaxsmith/internal/gitfetch"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
@@ -54,8 +55,9 @@ func run(database, server, image, signer, poolName, storage string, toolInputs, 
 		return errors.New("--workspace-ready requires --tool-inputs")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	ctx = tenant.System(ctx) // operator tool: seeds and reads every organization
 	defer cancel()
-	admin, err := pgxpool.New(ctx, database)
+	admin, err := tenant.NewPool(ctx, database)
 	if err != nil {
 		return err
 	}
@@ -80,7 +82,7 @@ func run(database, server, image, signer, poolName, storage string, toolInputs, 
 		return err
 	}
 	config.ConnConfig.RuntimeParams["search_path"] = schema
-	conn, err := pgxpool.NewWithConfig(ctx, config)
+	conn, err := pgxpool.NewWithConfig(ctx, tenant.Configure(config))
 	if err != nil {
 		return err
 	}

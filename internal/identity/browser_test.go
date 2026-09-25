@@ -15,11 +15,12 @@ import (
 	"connectrpc.com/connect"
 	api "github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1"
 	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestBrowserSessionPostgres(t *testing.T) {
 	pool := identityTestPool(t)
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	password := []byte("correct horse battery staple")
 	owner, err := BootstrapOwner(ctx, pool, "alice@example.com", "engineering", "Engineering", password)
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Escalation asks a human to choose a remedy when a loop or human correction
@@ -44,6 +45,7 @@ type ProgressBatch struct {
 // finalize and present completed runs, turn request_changes decisions into
 // corrections, and raise pending escalations. Every step is idempotent.
 func (s *Store) Progress(ctx context.Context, afterOrgID, afterRunID string, limit int, sink EscalationSink) (ProgressBatch, error) {
+	ctx = tenant.System(ctx)
 	if afterOrgID == "" {
 		afterOrgID = zeroUUID
 	}
@@ -181,6 +183,7 @@ func (s *Store) presentRun(ctx context.Context, run Run) error {
 // into corrections on each implement stage, reopening the run. Past the
 // recipe's max_correction_cycles it raises an escalation instead.
 func (s *Store) ApplyReviewDecision(ctx context.Context, orgID, runID string) (bool, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) {
 		return false, ErrInvalid
 	}
@@ -293,6 +296,7 @@ func (s *Store) raiseEscalations(ctx context.Context, orgID, runID string, sink 
 // accept_with_exceptions, or halt). People take over from the stage terminal,
 // not from an escalation. The caller must authorize run control first.
 func (s *Store) ResolveEscalation(ctx context.Context, orgID, runID, key, action string, cycles int) error {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) || (action == "raise_cap" && (cycles < 1 || cycles > 10)) ||
 		(action != "raise_cap" && action != "accept_with_exceptions" && action != "halt") {
 		return ErrInvalid

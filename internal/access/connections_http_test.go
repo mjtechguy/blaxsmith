@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestModelCatalogListsAndValidatesKeys(t *testing.T) {
@@ -45,25 +47,25 @@ func TestModelCatalogListsAndValidatesKeys(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := ModelCatalog{Base: map[string]string{"openai": srv.URL, "anthropic": srv.URL, "opencode": srv.URL + "/zen"}}
-	models, err := c.Fetch(t.Context(), "openai", []byte("sk-openai"))
+	models, err := c.Fetch(tenant.System(t.Context()), "openai", []byte("sk-openai"))
 	if err != nil || len(models) != 2 || models[0].ReleasedAt == nil || models[1].ReleasedAt != nil {
 		t.Fatalf("openai: %+v %v", models, err)
 	}
-	if _, err := c.Fetch(t.Context(), "openai", []byte("bad")); !errors.Is(err, ErrKeyRejected) {
+	if _, err := c.Fetch(tenant.System(t.Context()), "openai", []byte("bad")); !errors.Is(err, ErrKeyRejected) {
 		t.Fatalf("rejected openai key: %v", err)
 	}
-	models, err = c.Fetch(t.Context(), "anthropic", []byte("sk-ant"))
+	models, err = c.Fetch(tenant.System(t.Context()), "anthropic", []byte("sk-ant"))
 	if err != nil || len(models) != 2 || models[0].ContextTokens != 1000000 || len(models[0].Capabilities) == 0 ||
 		models[0].DisplayName != "Claude Opus 5" {
 		t.Fatalf("anthropic pages: %+v %v", models, err)
 	}
-	if models, err = c.Fetch(t.Context(), "opencode", []byte("zen-good")); err != nil || len(models) != 1 {
+	if models, err = c.Fetch(tenant.System(t.Context()), "opencode", []byte("zen-good")); err != nil || len(models) != 1 {
 		t.Fatalf("opencode: %+v %v", models, err)
 	}
-	if _, err := c.Fetch(t.Context(), "opencode", []byte("zen-bad")); !errors.Is(err, ErrKeyRejected) {
+	if _, err := c.Fetch(tenant.System(t.Context()), "opencode", []byte("zen-bad")); !errors.Is(err, ErrKeyRejected) {
 		t.Fatalf("rejected opencode key: %v", err)
 	}
-	if _, err := c.Fetch(t.Context(), "gemini", []byte("x")); !errors.Is(err, ErrDenied) {
+	if _, err := c.Fetch(tenant.System(t.Context()), "gemini", []byte("x")); !errors.Is(err, ErrDenied) {
 		t.Fatalf("unknown provider: %v", err)
 	}
 }
@@ -109,15 +111,15 @@ func TestCodexDeviceFlowExchangesOnceIntoCustodyShape(t *testing.T) {
 	}))
 	defer srv.Close()
 	d := CodexDevice{Issuer: srv.URL}
-	code, err := d.Start(t.Context())
+	code, err := d.Start(tenant.System(t.Context()))
 	if err != nil || code.UserCode != "ABCD-1234" || code.Interval != 5*time.Second || code.VerificationURL != srv.URL+"/codex/device" {
 		t.Fatalf("start: %+v %v", code, err)
 	}
-	if _, err := d.Poll(t.Context(), code); !errors.Is(err, ErrDevicePending) {
+	if _, err := d.Poll(tenant.System(t.Context()), code); !errors.Is(err, ErrDevicePending) {
 		t.Fatalf("pending: %v", err)
 	}
 	approved = true
-	bundle, err := d.Poll(t.Context(), code)
+	bundle, err := d.Poll(tenant.System(t.Context()), code)
 	if err != nil || exchanges != 1 {
 		t.Fatalf("approved: %v exchanges=%d", err, exchanges)
 	}
@@ -157,22 +159,22 @@ func TestGitHubOAuthAndRepositoryDiscovery(t *testing.T) {
 	if u := g.GitHubAuthorizeURL("cid", "https://app/oauth/github/callback", "st", "ch"); !strings.Contains(u, "code_challenge_method=S256") || !strings.Contains(u, "state=st") {
 		t.Fatalf("authorize url: %s", u)
 	}
-	if _, _, err := g.GitHubExchange(t.Context(), "cid", []byte("shh"), "code", "https://app/cb", "wrong"); err == nil {
+	if _, _, err := g.GitHubExchange(tenant.System(t.Context()), "cid", []byte("shh"), "code", "https://app/cb", "wrong"); err == nil {
 		t.Fatal("wrong PKCE verifier accepted")
 	}
-	token, login, err := g.GitHubExchange(t.Context(), "cid", []byte("shh"), "code", "https://app/cb", "verifier")
+	token, login, err := g.GitHubExchange(tenant.System(t.Context()), "cid", []byte("shh"), "code", "https://app/cb", "verifier")
 	if err != nil || string(token) != "gho_token" || login != "octo" {
 		t.Fatalf("exchange: %q %q %v", token, login, err)
 	}
-	repos, err := g.Repositories(t.Context(), "github.com", token, "APP")
+	repos, err := g.Repositories(tenant.System(t.Context()), "github.com", token, "APP")
 	if err != nil || len(repos) != 1 || repos[0].FullName != "octo/app" || !repos[0].Private {
 		t.Fatalf("repos (foreign clone URLs dropped): %+v %v", repos, err)
 	}
-	branches, err := g.Branches(t.Context(), "github.com", token, "octo/app")
+	branches, err := g.Branches(tenant.System(t.Context()), "github.com", token, "octo/app")
 	if err != nil || strings.Join(branches, ",") != "dev,main" {
 		t.Fatalf("branches: %v %v", branches, err)
 	}
-	if _, err := g.Branches(t.Context(), "github.com", token, "../x"); !errors.Is(err, ErrDenied) {
+	if _, err := g.Branches(tenant.System(t.Context()), "github.com", token, "../x"); !errors.Is(err, ErrDenied) {
 		t.Fatalf("path traversal repo accepted: %v", err)
 	}
 }

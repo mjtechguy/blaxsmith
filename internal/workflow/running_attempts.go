@@ -1,6 +1,10 @@
 package workflow
 
-import "context"
+import (
+	"context"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
+)
 
 const zeroUUID = "00000000-0000-0000-0000-000000000000"
 
@@ -8,6 +12,7 @@ const zeroUUID = "00000000-0000-0000-0000-000000000000"
 // after the last returned (organization ID, attempt ID) pair and resets both
 // cursors after an empty page. It does not claim or mutate an attempt.
 func (s *Store) ListRunningAttempts(ctx context.Context, afterOrgID, afterAttemptID string, limit int) ([]Attempt, error) {
+	ctx = tenant.System(ctx)
 	if afterOrgID == "" {
 		afterOrgID = zeroUUID
 	}
@@ -44,6 +49,7 @@ func (s *Store) ListRunningAttempts(ctx context.Context, afterOrgID, afterAttemp
 // ListUnresolvedAttempts finds current owners whose AX launch may have been
 // interrupted by a connector restart. It is bounded and does not claim work.
 func (s *Store) ListUnresolvedAttempts(ctx context.Context, afterOrgID, afterAttemptID string, limit int) ([]Attempt, error) {
+	ctx = tenant.System(ctx)
 	if afterOrgID == "" {
 		afterOrgID = zeroUUID
 	}

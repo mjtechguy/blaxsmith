@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"testing"
 
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 )
 
@@ -25,17 +26,17 @@ func TestModelGatewayReplacesProviderEgress(t *testing.T) {
 	template := Gateway{APIVersion: "ax.io/v1alpha1", Kind: "Gateway", Metadata: TaskMetadata{Name: "tpl", Atespace: "space"},
 		Spec: GatewaySpec{Egress: &GatewayEgress{Allowlist: &GatewayAllowlist{Hosts: []GatewayHostRule{
 			{Host: "140.82.112.3/32"}, {Host: "160.79.104.10/32"}}}}}}
-	if err := b.checkGateway(t.Context(), template, "tpl", "space", b.Tool.RepositoryURL, providerHost("anthropic")); err != nil {
+	if err := b.checkGateway(tenant.System(t.Context()), template, "tpl", "space", b.Tool.RepositoryURL, providerHost("anthropic")); err != nil {
 		t.Fatalf("template: %v", err)
 	}
 	// native_raw: the attempt keeps the template's provider egress.
-	native, err := b.attemptGatewayFor(t.Context(), template, "space", "egress-a", "anthropic")
+	native, err := b.attemptGatewayFor(tenant.System(t.Context()), template, "space", "egress-a", "anthropic")
 	if err != nil || len(native.Spec.Egress.Allowlist.Hosts) != 2 || native.Spec.Egress.Allowlist.Hosts[1].Host != "160.79.104.10/32" {
 		t.Fatalf("native egress: %+v %v", native.Spec.Egress.Allowlist.Hosts, err)
 	}
 	// brokered with direct egress removed: Git plus the gateway, no provider.
 	b.ModelGatewayHost = "gw.blaxsmith.dev"
-	brokered, err := b.attemptGatewayFor(t.Context(), template, "space", "egress-a", "anthropic")
+	brokered, err := b.attemptGatewayFor(tenant.System(t.Context()), template, "space", "egress-a", "anthropic")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,15 +45,15 @@ func TestModelGatewayReplacesProviderEgress(t *testing.T) {
 		t.Fatalf("brokered egress: %+v", hosts)
 	}
 	b.Gateway = "egress-a"
-	if err := b.checkGateway(t.Context(), brokered, "egress-a", "space", b.Tool.RepositoryURL, b.modelEgressHost("anthropic")); err != nil {
+	if err := b.checkGateway(tenant.System(t.Context()), brokered, "egress-a", "space", b.Tool.RepositoryURL, b.modelEgressHost("anthropic")); err != nil {
 		t.Fatalf("re-check before release: %v", err)
 	}
-	if err := b.checkGateway(t.Context(), native, "egress-a", "space", b.Tool.RepositoryURL, b.modelEgressHost("anthropic")); !errors.Is(err, ErrInputs) {
+	if err := b.checkGateway(tenant.System(t.Context()), native, "egress-a", "space", b.Tool.RepositoryURL, b.modelEgressHost("anthropic")); !errors.Is(err, ErrInputs) {
 		t.Fatalf("provider egress accepted for a brokered attempt: %v", err)
 	}
 	// A private gateway address cannot be an exact public egress rule.
 	addrs["gw.blaxsmith.dev"] = []netip.Addr{netip.MustParseAddr("10.0.0.5")}
-	if _, err := b.attemptGatewayFor(t.Context(), template, "space", "egress-a", "anthropic"); !errors.Is(err, ErrInputs) {
+	if _, err := b.attemptGatewayFor(tenant.System(t.Context()), template, "space", "egress-a", "anthropic"); !errors.Is(err, ErrInputs) {
 		t.Fatalf("private gateway address accepted: %v", err)
 	}
 }

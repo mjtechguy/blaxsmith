@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // RenewedLease is a model lease whose expiry moved forward.
@@ -22,6 +23,7 @@ type RenewedLease struct {
 // lease within ttl/2 of expiry is extended to now+ttl. Revoked or expired
 // leases are never renewed; the worker then stops at the old expiry.
 func RenewModelLeases(ctx context.Context, db *pgxpool.Pool, ttl time.Duration) ([]RenewedLease, error) {
+	ctx = tenant.System(ctx)
 	if db == nil || ttl <= 0 || ttl > time.Hour {
 		return nil, ErrDenied
 	}

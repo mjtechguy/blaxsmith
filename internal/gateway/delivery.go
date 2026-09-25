@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Delivery is how one attempt receives model access.
@@ -34,6 +35,7 @@ func ValidBaseURL(raw string) bool {
 // project falls back to native_raw on its next attempt; baseURL is the
 // installation's gateway ("" when the Helm gateway Deployment does not exist).
 func EffectiveDelivery(ctx context.Context, db *pgxpool.Pool, orgID, projectID, baseURL string) (Delivery, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if db == nil || orgID == "" || projectID == "" {
 		return Delivery{}, ErrDenied
 	}
@@ -76,6 +78,7 @@ func RecordAttemptDelivery(ctx context.Context, tx pgx.Tx, orgID, attemptID, har
 // AttemptDelivery reads the frozen mode; attempts dispatched before G1 have
 // no row and are native_raw.
 func AttemptDelivery(ctx context.Context, db *pgxpool.Pool, orgID, attemptID string) (Delivery, error) {
+	ctx = tenant.Org(ctx, orgID)
 	var delivery Delivery
 	err := db.QueryRow(ctx, `SELECT delivery_mode,base_url,remove_direct_egress FROM gateway_attempt_delivery
 		WHERE organization_id=$1 AND attempt_id=$2`, orgID, attemptID).Scan(&delivery.Mode, &delivery.BaseURL, &delivery.RemoveDirectEgress)

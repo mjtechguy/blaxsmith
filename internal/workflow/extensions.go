@@ -13,6 +13,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/extension"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // ErrExtensionDenied means the caller may not install or change extensions.
@@ -67,6 +68,7 @@ type ExtensionPreview struct {
 
 // PreviewExtension validates a fetched source without persisting anything.
 func (s *Store) PreviewExtension(ctx context.Context, caller identity.Caller, src ExtensionSource) (ExtensionPreview, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := requireExtensionAdmin(caller); err != nil {
 		return ExtensionPreview{}, err
 	}
@@ -120,6 +122,7 @@ func requireExtensionAdmin(caller identity.Caller) error {
 // string at the same commit and manifest is idempotent; at a different commit
 // or manifest it conflicts, so extension@version always names one install.
 func (s *Store) InstallExtensionAs(ctx context.Context, caller identity.Caller, src ExtensionSource, approved []string) (Extension, ExtensionVersion, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := requireExtensionAdmin(caller); err != nil {
 		return Extension{}, ExtensionVersion{}, err
 	}
@@ -204,6 +207,7 @@ func (s *Store) InstallExtensionAs(ctx context.Context, caller identity.Caller, 
 // RecordExtensionRefAs stores the latest resolution of an extension's ref,
 // which drives "update available".
 func (s *Store) RecordExtensionRefAs(ctx context.Context, caller identity.Caller, extensionID, commit string) (Extension, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := requireExtensionAdmin(caller); err != nil {
 		return Extension{}, err
 	}
@@ -236,6 +240,7 @@ func (s *Store) RecordExtensionRefAs(ctx context.Context, caller identity.Caller
 // ListExtensions returns the organization's extensions to any active member.
 // With projectID, it returns only those the caller may use in that project.
 func (s *Store) ListExtensions(ctx context.Context, caller identity.Caller, projectID string) ([]Extension, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID) || (projectID != "" && !ids(projectID)) {
 		return nil, ErrInvalid
 	}
@@ -273,6 +278,7 @@ func (s *Store) ListExtensions(ctx context.Context, caller identity.Caller, proj
 
 // GetExtension returns one extension and its versions, newest first.
 func (s *Store) GetExtension(ctx context.Context, caller identity.Caller, extensionID string) (Extension, []ExtensionVersion, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, extensionID) {
 		return Extension{}, nil, ErrNotFound
 	}
@@ -304,6 +310,7 @@ func (s *Store) extensionResolver(org string) *ExtensionResolver {
 
 // Resolve returns the installed, approved version of id@version.
 func (r *ExtensionResolver) Resolve(ctx context.Context, id, version string) (extension.Pin, error) {
+	ctx = tenant.Org(ctx, r.org)
 	var pin extension.Pin
 	var versionID, extensionID string
 	err := r.store.pool.QueryRow(ctx, `SELECT v.id::text,e.id::text,v.repository_url,v.commit_sha,v.manifest_json,v.approved_permissions
@@ -352,6 +359,7 @@ func (r *ExtensionResolver) recordRunExtensions(ctx context.Context, tx pgx.Tx, 
 
 // RunExtensions lists the extension versions a run froze.
 func (s *Store) RunExtensions(ctx context.Context, org, runID string) ([]ExtensionVersion, error) {
+	ctx = tenant.Org(ctx, org)
 	rows, err := s.pool.Query(ctx, `SELECT `+extensionVersionColumns+`
 		JOIN workflow_run_extensions re ON re.organization_id=v.organization_id AND re.extension_version_id=v.id
 		WHERE v.organization_id=$1 AND re.run_id=$2 ORDER BY v.version`, org, runID)
@@ -407,6 +415,7 @@ var extensionGrantColumns = strings.Replace(recipeGrantColumns, "g.resource_kind
 
 // ExtensionGrants lists live grants on an extension; owners/admins only.
 func (s *Store) ExtensionGrants(ctx context.Context, caller identity.Caller, extensionID string) ([]ConnectionGrant, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, extensionID) {
 		return nil, ErrInvalid
 	}
@@ -424,6 +433,7 @@ func (s *Store) ExtensionGrants(ctx context.Context, caller identity.Caller, ext
 // GrantExtensionAs grants an extension to a project, a member, or a minimum
 // role; access.GrantResource audits it.
 func (s *Store) GrantExtensionAs(ctx context.Context, caller identity.Caller, extensionID, projectID, granteeKind, granteeID string) (ConnectionGrant, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := requireExtensionAdmin(caller); err != nil {
 		return ConnectionGrant{}, err
 	}
@@ -471,6 +481,7 @@ func (s *Store) GrantExtensionAs(ctx context.Context, caller identity.Caller, ex
 // RevokeExtensionGrantAs revokes one live extension grant; launched runs
 // keep the versions they froze.
 func (s *Store) RevokeExtensionGrantAs(ctx context.Context, caller identity.Caller, grantID string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := requireExtensionAdmin(caller); err != nil {
 		return err
 	}

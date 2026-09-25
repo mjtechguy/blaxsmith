@@ -41,6 +41,10 @@ func runMigrations(ctx context.Context, pool *pgxpool.Pool, apply bool) (int, er
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('blaxsmith'), hashtext('schema'))`); err != nil {
 		return 0, fmt.Errorf("lock migrations: %w", err)
 	}
+	// Migrations rewrite rows of every organization (0140_tenant_rls.sql).
+	if _, err := tx.Exec(ctx, `SELECT set_config('blaxsmith.system', 'on', true)`); err != nil {
+		return 0, fmt.Errorf("scope migrations: %w", err)
+	}
 	if apply {
 		if _, err := tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS blaxsmith_schema_migrations (
 		version text PRIMARY KEY,

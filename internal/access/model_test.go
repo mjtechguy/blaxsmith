@@ -6,10 +6,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestModelAuthorityAndAttemptLeasePostgres(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	pool := testPool(t)
 	for _, statement := range []string{
 		`INSERT INTO access_provider_registrations

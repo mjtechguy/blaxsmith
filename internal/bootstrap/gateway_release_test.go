@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/gateway"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // gatewayRelease runs the model-phase release for an attempt dispatched in
@@ -18,7 +19,7 @@ import (
 func gatewayRelease(t *testing.T, enabled bool) (*pgxpool.Pool, *access.SecretStore, ModelAttempt, string, error) {
 	t.Helper()
 	pool, ledger, secrets, model, runtime, _ := modelAttemptFixture(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	if _, err := pool.Exec(ctx, `INSERT INTO gateway_org_settings (organization_id,enabled) VALUES ($1,$2)`,
 		model.Invoke.OrganizationID, enabled); err != nil {
 		t.Fatal(err)
@@ -59,7 +60,7 @@ func TestGatewayTokenLifecyclePostgres(t *testing.T) {
 	authorize := func(t *testing.T, pool *pgxpool.Pool, secrets *access.SecretStore, token string) (gateway.Grant, error) {
 		t.Helper()
 		a := &gateway.Authorizer{DB: pool, Secrets: secrets}
-		grant, err := a.Authorize(t.Context(), token, "openai")
+		grant, err := a.Authorize(tenant.System(t.Context()), token, "openai")
 		clear(grant.Key)
 		return grant, err
 	}
@@ -72,17 +73,17 @@ func TestGatewayTokenLifecyclePostgres(t *testing.T) {
 			t.Fatalf("sandbox received %q, want a gateway token", token)
 		}
 		var stored int
-		if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM gateway_tokens WHERE token_sha256=$1`,
+		if err := pool.QueryRow(tenant.System(t.Context()), `SELECT count(*) FROM gateway_tokens WHERE token_sha256=$1`,
 			func() []byte { h := gateway.HashToken(token); return h[:] }()).Scan(&stored); err != nil || stored != 1 {
 			t.Fatalf("token hash stored: %d %v", stored, err)
 		}
 		var plain int
-		if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM gateway_tokens WHERE position($1 in encode(token_sha256,'escape'))>0`,
+		if err := pool.QueryRow(tenant.System(t.Context()), `SELECT count(*) FROM gateway_tokens WHERE position($1 in encode(token_sha256,'escape'))>0`,
 			token).Scan(&plain); err != nil || plain != 0 {
 			t.Fatalf("plaintext token stored: %d %v", plain, err)
 		}
 		a := &gateway.Authorizer{DB: pool, Secrets: secrets}
-		grant, err := a.Authorize(t.Context(), token, "openai")
+		grant, err := a.Authorize(tenant.System(t.Context()), token, "openai")
 		if err != nil || string(grant.Key) != "private-provider-key" || grant.AttemptID != model.Attempt.ID ||
 			grant.Model != "gpt-6-luna" || grant.StageKey != "implement" || grant.Harness != "codex" {
 			t.Fatalf("authorize: %+v %v", grant, err)
@@ -91,7 +92,7 @@ func TestGatewayTokenLifecyclePostgres(t *testing.T) {
 		if _, err := authorize(t, pool, secrets, token+"x"); !errors.Is(err, gateway.ErrDenied) {
 			t.Fatalf("altered token accepted: %v", err)
 		}
-		if _, err := (&gateway.Authorizer{DB: pool, Secrets: secrets}).Authorize(t.Context(), token, "anthropic"); !errors.Is(err, gateway.ErrDenied) {
+		if _, err := (&gateway.Authorizer{DB: pool, Secrets: secrets}).Authorize(tenant.System(t.Context()), token, "anthropic"); !errors.Is(err, gateway.ErrDenied) {
 			t.Fatalf("token used for another family: %v", err)
 		}
 	})
@@ -102,11 +103,11 @@ func TestGatewayTokenLifecyclePostgres(t *testing.T) {
 		}
 		// Near expiry the existing renewal loop extends the lease; the token's
 		// expiry is the lease's, so it follows with no extra hook.
-		if _, err := pool.Exec(t.Context(), `UPDATE access_leases SET expires_at=clock_timestamp()+interval '2 minutes'
+		if _, err := pool.Exec(tenant.System(t.Context()), `UPDATE access_leases SET expires_at=clock_timestamp()+interval '2 minutes'
 			WHERE attempt_id=$1`, model.Attempt.ID); err != nil {
 			t.Fatal(err)
 		}
-		renewed, err := access.RenewModelLeases(t.Context(), pool, 30*time.Minute)
+		renewed, err := access.RenewModelLeases(tenant.System(t.Context()), pool, 30*time.Minute)
 		if err != nil || len(renewed) != 1 {
 			t.Fatalf("renewal: %+v %v", renewed, err)
 		}
@@ -115,7 +116,7 @@ func TestGatewayTokenLifecyclePostgres(t *testing.T) {
 			t.Fatalf("token did not follow the renewed lease: %v %v", grant.ExpiresAt, err)
 		}
 		// An expired lease denies the next request.
-		if _, err := pool.Exec(t.Context(), `UPDATE access_leases SET expires_at=clock_timestamp()-interval '1 second'
+		if _, err := pool.Exec(tenant.System(t.Context()), `UPDATE access_leases SET expires_at=clock_timestamp()-interval '1 second'
 			WHERE attempt_id=$1`, model.Attempt.ID); err != nil {
 			t.Fatal(err)
 		}
@@ -139,12 +140,12 @@ func TestGatewayTokenLifecyclePostgres(t *testing.T) {
 					t.Fatalf("before revocation: %v", err)
 				}
 				if name == "attempt" { // the task row must release its active attempt first.
-					if _, err := pool.Exec(t.Context(), `UPDATE workflow_tasks SET state='blocked',active_attempt_id=NULL
+					if _, err := pool.Exec(tenant.System(t.Context()), `UPDATE workflow_tasks SET state='blocked',active_attempt_id=NULL
 						WHERE organization_id=$1::uuid`, model.Invoke.OrganizationID); err != nil {
 						t.Fatal(err)
 					}
 				}
-				if _, err := pool.Exec(t.Context(), revoke, model.Invoke.OrganizationID); err != nil {
+				if _, err := pool.Exec(tenant.System(t.Context()), revoke, model.Invoke.OrganizationID); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := authorize(t, pool, secrets, token); !errors.Is(err, gateway.ErrDenied) {
@@ -168,15 +169,15 @@ func TestGatewayTokenLifecyclePostgres(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := pool.Exec(t.Context(), mutate, model.Invoke.OrganizationID); err != nil {
+				if _, err := pool.Exec(tenant.System(t.Context()), mutate, model.Invoke.OrganizationID); err != nil {
 					t.Fatal(err)
 				}
-				tx, err := pool.Begin(t.Context())
+				tx, err := pool.Begin(tenant.System(t.Context()))
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, direct := access.AuthorizeModelInvoke(t.Context(), tx, model.Invoke)
-				_ = tx.Rollback(t.Context())
+				_, direct := access.AuthorizeModelInvoke(tenant.System(t.Context()), tx, model.Invoke)
+				_ = tx.Rollback(tenant.System(t.Context()))
 				_, viaGateway := authorize(t, pool, secrets, token)
 				if !errors.Is(direct, access.ErrDenied) || !errors.Is(viaGateway, gateway.ErrDenied) {
 					t.Fatalf("parity: AuthorizeModelInvoke=%v gateway=%v", direct, viaGateway)
@@ -194,7 +195,7 @@ func TestGatewayTokenLifecyclePostgres(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := pool.Exec(t.Context(), `UPDATE gateway_org_settings SET enabled=false WHERE organization_id=$1`,
+		if _, err := pool.Exec(tenant.System(t.Context()), `UPDATE gateway_org_settings SET enabled=false WHERE organization_id=$1`,
 			model.Invoke.OrganizationID); err != nil {
 			t.Fatal(err)
 		}
@@ -209,7 +210,7 @@ func TestGatewayTokenLifecyclePostgres(t *testing.T) {
 			`UPDATE access_project_policies SET delivery_modes=ARRAY['brokered_gateway'] WHERE organization_id=$1`,
 			`UPDATE access_provider_registrations SET delivery_modes=ARRAY['brokered_gateway'] WHERE organization_id=$1`,
 		} {
-			if _, err := pool.Exec(t.Context(), statement, model.Invoke.OrganizationID); err != nil {
+			if _, err := pool.Exec(tenant.System(t.Context()), statement, model.Invoke.OrganizationID); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -219,7 +220,7 @@ func TestGatewayTokenLifecyclePostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		reserve := func(ctx context.Context, tx pgx.Tx) error { return connector.Reserve(ctx, tx, redeemed) }
-		_, err = ledger.Release(t.Context(), redeemed, reserve, func(ctx context.Context, tx pgx.Tx) error {
+		_, err = ledger.Release(tenant.System(t.Context()), redeemed, reserve, func(ctx context.Context, tx pgx.Tx) error {
 			if err := connector.Authorize(ctx, tx, runtime, redeemed.Challenge); err != nil {
 				return err
 			}

@@ -15,6 +15,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Harness probes (plan §13): run each real CLI, credential-free, against a
@@ -148,7 +150,7 @@ func probeToken(t *testing.T) string {
 
 func runProbe(t *testing.T, binary string, dir string, env []string, args ...string) string {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(tenant.System(t.Context()), 90*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir, cmd.Env = dir, env
@@ -262,7 +264,7 @@ func TestHarnessProbeCodex(t *testing.T) {
 				"--config", `model_reasoning_effort="medium"`, "--config", `web_search="disabled"`, "--config", "skills.bundled.enabled=false",
 				"--skip-git-repo-check"}
 			args = append(append(args, variant.args(base)...), "Reply with probe-ok")
-			ctx, cancel := context.WithTimeout(t.Context(), 40*time.Second)
+			ctx, cancel := context.WithTimeout(tenant.System(t.Context()), 40*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, binary, args...)
 			cmd.Dir, cmd.Env, cmd.Stdin = work, env, strings.NewReader("")

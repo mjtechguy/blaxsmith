@@ -19,6 +19,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/guild"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -70,7 +71,7 @@ func (g *fakeGuest) snapshot() ([]string, [][]string) {
 
 func TestWatcherPersistDedupeRedeliverPostgres(t *testing.T) {
 	f := newFixture(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	question := `{"id":"q1","kind":"question","title":"Pick a color","body_md":"## evidence","options":[{"id":"a","label":"Red","recommended":true},{"id":"b","label":"Blue"}],"allow_free_text":true,"blocking":true}`
 	long := strings.Repeat("x", 20000)
 	session1 := []string{
@@ -178,7 +179,7 @@ func TestWatcherPersistDedupeRedeliverPostgres(t *testing.T) {
 
 func TestAnswerAndSteerAuthorizationPostgres(t *testing.T) {
 	f := newFixture(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	line := func(seq int, ix string) {
 		if err := f.store.Persist(ctx, f.attempt, []byte(`{"seq":`+string(rune('0'+seq))+`,"interaction":`+ix+`}`)); err != nil {
 			t.Fatal(err)
@@ -278,7 +279,7 @@ func TestAnswerAndSteerAuthorizationPostgres(t *testing.T) {
 
 func TestEscalationAndTranscriptPostgres(t *testing.T) {
 	f := newFixture(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	ix := Interaction{ID: "loop-cap-verify-3", Title: "Verify loop hit its cap", BodyMD: "3 cycles failed",
 		Options: []Option{{ID: "raise", Label: "Raise cap"}, {ID: "halt", Label: "Halt"}}}
 	id, err := f.store.Raise(ctx, f.org, f.attempt.RunID, "implement", ix)
@@ -418,14 +419,14 @@ type fixture struct {
 
 func (f fixture) count(query string) int {
 	var n int
-	if err := f.pool.QueryRow(context.Background(), query).Scan(&n); err != nil {
+	if err := f.pool.QueryRow(tenant.System(context.Background()), query).Scan(&n); err != nil {
 		panic(err)
 	}
 	return n
 }
 
 func (f fixture) eventKinds() map[string]int {
-	rows, err := f.pool.Query(context.Background(), `SELECT kind,count(*) FROM workflow_events GROUP BY kind`)
+	rows, err := f.pool.Query(tenant.System(context.Background()), `SELECT kind,count(*) FROM workflow_events GROUP BY kind`)
 	if err != nil {
 		panic(err)
 	}
@@ -452,7 +453,7 @@ func (f fixture) eventKinds() map[string]int {
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	wf, err := workflow.New(pool)
 	if err != nil {
 		t.Fatal(err)
@@ -508,7 +509,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if dsn == "" {
 		t.Skip("set BLAXSMITH_TEST_DATABASE_URL")
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	admin, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -521,7 +522,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(tenant.System(context.Background()), 10*time.Second)
 		defer cancel()
 		_, _ = admin.Exec(cleanupCtx, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE")
 	})
@@ -530,7 +531,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	config.ConnConfig.RuntimeParams["search_path"] = schema
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := pgxpool.NewWithConfig(ctx, tenant.Configure(config))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -544,7 +545,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 func organization(t *testing.T, pool *pgxpool.Pool, suffix string) string {
 	t.Helper()
 	var id string
-	if err := pool.QueryRow(t.Context(), `INSERT INTO identity_organizations (id,slug,name)
+	if err := pool.QueryRow(tenant.System(t.Context()), `INSERT INTO identity_organizations (id,slug,name)
 		VALUES (gen_random_uuid(),$1,$2) RETURNING id`, "org-"+suffix, "Organization "+suffix).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
@@ -554,15 +555,15 @@ func organization(t *testing.T, pool *pgxpool.Pool, suffix string) string {
 func caller(t *testing.T, pool *pgxpool.Pool, orgID, role, username string) identity.Caller {
 	t.Helper()
 	var principal, session string
-	if err := pool.QueryRow(t.Context(), `INSERT INTO identity_principals (id,username)
+	if err := pool.QueryRow(tenant.System(t.Context()), `INSERT INTO identity_principals (id,username)
 		VALUES (gen_random_uuid(),$1) RETURNING id`, username).Scan(&principal); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(t.Context(), `INSERT INTO identity_memberships (organization_id,principal_id,role)
+	if _, err := pool.Exec(tenant.System(t.Context()), `INSERT INTO identity_memberships (organization_id,principal_id,role)
 		VALUES ($1,$2,$3)`, orgID, principal, role); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(t.Context(), `INSERT INTO identity_sessions
+	if err := pool.QueryRow(tenant.System(t.Context()), `INSERT INTO identity_sessions
 		(organization_id,id,principal_id,auth_method,mfa_level,expires_at)
 		VALUES ($1,gen_random_uuid(),$2,'local','none',clock_timestamp()+interval '1 hour') RETURNING id`,
 		orgID, principal).Scan(&session); err != nil {

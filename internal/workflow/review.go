@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var ErrReviewDenied = errors.New("human review denied")
@@ -44,6 +45,7 @@ type ReviewDecision struct {
 // Browser or agent-supplied digests are not acceptance evidence. The store
 // enforces completed execution and the run's frozen verification policy.
 func (s *Store) PresentForReview(ctx context.Context, orgID, runID, integratedCommit, evidenceSHA256, verificationSHA256 string) (ReviewPackage, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) || !commitPattern.MatchString(integratedCommit) ||
 		!hashPattern.MatchString(evidenceSHA256) || !hashPattern.MatchString(verificationSHA256) {
 		return ReviewPackage{}, ErrInvalid
@@ -123,6 +125,7 @@ func (s *Store) PresentForReview(ctx context.Context, orgID, runID, integratedCo
 // It rechecks the live human session, identity policy, and owner/admin role
 // under database locks before committing one decision for the current package.
 func (s *Store) DecideReview(ctx context.Context, caller identity.Caller, runID, packageID, idempotencyKey, action, feedback string) (ReviewDecision, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	feedback = strings.TrimSpace(feedback)
 	feedbackLength := utf8.RuneCountInString(feedback)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID, runID, packageID) ||
@@ -214,6 +217,7 @@ func (s *Store) DecideReview(ctx context.Context, caller identity.Caller, runID,
 
 // GetCurrentReview never returns a superseded approval as current.
 func (s *Store) GetCurrentReview(ctx context.Context, orgID, runID string) (ReviewPackage, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) {
 		return ReviewPackage{}, ErrInvalid
 	}

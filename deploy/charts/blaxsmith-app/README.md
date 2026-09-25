@@ -23,6 +23,9 @@ put `sslmode=verify-full&sslrootcert=/run/blaxsmith/database-ca/ca.crt` in the
 database URL Secret. The URL host must match the PostgreSQL server certificate
 (for CNPG, typically `<cluster>-rw.<namespace>.svc`). A missing CA key blocks
 pod startup; an untrusted or mismatched certificate blocks database readiness.
+The URL's role should own the schema but be neither SUPERUSER nor BYPASSRLS
+(the CNPG `initdb` owner qualifies): row-level security isolates organizations
+only for such a role, and the app logs a warning at startup otherwise.
 For a planned signing-key rotation, set `previousSignerPublicSecretName` to an
 existing Secret containing a raw 32-byte key under `public`. Pre-stage the new
 public key while the old signer is active, roll to the new signer while trusting

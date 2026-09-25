@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // CodexSubscriptionAuth marks a personal ChatGPT-plan Codex login. Its secret
@@ -246,6 +247,7 @@ const CodexLeaseMargin = 5 * time.Minute
 // token's expiry minus CodexLeaseMargin. It returns the delivery and the
 // lease expiry to announce to the guest.
 func (r *OAuthRefresher) RenewLease(ctx context.Context, renewed RenewedLease) (Delivery, time.Time, error) {
+	ctx = tenant.Org(ctx, renewed.OrganizationID)
 	if r == nil || r.DB == nil || renewed.DeliveryMode != "oauth_access" || renewed.LeaseID == "" {
 		return Delivery{}, time.Time{}, ErrDenied
 	}
@@ -296,6 +298,7 @@ func (r *OAuthRefresher) RenewLease(ctx context.Context, renewed RenewedLease) (
 // one, and the rotated token commits before the new access token is used.
 func (r *OAuthRefresher) accessToken(ctx context.Context, organizationID, connectionID string,
 	until time.Time) (codexTokens, time.Time, int64, error) {
+	ctx = tenant.Org(ctx, organizationID)
 	if r == nil || r.DB == nil || r.Secrets == nil || organizationID == "" || connectionID == "" {
 		return codexTokens{}, time.Time{}, 0, ErrDenied
 	}

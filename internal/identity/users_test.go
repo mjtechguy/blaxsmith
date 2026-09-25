@@ -8,11 +8,13 @@ import (
 	"net/netip"
 	"sync"
 	"testing"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestUserAdministrationPostgres(t *testing.T) {
 	pool := identityTestPool(t)
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	ownerPassword := []byte("correct horse battery staple")
 	if _, err := BootstrapOwner(ctx, pool, "alice@example.com", "engineering", "Engineering", ownerPassword); err != nil {
 		t.Fatal(err)

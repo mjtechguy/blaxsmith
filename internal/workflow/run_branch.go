@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Code flow between stages (docs/interactive-sessions.md): implement stages
@@ -18,6 +19,7 @@ import (
 // ponytail: the first proof is linear; with several implement ancestors the
 // first in recipe order wins, and parallel code-producing stages are deferred.
 func (s *Store) AttemptInput(ctx context.Context, orgID, runID, taskID string) (string, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID, taskID) {
 		return "", ErrInvalid
 	}
@@ -88,6 +90,7 @@ type RunBranchTarget struct {
 }
 
 func (s *Store) GetRunBranchTarget(ctx context.Context, a Attempt) (RunBranchTarget, error) {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if !validAttempt(a) {
 		return RunBranchTarget{}, ErrInvalid
 	}
@@ -118,6 +121,7 @@ func (s *Store) GetRunBranchTarget(ctx context.Context, a Attempt) (RunBranchTar
 // LoadInputCommit returns an attempt's frozen input commit (the run's source
 // commit for attempts reserved before code flow existed).
 func (s *Store) LoadInputCommit(ctx context.Context, a Attempt) (string, error) {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if !validAttempt(a) {
 		return "", ErrInvalid
 	}
@@ -137,6 +141,7 @@ func (s *Store) LoadInputCommit(ctx context.Context, a Attempt) (string, error) 
 // against the previous tip, so only the winner of that race reaches here, and
 // the remote now holds exactly this tip.
 func (s *Store) RecordBranchTip(ctx context.Context, orgID, runID, tip string) error {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) || !commitPattern.MatchString(tip) {
 		return ErrInvalid
 	}

@@ -10,9 +10,9 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"golang.org/x/term"
 )
 
@@ -61,7 +61,7 @@ func bootstrapOwner(args []string) error {
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
+	pool, err := tenant.NewPool(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("configure database: %w", err)
 	}
@@ -100,7 +100,7 @@ func adminCommand(args []string) error {
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
+	pool, err := tenant.NewPool(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("configure database: %w", err)
 	}
