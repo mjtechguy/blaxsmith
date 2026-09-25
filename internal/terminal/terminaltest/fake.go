@@ -33,6 +33,7 @@ type Fake struct {
 
 type proc struct {
 	argv   []string
+	auth   string
 	stdin  []byte
 	killed bool
 	exit   chan int
@@ -46,24 +47,33 @@ type Proc struct {
 	Stdin  []byte
 	Killed bool
 	Target string // ate-target-actor metadata
+	Auth   string // authorization metadata
 }
 
 // Start serves the fake over bufconn and returns a client connection.
 func Start(t testing.TB) (*Fake, *grpc.ClientConn) {
 	t.Helper()
-	fake := &Fake{procs: map[string]*proc{}}
-	listener := bufconn.Listen(1 << 20)
-	server := grpc.NewServer()
-	ateenv.RegisterProcessServiceServer(server, fake)
-	ateenv.RegisterFileSystemServiceServer(server, fake)
-	go server.Serve(listener)
-	conn, err := grpc.NewClient("passthrough:///guest", grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }))
+	fake, dialer := Serve(t)
+	conn, err := grpc.NewClient("passthrough:///guest", grpc.WithTransportCredentials(insecure.NewCredentials()), dialer)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { conn.Close(); server.Stop() })
+	t.Cleanup(func() { _ = conn.Close() })
 	return fake, conn
+}
+
+// Serve serves the fake over bufconn with opts (e.g. grpc.Creds) and returns
+// the dial option that reaches it.
+func Serve(t testing.TB, opts ...grpc.ServerOption) (*Fake, grpc.DialOption) {
+	t.Helper()
+	fake := &Fake{procs: map[string]*proc{}}
+	listener := bufconn.Listen(1 << 20)
+	server := grpc.NewServer(opts...)
+	ateenv.RegisterProcessServiceServer(server, fake)
+	ateenv.RegisterFileSystemServiceServer(server, fake)
+	go server.Serve(listener)
+	t.Cleanup(server.Stop)
+	return fake, grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) })
 }
 
 func (f *Fake) StartProcess(ctx context.Context, req *ateenv.StartProcessRequest) (*ateenv.Process, error) {
@@ -72,7 +82,7 @@ func (f *Fake) StartProcess(ctx context.Context, req *ateenv.StartProcessRequest
 	defer f.mu.Unlock()
 	f.seq++
 	id := fmt.Sprint(f.seq)
-	p := &proc{argv: req.Command, exit: make(chan int, 1), out: make(chan []byte, 4)}
+	p := &proc{argv: req.Command, auth: strings.Join(md.Get("authorization"), ","), exit: make(chan int, 1), out: make(chan []byte, 4)}
 	if req.Command[0] == "script" {
 		p.out <- []byte("screen\r\n")
 	} else {
@@ -151,7 +161,7 @@ func (f *Fake) Snapshot() []Proc {
 	defer f.mu.Unlock()
 	out := make([]Proc, len(f.order))
 	for i, p := range f.order {
-		out[i] = Proc{ID: fmt.Sprint(i + 1), Argv: p.argv, Stdin: slices.Clone(p.stdin), Killed: p.killed, Target: f.targets[i]}
+		out[i] = Proc{ID: fmt.Sprint(i + 1), Argv: p.argv, Stdin: slices.Clone(p.stdin), Killed: p.killed, Target: f.targets[i], Auth: p.auth}
 	}
 	return out
 }

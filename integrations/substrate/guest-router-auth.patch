@@ -1,0 +1,189 @@
+diff --git a/cmd/atenet/internal/router/cmd.go b/cmd/atenet/internal/router/cmd.go
+--- a/cmd/atenet/internal/router/cmd.go
++++ b/cmd/atenet/internal/router/cmd.go
+@@ -64,6 +64,7 @@
+ 	cmd.Flags().StringVar(&cfg.ActorIdentityCAFile, "actor-identity-ca-file", "", "PEM trust bundle for the actor-identity CA, used to verify the actor client certificates presented on egress CONNECTs. Required by the egress gateway's ext_proc sidecar; empty (the default) leaves egress authentication unconfigured and every egress CONNECT is denied.")
+ 	cmd.Flags().StringVar(&cfg.BootstrapAudience, "bootstrap-audience", "", "Kubernetes TokenReview audience accepted for Blaxsmith bootstrap routes; empty keeps those routes closed")
+ 	cmd.Flags().StringVar(&cfg.BootstrapClientUsername, "bootstrap-client-username", "", "Exact connector ServiceAccount username accepted for Blaxsmith bootstrap routes; empty keeps those routes closed")
++	cmd.Flags().BoolVar(&cfg.GuestClientAuth, "guest-client-auth", false, "Also require the Blaxsmith connector identity (TLS plus the bootstrap TokenReview) on guest daemon gRPC routes (/ateenv.*); requires --bootstrap-audience")
+ 	// Envoy learns the collector over xDS rather than from its own environment,
+ 	// so the router has to carry the address for it. Defaulting to
+ 	// OTEL_EXPORTER_OTLP_ENDPOINT — the same variable the router's own exporter
+diff --git a/cmd/atenet/internal/router/config.go b/cmd/atenet/internal/router/config.go
+--- a/cmd/atenet/internal/router/config.go
++++ b/cmd/atenet/internal/router/config.go
+@@ -115,6 +115,9 @@
+ 	// Empty values leave those routes closed.
+ 	BootstrapAudience       string
+ 	BootstrapClientUsername string
++	// GuestClientAuth applies the same connector check to the guest daemon's
++	// gRPC API (process exec, files), which otherwise routes unauthenticated.
++	GuestClientAuth bool
+ 
+ 	LogLevel    string
+ 	MetricsAddr string
+@@ -217,6 +220,9 @@
+ 	if (c.BootstrapAudience == "") != (c.BootstrapClientUsername == "") {
+ 		return fmt.Errorf("--bootstrap-audience and --bootstrap-client-username must be set together")
+ 	}
++	if c.GuestClientAuth && c.BootstrapAudience == "" {
++		return fmt.Errorf("--guest-client-auth requires --bootstrap-audience and --bootstrap-client-username")
++	}
+ 	switch c.atenetRouter() {
+ 	case atenetRouterEnvoy, atenetRouterAgentgateway:
+ 	default:
+diff --git a/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go b/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go
+--- a/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go
++++ b/cmd/atenet/internal/router/ingress/bootstrap_auth_test.go
+@@ -101,3 +101,59 @@
+ 		t.Fatal("TokenReview outage allowed bootstrap")
+ 	}
+ }
++
++func TestGuestRouteRequiresConnectorWhenEnabled(t *testing.T) {
++	resumes := 0
++	h := New(&mockClient{resumeFn: func(context.Context, *ateapipb.ResumeActorRequest, ...grpc.CallOption) (*ateapipb.ResumeActorResponse, error) {
++		resumes++
++		return &ateapipb.ResumeActorResponse{Actor: &ateapipb.Actor{Metadata: &ateapipb.ResourceMetadata{Uid: "uid-1"}, Status: &ateapipb.ActorStatus{
++			WorkerAssignment: &ateapipb.WorkerAssignment{WorkerPodIp: "10.0.0.52"},
++		}}}, nil
++	}}, ParkedRequestConfig{}, nil)
++	h.RequireBootstrapAuth(func(_ context.Context, token string) (bool, error) { return token == "good", nil })
++	request := func(path, auth string, tls bool) (*extproc.Result, error) {
++		md := requestMetadata("actor-1", "team-a",
++			&corev3.HeaderValue{Key: ":path", Value: path},
++			&corev3.HeaderValue{Key: ":method", Value: "POST"},
++			&corev3.HeaderValue{Key: "content-type", Value: "application/grpc"},
++			&corev3.HeaderValue{Key: "Authorization", Value: auth},
++		)
++		if tls {
++			md.Attributes = map[string]*structpb.Struct{"envoy.filters.http.ext_proc": {
++				Fields: map[string]*structpb.Value{"connection.tls_version": structpb.NewStringValue("TLSv1.3")},
++			}}
++		}
++		result, err := h.HandleRequestHeaders(context.Background(), md)
++		return &result, err
++	}
++	const exec = "/ateenv.v1alpha.ProcessService/StartProcess"
++	if _, err := request(exec, "", false); err != nil {
++		t.Fatalf("guest route closed without --guest-client-auth: %v", err)
++	}
++	h.RequireGuestAuth()
++	resumes = 0
++	for _, p := range []string{exec, "/%61teenv.v1alpha.FileSystemService/ReadFile", "/x/../ateenv.v1alpha.EnvironmentService/Get"} {
++		for _, auth := range []string{"", "Basic good", "Bearer bad"} {
++			if _, err := request(p, auth, true); err == nil {
++				t.Fatalf("guest route %s accepted %q", p, auth)
++			}
++		}
++		if _, err := request(p, "Bearer good", false); err == nil {
++			t.Fatalf("plaintext guest route %s accepted", p)
++		}
++	}
++	if resumes != 0 {
++		t.Fatal("unauthenticated guest call resumed the actor")
++	}
++	result, err := request(exec, "Bearer good", true)
++	if err != nil || resumes != 1 {
++		t.Fatalf("authorized guest call = %v", err)
++	}
++	removed := result.Response.GetResponse().GetHeaderMutation().GetRemoveHeaders()
++	if len(removed) != 1 || removed[0] != "authorization" {
++		t.Fatalf("connector token forwarded to guest: removed headers %v", removed)
++	}
++	if _, err := request("/readyz?check=workspace", "", false); err != nil {
++		t.Fatalf("non-guest route now needs auth: %v", err)
++	}
++}
+diff --git a/cmd/atenet/internal/router/ingress/ingress.go b/cmd/atenet/internal/router/ingress/ingress.go
+--- a/cmd/atenet/internal/router/ingress/ingress.go
++++ b/cmd/atenet/internal/router/ingress/ingress.go
+@@ -67,6 +67,7 @@
+ 	resumer       *ActorResumer
+ 	parking       *parkingLot
+ 	bootstrapAuth func(context.Context, string) (bool, error)
++	guestAuth     bool
+ }
+ 
+ func New(apiClient ateapipb.ControlClient, parkCfg ParkedRequestConfig, parkMetrics *ParkingMetrics) *Handler {
+@@ -87,13 +88,19 @@
+ 	h.bootstrapAuth = authorize
+ }
+ 
++// RequireGuestAuth makes guest daemon gRPC routes (/ateenv.*: process exec,
++// files) pass the same connector check as bootstrap routes. The actor UID
++// fence stays specific to bootstrap and command-exit.
++func (h *Handler) RequireGuestAuth() { h.guestAuth = true }
++
+ func (h *Handler) HandleRequestHeaders(ctx context.Context, md *extproc.RequestMetadata) (extproc.Result, error) {
+ 	slog.InfoContext(ctx, "Request", slog.String("host", md.Host))
+-	connectorRoute, err := isConnectorPath(md.Path)
++	connectorRoute, guestRoute, err := classifyPath(md.Path)
+ 	if err != nil {
+ 		return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_BadRequest, "invalid request path")
+ 	}
+-	if connectorRoute {
++	guestRoute = guestRoute && h.guestAuth
++	if connectorRoute || guestRoute {
+ 		if md.Attribute("connection.tls_version") == "" {
+ 			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_UpgradeRequired, "bootstrap requires TLS")
+ 		}
+@@ -115,7 +122,7 @@
+ 		if !allowed {
+ 			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_Forbidden, "bootstrap identity denied")
+ 		}
+-		if md.Header(bootstrapActorUIDHeader) == "" {
++		if connectorRoute && md.Header(bootstrapActorUIDHeader) == "" {
+ 			return extproc.Result{}, extproc.NewReqError(envoy_type.StatusCode_BadRequest, "bootstrap actor UID required")
+ 		}
+ 	}
+@@ -208,8 +215,10 @@
+ 	// Overwrite the routing header so a client-provided value cannot select a
+ 	// different actor after this request has been resolved.
+ 	mutation := &extprocv3.HeaderMutation{}
+-	if connectorRoute {
++	if connectorRoute || guestRoute {
+ 		mutation.RemoveHeaders = []string{"authorization"}
++	}
++	if connectorRoute {
+ 		mutation.SetHeaders = append(mutation.SetHeaders, &corev3.HeaderValueOption{
+ 			Header:       &corev3.HeaderValue{Key: bootstrapActorUIDHeader, RawValue: []byte(actor.GetMetadata().GetUid())},
+ 			AppendAction: corev3.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+@@ -233,16 +242,20 @@
+ 	return res, nil
+ }
+ 
+-func isConnectorPath(raw string) (bool, error) {
++// classifyPath reports connector (bootstrap, command-exit) and guest daemon
++// gRPC (/ateenv.*) routes. CONNECT-tunneled requests re-enter through
++// main_internal with their inner path, so tunnels are classified too.
++func classifyPath(raw string) (connector, guest bool, err error) {
+ 	if raw == "" { // CONNECT authority is not a request path.
+-		return false, nil
++		return false, false, nil
+ 	}
+ 	u, err := url.ParseRequestURI(raw)
+ 	if err != nil {
+-		return false, err
++		return false, false, err
+ 	}
+ 	clean := path.Clean(u.Path)
+-	return strings.HasPrefix(clean, "/blaxsmith/bootstrap/") || clean == "/blaxsmith/command-exit", nil
++	return strings.HasPrefix(clean, "/blaxsmith/bootstrap/") || clean == "/blaxsmith/command-exit",
++		strings.HasPrefix(clean, "/ateenv."), nil
+ }
+ 
+ func routingValue(md *extproc.RequestMetadata, header, attribute string) string {
+diff --git a/cmd/atenet/internal/router/router.go b/cmd/atenet/internal/router/router.go
+--- a/cmd/atenet/internal/router/router.go
++++ b/cmd/atenet/internal/router/router.go
+@@ -217,6 +217,9 @@
+ 				return reviewBootstrapToken(ctx, s.clientset, s.cfg.BootstrapAudience, s.cfg.BootstrapClientUsername, token)
+ 			})
+ 		}
++		if s.cfg.GuestClientAuth {
++			s.ingressHandler.RequireGuestAuth()
++		}
+ 		handlers[s.ingressHandler.Direction()] = s.ingressHandler
+ 	}
+ 	if s.cfg.Mode.ServesEgress() {

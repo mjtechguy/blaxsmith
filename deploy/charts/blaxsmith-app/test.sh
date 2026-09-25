@@ -134,6 +134,19 @@ if grep -F -q -- '--allow-open-egress-dev' "$rendered"; then
   echo 'open AX egress was enabled without the explicit dev switch' >&2
   exit 1
 fi
+if grep -F -q 'BLAXSMITH_GUEST_ROUTER' "$rendered"; then
+  echo 'guest router unexpectedly enabled by default' >&2
+  exit 1
+fi
+helm template app "$chart" "$@" $dispatch_args \
+  --set-string dispatch.guestRouter=router.ate-system.svc:443 > "$rendered"
+grep -F -q 'value: "router.ate-system.svc:443"' "$rendered"
+grep -F -A1 'name: BLAXSMITH_GUEST_ROUTER_CA_FILE' "$rendered" | grep -F -q '/run/blaxsmith/dispatch/router-ca.pem'
+grep -F -A1 'name: BLAXSMITH_GUEST_ROUTER_TOKEN_FILE' "$rendered" | grep -F -q '/run/blaxsmith/dispatch/bootstrap-token'
+if helm template app "$chart" "$@" --set-string dispatch.guestRouter=router.ate-system.svc:443 >/dev/null 2>&1; then
+  echo 'guest router unexpectedly accepted without dispatch credentials' >&2
+  exit 1
+fi
 helm template app "$chart" "$@" $dispatch_args --set dispatch.egressMode=open-dev \
   --set dispatch.dev.allowOpenEgress=true > "$rendered"
 grep -F -q -- '- --enable-dispatch' "$rendered"

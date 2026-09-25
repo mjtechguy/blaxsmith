@@ -15,6 +15,9 @@
 {{- if and .Values.ha.enabled (not (semverCompare ">=1.30.0-0" .Capabilities.KubeVersion.Version)) -}}
 {{- fail "ha.enabled requires Kubernetes 1.30+ for topologySpreadConstraints.minDomains" -}}
 {{- end -}}
+{{- if and .Values.dispatch.guestRouter (not .Values.dispatch.enabled) -}}
+{{- fail "dispatch.guestRouter requires dispatch.enabled (its router CA and connector token come from dispatch.credentialsSecretName)" -}}
+{{- end -}}
 {{- if .Values.dispatch.enabled -}}
 {{- $d := .Values.dispatch -}}
 {{- range $value := list $d.credentialsSecretName $.Values.accessKeySecretName $d.tools.image $d.tunnel.targetHost $d.ax.cliSHA256 $d.substrate.cliSHA256 $d.substrate.endpoint $d.bootstrap.routerURL $d.clusterID $d.leaseTTL $d.workerImage $d.workerPool $d.snapshotStorage $d.workspace $d.gateway -}}
@@ -204,6 +207,10 @@ spec:
             {{- with .Values.dispatch.guestRouter }}
             - name: BLAXSMITH_GUEST_ROUTER
               value: {{ . | quote }}
+            - name: BLAXSMITH_GUEST_ROUTER_CA_FILE
+              value: /run/blaxsmith/dispatch/router-ca.pem
+            - name: BLAXSMITH_GUEST_ROUTER_TOKEN_FILE
+              value: /run/blaxsmith/dispatch/bootstrap-token
             {{- end }}
           ports:
             - name: https
