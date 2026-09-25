@@ -95,7 +95,7 @@ export function UserMenu() {
       </div>
       {hasSlot("topbar.command") ? <>
         <div className="user-menu-separator" role="separator" />
-        <p className="user-menu-hint" role="presentation"><Command size={13} aria-hidden="true" /> Press <kbd>⌘</kbd> <kbd>K</kbd> (<kbd>Ctrl</kbd> <kbd>K</kbd>) to jump anywhere</p>
+        <p className="user-menu-hint" role="presentation"><Command size={13} aria-hidden="true" /> <kbd>⌘K</kbd> or <kbd>Ctrl K</kbd> to jump anywhere</p>
       </> : null}
       <div className="user-menu-separator" role="separator" />
       <button type="button" role="menuitem" tabIndex={-1} className="user-menu-item" aria-disabled={signingOut || undefined} onClick={() => void signOut()}>

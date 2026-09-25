@@ -889,6 +889,7 @@ a.row-title:hover { color: var(--primary); text-decoration: underline; }
 .user-menu-check { margin-left: auto; color: var(--primary) !important; }
 .user-menu-label { display: block; padding: 6px 10px 2px; color: var(--muted); font-size: 11px; font-weight: 650; }
 .user-menu-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 0; padding: 6px 10px; color: var(--muted); font-size: 12px; }
+@media (hover: none) and (pointer: coarse) { .user-menu-hint { display: none; } }
 .user-menu-hint kbd { padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--canvas); font: 600 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .signout-error { position: absolute; top: calc(100% + 8px); right: 0; width: 240px; padding: 8px 10px; border: 1px solid var(--danger-line); border-radius: 8px; background: var(--danger-soft); color: var(--danger-text); font-size: 12px; }
 
