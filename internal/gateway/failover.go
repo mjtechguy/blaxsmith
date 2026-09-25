@@ -91,7 +91,7 @@ func retryable(status int) bool {
 func (s *Server) try(w http.ResponseWriter, r *http.Request, family, path string, body []byte, grant Grant,
 	route Route, event *Event, last bool, admitted func()) bool {
 	started := event.StartedAt
-	upstream, eventStream, err := s.upstreamRequest(r, family, path, body, grant, route)
+	upstream, how, err := s.upstreamRequest(r, family, path, body, grant, route)
 	if err != nil {
 		admitted()
 		log.Printf("gateway route %s: %v", route.ID, err) // never the credential or body.
@@ -157,7 +157,25 @@ func (s *Server) try(w http.ResponseWriter, r *http.Request, family, path string
 	}
 	contentType := response.Header.Get("Content-Type")
 	var convert *eventStreamSSE
-	if eventStream && response.StatusCode == http.StatusOK {
+	if how == adaptBedrockCount && response.StatusCode == http.StatusOK {
+		// Bedrock CountTokens answers {"inputTokens": n}; the client expects
+		// Anthropic's {"input_tokens": n}.
+		var counted struct {
+			InputTokens int64 `json:"inputTokens"`
+		}
+		if json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&counted) != nil {
+			writeError(w, family, http.StatusBadGateway, "api_error", "Bedrock returned an unreadable token count.")
+			event.Status = "error"
+			return true
+		}
+		copyResponseHeaders(w.Header(), response.Header)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]int64{"input_tokens": counted.InputTokens})
+		event.Status = "ok"
+		return true
+	}
+	if how == adaptEventStream && response.StatusCode == http.StatusOK {
 		convert, contentType = &eventStreamSSE{}, "text/event-stream"
 	}
 	event.Streamed = strings.HasPrefix(contentType, "text/event-stream")
@@ -251,26 +269,35 @@ func (s *Server) recordLimits(ctx context.Context, g Grant, windows []Window) {
 // chatGPTCodexBase is where Codex itself sends a ChatGPT-plan sign-in's requests.
 const chatGPTCodexBase = "https://chatgpt.com/backend-api/codex"
 
+// adapt is how a route's response is turned back into the client's API.
+type adapt int
+
+const (
+	adaptNone         adapt = iota
+	adaptEventStream        // Bedrock's AWS event stream, re-framed as Anthropic SSE
+	adaptBedrockCount       // Bedrock CountTokens {"inputTokens"} as Anthropic {"input_tokens"}
+)
+
 // upstreamRequest builds the provider request for one route: its URL, body,
-// and the route's own credential, the only one sent. It reports whether the
-// response is an AWS event stream to re-frame as SSE.
-func (s *Server) upstreamRequest(r *http.Request, family, path string, body []byte, grant Grant, route Route) (*http.Request, bool, error) {
+// and the route's own credential, the only one sent, and how to adapt the
+// response.
+func (s *Server) upstreamRequest(r *http.Request, family, path string, body []byte, grant Grant, route Route) (*http.Request, adapt, error) {
 	ctx := r.Context()
 	key := grant.Key
 	if route.ID != grant.ConnectionID {
 		if s.RouteKey == nil {
-			return nil, false, errors.New("no route credential reader")
+			return nil, adaptNone, errors.New("no route credential reader")
 		}
 		var err error
 		if key, err = s.RouteKey(ctx, grant, route); err != nil {
-			return nil, false, err
+			return nil, adaptNone, err
 		}
 		defer clear(key)
 	}
 	ours := firstNonEmpty(requestedOrEmpty(body), grant.Model)
 	model, ok := route.model(ours)
 	if !ok {
-		return nil, false, errors.New("route does not serve the model")
+		return nil, adaptNone, errors.New("route does not serve the model")
 	}
 	override := func(name, fallback string) string {
 		if v := s.Upstream[name]; v != "" {
@@ -278,33 +305,41 @@ func (s *Server) upstreamRequest(r *http.Request, family, path string, body []by
 		}
 		return fallback
 	}
+	counting := path == "/v1/messages/count_tokens"
 	switch route.Kind {
 	case KindBedrock:
 		credential, err := ParseAWSCredential(key)
 		if err != nil {
-			return nil, false, err
+			return nil, adaptNone, err
 		}
 		out, stream, err := bedrockBody(body, headerList(r.Header, "Anthropic-Beta"))
 		if err != nil {
-			return nil, false, err
+			return nil, adaptNone, err
 		}
-		action := "/invoke"
-		if stream {
-			action = "/invoke-with-response-stream"
+		action, how := "/invoke", adaptNone
+		switch {
+		case counting:
+			// Bedrock CountTokens takes the InvokeModel body it would count.
+			if out, err = bedrockCountBody(out); err != nil {
+				return nil, adaptNone, err
+			}
+			action, how = "/count-tokens", adaptBedrockCount
+		case stream:
+			action, how = "/invoke-with-response-stream", adaptEventStream
 		}
 		upstream, err := http.NewRequestWithContext(ctx, http.MethodPost,
 			override(KindBedrock, bedrockEndpoint(route.Region))+"/model/"+awsEscape(model)+action, bytes.NewReader(out))
 		if err != nil {
-			return nil, false, err
+			return nil, adaptNone, err
 		}
 		upstream.Header.Set("Content-Type", "application/json")
 		upstream.Header.Set("Accept", "application/json")
-		if stream {
+		if how == adaptEventStream {
 			upstream.Header.Set("Accept", "application/vnd.amazon.eventstream")
 		}
 		upstream.ContentLength = int64(len(out))
 		signSigV4(upstream, out, credential, route.Region, "bedrock", time.Now())
-		return upstream, stream, nil
+		return upstream, how, nil
 	case KindVertex:
 		client := s.Client
 		if client == nil {
@@ -312,24 +347,61 @@ func (s *Server) upstreamRequest(r *http.Request, family, path string, body []by
 		}
 		token, err := s.google.token(ctx, client, firstNonEmpty(s.VertexTokenURL, googleTokenURL), key)
 		if err != nil {
-			return nil, false, err
+			return nil, adaptNone, err
 		}
 		out, stream, err := vertexBody(body)
 		if err != nil {
-			return nil, false, err
+			return nil, adaptNone, err
 		}
-		upstream, err := http.NewRequestWithContext(ctx, http.MethodPost,
-			override(KindVertex, vertexEndpoint(route.Region))+vertexPath(route.CloudProject, route.Region, model, stream),
+		target := vertexPath(route.CloudProject, route.Region, model, stream)
+		if counting {
+			// Vertex counts Claude tokens at the count-tokens publisher model,
+			// with the model named in the body; it answers in Anthropic's shape.
+			if out, err = withModel(out, model); err != nil {
+				return nil, adaptNone, err
+			}
+			target = vertexPath(route.CloudProject, route.Region, "count-tokens", false)
+		}
+		upstream, err := http.NewRequestWithContext(ctx, http.MethodPost, override(KindVertex, vertexEndpoint(route.Region))+target,
 			bytes.NewReader(out))
 		if err != nil {
-			return nil, false, err
+			return nil, adaptNone, err
 		}
 		copyRequestHeaders(upstream.Header, r.Header)
 		upstream.Header.Del("Anthropic-Version") // it is in the body for Vertex.
 		upstream.Header.Set("Content-Type", "application/json")
 		upstream.Header.Set("Authorization", "Bearer "+token)
 		upstream.ContentLength = int64(len(out))
-		return upstream, false, nil
+		return upstream, adaptNone, nil
+	case KindAzure:
+		// Azure OpenAI: the organization's resource, the model's deployment,
+		// the route's api-version, and the key in the api-key header.
+		apiKey := strings.TrimSpace(string(key))
+		if !validAzureKey(apiKey) || !validAzureResource(route.AzureResource) || route.APIVersion == "" {
+			return nil, adaptNone, errors.New("invalid Azure OpenAI route")
+		}
+		out, err := withModel(body, model)
+		if err != nil {
+			return nil, adaptNone, err
+		}
+		target := "/openai/deployments/" + url.PathEscape(model) + "/chat/completions"
+		if path == "/v1/responses" {
+			target = "/openai/responses" // the deployment is the body's model.
+		}
+		u, err := url.Parse(override(KindAzure, "https://"+route.AzureResource+".openai.azure.com") + target)
+		if err != nil {
+			return nil, adaptNone, err
+		}
+		u.RawQuery = url.Values{"api-version": {route.APIVersion}}.Encode()
+		upstream, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(out))
+		if err != nil {
+			return nil, adaptNone, err
+		}
+		copyRequestHeaders(upstream.Header, r.Header)
+		upstream.Header.Set("Content-Type", "application/json")
+		upstream.Header.Set("Api-Key", apiKey)
+		upstream.ContentLength = int64(len(out))
+		return upstream, adaptNone, nil
 	}
 	base := override(family, upstreamBase(family))
 	target := path
@@ -339,27 +411,27 @@ func (s *Server) upstreamRequest(r *http.Request, family, path string, body []by
 		base, target = override("chatgpt", chatGPTCodexBase), strings.TrimPrefix(path, "/v1")
 	}
 	if base == "" {
-		return nil, false, errors.New("no approved upstream for this provider")
+		return nil, adaptNone, errors.New("no approved upstream for this provider")
 	}
 	if model != ours {
 		var err error
 		if body, err = withModel(body, model); err != nil {
-			return nil, false, err
+			return nil, adaptNone, err
 		}
 	}
 	u, err := url.Parse(base + target)
 	if err != nil {
-		return nil, false, err
+		return nil, adaptNone, err
 	}
 	u.RawQuery = r.URL.RawQuery
 	upstream, err := http.NewRequestWithContext(ctx, r.Method, u.String(), bytes.NewReader(body))
 	if err != nil {
-		return nil, false, err
+		return nil, adaptNone, err
 	}
 	copyRequestHeaders(upstream.Header, r.Header)
 	injectCredential(upstream.Header, family, path, key, route.AuthMethod, grant.AccountID)
 	upstream.ContentLength = int64(len(body))
-	return upstream, false, nil
+	return upstream, adaptNone, nil
 }
 
 func requestedOrEmpty(body []byte) string {

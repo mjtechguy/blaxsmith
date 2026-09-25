@@ -268,7 +268,7 @@ func TestCircuitBreakerOpensAndHalfOpens(t *testing.T) {
 	if routes, _ := states.Order("org", Plan{Routes: []Route{bedrock}}, "claude-sonnet-5", "a", "/v1/messages", nil); len(routes) != 0 {
 		t.Fatal("unmapped model served on Bedrock")
 	}
-	if routes, _ := states.Order("org", Plan{Routes: []Route{bedrock}}, "claude-opus-5-5", "a", "/v1/messages/count_tokens", nil); len(routes) != 0 {
+	if routes, _ := states.Order("org", Plan{Routes: []Route{bedrock}}, "claude-opus-5-5", "a", "/v1/models", nil); len(routes) != 0 {
 		t.Fatal("Bedrock route offered an endpoint it cannot serve")
 	}
 }

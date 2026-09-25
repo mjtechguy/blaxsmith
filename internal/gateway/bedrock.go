@@ -65,6 +65,28 @@ func bedrockBody(body []byte, betas []string) ([]byte, bool, error) {
 	return out, stream, err
 }
 
+// bedrockCountBody wraps an InvokeModel body for Bedrock CountTokens:
+// {"input":{"invokeModel":{"body":<base64>}}}. A count request has no
+// max_tokens, which InvokeModel requires, so a placeholder of 1 is added
+// (it does not change the input count).
+func bedrockCountBody(invoke []byte) ([]byte, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(invoke, &fields); err != nil {
+		return nil, err
+	}
+	if _, ok := fields["max_tokens"]; !ok {
+		fields["max_tokens"] = json.RawMessage(`1`)
+	}
+	body, err := json.Marshal(fields)
+	if err != nil {
+		return nil, err
+	}
+	type invokeModel struct {
+		Body []byte `json:"body"` // base64 in JSON
+	}
+	return json.Marshal(map[string]any{"input": map[string]any{"invokeModel": invokeModel{Body: body}}})
+}
+
 func headerList(h http.Header, name string) []string {
 	var out []string
 	for _, value := range h.Values(name) {

@@ -2083,7 +2083,7 @@ type GatewayRoute struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // Empty on create.
 	Name              string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Kind              string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`                                     // anthropic, bedrock, vertex, openai, opencode_zen, opencode_go
+	Kind              string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`                                     // anthropic, bedrock, vertex, openai, azure_openai, opencode_zen, opencode_go
 	ConnectionId      string                 `protobuf:"bytes,4,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"` // API-key routes; cloud routes get a new connection.
 	ConnectionLabel   string                 `protobuf:"bytes,5,opt,name=connection_label,json=connectionLabel,proto3" json:"connection_label,omitempty"`
 	Region            string                 `protobuf:"bytes,6,opt,name=region,proto3" json:"region,omitempty"`                                                                                               // bedrock and vertex
@@ -2105,8 +2105,11 @@ type GatewayRoute struct {
 	Errors_15M     int32                 `protobuf:"varint,21,opt,name=errors_15m,json=errors15m,proto3" json:"errors_15m,omitempty"`
 	Last_429At     string                `protobuf:"bytes,22,opt,name=last_429_at,json=last429At,proto3" json:"last_429_at,omitempty"`
 	StateUpdatedAt string                `protobuf:"bytes,23,opt,name=state_updated_at,json=stateUpdatedAt,proto3" json:"state_updated_at,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Azure OpenAI: the resource name (<name>.openai.azure.com) and api-version.
+	AzureResource string `protobuf:"bytes,24,opt,name=azure_resource,json=azureResource,proto3" json:"azure_resource,omitempty"`
+	ApiVersion    string `protobuf:"bytes,25,opt,name=api_version,json=apiVersion,proto3" json:"api_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GatewayRoute) Reset() {
@@ -2296,6 +2299,20 @@ func (x *GatewayRoute) GetLast_429At() string {
 func (x *GatewayRoute) GetStateUpdatedAt() string {
 	if x != nil {
 		return x.StateUpdatedAt
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetAzureResource() string {
+	if x != nil {
+		return x.AzureResource
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetApiVersion() string {
+	if x != nil {
+		return x.ApiVersion
 	}
 	return ""
 }
@@ -2702,7 +2719,8 @@ type SaveGatewayRouteRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Route *GatewayRoute          `protobuf:"bytes,1,opt,name=route,proto3" json:"route,omitempty"`
 	// Bedrock: {"access_key_id","secret_access_key"[,"session_token"]}.
-	// Vertex: a service-account key JSON. Required when creating a cloud
+	// Vertex: a service-account key JSON. Azure OpenAI: the resource key.
+	// Required when creating a cloud
 	// route, optional (rotation) when updating one. Never returned.
 	CloudCredential string `protobuf:"bytes,2,opt,name=cloud_credential,json=cloudCredential,proto3" json:"cloud_credential,omitempty"`
 	unknownFields   protoimpl.UnknownFields
@@ -4357,6 +4375,369 @@ func (x *SnoozeBudgetAlertResponse) GetSnoozedUntil() string {
 	return ""
 }
 
+type GetGatewayPoolDetailRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PoolId        string                 `protobuf:"bytes,1,opt,name=pool_id,json=poolId,proto3" json:"pool_id,omitempty"`
+	Hours         int32                  `protobuf:"varint,2,opt,name=hours,proto3" json:"hours,omitempty"` // 1–168; 0 means 24.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGatewayPoolDetailRequest) Reset() {
+	*x = GetGatewayPoolDetailRequest{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGatewayPoolDetailRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGatewayPoolDetailRequest) ProtoMessage() {}
+
+func (x *GetGatewayPoolDetailRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGatewayPoolDetailRequest.ProtoReflect.Descriptor instead.
+func (*GetGatewayPoolDetailRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *GetGatewayPoolDetailRequest) GetPoolId() string {
+	if x != nil {
+		return x.PoolId
+	}
+	return ""
+}
+
+func (x *GetGatewayPoolDetailRequest) GetHours() int32 {
+	if x != nil {
+		return x.Hours
+	}
+	return 0
+}
+
+// One route's traffic in the pool over the window.
+type GatewayRouteTraffic struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RouteId       string                 `protobuf:"bytes,1,opt,name=route_id,json=routeId,proto3" json:"route_id,omitempty"`
+	RouteName     string                 `protobuf:"bytes,2,opt,name=route_name,json=routeName,proto3" json:"route_name,omitempty"`
+	RouteKind     string                 `protobuf:"bytes,3,opt,name=route_kind,json=routeKind,proto3" json:"route_kind,omitempty"`
+	Requests      int64                  `protobuf:"varint,4,opt,name=requests,proto3" json:"requests,omitempty"`
+	Errors        int64                  `protobuf:"varint,5,opt,name=errors,proto3" json:"errors,omitempty"`
+	RateLimited   int64                  `protobuf:"varint,6,opt,name=rate_limited,json=rateLimited,proto3" json:"rate_limited,omitempty"`
+	FailoversFrom int64                  `protobuf:"varint,7,opt,name=failovers_from,json=failoversFrom,proto3" json:"failovers_from,omitempty"` // requests that failed over to another route
+	Tokens        int64                  `protobuf:"varint,8,opt,name=tokens,proto3" json:"tokens,omitempty"`
+	CostUsdMicros int64                  `protobuf:"varint,9,opt,name=cost_usd_micros,json=costUsdMicros,proto3" json:"cost_usd_micros,omitempty"`
+	AvgTtftMs     int64                  `protobuf:"varint,10,opt,name=avg_ttft_ms,json=avgTtftMs,proto3" json:"avg_ttft_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GatewayRouteTraffic) Reset() {
+	*x = GatewayRouteTraffic{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayRouteTraffic) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayRouteTraffic) ProtoMessage() {}
+
+func (x *GatewayRouteTraffic) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayRouteTraffic.ProtoReflect.Descriptor instead.
+func (*GatewayRouteTraffic) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *GatewayRouteTraffic) GetRouteId() string {
+	if x != nil {
+		return x.RouteId
+	}
+	return ""
+}
+
+func (x *GatewayRouteTraffic) GetRouteName() string {
+	if x != nil {
+		return x.RouteName
+	}
+	return ""
+}
+
+func (x *GatewayRouteTraffic) GetRouteKind() string {
+	if x != nil {
+		return x.RouteKind
+	}
+	return ""
+}
+
+func (x *GatewayRouteTraffic) GetRequests() int64 {
+	if x != nil {
+		return x.Requests
+	}
+	return 0
+}
+
+func (x *GatewayRouteTraffic) GetErrors() int64 {
+	if x != nil {
+		return x.Errors
+	}
+	return 0
+}
+
+func (x *GatewayRouteTraffic) GetRateLimited() int64 {
+	if x != nil {
+		return x.RateLimited
+	}
+	return 0
+}
+
+func (x *GatewayRouteTraffic) GetFailoversFrom() int64 {
+	if x != nil {
+		return x.FailoversFrom
+	}
+	return 0
+}
+
+func (x *GatewayRouteTraffic) GetTokens() int64 {
+	if x != nil {
+		return x.Tokens
+	}
+	return 0
+}
+
+func (x *GatewayRouteTraffic) GetCostUsdMicros() int64 {
+	if x != nil {
+		return x.CostUsdMicros
+	}
+	return 0
+}
+
+func (x *GatewayRouteTraffic) GetAvgTtftMs() int64 {
+	if x != nil {
+		return x.AvgTtftMs
+	}
+	return 0
+}
+
+// One failover: a request that failed on one route before the first byte
+// and was retried on the next.
+type GatewayFailover struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	At              string                 `protobuf:"bytes,1,opt,name=at,proto3" json:"at,omitempty"`
+	RunId           string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	ProjectId       string                 `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Stage           string                 `protobuf:"bytes,4,opt,name=stage,proto3" json:"stage,omitempty"`
+	FromRouteId     string                 `protobuf:"bytes,5,opt,name=from_route_id,json=fromRouteId,proto3" json:"from_route_id,omitempty"`
+	FromRouteName   string                 `protobuf:"bytes,6,opt,name=from_route_name,json=fromRouteName,proto3" json:"from_route_name,omitempty"`
+	HttpStatus      int32                  `protobuf:"varint,7,opt,name=http_status,json=httpStatus,proto3" json:"http_status,omitempty"` // 502 for a connect error
+	ToRouteId       string                 `protobuf:"bytes,8,opt,name=to_route_id,json=toRouteId,proto3" json:"to_route_id,omitempty"`
+	ToRouteName     string                 `protobuf:"bytes,9,opt,name=to_route_name,json=toRouteName,proto3" json:"to_route_name,omitempty"`
+	FinalStatus     string                 `protobuf:"bytes,10,opt,name=final_status,json=finalStatus,proto3" json:"final_status,omitempty"` // ok, error, cancelled
+	FinalHttpStatus int32                  `protobuf:"varint,11,opt,name=final_http_status,json=finalHttpStatus,proto3" json:"final_http_status,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *GatewayFailover) Reset() {
+	*x = GatewayFailover{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayFailover) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayFailover) ProtoMessage() {}
+
+func (x *GatewayFailover) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayFailover.ProtoReflect.Descriptor instead.
+func (*GatewayFailover) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *GatewayFailover) GetAt() string {
+	if x != nil {
+		return x.At
+	}
+	return ""
+}
+
+func (x *GatewayFailover) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *GatewayFailover) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *GatewayFailover) GetStage() string {
+	if x != nil {
+		return x.Stage
+	}
+	return ""
+}
+
+func (x *GatewayFailover) GetFromRouteId() string {
+	if x != nil {
+		return x.FromRouteId
+	}
+	return ""
+}
+
+func (x *GatewayFailover) GetFromRouteName() string {
+	if x != nil {
+		return x.FromRouteName
+	}
+	return ""
+}
+
+func (x *GatewayFailover) GetHttpStatus() int32 {
+	if x != nil {
+		return x.HttpStatus
+	}
+	return 0
+}
+
+func (x *GatewayFailover) GetToRouteId() string {
+	if x != nil {
+		return x.ToRouteId
+	}
+	return ""
+}
+
+func (x *GatewayFailover) GetToRouteName() string {
+	if x != nil {
+		return x.ToRouteName
+	}
+	return ""
+}
+
+func (x *GatewayFailover) GetFinalStatus() string {
+	if x != nil {
+		return x.FinalStatus
+	}
+	return ""
+}
+
+func (x *GatewayFailover) GetFinalHttpStatus() int32 {
+	if x != nil {
+		return x.FinalHttpStatus
+	}
+	return 0
+}
+
+type GetGatewayPoolDetailResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pool          *GatewayPool           `protobuf:"bytes,1,opt,name=pool,proto3" json:"pool,omitempty"`
+	Traffic       []*GatewayRouteTraffic `protobuf:"bytes,2,rep,name=traffic,proto3" json:"traffic,omitempty"`
+	Failovers     []*GatewayFailover     `protobuf:"bytes,3,rep,name=failovers,proto3" json:"failovers,omitempty"` // newest first, at most 200
+	Hours         int32                  `protobuf:"varint,4,opt,name=hours,proto3" json:"hours,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGatewayPoolDetailResponse) Reset() {
+	*x = GetGatewayPoolDetailResponse{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGatewayPoolDetailResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGatewayPoolDetailResponse) ProtoMessage() {}
+
+func (x *GetGatewayPoolDetailResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGatewayPoolDetailResponse.ProtoReflect.Descriptor instead.
+func (*GetGatewayPoolDetailResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *GetGatewayPoolDetailResponse) GetPool() *GatewayPool {
+	if x != nil {
+		return x.Pool
+	}
+	return nil
+}
+
+func (x *GetGatewayPoolDetailResponse) GetTraffic() []*GatewayRouteTraffic {
+	if x != nil {
+		return x.Traffic
+	}
+	return nil
+}
+
+func (x *GetGatewayPoolDetailResponse) GetFailovers() []*GatewayFailover {
+	if x != nil {
+		return x.Failovers
+	}
+	return nil
+}
+
+func (x *GetGatewayPoolDetailResponse) GetHours() int32 {
+	if x != nil {
+		return x.Hours
+	}
+	return 0
+}
+
 var File_blaxsmith_api_v1_gateway_proto protoreflect.FileDescriptor
 
 const file_blaxsmith_api_v1_gateway_proto_rawDesc = "" +
@@ -4527,7 +4908,7 @@ const file_blaxsmith_api_v1_gateway_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x03R\x05limit\x12\x1c\n" +
 	"\tremaining\x18\x03 \x01(\x03R\tremaining\x12\x19\n" +
-	"\breset_at\x18\x04 \x01(\tR\aresetAt\"\xee\x06\n" +
+	"\breset_at\x18\x04 \x01(\tR\aresetAt\"\xb6\a\n" +
 	"\fGatewayRoute\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -4553,7 +4934,10 @@ const file_blaxsmith_api_v1_gateway_proto_rawDesc = "" +
 	"\n" +
 	"errors_15m\x18\x15 \x01(\x05R\terrors15m\x12\x1e\n" +
 	"\vlast_429_at\x18\x16 \x01(\tR\tlast429At\x12(\n" +
-	"\x10state_updated_at\x18\x17 \x01(\tR\x0estateUpdatedAt\x1a;\n" +
+	"\x10state_updated_at\x18\x17 \x01(\tR\x0estateUpdatedAt\x12%\n" +
+	"\x0eazure_resource\x18\x18 \x01(\tR\razureResource\x12\x1f\n" +
+	"\vapi_version\x18\x19 \x01(\tR\n" +
+	"apiVersion\x1a;\n" +
 	"\rModelMapEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfe\x01\n" +
@@ -4713,7 +5097,44 @@ const file_blaxsmith_api_v1_gateway_proto_rawDesc = "" +
 	"\balert_id\x18\x01 \x01(\tR\aalertId\x12\x14\n" +
 	"\x05hours\x18\x02 \x01(\x05R\x05hours\"@\n" +
 	"\x19SnoozeBudgetAlertResponse\x12#\n" +
-	"\rsnoozed_until\x18\x01 \x01(\tR\fsnoozedUntil2\xda\f\n" +
+	"\rsnoozed_until\x18\x01 \x01(\tR\fsnoozedUntil\"L\n" +
+	"\x1bGetGatewayPoolDetailRequest\x12\x17\n" +
+	"\apool_id\x18\x01 \x01(\tR\x06poolId\x12\x14\n" +
+	"\x05hours\x18\x02 \x01(\x05R\x05hours\"\xcc\x02\n" +
+	"\x13GatewayRouteTraffic\x12\x19\n" +
+	"\broute_id\x18\x01 \x01(\tR\arouteId\x12\x1d\n" +
+	"\n" +
+	"route_name\x18\x02 \x01(\tR\trouteName\x12\x1d\n" +
+	"\n" +
+	"route_kind\x18\x03 \x01(\tR\trouteKind\x12\x1a\n" +
+	"\brequests\x18\x04 \x01(\x03R\brequests\x12\x16\n" +
+	"\x06errors\x18\x05 \x01(\x03R\x06errors\x12!\n" +
+	"\frate_limited\x18\x06 \x01(\x03R\vrateLimited\x12%\n" +
+	"\x0efailovers_from\x18\a \x01(\x03R\rfailoversFrom\x12\x16\n" +
+	"\x06tokens\x18\b \x01(\x03R\x06tokens\x12&\n" +
+	"\x0fcost_usd_micros\x18\t \x01(\x03R\rcostUsdMicros\x12\x1e\n" +
+	"\vavg_ttft_ms\x18\n" +
+	" \x01(\x03R\tavgTtftMs\"\xed\x02\n" +
+	"\x0fGatewayFailover\x12\x0e\n" +
+	"\x02at\x18\x01 \x01(\tR\x02at\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x03 \x01(\tR\tprojectId\x12\x14\n" +
+	"\x05stage\x18\x04 \x01(\tR\x05stage\x12\"\n" +
+	"\rfrom_route_id\x18\x05 \x01(\tR\vfromRouteId\x12&\n" +
+	"\x0ffrom_route_name\x18\x06 \x01(\tR\rfromRouteName\x12\x1f\n" +
+	"\vhttp_status\x18\a \x01(\x05R\n" +
+	"httpStatus\x12\x1e\n" +
+	"\vto_route_id\x18\b \x01(\tR\ttoRouteId\x12\"\n" +
+	"\rto_route_name\x18\t \x01(\tR\vtoRouteName\x12!\n" +
+	"\ffinal_status\x18\n" +
+	" \x01(\tR\vfinalStatus\x12*\n" +
+	"\x11final_http_status\x18\v \x01(\x05R\x0ffinalHttpStatus\"\xe9\x01\n" +
+	"\x1cGetGatewayPoolDetailResponse\x121\n" +
+	"\x04pool\x18\x01 \x01(\v2\x1d.blaxsmith.api.v1.GatewayPoolR\x04pool\x12?\n" +
+	"\atraffic\x18\x02 \x03(\v2%.blaxsmith.api.v1.GatewayRouteTrafficR\atraffic\x12?\n" +
+	"\tfailovers\x18\x03 \x03(\v2!.blaxsmith.api.v1.GatewayFailoverR\tfailovers\x12\x14\n" +
+	"\x05hours\x18\x04 \x01(\x05R\x05hours2\xd1\r\n" +
 	"\x13GatewayAdminService\x12o\n" +
 	"\x12GetGatewaySettings\x12+.blaxsmith.api.v1.GetGatewaySettingsRequest\x1a,.blaxsmith.api.v1.GetGatewaySettingsResponse\x12x\n" +
 	"\x15UpdateGatewaySettings\x12..blaxsmith.api.v1.UpdateGatewaySettingsRequest\x1a/.blaxsmith.api.v1.UpdateGatewaySettingsResponse\x12i\n" +
@@ -4723,7 +5144,8 @@ const file_blaxsmith_api_v1_gateway_proto_rawDesc = "" +
 	"\x11ListGatewayRoutes\x12*.blaxsmith.api.v1.ListGatewayRoutesRequest\x1a+.blaxsmith.api.v1.ListGatewayRoutesResponse\x12i\n" +
 	"\x10SaveGatewayRoute\x12).blaxsmith.api.v1.SaveGatewayRouteRequest\x1a*.blaxsmith.api.v1.SaveGatewayRouteResponse\x12u\n" +
 	"\x14SetGatewayRouteState\x12-.blaxsmith.api.v1.SetGatewayRouteStateRequest\x1a..blaxsmith.api.v1.SetGatewayRouteStateResponse\x12f\n" +
-	"\x0fSaveGatewayPool\x12(.blaxsmith.api.v1.SaveGatewayPoolRequest\x1a).blaxsmith.api.v1.SaveGatewayPoolResponse\x12Z\n" +
+	"\x0fSaveGatewayPool\x12(.blaxsmith.api.v1.SaveGatewayPoolRequest\x1a).blaxsmith.api.v1.SaveGatewayPoolResponse\x12u\n" +
+	"\x14GetGatewayPoolDetail\x12-.blaxsmith.api.v1.GetGatewayPoolDetailRequest\x1a..blaxsmith.api.v1.GetGatewayPoolDetailResponse\x12Z\n" +
 	"\vListBudgets\x12$.blaxsmith.api.v1.ListBudgetsRequest\x1a%.blaxsmith.api.v1.ListBudgetsResponse\x12l\n" +
 	"\x11SetBudgetsEnabled\x12*.blaxsmith.api.v1.SetBudgetsEnabledRequest\x1a+.blaxsmith.api.v1.SetBudgetsEnabledResponse\x12]\n" +
 	"\fCreateBudget\x12%.blaxsmith.api.v1.CreateBudgetRequest\x1a&.blaxsmith.api.v1.CreateBudgetResponse\x12]\n" +
@@ -4756,7 +5178,7 @@ func file_blaxsmith_api_v1_gateway_proto_rawDescGZIP() []byte {
 	return file_blaxsmith_api_v1_gateway_proto_rawDescData
 }
 
-var file_blaxsmith_api_v1_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 66)
+var file_blaxsmith_api_v1_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 70)
 var file_blaxsmith_api_v1_gateway_proto_goTypes = []any{
 	(*GatewaySettings)(nil),                  // 0: blaxsmith.api.v1.GatewaySettings
 	(*GetGatewaySettingsRequest)(nil),        // 1: blaxsmith.api.v1.GetGatewaySettingsRequest
@@ -4823,7 +5245,11 @@ var file_blaxsmith_api_v1_gateway_proto_goTypes = []any{
 	(*AcknowledgeBudgetAlertResponse)(nil),   // 62: blaxsmith.api.v1.AcknowledgeBudgetAlertResponse
 	(*SnoozeBudgetAlertRequest)(nil),         // 63: blaxsmith.api.v1.SnoozeBudgetAlertRequest
 	(*SnoozeBudgetAlertResponse)(nil),        // 64: blaxsmith.api.v1.SnoozeBudgetAlertResponse
-	nil,                                      // 65: blaxsmith.api.v1.GatewayRoute.ModelMapEntry
+	(*GetGatewayPoolDetailRequest)(nil),      // 65: blaxsmith.api.v1.GetGatewayPoolDetailRequest
+	(*GatewayRouteTraffic)(nil),              // 66: blaxsmith.api.v1.GatewayRouteTraffic
+	(*GatewayFailover)(nil),                  // 67: blaxsmith.api.v1.GatewayFailover
+	(*GetGatewayPoolDetailResponse)(nil),     // 68: blaxsmith.api.v1.GetGatewayPoolDetailResponse
+	nil,                                      // 69: blaxsmith.api.v1.GatewayRoute.ModelMapEntry
 }
 var file_blaxsmith_api_v1_gateway_proto_depIdxs = []int32{
 	0,  // 0: blaxsmith.api.v1.GetGatewaySettingsResponse.settings:type_name -> blaxsmith.api.v1.GatewaySettings
@@ -4845,7 +5271,7 @@ var file_blaxsmith_api_v1_gateway_proto_depIdxs = []int32{
 	16, // 16: blaxsmith.api.v1.UpdateBudgetRequest.budget:type_name -> blaxsmith.api.v1.BudgetInput
 	15, // 17: blaxsmith.api.v1.UpdateBudgetResponse.budget:type_name -> blaxsmith.api.v1.Budget
 	27, // 18: blaxsmith.api.v1.ListBudgetAlertsResponse.alerts:type_name -> blaxsmith.api.v1.BudgetAlert
-	65, // 19: blaxsmith.api.v1.GatewayRoute.model_map:type_name -> blaxsmith.api.v1.GatewayRoute.ModelMapEntry
+	69, // 19: blaxsmith.api.v1.GatewayRoute.model_map:type_name -> blaxsmith.api.v1.GatewayRoute.ModelMapEntry
 	30, // 20: blaxsmith.api.v1.GatewayRoute.metrics:type_name -> blaxsmith.api.v1.GatewayRouteMetric
 	31, // 21: blaxsmith.api.v1.ListGatewayRoutesResponse.routes:type_name -> blaxsmith.api.v1.GatewayRoute
 	32, // 22: blaxsmith.api.v1.ListGatewayRoutesResponse.pools:type_name -> blaxsmith.api.v1.GatewayPool
@@ -4876,59 +5302,64 @@ var file_blaxsmith_api_v1_gateway_proto_depIdxs = []int32{
 	6,  // 47: blaxsmith.api.v1.GetProjectUsageResponse.by_user:type_name -> blaxsmith.api.v1.UsageSlice
 	6,  // 48: blaxsmith.api.v1.GetProjectUsageResponse.top_runs:type_name -> blaxsmith.api.v1.UsageSlice
 	27, // 49: blaxsmith.api.v1.GetProjectUsageResponse.alerts:type_name -> blaxsmith.api.v1.BudgetAlert
-	1,  // 50: blaxsmith.api.v1.GatewayAdminService.GetGatewaySettings:input_type -> blaxsmith.api.v1.GetGatewaySettingsRequest
-	3,  // 51: blaxsmith.api.v1.GatewayAdminService.UpdateGatewaySettings:input_type -> blaxsmith.api.v1.UpdateGatewaySettingsRequest
-	8,  // 52: blaxsmith.api.v1.GatewayAdminService.GetUsageOverview:input_type -> blaxsmith.api.v1.GetUsageOverviewRequest
-	11, // 53: blaxsmith.api.v1.GatewayAdminService.ListModelPrices:input_type -> blaxsmith.api.v1.ListModelPricesRequest
-	13, // 54: blaxsmith.api.v1.GatewayAdminService.SetModelPriceOverride:input_type -> blaxsmith.api.v1.SetModelPriceOverrideRequest
-	35, // 55: blaxsmith.api.v1.GatewayAdminService.ListGatewayRoutes:input_type -> blaxsmith.api.v1.ListGatewayRoutesRequest
-	37, // 56: blaxsmith.api.v1.GatewayAdminService.SaveGatewayRoute:input_type -> blaxsmith.api.v1.SaveGatewayRouteRequest
-	39, // 57: blaxsmith.api.v1.GatewayAdminService.SetGatewayRouteState:input_type -> blaxsmith.api.v1.SetGatewayRouteStateRequest
-	41, // 58: blaxsmith.api.v1.GatewayAdminService.SaveGatewayPool:input_type -> blaxsmith.api.v1.SaveGatewayPoolRequest
-	17, // 59: blaxsmith.api.v1.GatewayAdminService.ListBudgets:input_type -> blaxsmith.api.v1.ListBudgetsRequest
-	19, // 60: blaxsmith.api.v1.GatewayAdminService.SetBudgetsEnabled:input_type -> blaxsmith.api.v1.SetBudgetsEnabledRequest
-	21, // 61: blaxsmith.api.v1.GatewayAdminService.CreateBudget:input_type -> blaxsmith.api.v1.CreateBudgetRequest
-	23, // 62: blaxsmith.api.v1.GatewayAdminService.UpdateBudget:input_type -> blaxsmith.api.v1.UpdateBudgetRequest
-	25, // 63: blaxsmith.api.v1.GatewayAdminService.ArchiveBudget:input_type -> blaxsmith.api.v1.ArchiveBudgetRequest
-	28, // 64: blaxsmith.api.v1.GatewayAdminService.ListBudgetAlerts:input_type -> blaxsmith.api.v1.ListBudgetAlertsRequest
-	47, // 65: blaxsmith.api.v1.UsageService.GetGatewayStatus:input_type -> blaxsmith.api.v1.GetGatewayStatusRequest
-	49, // 66: blaxsmith.api.v1.UsageService.GetMyUsage:input_type -> blaxsmith.api.v1.GetMyUsageRequest
-	53, // 67: blaxsmith.api.v1.UsageService.GetRunCost:input_type -> blaxsmith.api.v1.GetRunCostRequest
-	55, // 68: blaxsmith.api.v1.UsageService.GetProjectDelivery:input_type -> blaxsmith.api.v1.GetProjectDeliveryRequest
-	57, // 69: blaxsmith.api.v1.UsageService.SetProjectDelivery:input_type -> blaxsmith.api.v1.SetProjectDeliveryRequest
-	45, // 70: blaxsmith.api.v1.UsageService.ListMySubscriptionLimits:input_type -> blaxsmith.api.v1.ListMySubscriptionLimitsRequest
-	59, // 71: blaxsmith.api.v1.UsageService.GetProjectUsage:input_type -> blaxsmith.api.v1.GetProjectUsageRequest
-	61, // 72: blaxsmith.api.v1.UsageService.AcknowledgeBudgetAlert:input_type -> blaxsmith.api.v1.AcknowledgeBudgetAlertRequest
-	63, // 73: blaxsmith.api.v1.UsageService.SnoozeBudgetAlert:input_type -> blaxsmith.api.v1.SnoozeBudgetAlertRequest
-	2,  // 74: blaxsmith.api.v1.GatewayAdminService.GetGatewaySettings:output_type -> blaxsmith.api.v1.GetGatewaySettingsResponse
-	4,  // 75: blaxsmith.api.v1.GatewayAdminService.UpdateGatewaySettings:output_type -> blaxsmith.api.v1.UpdateGatewaySettingsResponse
-	9,  // 76: blaxsmith.api.v1.GatewayAdminService.GetUsageOverview:output_type -> blaxsmith.api.v1.GetUsageOverviewResponse
-	12, // 77: blaxsmith.api.v1.GatewayAdminService.ListModelPrices:output_type -> blaxsmith.api.v1.ListModelPricesResponse
-	14, // 78: blaxsmith.api.v1.GatewayAdminService.SetModelPriceOverride:output_type -> blaxsmith.api.v1.SetModelPriceOverrideResponse
-	36, // 79: blaxsmith.api.v1.GatewayAdminService.ListGatewayRoutes:output_type -> blaxsmith.api.v1.ListGatewayRoutesResponse
-	38, // 80: blaxsmith.api.v1.GatewayAdminService.SaveGatewayRoute:output_type -> blaxsmith.api.v1.SaveGatewayRouteResponse
-	40, // 81: blaxsmith.api.v1.GatewayAdminService.SetGatewayRouteState:output_type -> blaxsmith.api.v1.SetGatewayRouteStateResponse
-	42, // 82: blaxsmith.api.v1.GatewayAdminService.SaveGatewayPool:output_type -> blaxsmith.api.v1.SaveGatewayPoolResponse
-	18, // 83: blaxsmith.api.v1.GatewayAdminService.ListBudgets:output_type -> blaxsmith.api.v1.ListBudgetsResponse
-	20, // 84: blaxsmith.api.v1.GatewayAdminService.SetBudgetsEnabled:output_type -> blaxsmith.api.v1.SetBudgetsEnabledResponse
-	22, // 85: blaxsmith.api.v1.GatewayAdminService.CreateBudget:output_type -> blaxsmith.api.v1.CreateBudgetResponse
-	24, // 86: blaxsmith.api.v1.GatewayAdminService.UpdateBudget:output_type -> blaxsmith.api.v1.UpdateBudgetResponse
-	26, // 87: blaxsmith.api.v1.GatewayAdminService.ArchiveBudget:output_type -> blaxsmith.api.v1.ArchiveBudgetResponse
-	29, // 88: blaxsmith.api.v1.GatewayAdminService.ListBudgetAlerts:output_type -> blaxsmith.api.v1.ListBudgetAlertsResponse
-	48, // 89: blaxsmith.api.v1.UsageService.GetGatewayStatus:output_type -> blaxsmith.api.v1.GetGatewayStatusResponse
-	50, // 90: blaxsmith.api.v1.UsageService.GetMyUsage:output_type -> blaxsmith.api.v1.GetMyUsageResponse
-	54, // 91: blaxsmith.api.v1.UsageService.GetRunCost:output_type -> blaxsmith.api.v1.GetRunCostResponse
-	56, // 92: blaxsmith.api.v1.UsageService.GetProjectDelivery:output_type -> blaxsmith.api.v1.GetProjectDeliveryResponse
-	58, // 93: blaxsmith.api.v1.UsageService.SetProjectDelivery:output_type -> blaxsmith.api.v1.SetProjectDeliveryResponse
-	46, // 94: blaxsmith.api.v1.UsageService.ListMySubscriptionLimits:output_type -> blaxsmith.api.v1.ListMySubscriptionLimitsResponse
-	60, // 95: blaxsmith.api.v1.UsageService.GetProjectUsage:output_type -> blaxsmith.api.v1.GetProjectUsageResponse
-	62, // 96: blaxsmith.api.v1.UsageService.AcknowledgeBudgetAlert:output_type -> blaxsmith.api.v1.AcknowledgeBudgetAlertResponse
-	64, // 97: blaxsmith.api.v1.UsageService.SnoozeBudgetAlert:output_type -> blaxsmith.api.v1.SnoozeBudgetAlertResponse
-	74, // [74:98] is the sub-list for method output_type
-	50, // [50:74] is the sub-list for method input_type
-	50, // [50:50] is the sub-list for extension type_name
-	50, // [50:50] is the sub-list for extension extendee
-	0,  // [0:50] is the sub-list for field type_name
+	32, // 50: blaxsmith.api.v1.GetGatewayPoolDetailResponse.pool:type_name -> blaxsmith.api.v1.GatewayPool
+	66, // 51: blaxsmith.api.v1.GetGatewayPoolDetailResponse.traffic:type_name -> blaxsmith.api.v1.GatewayRouteTraffic
+	67, // 52: blaxsmith.api.v1.GetGatewayPoolDetailResponse.failovers:type_name -> blaxsmith.api.v1.GatewayFailover
+	1,  // 53: blaxsmith.api.v1.GatewayAdminService.GetGatewaySettings:input_type -> blaxsmith.api.v1.GetGatewaySettingsRequest
+	3,  // 54: blaxsmith.api.v1.GatewayAdminService.UpdateGatewaySettings:input_type -> blaxsmith.api.v1.UpdateGatewaySettingsRequest
+	8,  // 55: blaxsmith.api.v1.GatewayAdminService.GetUsageOverview:input_type -> blaxsmith.api.v1.GetUsageOverviewRequest
+	11, // 56: blaxsmith.api.v1.GatewayAdminService.ListModelPrices:input_type -> blaxsmith.api.v1.ListModelPricesRequest
+	13, // 57: blaxsmith.api.v1.GatewayAdminService.SetModelPriceOverride:input_type -> blaxsmith.api.v1.SetModelPriceOverrideRequest
+	35, // 58: blaxsmith.api.v1.GatewayAdminService.ListGatewayRoutes:input_type -> blaxsmith.api.v1.ListGatewayRoutesRequest
+	37, // 59: blaxsmith.api.v1.GatewayAdminService.SaveGatewayRoute:input_type -> blaxsmith.api.v1.SaveGatewayRouteRequest
+	39, // 60: blaxsmith.api.v1.GatewayAdminService.SetGatewayRouteState:input_type -> blaxsmith.api.v1.SetGatewayRouteStateRequest
+	41, // 61: blaxsmith.api.v1.GatewayAdminService.SaveGatewayPool:input_type -> blaxsmith.api.v1.SaveGatewayPoolRequest
+	65, // 62: blaxsmith.api.v1.GatewayAdminService.GetGatewayPoolDetail:input_type -> blaxsmith.api.v1.GetGatewayPoolDetailRequest
+	17, // 63: blaxsmith.api.v1.GatewayAdminService.ListBudgets:input_type -> blaxsmith.api.v1.ListBudgetsRequest
+	19, // 64: blaxsmith.api.v1.GatewayAdminService.SetBudgetsEnabled:input_type -> blaxsmith.api.v1.SetBudgetsEnabledRequest
+	21, // 65: blaxsmith.api.v1.GatewayAdminService.CreateBudget:input_type -> blaxsmith.api.v1.CreateBudgetRequest
+	23, // 66: blaxsmith.api.v1.GatewayAdminService.UpdateBudget:input_type -> blaxsmith.api.v1.UpdateBudgetRequest
+	25, // 67: blaxsmith.api.v1.GatewayAdminService.ArchiveBudget:input_type -> blaxsmith.api.v1.ArchiveBudgetRequest
+	28, // 68: blaxsmith.api.v1.GatewayAdminService.ListBudgetAlerts:input_type -> blaxsmith.api.v1.ListBudgetAlertsRequest
+	47, // 69: blaxsmith.api.v1.UsageService.GetGatewayStatus:input_type -> blaxsmith.api.v1.GetGatewayStatusRequest
+	49, // 70: blaxsmith.api.v1.UsageService.GetMyUsage:input_type -> blaxsmith.api.v1.GetMyUsageRequest
+	53, // 71: blaxsmith.api.v1.UsageService.GetRunCost:input_type -> blaxsmith.api.v1.GetRunCostRequest
+	55, // 72: blaxsmith.api.v1.UsageService.GetProjectDelivery:input_type -> blaxsmith.api.v1.GetProjectDeliveryRequest
+	57, // 73: blaxsmith.api.v1.UsageService.SetProjectDelivery:input_type -> blaxsmith.api.v1.SetProjectDeliveryRequest
+	45, // 74: blaxsmith.api.v1.UsageService.ListMySubscriptionLimits:input_type -> blaxsmith.api.v1.ListMySubscriptionLimitsRequest
+	59, // 75: blaxsmith.api.v1.UsageService.GetProjectUsage:input_type -> blaxsmith.api.v1.GetProjectUsageRequest
+	61, // 76: blaxsmith.api.v1.UsageService.AcknowledgeBudgetAlert:input_type -> blaxsmith.api.v1.AcknowledgeBudgetAlertRequest
+	63, // 77: blaxsmith.api.v1.UsageService.SnoozeBudgetAlert:input_type -> blaxsmith.api.v1.SnoozeBudgetAlertRequest
+	2,  // 78: blaxsmith.api.v1.GatewayAdminService.GetGatewaySettings:output_type -> blaxsmith.api.v1.GetGatewaySettingsResponse
+	4,  // 79: blaxsmith.api.v1.GatewayAdminService.UpdateGatewaySettings:output_type -> blaxsmith.api.v1.UpdateGatewaySettingsResponse
+	9,  // 80: blaxsmith.api.v1.GatewayAdminService.GetUsageOverview:output_type -> blaxsmith.api.v1.GetUsageOverviewResponse
+	12, // 81: blaxsmith.api.v1.GatewayAdminService.ListModelPrices:output_type -> blaxsmith.api.v1.ListModelPricesResponse
+	14, // 82: blaxsmith.api.v1.GatewayAdminService.SetModelPriceOverride:output_type -> blaxsmith.api.v1.SetModelPriceOverrideResponse
+	36, // 83: blaxsmith.api.v1.GatewayAdminService.ListGatewayRoutes:output_type -> blaxsmith.api.v1.ListGatewayRoutesResponse
+	38, // 84: blaxsmith.api.v1.GatewayAdminService.SaveGatewayRoute:output_type -> blaxsmith.api.v1.SaveGatewayRouteResponse
+	40, // 85: blaxsmith.api.v1.GatewayAdminService.SetGatewayRouteState:output_type -> blaxsmith.api.v1.SetGatewayRouteStateResponse
+	42, // 86: blaxsmith.api.v1.GatewayAdminService.SaveGatewayPool:output_type -> blaxsmith.api.v1.SaveGatewayPoolResponse
+	68, // 87: blaxsmith.api.v1.GatewayAdminService.GetGatewayPoolDetail:output_type -> blaxsmith.api.v1.GetGatewayPoolDetailResponse
+	18, // 88: blaxsmith.api.v1.GatewayAdminService.ListBudgets:output_type -> blaxsmith.api.v1.ListBudgetsResponse
+	20, // 89: blaxsmith.api.v1.GatewayAdminService.SetBudgetsEnabled:output_type -> blaxsmith.api.v1.SetBudgetsEnabledResponse
+	22, // 90: blaxsmith.api.v1.GatewayAdminService.CreateBudget:output_type -> blaxsmith.api.v1.CreateBudgetResponse
+	24, // 91: blaxsmith.api.v1.GatewayAdminService.UpdateBudget:output_type -> blaxsmith.api.v1.UpdateBudgetResponse
+	26, // 92: blaxsmith.api.v1.GatewayAdminService.ArchiveBudget:output_type -> blaxsmith.api.v1.ArchiveBudgetResponse
+	29, // 93: blaxsmith.api.v1.GatewayAdminService.ListBudgetAlerts:output_type -> blaxsmith.api.v1.ListBudgetAlertsResponse
+	48, // 94: blaxsmith.api.v1.UsageService.GetGatewayStatus:output_type -> blaxsmith.api.v1.GetGatewayStatusResponse
+	50, // 95: blaxsmith.api.v1.UsageService.GetMyUsage:output_type -> blaxsmith.api.v1.GetMyUsageResponse
+	54, // 96: blaxsmith.api.v1.UsageService.GetRunCost:output_type -> blaxsmith.api.v1.GetRunCostResponse
+	56, // 97: blaxsmith.api.v1.UsageService.GetProjectDelivery:output_type -> blaxsmith.api.v1.GetProjectDeliveryResponse
+	58, // 98: blaxsmith.api.v1.UsageService.SetProjectDelivery:output_type -> blaxsmith.api.v1.SetProjectDeliveryResponse
+	46, // 99: blaxsmith.api.v1.UsageService.ListMySubscriptionLimits:output_type -> blaxsmith.api.v1.ListMySubscriptionLimitsResponse
+	60, // 100: blaxsmith.api.v1.UsageService.GetProjectUsage:output_type -> blaxsmith.api.v1.GetProjectUsageResponse
+	62, // 101: blaxsmith.api.v1.UsageService.AcknowledgeBudgetAlert:output_type -> blaxsmith.api.v1.AcknowledgeBudgetAlertResponse
+	64, // 102: blaxsmith.api.v1.UsageService.SnoozeBudgetAlert:output_type -> blaxsmith.api.v1.SnoozeBudgetAlertResponse
+	78, // [78:103] is the sub-list for method output_type
+	53, // [53:78] is the sub-list for method input_type
+	53, // [53:53] is the sub-list for extension type_name
+	53, // [53:53] is the sub-list for extension extendee
+	0,  // [0:53] is the sub-list for field type_name
 }
 
 func init() { file_blaxsmith_api_v1_gateway_proto_init() }
@@ -4942,7 +5373,7 @@ func file_blaxsmith_api_v1_gateway_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blaxsmith_api_v1_gateway_proto_rawDesc), len(file_blaxsmith_api_v1_gateway_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   66,
+			NumMessages:   70,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

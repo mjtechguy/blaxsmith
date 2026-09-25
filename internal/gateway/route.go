@@ -19,6 +19,7 @@ const (
 	KindBedrock   = "bedrock"
 	KindVertex    = "vertex"
 	KindOpenAI    = "openai"
+	KindAzure     = "azure_openai"
 	KindPersonal  = "personal_subscription"
 )
 
@@ -34,12 +35,14 @@ const (
 const (
 	AWSSigV4AuthMethod          = "aws_sigv4"
 	GCPServiceAccountAuthMethod = "gcp_service_account"
+	AzureAPIKeyAuthMethod       = "azure_api_key"
 )
 
 // Route is one upstream the gateway may send a request to.
 type Route struct {
 	ID, Name, Kind, ConnectionID, AuthMethod string
 	Region, CloudProject                     string
+	AzureResource, APIVersion                string // azure_openai
 	ModelMap                                 map[string]string
 	Weight, Priority, Cap                    int
 	RequestsPerMinute                        int
@@ -57,8 +60,8 @@ func (r Route) model(ours string) (string, bool) {
 	if mapped, ok := r.ModelMap[ours]; ok && mapped != "" {
 		return mapped, true
 	}
-	if r.Kind == KindBedrock || r.Kind == KindVertex {
-		return "", false
+	if r.Kind == KindBedrock || r.Kind == KindVertex || r.Kind == KindAzure {
+		return "", false // cloud model ids and Azure deployment names always differ from ours.
 	}
 	return ours, len(r.ModelMap) == 0
 }
@@ -67,7 +70,9 @@ func (r Route) model(ours string) (string, bool) {
 func (r Route) serves(path string) bool {
 	switch r.Kind {
 	case KindBedrock, KindVertex:
-		return path == "/v1/messages"
+		return path == "/v1/messages" || path == "/v1/messages/count_tokens"
+	case KindAzure:
+		return path == "/v1/chat/completions" || path == "/v1/responses"
 	case KindPersonal:
 		if r.AuthMethod == access.CodexSubscriptionAuth {
 			return path == "/v1/responses" || path == "/v1/responses/compact" || path == "/v1/models" ||
@@ -152,6 +157,7 @@ const poolForConnection = `SELECT p.id::text,p.name,p.strategy,p.concurrency_cap
 func poolRoutes(ctx context.Context, db *pgxpool.Pool, orgID, poolID string, all bool) ([]Route, error) {
 	ctx = tenant.Org(ctx, orgID)
 	rows, err := db.Query(ctx, `SELECT r.id::text,r.name,r.kind,r.connection_id,c.auth_method,r.region,r.cloud_project,
+		r.azure_resource,r.api_version,
 		r.model_map,r.weight,r.priority,r.concurrency_cap,r.requests_per_minute,r.tokens_per_minute,r.state
 		FROM gateway_pool_routes pr
 		JOIN gateway_routes r ON r.organization_id=pr.organization_id AND r.id=pr.route_id
@@ -168,6 +174,7 @@ func poolRoutes(ctx context.Context, db *pgxpool.Pool, orgID, poolID string, all
 		var r Route
 		var mapping []byte
 		if err := rows.Scan(&r.ID, &r.Name, &r.Kind, &r.ConnectionID, &r.AuthMethod, &r.Region, &r.CloudProject,
+			&r.AzureResource, &r.APIVersion,
 			&mapping, &r.Weight, &r.Priority, &r.Cap, &r.RequestsPerMinute, &r.TokensPerMinute, &r.State); err != nil {
 			return nil, err
 		}

@@ -77,7 +77,7 @@ export const deliveryLabels: Record<string, string> = {
 
 export const routeKindLabels: Record<string, string> = {
   anthropic: "Anthropic", openai: "OpenAI", opencode_zen: "OpenCode Zen", opencode_go: "OpenCode Go",
-  bedrock: "Amazon Bedrock", vertex: "Google Vertex AI", personal_subscription: "Personal subscription",
+  bedrock: "Amazon Bedrock", vertex: "Google Vertex AI", azure_openai: "Azure OpenAI", personal_subscription: "Personal subscription",
 };
 
 // Routes & pools (docs/model-gateway-plan.md §4, §5): API-key and cloud
@@ -89,12 +89,14 @@ export const saveGatewayRoute = async (route: Partial<Omit<GatewayRoute, "$typeN
   admin.saveGatewayRoute({ route, cloudCredential }, await csrf());
 export const setGatewayRouteState = async (id: string, state: string) => admin.setGatewayRouteState({ id, state }, await csrf());
 export const saveGatewayPool = async (pool: Partial<Omit<GatewayPool, "$typeName" | "$unknown">>) => admin.saveGatewayPool({ pool }, await csrf());
-export const listMySubscriptionLimits = (signal?: AbortSignal) => usage.listMySubscriptionLimits({}, { signal });
+export const poolDetailKey = (org: string, poolId: string, hours: number) => ["gateway-pool-detail", org, poolId, hours] as const;
+export const getGatewayPoolDetail = (poolId: string, hours: number, signal?: AbortSignal) => admin.getGatewayPoolDetail({ poolId, hours }, { signal });
+export const listMySubscriptionLimits =(signal?: AbortSignal) => usage.listMySubscriptionLimits({}, { signal });
 
 export const familyLabels: Record<string, string> = { anthropic: "Claude (Anthropic)", openai: "OpenAI", opencode: "OpenCode Zen", "opencode-go": "OpenCode Go" };
 export const strategyLabels: Record<string, string> = { priority_headroom: "Priority, then headroom", weighted: "Weighted", fill_first: "Fill first" };
 // Which route kinds serve a pool family; the server enforces the same.
-export const familyKinds: Record<string, string[]> = { anthropic: ["anthropic", "bedrock", "vertex"], openai: ["openai"], opencode: ["opencode_zen"], "opencode-go": ["opencode_go"] };
+export const familyKinds: Record<string, string[]> = { anthropic: ["anthropic", "bedrock", "vertex"], openai: ["openai", "azure_openai"], opencode: ["opencode_zen"], "opencode-go": ["opencode_go"] };
 
 // "42 s" style countdown to an RFC 3339 time; "" when unknown or past.
 export function countdown(at: string, now: number): string {

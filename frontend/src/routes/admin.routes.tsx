@@ -64,7 +64,7 @@ function Headroom({ metric }: { metric?: GatewayRouteMetric }) {
 
 const metric = (r: GatewayRoute, name: string) => r.metrics.find((m) => m.name === name);
 
-function RouteTable({ routes, pools, org }: { routes: GatewayRoute[]; pools: GatewayPool[]; org: string }) {
+export function RouteTable({ routes, pools, org }: { routes: GatewayRoute[]; pools: GatewayPool[]; org: string }) {
   const queryClient = useQueryClient();
   const [view, setView] = useLocalView({ size: 25 });
   const [message, setMessage] = useState("");
@@ -143,7 +143,8 @@ function Pools({ data, org }: { data: ListGatewayRoutesResponse; org: string }) 
     <div className="pool-list">
       {data.pools.map((pool) => <details key={pool.id} className="pool-item">
         <summary>{pool.name} <small>{familyLabels[pool.family] ?? pool.family} · {strategyLabels[pool.strategy] ?? pool.strategy} · {pool.routeIds.length} routes · {pool.projectIds.length} projects</small>
-          {pool.state === "disabled" ? <span className="state-badge">Disabled</span> : null}</summary>
+          {pool.state === "disabled" ? <span className="state-badge">Disabled</span> : null}
+          <Link className="text-action" to="/admin/pools/$poolId" params={{ poolId: pool.id }}>Traffic & failovers</Link></summary>
         <PoolForm pool={pool} data={data} org={org} />
       </details>)}
       <details className="pool-item" open={!data.pools.length}>
@@ -158,7 +159,7 @@ function toggle(list: string[], id: string, on: boolean) {
   return on ? [...new Set([...list, id])] : list.filter((x) => x !== id);
 }
 
-function PoolForm({ pool, data, org }: { pool?: GatewayPool; data: ListGatewayRoutesResponse; org: string }) {
+export function PoolForm({ pool, data, org }: { pool?: GatewayPool; data: ListGatewayRoutesResponse; org: string }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState({ name: pool?.name ?? "", family: pool?.family ?? "anthropic", strategy: pool?.strategy ?? "priority_headroom",
     concurrencyCap: String(pool?.concurrencyCap ?? 0), affinity: pool?.affinity ?? true, state: pool?.state ?? "enabled",
@@ -213,17 +214,20 @@ const apiKinds: Record<string, string> = { anthropic: "anthropic", openai: "open
 
 function NewRoute({ connections, org }: { connections: GatewayRouteOption[]; org: string }) {
   const queryClient = useQueryClient();
-  const empty = { kind: "anthropic", name: "", connectionId: "", region: "", cloudProject: "", models: "", priority: "100", weight: "1", cap: "0", rpm: "0", tpm: "0", credential: "" };
+  const empty = { kind: "anthropic", name: "", connectionId: "", region: "", cloudProject: "", azureResource: "", apiVersion: "2024-10-21", models: "", priority: "100", weight: "1", cap: "0", rpm: "0", tpm: "0", credential: "" };
   const [draft, setDraft] = useState(empty);
   const [message, setMessage] = useState("");
-  const cloud = draft.kind === "bedrock" || draft.kind === "vertex";
+  const regional = draft.kind === "bedrock" || draft.kind === "vertex";
+  const azure = draft.kind === "azure_openai";
+  const cloud = regional || azure;
   const keys = connections.filter((c) => c.detail === apiKinds[draft.kind]);
   const save = useMutation({
     mutationFn: () => {
       const modelMap = parseModelMap(draft.models);
       if (!modelMap) throw new Error("Write one model mapping per line as our-model-id=route-model-id.");
-      if (cloud && !Object.keys(modelMap).length) throw new Error("Cloud routes need at least one model mapping.");
-      return saveGatewayRoute({ name: draft.name.trim(), kind: draft.kind, connectionId: cloud ? "" : draft.connectionId, region: cloud ? draft.region.trim() : "",
+      if (cloud && !Object.keys(modelMap).length) throw new Error(azure ? "Map each model to its Azure deployment name." : "Cloud routes need at least one model mapping.");
+      return saveGatewayRoute({ name: draft.name.trim(), kind: draft.kind, connectionId: cloud ? "" : draft.connectionId, region: regional ? draft.region.trim() : "",
+        azureResource: azure ? draft.azureResource.trim() : "", apiVersion: azure ? draft.apiVersion.trim() : "",
         cloudProject: draft.kind === "vertex" ? draft.cloudProject.trim() : "", modelMap, priority: Number(draft.priority) || 0, weight: Number(draft.weight) || 1,
         concurrencyCap: Number(draft.cap) || 0, requestsPerMinute: Number(draft.rpm) || 0, tokensPerMinute: BigInt(Number(draft.tpm) || 0) }, cloud ? draft.credential.trim() : "");
     },
@@ -233,25 +237,28 @@ function NewRoute({ connections, org }: { connections: GatewayRouteOption[]; org
   });
   const field = (key: keyof typeof draft, label: string, placeholder = "") => <label className="form-field"><span>{label}</span>
     <input value={draft[key]} placeholder={placeholder} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} /></label>;
-  return <Card title="Add a route" description="Routes are organization-owned API keys, or cloud accounts your organization owns: Amazon Bedrock (an AWS access key) and Google Vertex AI (a service-account key). Cloud credentials are encrypted and never shown again.">
+  return <Card title="Add a route" description="Routes are organization-owned API keys, or cloud accounts your organization owns: Amazon Bedrock (an AWS access key), Google Vertex AI (a service-account key) and Azure OpenAI (a resource key). Cloud credentials are encrypted and never shown again.">
     <form className="price-form" noValidate onSubmit={(e) => { e.preventDefault(); setMessage(""); save.mutate(); }} aria-label="Add a route">
       <label className="form-field"><span>Kind</span><select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value, connectionId: "" })}>
-        {["anthropic", "bedrock", "vertex", "openai", "opencode_zen", "opencode_go"].map((k) => <option key={k} value={k}>{routeKindLabels[k]}</option>)}</select></label>
+        {["anthropic", "bedrock", "vertex", "openai", "azure_openai", "opencode_zen", "opencode_go"].map((k) => <option key={k} value={k}>{routeKindLabels[k]}</option>)}</select></label>
       {field("name", "Name", draft.kind === "bedrock" ? "bedrock-us-east-1" : "anthropic-key-a")}
-      {cloud ? <>
+      {regional ? <>
         {field("region", "Region", draft.kind === "bedrock" ? "us-east-1" : "us-east5")}
         {draft.kind === "vertex" ? field("cloudProject", "Google Cloud project", "my-project") : null}
+      </> : azure ? <>
+        {field("azureResource", "Azure resource name", "contoso-ai")}
+        {field("apiVersion", "API version", "2024-10-21")}
       </> : <label className="form-field"><span>Organization API key</span><select value={draft.connectionId} onChange={(e) => setDraft({ ...draft, connectionId: e.target.value })}>
         <option value="">Choose a connection</option>{keys.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>}
       {field("priority", "Priority (lower first)")}
       {field("weight", "Weight")}
       {field("cap", "Concurrency cap (0 = none)")}
-      {cloud ? <>{field("rpm", "Quota: requests/min")}{field("tpm", "Quota: tokens/min")}</> : null}
+      {regional ? <>{field("rpm", "Quota: requests/min")}{field("tpm", "Quota: tokens/min")}</> : null}
       <label className="form-field form-wide"><span>Model mapping{cloud ? "" : " (optional)"}</span>
-        <textarea value={draft.models} spellCheck={false} placeholder={draft.kind === "bedrock" ? "claude-opus-5-5=us.anthropic.claude-opus-5-5-v1:0" : draft.kind === "vertex" ? "claude-opus-5-5=claude-opus-5-5@20260901" : "Leave empty to pass model ids through unchanged"}
+        <textarea value={draft.models} spellCheck={false} placeholder={draft.kind === "bedrock" ? "claude-opus-5-5=us.anthropic.claude-opus-5-5-v1:0" : draft.kind === "vertex" ? "claude-opus-5-5=claude-opus-5-5@20260901" : azure ? "gpt-6-luna=my-luna-deployment" : "Leave empty to pass model ids through unchanged"}
           onChange={(e) => setDraft({ ...draft, models: e.target.value })} /></label>
-      {cloud ? <label className="form-field form-wide"><span>{draft.kind === "bedrock" ? "AWS access key (JSON)" : "Service-account key (JSON)"}</span>
-        <textarea value={draft.credential} spellCheck={false} autoComplete="off" placeholder={draft.kind === "bedrock" ? '{"access_key_id": "…", "secret_access_key": "…"}' : '{"type": "service_account", "client_email": "…", "private_key": "…"}'}
+      {cloud ? <label className="form-field form-wide"><span>{draft.kind === "bedrock" ? "AWS access key (JSON)" : azure ? "Azure OpenAI key" : "Service-account key (JSON)"}</span>
+        <textarea value={draft.credential} spellCheck={false} autoComplete="off" placeholder={draft.kind === "bedrock" ? '{"access_key_id": "…", "secret_access_key": "…"}' : azure ? "Key 1 or key 2 from the Azure portal" : '{"type": "service_account", "client_email": "…", "private_key": "…"}'}
           onChange={(e) => setDraft({ ...draft, credential: e.target.value })} /></label> : null}
       <button type="submit" className="secondary-button" disabled={save.isPending || !draft.name.trim() || (!cloud && !draft.connectionId) || (cloud && !draft.credential.trim())}>
         {save.isPending ? "Adding…" : "Add route"}</button>

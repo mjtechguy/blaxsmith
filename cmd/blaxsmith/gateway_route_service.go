@@ -19,7 +19,8 @@ func routeMessage(r workflow.GatewayRoute) *api.GatewayRoute {
 		ConcurrencyCap: int32(r.Cap), RequestsPerMinute: int32(r.RequestsPerMinute), TokensPerMinute: r.TokensPerMinute,
 		State: r.State, PoolIds: r.PoolIDs, Breaker: r.Breaker, CooldownUntil: adminOptionalTime(r.CooldownUntil),
 		Inflight: int32(r.Inflight), Requests_15M: int32(r.Requests15m), Errors_15M: int32(r.Errors15m),
-		Last_429At: adminOptionalTime(r.Last429), StateUpdatedAt: adminOptionalTime(r.StateUpdatedAt)}
+		Last_429At: adminOptionalTime(r.Last429), StateUpdatedAt: adminOptionalTime(r.StateUpdatedAt),
+		AzureResource: r.AzureResource, ApiVersion: r.APIVersion}
 	for _, m := range r.Metrics {
 		out.Metrics = append(out.Metrics, &api.GatewayRouteMetric{Name: m.Name, Limit: m.Limit, Remaining: m.Remaining,
 			ResetAt: adminOptionalTime(m.ResetAt)})
@@ -66,7 +67,7 @@ func (s *gatewayAdminService) ListGatewayRoutes(ctx context.Context, req *connec
 
 // cloudCredential validates a Bedrock or Vertex credential's shape before it
 // is sealed; the parsed form is discarded.
-func cloudCredential(kind, raw string) (*workflow.CloudCredential, error) {
+func cloudCredential(kind, resource, raw string) (*workflow.CloudCredential, error) {
 	if raw == "" {
 		return nil, nil
 	}
@@ -84,6 +85,12 @@ func cloudCredential(kind, raw string) (*workflow.CloudCredential, error) {
 			return nil, invalid
 		}
 		return &workflow.CloudCredential{Secret: []byte(raw), ExternalAccount: sa.ClientEmail}, nil
+	case gateway.KindAzure:
+		key, ok := gateway.ParseAzureKey([]byte(raw))
+		if !ok {
+			return nil, invalid
+		}
+		return &workflow.CloudCredential{Secret: []byte(key), ExternalAccount: "azure-" + firstNonEmptyString(resource, "resource")}, nil
 	}
 	return nil, invalid
 }
@@ -97,7 +104,7 @@ func (s *gatewayAdminService) SaveGatewayRoute(ctx context.Context, req *connect
 	if in == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("route is required"))
 	}
-	kind := in.Kind
+	kind, resource := in.Kind, in.AzureResource
 	if in.Id != "" && req.Msg.CloudCredential != "" {
 		// Rotation: the stored kind decides the credential shape.
 		view, err := s.store.GatewayRoutesAs(ctx, caller)
@@ -106,11 +113,11 @@ func (s *gatewayAdminService) SaveGatewayRoute(ctx context.Context, req *connect
 		}
 		for _, r := range view.Routes {
 			if r.ID == in.Id {
-				kind = r.Kind
+				kind, resource = r.Kind, r.AzureResource
 			}
 		}
 	}
-	credential, err := cloudCredential(kind, req.Msg.CloudCredential)
+	credential, err := cloudCredential(kind, resource, req.Msg.CloudCredential)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +127,8 @@ func (s *gatewayAdminService) SaveGatewayRoute(ctx context.Context, req *connect
 	route, err := s.store.SaveGatewayRouteAs(ctx, caller, workflow.GatewayRoute{ID: in.Id, Name: in.Name, Kind: in.Kind,
 		ConnectionID: in.ConnectionId, Region: in.Region, CloudProject: in.CloudProject, ModelMap: in.ModelMap,
 		Weight: int(in.Weight), Priority: int(in.Priority), Cap: int(in.ConcurrencyCap), RequestsPerMinute: int(in.RequestsPerMinute),
-		TokensPerMinute: in.TokensPerMinute, State: in.State}, credential, s.secrets)
+		TokensPerMinute: in.TokensPerMinute, State: in.State, AzureResource: in.AzureResource, APIVersion: in.ApiVersion},
+		credential, s.secrets)
 	if err != nil {
 		return nil, gatewayError(err)
 	}
@@ -174,6 +182,38 @@ func (s *usageService) ListMySubscriptionLimits(ctx context.Context, req *connec
 				WindowMinutes: int32(w.WindowMinutes), ResetsAt: adminOptionalTime(w.ResetsAt), ObservedAt: adminTime(w.ObservedAt)})
 		}
 		response.Subscriptions = append(response.Subscriptions, out)
+	}
+	return connect.NewResponse(response), nil
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func (s *gatewayAdminService) GetGatewayPoolDetail(ctx context.Context, req *connect.Request[api.GetGatewayPoolDetailRequest]) (*connect.Response[api.GetGatewayPoolDetailResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	d, err := s.store.GatewayPoolDetailAs(ctx, caller, req.Msg.PoolId, int(req.Msg.Hours))
+	if err != nil {
+		return nil, gatewayError(err)
+	}
+	response := &api.GetGatewayPoolDetailResponse{Pool: poolMessage(d.Pool), Hours: int32(d.Hours)}
+	for _, t := range d.Traffic {
+		response.Traffic = append(response.Traffic, &api.GatewayRouteTraffic{RouteId: t.RouteID, RouteName: t.RouteName,
+			RouteKind: t.RouteKind, Requests: t.Requests, Errors: t.Errors, RateLimited: t.RateLimited, FailoversFrom: t.FailoversFrom,
+			Tokens: t.Tokens, CostUsdMicros: t.CostUSDMicros, AvgTtftMs: t.AvgTTFTMS})
+	}
+	for _, f := range d.Failovers {
+		response.Failovers = append(response.Failovers, &api.GatewayFailover{At: adminTime(f.At), RunId: f.RunID, ProjectId: f.ProjectID,
+			Stage: f.Stage, FromRouteId: f.FromRouteID, FromRouteName: f.FromRouteName, HttpStatus: int32(f.HTTPStatus),
+			ToRouteId: f.ToRouteID, ToRouteName: f.ToRouteName, FinalStatus: f.FinalStatus, FinalHttpStatus: int32(f.FinalHTTPStatus)})
 	}
 	return connect.NewResponse(response), nil
 }

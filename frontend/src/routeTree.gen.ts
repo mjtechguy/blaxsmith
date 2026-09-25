@@ -39,6 +39,7 @@ import { Route as AdminConnectionsGithubAppRouteImport } from './routes/admin.co
 import { Route as AdminExtensionsIndexRouteImport } from './routes/admin.extensions.index'
 import { Route as AdminExtensionsExtensionIdRouteImport } from './routes/admin.extensions.$extensionId'
 import { Route as AdminExtensionsNewRouteImport } from './routes/admin.extensions.new'
+import { Route as AdminPoolsPoolIdRouteImport } from './routes/admin.pools.$poolId'
 import { Route as AdminRecipesIndexRouteImport } from './routes/admin.recipes.index'
 import { Route as AdminRecipesNewRouteImport } from './routes/admin.recipes.new'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin.settings.index'
@@ -243,6 +244,11 @@ const AdminExtensionsExtensionIdRoute =
 const AdminExtensionsNewRoute = AdminExtensionsNewRouteImport.update({
   id: '/extensions/new',
   path: '/extensions/new',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPoolsPoolIdRoute = AdminPoolsPoolIdRouteImport.update({
+  id: '/pools/$poolId',
+  path: '/pools/$poolId',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminRecipesIndexRoute = AdminRecipesIndexRouteImport.update({
@@ -564,6 +570,7 @@ export interface FileRoutesByFullPath {
   '/admin/connections/github-app': typeof AdminConnectionsGithubAppRoute
   '/admin/extensions/$extensionId': typeof AdminExtensionsExtensionIdRoute
   '/admin/extensions/new': typeof AdminExtensionsNewRoute
+  '/admin/pools/$poolId': typeof AdminPoolsPoolIdRoute
   '/admin/recipes/new': typeof AdminRecipesNewRoute
   '/admin/settings/connections': typeof AdminSettingsConnectionsRoute
   '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
@@ -644,6 +651,7 @@ export interface FileRoutesByTo {
   '/admin/connections/github-app': typeof AdminConnectionsGithubAppRoute
   '/admin/extensions/$extensionId': typeof AdminExtensionsExtensionIdRoute
   '/admin/extensions/new': typeof AdminExtensionsNewRoute
+  '/admin/pools/$poolId': typeof AdminPoolsPoolIdRoute
   '/admin/recipes/new': typeof AdminRecipesNewRoute
   '/admin/settings/connections': typeof AdminSettingsConnectionsRoute
   '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
@@ -728,6 +736,7 @@ export interface FileRoutesById {
   '/admin/connections/github-app': typeof AdminConnectionsGithubAppRoute
   '/admin/extensions/$extensionId': typeof AdminExtensionsExtensionIdRoute
   '/admin/extensions/new': typeof AdminExtensionsNewRoute
+  '/admin/pools/$poolId': typeof AdminPoolsPoolIdRoute
   '/admin/recipes/new': typeof AdminRecipesNewRoute
   '/admin/settings/connections': typeof AdminSettingsConnectionsRoute
   '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
@@ -814,6 +823,7 @@ export interface FileRouteTypes {
     | '/admin/connections/github-app'
     | '/admin/extensions/$extensionId'
     | '/admin/extensions/new'
+    | '/admin/pools/$poolId'
     | '/admin/recipes/new'
     | '/admin/settings/connections'
     | '/admin/settings/github-app'
@@ -894,6 +904,7 @@ export interface FileRouteTypes {
     | '/admin/connections/github-app'
     | '/admin/extensions/$extensionId'
     | '/admin/extensions/new'
+    | '/admin/pools/$poolId'
     | '/admin/recipes/new'
     | '/admin/settings/connections'
     | '/admin/settings/github-app'
@@ -977,6 +988,7 @@ export interface FileRouteTypes {
     | '/admin/connections/github-app'
     | '/admin/extensions/$extensionId'
     | '/admin/extensions/new'
+    | '/admin/pools/$poolId'
     | '/admin/recipes/new'
     | '/admin/settings/connections'
     | '/admin/settings/github-app'
@@ -1269,6 +1281,13 @@ declare module '@tanstack/react-router' {
       path: '/extensions/new'
       fullPath: '/admin/extensions/new'
       preLoaderRoute: typeof AdminExtensionsNewRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/pools/$poolId': {
+      id: '/admin/pools/$poolId'
+      path: '/pools/$poolId'
+      fullPath: '/admin/pools/$poolId'
+      preLoaderRoute: typeof AdminPoolsPoolIdRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/recipes/': {
@@ -1672,6 +1691,7 @@ interface AdminRouteChildren {
   AdminConnectionsGithubAppRoute: typeof AdminConnectionsGithubAppRoute
   AdminExtensionsExtensionIdRoute: typeof AdminExtensionsExtensionIdRoute
   AdminExtensionsNewRoute: typeof AdminExtensionsNewRoute
+  AdminPoolsPoolIdRoute: typeof AdminPoolsPoolIdRoute
   AdminRecipesNewRoute: typeof AdminRecipesNewRoute
   AdminUsersPrincipalIdRoute: typeof AdminUsersPrincipalIdRoute
   AdminUsersNewRoute: typeof AdminUsersNewRoute
@@ -1698,6 +1718,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminConnectionsGithubAppRoute: AdminConnectionsGithubAppRoute,
   AdminExtensionsExtensionIdRoute: AdminExtensionsExtensionIdRoute,
   AdminExtensionsNewRoute: AdminExtensionsNewRoute,
+  AdminPoolsPoolIdRoute: AdminPoolsPoolIdRoute,
   AdminRecipesNewRoute: AdminRecipesNewRoute,
   AdminUsersPrincipalIdRoute: AdminUsersPrincipalIdRoute,
   AdminUsersNewRoute: AdminUsersNewRoute,

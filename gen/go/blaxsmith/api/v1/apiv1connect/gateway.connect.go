@@ -62,6 +62,9 @@ const (
 	// GatewayAdminServiceSaveGatewayPoolProcedure is the fully-qualified name of the
 	// GatewayAdminService's SaveGatewayPool RPC.
 	GatewayAdminServiceSaveGatewayPoolProcedure = "/blaxsmith.api.v1.GatewayAdminService/SaveGatewayPool"
+	// GatewayAdminServiceGetGatewayPoolDetailProcedure is the fully-qualified name of the
+	// GatewayAdminService's GetGatewayPoolDetail RPC.
+	GatewayAdminServiceGetGatewayPoolDetailProcedure = "/blaxsmith.api.v1.GatewayAdminService/GetGatewayPoolDetail"
 	// GatewayAdminServiceListBudgetsProcedure is the fully-qualified name of the GatewayAdminService's
 	// ListBudgets RPC.
 	GatewayAdminServiceListBudgetsProcedure = "/blaxsmith.api.v1.GatewayAdminService/ListBudgets"
@@ -119,6 +122,8 @@ type GatewayAdminServiceClient interface {
 	SaveGatewayRoute(context.Context, *connect.Request[v1.SaveGatewayRouteRequest]) (*connect.Response[v1.SaveGatewayRouteResponse], error)
 	SetGatewayRouteState(context.Context, *connect.Request[v1.SetGatewayRouteStateRequest]) (*connect.Response[v1.SetGatewayRouteStateResponse], error)
 	SaveGatewayPool(context.Context, *connect.Request[v1.SaveGatewayPoolRequest]) (*connect.Response[v1.SaveGatewayPoolResponse], error)
+	// Pool detail: traffic per route and failovers, from usage events.
+	GetGatewayPoolDetail(context.Context, *connect.Request[v1.GetGatewayPoolDetailRequest]) (*connect.Response[v1.GetGatewayPoolDetailResponse], error)
 	ListBudgets(context.Context, *connect.Request[v1.ListBudgetsRequest]) (*connect.Response[v1.ListBudgetsResponse], error)
 	SetBudgetsEnabled(context.Context, *connect.Request[v1.SetBudgetsEnabledRequest]) (*connect.Response[v1.SetBudgetsEnabledResponse], error)
 	CreateBudget(context.Context, *connect.Request[v1.CreateBudgetRequest]) (*connect.Response[v1.CreateBudgetResponse], error)
@@ -192,6 +197,12 @@ func NewGatewayAdminServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(gatewayAdminServiceMethods.ByName("SaveGatewayPool")),
 			connect.WithClientOptions(opts...),
 		),
+		getGatewayPoolDetail: connect.NewClient[v1.GetGatewayPoolDetailRequest, v1.GetGatewayPoolDetailResponse](
+			httpClient,
+			baseURL+GatewayAdminServiceGetGatewayPoolDetailProcedure,
+			connect.WithSchema(gatewayAdminServiceMethods.ByName("GetGatewayPoolDetail")),
+			connect.WithClientOptions(opts...),
+		),
 		listBudgets: connect.NewClient[v1.ListBudgetsRequest, v1.ListBudgetsResponse](
 			httpClient,
 			baseURL+GatewayAdminServiceListBudgetsProcedure,
@@ -242,6 +253,7 @@ type gatewayAdminServiceClient struct {
 	saveGatewayRoute      *connect.Client[v1.SaveGatewayRouteRequest, v1.SaveGatewayRouteResponse]
 	setGatewayRouteState  *connect.Client[v1.SetGatewayRouteStateRequest, v1.SetGatewayRouteStateResponse]
 	saveGatewayPool       *connect.Client[v1.SaveGatewayPoolRequest, v1.SaveGatewayPoolResponse]
+	getGatewayPoolDetail  *connect.Client[v1.GetGatewayPoolDetailRequest, v1.GetGatewayPoolDetailResponse]
 	listBudgets           *connect.Client[v1.ListBudgetsRequest, v1.ListBudgetsResponse]
 	setBudgetsEnabled     *connect.Client[v1.SetBudgetsEnabledRequest, v1.SetBudgetsEnabledResponse]
 	createBudget          *connect.Client[v1.CreateBudgetRequest, v1.CreateBudgetResponse]
@@ -295,6 +307,11 @@ func (c *gatewayAdminServiceClient) SaveGatewayPool(ctx context.Context, req *co
 	return c.saveGatewayPool.CallUnary(ctx, req)
 }
 
+// GetGatewayPoolDetail calls blaxsmith.api.v1.GatewayAdminService.GetGatewayPoolDetail.
+func (c *gatewayAdminServiceClient) GetGatewayPoolDetail(ctx context.Context, req *connect.Request[v1.GetGatewayPoolDetailRequest]) (*connect.Response[v1.GetGatewayPoolDetailResponse], error) {
+	return c.getGatewayPoolDetail.CallUnary(ctx, req)
+}
+
 // ListBudgets calls blaxsmith.api.v1.GatewayAdminService.ListBudgets.
 func (c *gatewayAdminServiceClient) ListBudgets(ctx context.Context, req *connect.Request[v1.ListBudgetsRequest]) (*connect.Response[v1.ListBudgetsResponse], error) {
 	return c.listBudgets.CallUnary(ctx, req)
@@ -338,6 +355,8 @@ type GatewayAdminServiceHandler interface {
 	SaveGatewayRoute(context.Context, *connect.Request[v1.SaveGatewayRouteRequest]) (*connect.Response[v1.SaveGatewayRouteResponse], error)
 	SetGatewayRouteState(context.Context, *connect.Request[v1.SetGatewayRouteStateRequest]) (*connect.Response[v1.SetGatewayRouteStateResponse], error)
 	SaveGatewayPool(context.Context, *connect.Request[v1.SaveGatewayPoolRequest]) (*connect.Response[v1.SaveGatewayPoolResponse], error)
+	// Pool detail: traffic per route and failovers, from usage events.
+	GetGatewayPoolDetail(context.Context, *connect.Request[v1.GetGatewayPoolDetailRequest]) (*connect.Response[v1.GetGatewayPoolDetailResponse], error)
 	ListBudgets(context.Context, *connect.Request[v1.ListBudgetsRequest]) (*connect.Response[v1.ListBudgetsResponse], error)
 	SetBudgetsEnabled(context.Context, *connect.Request[v1.SetBudgetsEnabledRequest]) (*connect.Response[v1.SetBudgetsEnabledResponse], error)
 	CreateBudget(context.Context, *connect.Request[v1.CreateBudgetRequest]) (*connect.Response[v1.CreateBudgetResponse], error)
@@ -407,6 +426,12 @@ func NewGatewayAdminServiceHandler(svc GatewayAdminServiceHandler, opts ...conne
 		connect.WithSchema(gatewayAdminServiceMethods.ByName("SaveGatewayPool")),
 		connect.WithHandlerOptions(opts...),
 	)
+	gatewayAdminServiceGetGatewayPoolDetailHandler := connect.NewUnaryHandler(
+		GatewayAdminServiceGetGatewayPoolDetailProcedure,
+		svc.GetGatewayPoolDetail,
+		connect.WithSchema(gatewayAdminServiceMethods.ByName("GetGatewayPoolDetail")),
+		connect.WithHandlerOptions(opts...),
+	)
 	gatewayAdminServiceListBudgetsHandler := connect.NewUnaryHandler(
 		GatewayAdminServiceListBudgetsProcedure,
 		svc.ListBudgets,
@@ -463,6 +488,8 @@ func NewGatewayAdminServiceHandler(svc GatewayAdminServiceHandler, opts ...conne
 			gatewayAdminServiceSetGatewayRouteStateHandler.ServeHTTP(w, r)
 		case GatewayAdminServiceSaveGatewayPoolProcedure:
 			gatewayAdminServiceSaveGatewayPoolHandler.ServeHTTP(w, r)
+		case GatewayAdminServiceGetGatewayPoolDetailProcedure:
+			gatewayAdminServiceGetGatewayPoolDetailHandler.ServeHTTP(w, r)
 		case GatewayAdminServiceListBudgetsProcedure:
 			gatewayAdminServiceListBudgetsHandler.ServeHTTP(w, r)
 		case GatewayAdminServiceSetBudgetsEnabledProcedure:
@@ -518,6 +545,10 @@ func (UnimplementedGatewayAdminServiceHandler) SetGatewayRouteState(context.Cont
 
 func (UnimplementedGatewayAdminServiceHandler) SaveGatewayPool(context.Context, *connect.Request[v1.SaveGatewayPoolRequest]) (*connect.Response[v1.SaveGatewayPoolResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.SaveGatewayPool is not implemented"))
+}
+
+func (UnimplementedGatewayAdminServiceHandler) GetGatewayPoolDetail(context.Context, *connect.Request[v1.GetGatewayPoolDetailRequest]) (*connect.Response[v1.GetGatewayPoolDetailResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.GetGatewayPoolDetail is not implemented"))
 }
 
 func (UnimplementedGatewayAdminServiceHandler) ListBudgets(context.Context, *connect.Request[v1.ListBudgetsRequest]) (*connect.Response[v1.ListBudgetsResponse], error) {

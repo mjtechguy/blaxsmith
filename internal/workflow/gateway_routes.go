@@ -32,6 +32,7 @@ type GatewayRouteMetric struct {
 type GatewayRoute struct {
 	ID, Name, Kind, ConnectionID, ConnectionLabel string
 	Region, CloudProject                          string
+	AzureResource, APIVersion                     string // azure_openai
 	ModelMap                                      map[string]string
 	Weight, Priority, Cap, RequestsPerMinute      int
 	TokensPerMinute                               int64
@@ -82,6 +83,8 @@ var (
 	routeModelID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,199}$`)
 	routeRegion  = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
 	cloudProject = regexp.MustCompile(`^[a-z][a-z0-9-]{4,62}$`)
+	azureName    = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}$`)
+	apiVersion   = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}(-preview)?$`)
 )
 
 // routeProvider is the connection provider an API-key route kind serves.
@@ -122,6 +125,7 @@ func (s *Store) GatewayRoutesAs(ctx context.Context, caller identity.Caller) (Ga
 		Connections: []GatewayOption{}, Projects: []GatewayOption{},
 		PoolsEnabled: settings.Settings.PoolsEnabled, PacingEnabled: settings.Settings.PacingEnabled}
 	rows, err := tx.Query(ctx, `SELECT r.id::text,r.name,r.kind,r.connection_id,COALESCE(c.label,''),r.region,r.cloud_project,
+		r.azure_resource,r.api_version,
 		r.model_map,r.weight,r.priority,r.concurrency_cap,r.requests_per_minute,r.tokens_per_minute,r.state,
 		ARRAY(SELECT pr.pool_id::text FROM gateway_pool_routes pr WHERE pr.organization_id=r.organization_id AND pr.route_id=r.id ORDER BY 1),
 		COALESCE(st.breaker,'closed'),st.cooldown_until,COALESCE((SELECT sum(i.inflight) FROM gateway_route_inflight i WHERE i.organization_id=r.organization_id AND i.slot=r.id::text AND i.heartbeat_at>clock_timestamp()-interval '30 seconds'),st.inflight,0),COALESCE(st.metrics,'{}'),
@@ -137,6 +141,7 @@ func (s *Store) GatewayRoutesAs(ctx context.Context, caller identity.Caller) (Ga
 		var r GatewayRoute
 		var mapping, metrics []byte
 		if err := rows.Scan(&r.ID, &r.Name, &r.Kind, &r.ConnectionID, &r.ConnectionLabel, &r.Region, &r.CloudProject,
+			&r.AzureResource, &r.APIVersion,
 			&mapping, &r.Weight, &r.Priority, &r.Cap, &r.RequestsPerMinute, &r.TokensPerMinute, &r.State, &r.PoolIDs,
 			&r.Breaker, &r.CooldownUntil, &r.Inflight, &metrics, &r.Requests15m, &r.Errors15m, &r.Last429, &r.StateUpdatedAt); err != nil {
 			rows.Close()
@@ -246,11 +251,21 @@ func validRoute(r GatewayRoute) bool {
 			return false
 		}
 	}
-	cloud := r.Kind == "bedrock" || r.Kind == "vertex"
-	if cloud != routeRegion.MatchString(r.Region) || cloud && len(r.ModelMap) == 0 {
+	regional := r.Kind == "bedrock" || r.Kind == "vertex"
+	if regional != routeRegion.MatchString(r.Region) || cloudKind(r.Kind) && len(r.ModelMap) == 0 {
+		return false
+	}
+	azure := r.Kind == "azure_openai"
+	if azure != (azureName.MatchString(r.AzureResource) && apiVersion.MatchString(r.APIVersion)) ||
+		!azure && (r.AzureResource != "" || r.APIVersion != "") {
 		return false
 	}
 	return (r.Kind == "vertex") == cloudProject.MatchString(r.CloudProject)
+}
+
+// cloudKind routes carry their own credential as a route-only connection.
+func cloudKind(kind string) bool {
+	return kind == "bedrock" || kind == "vertex" || kind == "azure_openai"
 }
 
 // SaveGatewayRouteAs creates (empty ID) or updates a route. An API-key route
@@ -279,19 +294,19 @@ func (s *Store) SaveGatewayRouteAs(ctx context.Context, caller identity.Caller, 
 	}
 	defer tx.Rollback(ctx)
 	org := caller.OrganizationID
-	cloud := r.Kind == "bedrock" || r.Kind == "vertex"
+	cloud := cloudKind(r.Kind)
 	action := "gateway.route.updated"
 	if r.ID != "" {
 		var connection string
-		if err := tx.QueryRow(ctx, `SELECT kind,connection_id FROM gateway_routes WHERE organization_id=$1 AND id=$2 FOR UPDATE`,
-			org, r.ID).Scan(&r.Kind, &connection); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT kind,connection_id,azure_resource FROM gateway_routes WHERE organization_id=$1 AND id=$2 FOR UPDATE`,
+			org, r.ID).Scan(&r.Kind, &connection, &r.AzureResource); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return GatewayRoute{}, ErrNotFound
 			}
 			return GatewayRoute{}, err
 		}
 		r.ConnectionID = connection
-		cloud = r.Kind == "bedrock" || r.Kind == "vertex"
+		cloud = cloudKind(r.Kind)
 	}
 	if !validRoute(r) || (credential != nil && (!cloud || len(credential.Secret) == 0)) {
 		return GatewayRoute{}, ErrInvalid
@@ -304,8 +319,11 @@ func (s *Store) SaveGatewayRouteAs(ctx context.Context, caller identity.Caller, 
 				return GatewayRoute{}, ErrInvalid
 			}
 			provider, method, origin := "aws_bedrock", "aws_sigv4", "https://bedrock-runtime."+r.Region+".amazonaws.com"
-			if r.Kind == "vertex" {
+			switch r.Kind {
+			case "vertex":
 				provider, method, origin = "gcp_vertex", "gcp_service_account", "https://aiplatform.googleapis.com"
+			case "azure_openai":
+				provider, method, origin = "azure_openai", "azure_api_key", "https://"+r.AzureResource+".openai.azure.com"
 			}
 			var providerID string
 			if err := tx.QueryRow(ctx, `INSERT INTO access_provider_registrations (organization_id,id,provider_kind,origin,delivery_modes,state)
@@ -338,18 +356,18 @@ func (s *Store) SaveGatewayRouteAs(ctx context.Context, caller identity.Caller, 
 		}
 		mapping, _ := json.Marshal(r.ModelMap)
 		if err := tx.QueryRow(ctx, `INSERT INTO gateway_routes (organization_id,name,connection_id,kind,region,cloud_project,model_map,
-			weight,priority,concurrency_cap,requests_per_minute,tokens_per_minute,state,created_by)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id::text`, org, r.Name, r.ConnectionID, r.Kind,
+			weight,priority,concurrency_cap,requests_per_minute,tokens_per_minute,state,created_by,azure_resource,api_version)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id::text`, org, r.Name, r.ConnectionID, r.Kind,
 			r.Region, r.CloudProject, mapping, r.Weight, r.Priority, r.Cap, r.RequestsPerMinute, r.TokensPerMinute, r.State,
-			caller.PrincipalID).Scan(&r.ID); err != nil {
+			caller.PrincipalID, r.AzureResource, r.APIVersion).Scan(&r.ID); err != nil {
 			return GatewayRoute{}, routeError(err)
 		}
 	} else {
 		mapping, _ := json.Marshal(r.ModelMap)
 		if _, err := tx.Exec(ctx, `UPDATE gateway_routes SET name=$3,region=$4,cloud_project=$5,model_map=$6,weight=$7,priority=$8,
-			concurrency_cap=$9,requests_per_minute=$10,tokens_per_minute=$11,state=$12,updated_at=clock_timestamp()
+			concurrency_cap=$9,requests_per_minute=$10,tokens_per_minute=$11,state=$12,api_version=$13,updated_at=clock_timestamp()
 			WHERE organization_id=$1 AND id=$2`, org, r.ID, r.Name, r.Region, r.CloudProject, mapping, r.Weight, r.Priority,
-			r.Cap, r.RequestsPerMinute, r.TokensPerMinute, r.State); err != nil {
+			r.Cap, r.RequestsPerMinute, r.TokensPerMinute, r.State, r.APIVersion); err != nil {
 			return GatewayRoute{}, routeError(err)
 		}
 		if credential != nil {
@@ -541,4 +559,109 @@ func (s *Store) MySubscriptionLimitsAs(ctx context.Context, caller identity.Call
 		return nil, false, err
 	}
 	return out, settings.Settings.PersonalRoutesEnabled, tx.Commit(ctx)
+}
+
+// GatewayRouteTraffic is one pool route's traffic over a window.
+type GatewayRouteTraffic struct {
+	RouteID, RouteName, RouteKind                        string
+	Requests, Errors, RateLimited, FailoversFrom, Tokens int64
+	CostUSDMicros, AvgTTFTMS                             int64
+}
+
+// GatewayFailover is one request that failed on a route before its first
+// byte and was retried on the next (both are usage events, §4).
+type GatewayFailover struct {
+	At                                                 time.Time
+	RunID, ProjectID, Stage                            string
+	FromRouteID, FromRouteName, ToRouteID, ToRouteName string
+	HTTPStatus, FinalHTTPStatus                        int
+	FinalStatus                                        string
+}
+
+type GatewayPoolDetail struct {
+	Pool      GatewayPool
+	Traffic   []GatewayRouteTraffic
+	Failovers []GatewayFailover
+	Hours     int
+}
+
+// GatewayPoolDetailAs is Admin → Routes & pools → pool: Traffic and
+// Failovers tabs, built from the per-attempt usage events (owners, admins).
+func (s *Store) GatewayPoolDetailAs(ctx context.Context, caller identity.Caller, poolID string, hours int) (GatewayPoolDetail, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
+	if !ids(poolID) || hours < 0 || hours > 168 {
+		return GatewayPoolDetail{}, ErrInvalid
+	}
+	if hours == 0 {
+		hours = 24
+	}
+	tx, err := s.beginScoped(ctx, caller, ScopeOrganization, "")
+	if err != nil {
+		return GatewayPoolDetail{}, adminScopeError(err)
+	}
+	defer tx.Rollback(ctx)
+	org := caller.OrganizationID
+	d := GatewayPoolDetail{Hours: hours, Traffic: []GatewayRouteTraffic{}, Failovers: []GatewayFailover{}}
+	p := &d.Pool
+	err = tx.QueryRow(ctx, `SELECT p.id::text,p.name,p.family,p.strategy,p.concurrency_cap,p.affinity,p.state,
+		ARRAY(SELECT pr.route_id::text FROM gateway_pool_routes pr WHERE pr.organization_id=p.organization_id AND pr.pool_id=p.id ORDER BY 1),
+		ARRAY(SELECT g.grantee_project_id::text FROM access_resource_grants g WHERE g.organization_id=p.organization_id
+			AND g.resource_kind='gateway_pool' AND g.resource_id=p.id::text AND g.grantee_project_id IS NOT NULL
+			AND g.revoked_at IS NULL ORDER BY 1)
+		FROM gateway_pools p WHERE p.organization_id=$1 AND p.id=$2`, org, poolID).Scan(&p.ID, &p.Name, &p.Family, &p.Strategy,
+		&p.Cap, &p.Affinity, &p.State, &p.RouteIDs, &p.ProjectIDs)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return GatewayPoolDetail{}, ErrNotFound
+	}
+	if err != nil {
+		return GatewayPoolDetail{}, err
+	}
+	since := time.Now().Add(-time.Duration(hours) * time.Hour)
+	rows, err := tx.Query(ctx, `SELECT r.id::text,r.name,r.kind,count(e.id),
+		count(e.id) FILTER (WHERE e.status<>'ok'),count(e.id) FILTER (WHERE e.http_status=429),
+		count(e.id) FILTER (WHERE e.status='error' AND EXISTS (SELECT 1 FROM gateway_usage_events n
+			WHERE n.organization_id=e.organization_id AND n.attempt_id=e.attempt_id AND n.pool_id=e.pool_id
+			AND n.retry_count=e.retry_count+1 AND n.started_at>=e.started_at AND n.started_at<e.started_at+interval '10 minutes')),
+		COALESCE(sum(e.input_tokens+e.output_tokens+e.cache_read_tokens+e.cache_write_tokens),0),
+		COALESCE(sum(e.cost_usd_micros),0),COALESCE(avg(e.ttft_ms),0)::bigint
+		FROM gateway_pool_routes pr
+		JOIN gateway_routes r ON r.organization_id=pr.organization_id AND r.id=pr.route_id
+		LEFT JOIN gateway_usage_events e ON e.organization_id=r.organization_id AND e.pool_id=$2::text AND e.route_id=r.id::text
+			AND e.started_at>=$3
+		WHERE pr.organization_id=$1 AND pr.pool_id=$2::uuid
+		GROUP BY r.id,r.name,r.kind,r.priority ORDER BY r.priority,r.name`, org, poolID, since)
+	if err != nil {
+		return GatewayPoolDetail{}, err
+	}
+	var t GatewayRouteTraffic
+	if _, err := pgx.ForEachRow(rows, []any{&t.RouteID, &t.RouteName, &t.RouteKind, &t.Requests, &t.Errors, &t.RateLimited,
+		&t.FailoversFrom, &t.Tokens, &t.CostUSDMicros, &t.AvgTTFTMS}, func() error {
+		d.Traffic = append(d.Traffic, t)
+		return nil
+	}); err != nil {
+		return GatewayPoolDetail{}, err
+	}
+	rows, err = tx.Query(ctx, `SELECT e.started_at,e.run_id::text,e.project_id::text,e.stage_key,e.route_id,COALESCE(fr.name,e.route_id),
+		e.http_status,n.route_id,COALESCE(tr.name,n.route_id),n.status,n.http_status
+		FROM gateway_usage_events e
+		JOIN LATERAL (SELECT x.route_id,x.status,x.http_status FROM gateway_usage_events x
+			WHERE x.organization_id=e.organization_id AND x.attempt_id=e.attempt_id AND x.pool_id=e.pool_id
+			AND x.retry_count=e.retry_count+1 AND x.started_at>=e.started_at AND x.started_at<e.started_at+interval '10 minutes'
+			ORDER BY x.started_at LIMIT 1) n ON true
+		LEFT JOIN gateway_routes fr ON fr.organization_id=e.organization_id AND fr.id::text=e.route_id
+		LEFT JOIN gateway_routes tr ON tr.organization_id=e.organization_id AND tr.id::text=n.route_id
+		WHERE e.organization_id=$1 AND e.pool_id=$2 AND e.started_at>=$3 AND e.status='error'
+		ORDER BY e.started_at DESC LIMIT 200`, org, poolID, since)
+	if err != nil {
+		return GatewayPoolDetail{}, err
+	}
+	var f GatewayFailover
+	if _, err := pgx.ForEachRow(rows, []any{&f.At, &f.RunID, &f.ProjectID, &f.Stage, &f.FromRouteID, &f.FromRouteName,
+		&f.HTTPStatus, &f.ToRouteID, &f.ToRouteName, &f.FinalStatus, &f.FinalHTTPStatus}, func() error {
+		d.Failovers = append(d.Failovers, f)
+		return nil
+	}); err != nil {
+		return GatewayPoolDetail{}, err
+	}
+	return d, tx.Commit(ctx)
 }

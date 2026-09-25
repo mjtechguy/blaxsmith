@@ -101,6 +101,7 @@ function SettingsEditor({ data, org, saved, setSaved }: { data: GetGatewaySettin
         </Flag>}</form.Field>
         <form.Field name="personalRoutesEnabled">{(field) => <Flag id="gw-personal" label="Personal subscription routes" checked={field.state.value} onChange={field.handleChange}>
           <p id="gw-personal-help">A member's own Codex sign-in is served through the gateway for runs they start, so the sandbox never holds even an access token, and they see their own limit and reset meters in My usage. One account per route, owner-only, never pooled, shared or rotated. Members' own Claude setup-tokens always go through the gateway in gateway-mode projects.</p>
+          <p className="flag-warning" id="gw-personal-note"><AlertTriangle size={14} aria-hidden="true" /> Codex through the gateway has not yet been verified against the live ChatGPT backend. Keep this off until an operator has checked it.</p>
         </Flag>}</form.Field>
         <li className="flag-row"><div><label htmlFor="gw-retention">Raw usage event retention (days)</label>
           <p id="gw-retention-help">How long per-request usage events are kept, 7 to 400 days. Daily rollups and run totals are kept.</p></div>

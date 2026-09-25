@@ -167,7 +167,7 @@ switch at GA.
 - **Route state:** the latest limit, remaining and reset for each metric, kept
   in memory and persisted to `gateway_route_state` about every 5 seconds for
   the UI and for other replicas. Bedrock and Vertex routes may carry a
-  configured requests/min and tokens/min quota, counted per replica.
+  configured requests/min and tokens/min quota, counted across replicas (§17).
   With no route able to take a request, the gateway answers 429 with the
   earliest reset as `Retry-After` instead of calling a provider.
 - **Back-pressure to the dispatcher:** before reserving a stage, the
@@ -201,8 +201,9 @@ switch at GA.
     percent, window minutes, resets at) are reported in the Responses stream
     and by `codex app-server` `account/rateLimits`. Built: the gateway parses
     the `x-codex-{primary,secondary}-*` response headers (as codex-rs does)
-    into `gateway_subscription_limits`. The in-stream `codex.rate_limits`
-    event is not parsed.
+    into `gateway_subscription_limits`. Headers only: the in-stream
+    `codex.rate_limits` event's format is not documented in the codebase or
+    the reference repositories, so it is not parsed.
   - **Claude subscription:** a per-user, owner-only option (§6.1). Its
     `anthropic-ratelimit-unified-<window>-utilization` / `-reset` headers
     (unofficial, observed) are recorded the same way.
@@ -587,39 +588,69 @@ Decided (2026-09-24 defaults, recorded here):
 Still open:
 
 1. Which cloud routes can we actually use? Do we have Bedrock or Vertex
-   accounts for Claude, and Azure OpenAI? The Bedrock and Vertex adapters are
-   built and tested against local mocks only; Azure OpenAI is not built.
+   accounts for Claude, and Azure OpenAI? The Bedrock, Vertex and Azure
+   OpenAI adapters are built and tested against local mocks only.
 
 ## 17. Built (G2 and G4)
 
-- **Migration** `0160_gateway_routes.sql`: `gateway_routes`, `gateway_pools`,
-  `gateway_pool_routes` (with the policy triggers in §4),
+- **Migrations:** `0160_gateway_routes.sql` (`gateway_routes`,
+  `gateway_pools`, `gateway_pool_routes` with the policy triggers in §4,
   `gateway_route_state`, `gateway_paced_tasks`, `gateway_subscription_limits`,
-  the `gateway_pool` resource-grant kind, and the G2/G4 switches plus
-  `event_retention_days` on `gateway_org_settings`.
+  the `gateway_pool` resource-grant kind, the G2/G4 switches and
+  `event_retention_days`); `0200_gateway_routes_rls.sql` (the tenant
+  row-level-security policy on every 0160 table); `0210_gateway_shared_state.sql`
+  (shared breaker and probe columns, `gateway_route_inflight` with its own
+  policy, and Azure OpenAI routes).
+- **Tenancy:** single-organization reads and writes run with
+  `tenant.Org`. Only cross-organization work uses `tenant.System`: token
+  authorization (the token hash names the organization), route-state
+  persistence and slot heartbeats (one replica serves many organizations),
+  and raw-event retention.
 - **Gateway** (`internal/gateway`): `LoadPlan` (the routes a request may
-  use), `States` (breaker, cooldown, rate-limit metrics, concurrency,
-  prompt-cache affinity; persisted every 5 s), failover before the first
-  byte (`failover.go`; every upstream attempt is metered with its pool and
-  retry count), header parsing (`limits.go`), Bedrock (SigV4 with an org
-  AWS key, event-stream to SSE re-framing, `anthropic_beta` in the body),
-  Vertex (service-account JWT exchanged for a cached access token,
-  `rawPredict` / `streamRawPredict`), `HeadroomFor` and `Pace` for the
-  dispatcher, and personal routes for a member's Claude setup-token (OAuth
-  bearer) and Codex sign-in (fresh access token from
-  `access.OAuthRefresher`, served at the Codex backend with its ChatGPT
-  account id).
+  use); `States` (this replica's fast view: rate-limit metrics, breaker
+  window, concurrency, prompt-cache affinity); failover before the first
+  byte (`failover.go`; every upstream attempt is a usage event with its pool
+  and retry count); header parsing (`limits.go`); the transports: Bedrock
+  (SigV4, event stream to SSE, `anthropic_beta` in the body, CountTokens),
+  Vertex (service-account JWT exchanged for a cached token, `rawPredict`,
+  `streamRawPredict`, `count-tokens`) and Azure OpenAI (the resource name,
+  never a URL, the model's deployment, `api-version`, `api-key`);
+  `HeadroomFor`, `EstimateTokens` and `Pace` for the dispatcher; personal
+  routes for a member's Claude setup-token (OAuth bearer) and Codex sign-in
+  (a fresh access token from `access.OAuthRefresher`, served at the Codex
+  backend with its ChatGPT account id).
+- **Across replicas** (`shared.go`): admission-critical state is consistent
+  through PostgreSQL. A 429's retry-after and any exhausted metric's reset
+  are written at once as a cooldown that only grows (`GREATEST`); the
+  breaker opens from the shared consecutive-failure count (or a replica's
+  own error window) and exactly one replica wins the half-open probe (a
+  conditional update); concurrency caps for routes and pools, and Bedrock or
+  Vertex per-minute request and token quotas, are counted over every live
+  replica's slots under an advisory lock, and a replica that stops
+  heartbeating stops holding slots after 30 s. Each replica reads the shared
+  view with a 1 s TTL before choosing routes. Metrics and 15-minute counts
+  are still persisted about every 5 s for display.
+- **Pacing estimate:** a stage is paced against its likely request size:
+  the average tokens of the same stage's last successful requests in the
+  project (at least 3 in 7 days), else 48k tokens for Claude and OpenAI and
+  32k for OpenCode. Request limits still need only one request.
+- **count_tokens:** Bedrock uses CountTokens (`/model/<id>/count-tokens`,
+  the InvokeModel body base64-wrapped, a placeholder `max_tokens: 1`) and
+  its `{"inputTokens"}` answer is returned as `{"input_tokens"}`; Vertex uses
+  the `count-tokens` publisher model with the model in the body. Azure has
+  no Anthropic endpoints.
 - **UI:** Admin → Routes & pools (routes with health, requests and tokens
-  remaining with reset countdowns, concurrency, 15-minute errors, drain /
-  disable / re-enable, per-metric detail and last 429; pools with members
-  and project grants; stages queued for headroom; add a route, including
-  Bedrock and Vertex credentials), the new switches and retention in
-  Settings → Model gateway, My usage → My subscriptions (owner-only
-  meters), and a paced chip on run stages.
-- **Not built / limits:** Azure OpenAI routes; separate pool detail tabs
-  (Traffic, Failovers); Bedrock `count_tokens` (Bedrock and Vertex routes
-  serve `/v1/messages` only); route state, breakers and configured quotas
-  are per gateway replica (last writer wins in `gateway_route_state`);
-  nothing has been run against live AWS, Google, Anthropic OAuth or ChatGPT
-  endpoints. The gateway Deployment needs egress to `chatgpt.com` for Codex
-  personal routes and to the Bedrock/Vertex regional hosts for cloud routes.
+  remaining with reset countdowns, concurrency across replicas, 15-minute
+  errors, drain / disable / re-enable, per-metric detail and last 429;
+  pools; stages queued for headroom; add a route, including Bedrock,
+  Vertex and Azure OpenAI credentials), a pool page with Routes, Traffic,
+  Failovers and Settings tabs built from the usage events, the new switches
+  and retention in Settings → Model gateway, My usage → My subscriptions
+  (owner-only meters), and a paced chip on run stages.
+- **Limits:** nothing has been run against live AWS, Google, Azure,
+  Anthropic OAuth or ChatGPT endpoints. **Codex through the gateway needs a
+  live check** before the Personal subscription routes switch is turned on;
+  it stays off by default and the settings page says so. The gateway
+  Deployment needs egress to `chatgpt.com` for Codex personal routes and to
+  the Bedrock, Vertex (`oauth2.googleapis.com`) and `<resource>.openai.azure.com`
+  hosts for cloud routes; the chart's public-HTTPS egress already allows them.
