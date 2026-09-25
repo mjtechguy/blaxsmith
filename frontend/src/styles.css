@@ -581,6 +581,7 @@ a { color: inherit; text-decoration: none; }
 .breadcrumb ol { display: flex; align-items: center; min-width: 0; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: 13px; }
 .breadcrumb li { display: flex; align-items: center; gap: 6px; min-width: 0; margin-right: 6px; white-space: nowrap; }
 .breadcrumb li > svg { flex: none; }
+.breadcrumb li:not(.crumb-current) > :is(a, span) { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
 .breadcrumb a:hover { color: var(--text); text-decoration: underline; }
 .breadcrumb .crumb-current span { overflow: hidden; color: var(--text); font-weight: 600; text-overflow: ellipsis; }
 .main-content { flex: 1; min-width: 0; padding: 24px 32px 64px; }
