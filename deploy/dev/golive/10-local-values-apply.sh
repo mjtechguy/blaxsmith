@@ -7,7 +7,7 @@ REPO=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 KEY=${KEY:-~/.ssh/mj_hetzner_091123} NODE=${NODE:-root@135.181.34.21}
 REF=${BUNDLE_REF:-refs/heads/main}
 GUEST_KEY=${GUEST_KEY:-guestRouter}   # match the B2 chart value name
-GUEST=atenet-router.ate-system.svc.cluster.local:80
+GUEST=atenet-router.ate-system.svc:443   # router HTTPS; host = its cert SAN. Run 12 first.
 VALUES=$REPO/deploy/dev/preview-app-values.yaml
 APP=${APP:-$(ssh -i "$KEY" "$NODE" cat /opt/blaxsmith-dev/mvp-state-$S/app.image)}
 WORKER=${WORKER:-$(ssh -i "$KEY" "$NODE" cat /opt/blaxsmith-dev/mvp-state-$S/worker.image)}

@@ -7,11 +7,14 @@ package terminal
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os"
 	pathpkg "path"
 	"regexp"
 	"strconv"
@@ -20,7 +23,7 @@ import (
 
 	ateenv "github.com/agent-substrate/env/proto/ateenv/v1alpha"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -47,31 +50,71 @@ var (
 // Router is one process-wide gRPC connection to the in-cluster Substrate
 // atenet-router. Each call names its guest with ate-target-actor metadata.
 //
-// ponytail: guest calls need AX Task spec.debug=true, which exposes the whole
-// guest ProcessService/FileSystemService to anything that can reach the router.
-// Blaxsmith (the connector) must be the only permitted caller, enforced by a
-// NetworkPolicy on atenet-router; replace this with a narrow AX-owned terminal
-// API (attach/resize/takeover only, authenticated per attempt) before
-// multi-tenant release. The router hop is plaintext h2c inside the cluster.
+// Guest calls need AX Task spec.debug=true, which exposes the whole guest
+// ProcessService/FileSystemService. The router admits them only over its HTTPS
+// listener with the connector's bearer token, which it strips before the guest
+// (integrations/substrate/guest-router-auth.patch, --guest-client-auth); a
+// NetworkPolicy keeps other pods off its ports. The connector identity spans
+// every guest: which attempt a caller may reach is the app's authorization.
 type Router struct {
 	conn    *grpc.ClientConn
 	process ateenv.ProcessServiceClient
 	files   ateenv.FileSystemServiceClient
 }
 
-// NewRouter dials host:port lazily. It never loads a kubeconfig or port-forward.
-func NewRouter(address string) (*Router, error) {
+// NewRouter dials the router's HTTPS listener (host:port) lazily over TLS that
+// trusts only caFile, sending tokenFile's bearer token on every RPC. Both are
+// required; there is no plaintext fallback. It never loads a kubeconfig or
+// port-forward. opts are for tests (a bufconn dialer).
+func NewRouter(address, caFile, tokenFile string, opts ...grpc.DialOption) (*Router, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil || host == "" || port == "" || strings.Contains(address, "/") {
 		return nil, errors.New("guest router must be host:port")
 	}
-	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if caFile == "" || tokenFile == "" {
+		return nil, errors.New("guest router requires a CA file and a token file")
+	}
+	pem, err := os.ReadFile(caFile) // #nosec G304 -- path is trusted platform configuration
+	roots := x509.NewCertPool()
+	if err != nil || !roots.AppendCertsFromPEM(pem) {
+		return nil, errors.New("guest router CA is invalid")
+	}
+	token := routerToken(tokenFile)
+	if _, err := token.read(); err != nil {
+		return nil, err
+	}
+	creds := credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots, ServerName: host})
+	conn, err := grpc.NewClient(address, append([]grpc.DialOption{grpc.WithTransportCredentials(creds),
+		grpc.WithPerRPCCredentials(token)}, opts...)...)
 	if err != nil {
 		return nil, fmt.Errorf("guest router: %w", err)
 	}
 	r := NewRouterConn(conn)
 	r.conn = conn
 	return r, nil
+}
+
+// routerToken is the connector token file, re-read per RPC so a re-minted
+// Secret applies without a restart. gRPC never sends it without TLS.
+type routerToken string
+
+func (f routerToken) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
+	token, err := f.read()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{"authorization": "Bearer " + token}, nil
+}
+
+func (routerToken) RequireTransportSecurity() bool { return true }
+
+func (f routerToken) read() (string, error) {
+	data, err := os.ReadFile(string(f)) // #nosec G304 -- path is trusted platform configuration
+	token := strings.TrimSpace(string(data))
+	if err != nil || token == "" || len(token) > 16<<10 || strings.ContainsAny(token, " \t\r\n\x00") {
+		return "", errors.New("guest router token file is invalid")
+	}
+	return token, nil
 }
 
 // NewRouterConn wraps an existing connection (tests use bufconn).

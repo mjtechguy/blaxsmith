@@ -7,7 +7,9 @@ kubectl -n $n logs deploy/preview-app -c app --tail=40 | grep -v 'TLS handshake 
 kubectl -n $n exec preview-postgres-0 -- sh -c \
   'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select version from blaxsmith_schema_migrations order by 1 desc limit 5"'
 kubectl -n $n get deploy preview-app -o jsonpath='{range .spec.template.spec.containers[0].env[*]}{.name}={.value}{"\n"}{end}' \
-  | grep -E '^BLAXSMITH_(GUEST_ROUTER|DISPATCH_WORKER_IMAGE)='
+  | grep -E '^BLAXSMITH_(GUEST_ROUTER(_CA_FILE|_TOKEN_FILE)?|DISPATCH_WORKER_IMAGE)='
+kubectl -n ate-system get deploy atenet-router -o jsonpath='{.spec.template.spec.containers[0].args}' | grep -q -- '--guest-client-auth'
+echo 'router guest auth on'
 test "$(kubectl -n $n get deploy preview-app -o jsonpath='{.spec.template.spec.containers[0].image}')" = "$(cat "$STATE/app.image")"
 # Re-minted Substrate token works from the app pod (output discarded).
 kubectl -n $n exec deploy/preview-app -c app -- env KUBECTL_ATE_CA_FILE=/run/blaxsmith/dispatch/substrate-ca.pem \

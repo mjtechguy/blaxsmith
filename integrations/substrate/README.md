@@ -14,13 +14,24 @@ phase through `atunnel` when it signs the guest challenge. The
 direct Substrate service with an explicit bearer-token file and mounted server
 CA, without loading kubeconfig or querying the Kubernetes API. The build now
 packages this patched CLI with the connector's runtime binaries.
+`guest-router-auth.patch` adds `--guest-client-auth`: guest daemon gRPC
+routes (`/ateenv.*`, i.e. process exec and file read/write on AX debug tasks)
+then need verified HTTPS plus the same connector TokenReview as bootstrap
+routes, and the router strips the bearer before the guest. Without the flag,
+upstream routes them unauthenticated on every listener. The actor UID fence
+is not applied to guest routes. CONNECT-tunneled requests re-enter
+`main_internal`, whose ext_proc sees the inner path and should see no TLS
+attribute, so guest calls through a tunnel are refused (not yet probed live;
+`deploy/dev/golive/atenet-router-callers.yaml` also closes the CONNECT ports
+to pods). Operator `ax debug` through a
+router port-forward stops working while the flag is set.
 The reference checkout stays untouched. Rebuild with:
 
 ```sh
 bash integrations/substrate/build.sh ../reference/substrate /tmp/blaxsmith-substrate-build
 ```
 
-The build exports the pinned commit, applies all seven patches, runs focused tests
+The build exports the pinned commit, applies all eight patches, runs focused tests
 and `go vet`, builds Linux/AMD64 `atenet`, `ateom-gvisor`, and `kubectl-ate`,
 and records source/patch/binary hashes.
 The [phase-forward Linux provenance](provenance-bootstrap-phase.json) records

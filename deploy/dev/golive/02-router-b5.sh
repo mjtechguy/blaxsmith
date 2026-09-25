@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # NODE. B5: publish atenet with command-exit-router-auth, enable router auth, re-probe.
+# Superseded by 12-guest-router-auth.sh; once the router runs --guest-client-auth the
+# enable script refuses this older build.
 source "$(dirname "$0")/env.sh"
 python3 - "$ROUTER_BUILD" <<'PY'
 import json, pathlib, sys

@@ -100,6 +100,13 @@ immutable tools image containing `socat`; no ServiceAccount token or
 Kubernetes port-forward permission is needed. Both the AX service and the
 Substrate/router endpoints must be reachable from the app namespace.
 
+`dispatch.guestRouter` (terminals, takeover, guest result reads) requires
+dispatch and reuses `router-ca.pem` and `bootstrap-token`: the app calls the
+router's HTTPS listener with TLS pinned to that CA and the token as a bearer
+on every RPC, never plaintext. The router must run the
+`guest-router-auth.patch` build with `--guest-client-auth`, which checks and
+strips the token before the guest; see `deploy/dev/README.md`.
+
 Example values (replace all example digests and IDs with the pinned values
 for the target dev cluster):
 
@@ -129,7 +136,7 @@ dispatch:
   snapshotStorage: blaxsmith-snapshots
   workspace: blaxsmith-workspaces
   gateway: blaxsmith-egress
-  guestRouter: atenet-router.ate-system.svc.cluster.local:80 # optional; empty = terminals 503
+  guestRouter: router.ate-system.svc:443 # optional HTTPS host:port; empty = terminals 503
 ```
 
 The normal setting `egressMode: exact` retains the attempt-scoped host

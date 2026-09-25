@@ -29,7 +29,7 @@ dispatch:
   clusterID: blaxsmith-dev1
   leaseTTL: 10m
   workerImage: 127.0.0.1:5001/blaxsmith-tool-worker@sha256:9ea53383b527846e00bf42abc113a64d7b632ed7c798fc551cbbf6693c1f70a0
-  guestRouter: atenet-router.ate-system.svc.cluster.local:80
+  guestRouter: atenet-router.ate-system.svc:443
   workerPool: blaxsmith-smoke
   snapshotStorage: gs://ate-snapshots/blaxsmith/
   workspace: blaxsmith-source
