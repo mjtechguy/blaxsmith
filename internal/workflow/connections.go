@@ -139,6 +139,7 @@ func (s *Store) beginScoped(ctx context.Context, caller identity.Caller, scope, 
 // CheckConnectionScopeAs applies beginScoped's rule without writing, so a
 // flow that ends in a connection (GitHub OAuth) can refuse before it starts.
 func (s *Store) CheckConnectionScopeAs(ctx context.Context, caller identity.Caller, scope, projectID string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := s.beginScoped(ctx, caller, scope, projectID)
 	if err != nil {
 		return err

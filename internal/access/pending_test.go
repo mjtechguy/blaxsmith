@@ -7,13 +7,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Two stores on one database stand in for two replicas: a sign-in started on
 // one finishes on the other, once, only for the session that started it, and
 // the secret payload is never stored in plaintext.
 func TestPendingSignInAcrossReplicasPostgres(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	pool := testPool(t)
 	keys := map[string][]byte{"key": []byte(strings.Repeat("k", 32))}
 	one, err := NewSecretStore(pool, "key", keys)

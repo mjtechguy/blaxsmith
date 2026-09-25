@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Pending sign-ins (OAuth state with its PKCE verifier, device codes) live in
@@ -40,6 +41,7 @@ func pendingAAD(kind string, key []byte, owner PendingOwner) []byte {
 // SavePending stores payload (which may be secret) until expires, and
 // opportunistically deletes every expired pending sign-in.
 func (s *SecretStore) SavePending(ctx context.Context, kind, handle string, owner PendingOwner, payload []byte, expires time.Time) error {
+	ctx = tenant.Org(ctx, owner.OrganizationID)
 	if s == nil || kind == "" || handle == "" || owner.OrganizationID == "" || owner.PrincipalID == "" ||
 		owner.SessionID == "" || len(payload) == 0 || len(payload) > maxSecretBytes {
 		return ErrDenied
@@ -49,7 +51,9 @@ func (s *SecretStore) SavePending(ctx context.Context, kind, handle string, owne
 	if err != nil {
 		return err
 	}
-	if _, err := s.db.Exec(ctx, `DELETE FROM access_pending_sign_ins WHERE expires_at<clock_timestamp()`); err != nil {
+	// The sweep spans organizations; the insert and its per-principal cap are
+	// scoped to the owner's organization.
+	if _, err := s.db.Exec(tenant.System(ctx), `DELETE FROM access_pending_sign_ins WHERE expires_at<clock_timestamp()`); err != nil {
 		return fmt.Errorf("sweep pending sign-ins: %w", err)
 	}
 	tag, err := s.db.Exec(ctx, `INSERT INTO access_pending_sign_ins
@@ -83,6 +87,7 @@ func (s *SecretStore) openPending(kind string, key []byte, owner PendingOwner, k
 // handle; the caller must compare the returned owner with its own session.
 // A missing or expired handle is ErrDenied.
 func (s *SecretStore) TakePending(ctx context.Context, kind, handle string) (PendingOwner, []byte, error) {
+	ctx = tenant.System(ctx) // the handle hash is the credential; the caller checks the returned owner
 	if s == nil || kind == "" || handle == "" {
 		return PendingOwner{}, nil, ErrDenied
 	}
@@ -109,6 +114,7 @@ func (s *SecretStore) TakePending(ctx context.Context, kind, handle string) (Pen
 // returns ErrPendingBusy while another claim holds it and ErrDenied when it
 // is gone, expired, or bound to another session.
 func (s *SecretStore) ClaimPending(ctx context.Context, kind, handle string, owner PendingOwner, hold time.Duration) ([]byte, error) {
+	ctx = tenant.Org(ctx, owner.OrganizationID)
 	if s == nil || kind == "" || handle == "" || owner.SessionID == "" || owner.PrincipalID == "" {
 		return nil, ErrDenied
 	}
@@ -141,6 +147,7 @@ func (s *SecretStore) ClaimPending(ctx context.Context, kind, handle string, own
 // FinishPending ends a claim: done deletes the pending sign-in, otherwise it
 // is released for the next poll.
 func (s *SecretStore) FinishPending(ctx context.Context, kind, handle string, done bool) error {
+	ctx = tenant.System(ctx) // the handle hash is the credential; the caller checks the returned owner
 	if s == nil {
 		return ErrDenied
 	}

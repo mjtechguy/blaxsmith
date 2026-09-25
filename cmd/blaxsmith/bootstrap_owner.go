@@ -133,7 +133,7 @@ func adminUpgradeSecrets() error {
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
+	pool, err := tenant.NewPool(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("configure database: %w", err)
 	}
