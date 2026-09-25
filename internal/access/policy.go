@@ -38,6 +38,9 @@ type Decision struct {
 	GrantID           string
 	BindingID         string
 	DeliveryMode      string
+	// BaseURL is the API-key connection's model endpoint (LiteLLM, a company
+	// gateway); empty means the provider's own. Not secret.
+	BaseURL string
 }
 
 // AuthorizeGitRead locks the frozen binding, current grant, and connection in

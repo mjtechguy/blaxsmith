@@ -41,7 +41,7 @@ these are `accessKeySecretName`, `accessKeyID`, and `previousAccessKeys`
 
 1. Create a new 32-byte key in a new Secret and pre-stage it: add it to
    `previousAccessKeys` under a new ID (for example `key-2`) and roll out, so
-   every app and gateway pod can unwrap with either key before any data key
+   every app pod can unwrap with either key before any data key
    moves.
 2. Swap: point `accessKeySecretName` at the new Secret with `accessKeyID: key-2`,
    and list the old key under its old ID in `previousAccessKeys` (the first
@@ -115,3 +115,47 @@ seed command reads a
 root-owned fixture token once; the release connector reads only ciphertext
 through `SecretStore`. Those pieces must precede real
 credentials.
+
+### Base URLs
+
+Any API-key connection (organization, project, or personal; any provider) may
+carry an optional base URL: an OpenAI- or Anthropic-compatible endpoint such as
+LiteLLM or a company proxy, used in place of the provider's own. Blaxsmith has
+no model gateway of its own (the plan moved out, see
+[archive/model-gateway-plan.md](archive/model-gateway-plan.md)); such a service
+is connected as an ordinary key with a base URL, and costs, usage and budgets
+are its responsibility. Subscriptions (Codex ChatGPT sign-in, Claude
+setup-token) never take a base URL; `0230_drop_model_gateway.sql` enforces that
+with a check on `access_connections.base_url`.
+
+- **Validation.** `https` only, no user info, query or fragment, at most 512
+  characters, trailing slash stripped. The value is what the harness itself
+  takes as its base URL: Anthropic without `/v1` (`https://litellm.example.com`),
+  OpenAI-compatible and OpenCode with `/v1` (`https://litellm.example.com/v1`).
+- **Editing.** It is not secret. Whoever manages the connection may set or clear
+  it; each change is audited as `access.connection.base_url_changed` and
+  refreshes the model list.
+- **Model listing.** Adding a key or refreshing lists models from the base URL
+  with the same defense as the Git fetch proxy: every resolved address must pass
+  `gitfetch.PublicIPv4`, the checked IP is the one dialed (so DNS rebinding
+  cannot reach an internal address), and redirects are not followed. If the
+  endpoint lists no models, the user types a model id.
+- **Freezing and fencing.** Dispatch copies the connection's base URL into the
+  attempt's model binding and the frozen tool request. Credential release and
+  lease renewal deny when the connection's base URL no longer matches the
+  binding, so changing it stops in-flight attempts from receiving the key.
+- **Delivery.** Claude Code gets `ANTHROPIC_BASE_URL=<base>` with the key in
+  `ANTHROPIC_API_KEY`. Codex gets a model provider in argv
+  (`--config model_provider="blaxsmith-endpoint"` and
+  `--config model_providers.blaxsmith-endpoint={name="Custom endpoint",base_url="<base>",env_key="OPENAI_API_KEY",wire_api="responses",supports_websockets=false}`)
+  with the key in `OPENAI_API_KEY`, because its built-in `openai` provider
+  ignores `OPENAI_BASE_URL`. OpenCode gets `provider.<id>.options.baseURL`
+  in its scoped `opencode.json`, with `apiKey` read from the provider's key
+  variable. The base URL variables are public configuration: allowed in the
+  tool environment, not redacted.
+- **Egress.** The sandbox calls the base URL's host. In the preview egress is
+  open (`open-dev`). In exact-egress deployments the attempt Gateway allows
+  only the source repository host and the provider's own host, so a base URL
+  on another host needs that host allowed (open egress, or an AX Gateway
+  allowlist extended to it); until then such a dispatch is blocked with a
+  clear error.

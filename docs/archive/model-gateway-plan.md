@@ -1,5 +1,7 @@
 # Blaxsmith model gateway: plan
 
+> Moved out of Blaxsmith on 2026-09-25; to be implemented as a separate service. Blaxsmith connects to it as an ordinary API-key connection with a base URL.
+
 **Status:** G1–G4 built (G2 and G4 details in §17) · **Date:** 2026-09-24 · **Owners:** platform, access, web
 
 Related: [`extensions-and-runtimes.md`](extensions-and-runtimes.md),

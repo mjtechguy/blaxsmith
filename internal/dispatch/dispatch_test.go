@@ -355,6 +355,22 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		modelReleaseSawWorkspaceReady = true
 		return nil
 	}
+	// A base URL on another host cannot be reached under exact egress, so it
+	// is refused before any attempt is reserved.
+	if _, err := pool.Exec(ctx, `UPDATE access_connections SET base_url='https://litellm.example.com/v1'
+		WHERE organization_id=$1 AND id='connection'`, orgID); err != nil {
+		t.Fatal(err)
+	}
+	if refused, err := dispatcher.DispatchBatch(ctx, "", 1, 1); err != nil || len(refused.Outcomes) != 1 ||
+		refused.Outcomes[0].State != "blocked" || !errors.Is(refused.Outcomes[0].Err, axbridge.ErrModelEndpointEgress) {
+		t.Fatalf("exact egress admitted a base URL on another host: %+v, %v", refused, err)
+	}
+	// On the provider's own host it is admitted and frozen into the command.
+	if _, err := pool.Exec(ctx, `UPDATE access_connections SET base_url='https://api.openai.com/v1'
+		WHERE organization_id=$1 AND id='connection'`, orgID); err != nil {
+		t.Fatal(err)
+	}
+	activationPreflights = 0
 	batch, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
 	if err != nil || len(batch.Outcomes) != 1 || batch.Outcomes[0].State != "started" ||
 		batch.Outcomes[0].AttemptID == "" || batch.Outcomes[0].BindingID == "" || ax.task == nil || activationPreflights != 1 ||
@@ -373,6 +389,7 @@ func TestDispatchBatchPostgres(t *testing.T) {
 	command := ax.task.Spec["command"].([]any)[1].(string)
 	if !ok || workspace.Metadata.Atespace != axbridge.Space(orgID) ||
 		!strings.Contains(command, `"source_directory":"source"`) ||
+		!strings.Contains(command, `"model_base_url":"https://api.openai.com/v1"`) ||
 		ax.task.Spec["workspaces"].([]any)[0].(map[string]any)["name"] != workspaceName || !gatewayOK ||
 		attemptGateway.Metadata.Atespace != axbridge.Space(orgID) ||
 		ax.task.Spec["gateway"].(map[string]any)["name"] != gatewayName {

@@ -57,20 +57,20 @@ func TestConnectionScopeRules(t *testing.T) {
 		t.Fatal("CanLaunch disagrees with LaunchRun's role rule")
 	}
 	key := []byte("sk-scope-secret-value")
-	if _, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), member, ScopeOrganization, "", "openai", "", key, testModels, "", secrets); !errors.Is(err, ErrConnectionDenied) {
+	if _, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), member, ScopeOrganization, "", "openai", "", "", key, testModels, "", secrets); !errors.Is(err, ErrConnectionDenied) {
 		t.Fatalf("member created an organization connection: %v", err)
 	}
 	if _, err := store.CreateGitTokenConnectionAs(tenant.System(t.Context()), member, ScopeOrganization, "", "github.com", "bot", "token", key, secrets); !errors.Is(err, ErrConnectionDenied) {
 		t.Fatalf("member created an organization Git connection: %v", err)
 	}
-	if _, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopeOrganization, "", "openai", "Company", key, testModels, "", secrets); err != nil {
+	if _, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopeOrganization, "", "openai", "Company", "", key, testModels, "", secrets); err != nil {
 		t.Fatalf("owner organization connection: %v", err)
 	}
-	c, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), member, ScopeProject, mine, "opencode", "", key, testModels, "", secrets)
+	c, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), member, ScopeProject, mine, "opencode", "", "", key, testModels, "", secrets)
 	if err != nil || c.Scope != ScopeProject || c.OwnerID != mine || c.ModelCount != 2 {
 		t.Fatalf("project admin on own project: %+v %v", c, err)
 	}
-	if _, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), member, ScopeProject, theirs, "openai", "", key, testModels, "", secrets); !errors.Is(err, ErrConnectionDenied) {
+	if _, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), member, ScopeProject, theirs, "openai", "", "", key, testModels, "", secrets); !errors.Is(err, ErrConnectionDenied) {
 		t.Fatalf("project admin created a connection in another project: %v", err)
 	}
 	if _, err := store.CreateGitTokenConnectionAs(tenant.System(t.Context()), viewer, ScopeProject, mine, "github.com", "bot", "token", key, secrets); !errors.Is(err, ErrConnectionDenied) {
@@ -82,7 +82,7 @@ func TestConnectionScopeRules(t *testing.T) {
 	if _, err := store.ListConnectionsAs(tenant.System(t.Context()), member, ScopeProject, theirs); !errors.Is(err, ErrConnectionDenied) {
 		t.Fatalf("member listed another project's connections: %v", err)
 	}
-	personal, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), viewer, ScopePersonal, "", "anthropic", "", key, nil, "", secrets)
+	personal, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), viewer, ScopePersonal, "", "anthropic", "", "", key, nil, "", secrets)
 	if err != nil || personal.Scope != ScopePersonal || personal.OwnerID != viewer.PrincipalID {
 		t.Fatalf("personal key: %+v %v", personal, err)
 	}
@@ -92,7 +92,7 @@ func TestConnectionScopeRules(t *testing.T) {
 	if _, err := store.CreateCodexSubscriptionAs(tenant.System(t.Context()), member, []byte(`{"tokens":{}}`), secrets); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("invalid auth.json accepted: %v", err)
 	}
-	if _, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopeOrganization, "", "claude-subscription", "", key, nil, "", secrets); !errors.Is(err, ErrInvalid) {
+	if _, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopeOrganization, "", "claude-subscription", "", "", key, nil, "", secrets); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("unknown provider accepted: %v", err)
 	}
 }
@@ -117,7 +117,7 @@ func TestConnectionGrantVisibilityAndSecretsNeverReturned(t *testing.T) {
 		t.Fatal(err)
 	}
 	const secret = "sk-live-never-return-this"
-	c, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopeOrganization, "", "openai", "Company", []byte(secret), testModels, "", secrets)
+	c, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopeOrganization, "", "openai", "Company", "", []byte(secret), testModels, "", secrets)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestPersonalGrantHonouredOnlyForItsOwnersRuns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	company, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopeOrganization, "", "openai", "", []byte("sk-company"), testModels, "", secrets)
+	company, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopeOrganization, "", "openai", "", "", []byte("sk-company"), testModels, "", secrets)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestPersonalGrantHonouredOnlyForItsOwnersRuns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	personal, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), alice, ScopePersonal, "", "openai", "", []byte("sk-alice"), testModels, "", secrets)
+	personal, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), alice, ScopePersonal, "", "openai", "", "", []byte("sk-alice"), testModels, "", secrets)
 	if err != nil {
 		t.Fatal(err)
 	}

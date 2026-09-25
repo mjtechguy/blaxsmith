@@ -39,6 +39,9 @@ const (
 	// ConnectionServiceCreateApiKeyConnectionProcedure is the fully-qualified name of the
 	// ConnectionService's CreateApiKeyConnection RPC.
 	ConnectionServiceCreateApiKeyConnectionProcedure = "/blaxsmith.api.v1.ConnectionService/CreateApiKeyConnection"
+	// ConnectionServiceSetConnectionBaseUrlProcedure is the fully-qualified name of the
+	// ConnectionService's SetConnectionBaseUrl RPC.
+	ConnectionServiceSetConnectionBaseUrlProcedure = "/blaxsmith.api.v1.ConnectionService/SetConnectionBaseUrl"
 	// ConnectionServiceCreateGitTokenConnectionProcedure is the fully-qualified name of the
 	// ConnectionService's CreateGitTokenConnection RPC.
 	ConnectionServiceCreateGitTokenConnectionProcedure = "/blaxsmith.api.v1.ConnectionService/CreateGitTokenConnection"
@@ -105,6 +108,7 @@ const (
 type ConnectionServiceClient interface {
 	ListConnections(context.Context, *connect.Request[v1.ListConnectionsRequest]) (*connect.Response[v1.ListConnectionsResponse], error)
 	CreateApiKeyConnection(context.Context, *connect.Request[v1.CreateApiKeyConnectionRequest]) (*connect.Response[v1.CreateApiKeyConnectionResponse], error)
+	SetConnectionBaseUrl(context.Context, *connect.Request[v1.SetConnectionBaseUrlRequest]) (*connect.Response[v1.SetConnectionBaseUrlResponse], error)
 	CreateGitTokenConnection(context.Context, *connect.Request[v1.CreateGitTokenConnectionRequest]) (*connect.Response[v1.CreateGitTokenConnectionResponse], error)
 	CreateCodexSubscription(context.Context, *connect.Request[v1.CreateCodexSubscriptionRequest]) (*connect.Response[v1.CreateCodexSubscriptionResponse], error)
 	CreateClaudeSubscription(context.Context, *connect.Request[v1.CreateClaudeSubscriptionRequest]) (*connect.Response[v1.CreateClaudeSubscriptionResponse], error)
@@ -148,6 +152,12 @@ func NewConnectionServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			httpClient,
 			baseURL+ConnectionServiceCreateApiKeyConnectionProcedure,
 			connect.WithSchema(connectionServiceMethods.ByName("CreateApiKeyConnection")),
+			connect.WithClientOptions(opts...),
+		),
+		setConnectionBaseUrl: connect.NewClient[v1.SetConnectionBaseUrlRequest, v1.SetConnectionBaseUrlResponse](
+			httpClient,
+			baseURL+ConnectionServiceSetConnectionBaseUrlProcedure,
+			connect.WithSchema(connectionServiceMethods.ByName("SetConnectionBaseUrl")),
 			connect.WithClientOptions(opts...),
 		),
 		createGitTokenConnection: connect.NewClient[v1.CreateGitTokenConnectionRequest, v1.CreateGitTokenConnectionResponse](
@@ -277,6 +287,7 @@ func NewConnectionServiceClient(httpClient connect.HTTPClient, baseURL string, o
 type connectionServiceClient struct {
 	listConnections             *connect.Client[v1.ListConnectionsRequest, v1.ListConnectionsResponse]
 	createApiKeyConnection      *connect.Client[v1.CreateApiKeyConnectionRequest, v1.CreateApiKeyConnectionResponse]
+	setConnectionBaseUrl        *connect.Client[v1.SetConnectionBaseUrlRequest, v1.SetConnectionBaseUrlResponse]
 	createGitTokenConnection    *connect.Client[v1.CreateGitTokenConnectionRequest, v1.CreateGitTokenConnectionResponse]
 	createCodexSubscription     *connect.Client[v1.CreateCodexSubscriptionRequest, v1.CreateCodexSubscriptionResponse]
 	createClaudeSubscription    *connect.Client[v1.CreateClaudeSubscriptionRequest, v1.CreateClaudeSubscriptionResponse]
@@ -307,6 +318,11 @@ func (c *connectionServiceClient) ListConnections(ctx context.Context, req *conn
 // CreateApiKeyConnection calls blaxsmith.api.v1.ConnectionService.CreateApiKeyConnection.
 func (c *connectionServiceClient) CreateApiKeyConnection(ctx context.Context, req *connect.Request[v1.CreateApiKeyConnectionRequest]) (*connect.Response[v1.CreateApiKeyConnectionResponse], error) {
 	return c.createApiKeyConnection.CallUnary(ctx, req)
+}
+
+// SetConnectionBaseUrl calls blaxsmith.api.v1.ConnectionService.SetConnectionBaseUrl.
+func (c *connectionServiceClient) SetConnectionBaseUrl(ctx context.Context, req *connect.Request[v1.SetConnectionBaseUrlRequest]) (*connect.Response[v1.SetConnectionBaseUrlResponse], error) {
+	return c.setConnectionBaseUrl.CallUnary(ctx, req)
 }
 
 // CreateGitTokenConnection calls blaxsmith.api.v1.ConnectionService.CreateGitTokenConnection.
@@ -413,6 +429,7 @@ func (c *connectionServiceClient) StartGitHubConnect(ctx context.Context, req *c
 type ConnectionServiceHandler interface {
 	ListConnections(context.Context, *connect.Request[v1.ListConnectionsRequest]) (*connect.Response[v1.ListConnectionsResponse], error)
 	CreateApiKeyConnection(context.Context, *connect.Request[v1.CreateApiKeyConnectionRequest]) (*connect.Response[v1.CreateApiKeyConnectionResponse], error)
+	SetConnectionBaseUrl(context.Context, *connect.Request[v1.SetConnectionBaseUrlRequest]) (*connect.Response[v1.SetConnectionBaseUrlResponse], error)
 	CreateGitTokenConnection(context.Context, *connect.Request[v1.CreateGitTokenConnectionRequest]) (*connect.Response[v1.CreateGitTokenConnectionResponse], error)
 	CreateCodexSubscription(context.Context, *connect.Request[v1.CreateCodexSubscriptionRequest]) (*connect.Response[v1.CreateCodexSubscriptionResponse], error)
 	CreateClaudeSubscription(context.Context, *connect.Request[v1.CreateClaudeSubscriptionRequest]) (*connect.Response[v1.CreateClaudeSubscriptionResponse], error)
@@ -452,6 +469,12 @@ func NewConnectionServiceHandler(svc ConnectionServiceHandler, opts ...connect.H
 		ConnectionServiceCreateApiKeyConnectionProcedure,
 		svc.CreateApiKeyConnection,
 		connect.WithSchema(connectionServiceMethods.ByName("CreateApiKeyConnection")),
+		connect.WithHandlerOptions(opts...),
+	)
+	connectionServiceSetConnectionBaseUrlHandler := connect.NewUnaryHandler(
+		ConnectionServiceSetConnectionBaseUrlProcedure,
+		svc.SetConnectionBaseUrl,
+		connect.WithSchema(connectionServiceMethods.ByName("SetConnectionBaseUrl")),
 		connect.WithHandlerOptions(opts...),
 	)
 	connectionServiceCreateGitTokenConnectionHandler := connect.NewUnaryHandler(
@@ -580,6 +603,8 @@ func NewConnectionServiceHandler(svc ConnectionServiceHandler, opts ...connect.H
 			connectionServiceListConnectionsHandler.ServeHTTP(w, r)
 		case ConnectionServiceCreateApiKeyConnectionProcedure:
 			connectionServiceCreateApiKeyConnectionHandler.ServeHTTP(w, r)
+		case ConnectionServiceSetConnectionBaseUrlProcedure:
+			connectionServiceSetConnectionBaseUrlHandler.ServeHTTP(w, r)
 		case ConnectionServiceCreateGitTokenConnectionProcedure:
 			connectionServiceCreateGitTokenConnectionHandler.ServeHTTP(w, r)
 		case ConnectionServiceCreateCodexSubscriptionProcedure:
@@ -635,6 +660,10 @@ func (UnimplementedConnectionServiceHandler) ListConnections(context.Context, *c
 
 func (UnimplementedConnectionServiceHandler) CreateApiKeyConnection(context.Context, *connect.Request[v1.CreateApiKeyConnectionRequest]) (*connect.Response[v1.CreateApiKeyConnectionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.ConnectionService.CreateApiKeyConnection is not implemented"))
+}
+
+func (UnimplementedConnectionServiceHandler) SetConnectionBaseUrl(context.Context, *connect.Request[v1.SetConnectionBaseUrlRequest]) (*connect.Response[v1.SetConnectionBaseUrlResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.ConnectionService.SetConnectionBaseUrl is not implemented"))
 }
 
 func (UnimplementedConnectionServiceHandler) CreateGitTokenConnection(context.Context, *connect.Request[v1.CreateGitTokenConnectionRequest]) (*connect.Response[v1.CreateGitTokenConnectionResponse], error) {

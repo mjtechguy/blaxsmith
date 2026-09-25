@@ -2,7 +2,6 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type R
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Building2, ChevronDown, ChevronRight, ChevronsUpDown, FolderKanban, Hammer, Menu, Moon, PanelLeftClose, PanelLeftOpen, Search, Sun, X } from "lucide-react";
-import { useGatewayEnabled } from "./gateway";
 import type { SessionIdentity } from "./gen/blaxsmith/api/v1/auth_pb";
 import { activeItem, breadcrumbs, detailKind, itemMatches, navigation, projectIdFrom, switchPath, type NavGroup, type NavItem } from "./nav";
 import { applyTheme, setPrefs, usePrefs, type Theme } from "./preferences";
@@ -45,8 +44,7 @@ export function Shell({ children, session }: { children: ReactNode; session?: Se
   const identity = home.data;
   const orgName = identity?.organizationName || "Organization";
 
-  const gatewayEnabled = useGatewayEnabled();
-  const groups = useMemo(() => navigation({ role: session?.role, projectId, projectName: project.data?.project?.name, gatewayEnabled }), [session?.role, projectId, project.data?.project?.name, gatewayEnabled]);
+  const groups = useMemo(() => navigation({ role: session?.role, projectId, projectName: project.data?.project?.name }), [session?.role, projectId, project.data?.project?.name]);
   const kind = detailKind(pathname);
   const detail = kind === "run" ? run.data?.run?.launchKey || "Run" : kind ? detailLabels[kind] : undefined;
   const crumbs = breadcrumbs(groups, pathname, detail);

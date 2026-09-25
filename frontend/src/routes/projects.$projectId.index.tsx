@@ -78,7 +78,7 @@ function ProjectOverview() {
       {waiting.data?.items.length ? <ol className="ledger-list"><ShowMore items={waiting.data.items} initial={4} noun="more items" render={(item) =>
         <li key={`${item.kind}-${item.id}`} className={`ledger-item kind-${item.kind}`}><KindMark kind={item.kind} />
           <div className="ledger-main"><InboxLink item={item} className="row-title">{item.title || kindLabel(item.kind)}</InboxLink>
-            <small>{[kindLabel(item.kind) + (item.blocking ? " · blocking" : ""), item.runLaunchKey, item.kind === "budget_alert" ? "" : item.stage].filter(Boolean).join(" · ")}</small></div>
+            <small>{[kindLabel(item.kind) + (item.blocking ? " · blocking" : ""), item.runLaunchKey, item.stage].filter(Boolean).join(" · ")}</small></div>
           <Timestamp value={item.createdAt} /></li>} /></ol>
         : waiting.isSuccess ? <EmptyState title="Nothing is waiting on you here" /> : null}
     </Card>

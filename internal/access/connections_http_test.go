@@ -47,25 +47,25 @@ func TestModelCatalogListsAndValidatesKeys(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := ModelCatalog{Base: map[string]string{"openai": srv.URL, "anthropic": srv.URL, "opencode": srv.URL + "/zen"}}
-	models, err := c.Fetch(tenant.System(t.Context()), "openai", []byte("sk-openai"))
+	models, err := c.Fetch(tenant.System(t.Context()), "openai", "", []byte("sk-openai"))
 	if err != nil || len(models) != 2 || models[0].ReleasedAt == nil || models[1].ReleasedAt != nil {
 		t.Fatalf("openai: %+v %v", models, err)
 	}
-	if _, err := c.Fetch(tenant.System(t.Context()), "openai", []byte("bad")); !errors.Is(err, ErrKeyRejected) {
+	if _, err := c.Fetch(tenant.System(t.Context()), "openai", "", []byte("bad")); !errors.Is(err, ErrKeyRejected) {
 		t.Fatalf("rejected openai key: %v", err)
 	}
-	models, err = c.Fetch(tenant.System(t.Context()), "anthropic", []byte("sk-ant"))
+	models, err = c.Fetch(tenant.System(t.Context()), "anthropic", "", []byte("sk-ant"))
 	if err != nil || len(models) != 2 || models[0].ContextTokens != 1000000 || len(models[0].Capabilities) == 0 ||
 		models[0].DisplayName != "Claude Opus 5" {
 		t.Fatalf("anthropic pages: %+v %v", models, err)
 	}
-	if models, err = c.Fetch(tenant.System(t.Context()), "opencode", []byte("zen-good")); err != nil || len(models) != 1 {
+	if models, err = c.Fetch(tenant.System(t.Context()), "opencode", "", []byte("zen-good")); err != nil || len(models) != 1 {
 		t.Fatalf("opencode: %+v %v", models, err)
 	}
-	if _, err := c.Fetch(tenant.System(t.Context()), "opencode", []byte("zen-bad")); !errors.Is(err, ErrKeyRejected) {
+	if _, err := c.Fetch(tenant.System(t.Context()), "opencode", "", []byte("zen-bad")); !errors.Is(err, ErrKeyRejected) {
 		t.Fatalf("rejected opencode key: %v", err)
 	}
-	if _, err := c.Fetch(tenant.System(t.Context()), "gemini", []byte("x")); !errors.Is(err, ErrDenied) {
+	if _, err := c.Fetch(tenant.System(t.Context()), "gemini", "", []byte("x")); !errors.Is(err, ErrDenied) {
 		t.Fatalf("unknown provider: %v", err)
 	}
 }

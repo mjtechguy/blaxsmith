@@ -97,7 +97,7 @@ command-line `--set` arguments.
 
 To rotate the access master key, set `accessKeyID` to the new key's ID and
 list older keys as `previousAccessKeys: [{id: primary, secretName: <old
-Secret>}]`; each is mounted read-only and passed to the app and gateway. See
+Secret>}]`; each is mounted read-only and passed to the app. See
 "Rotating the master key" in `docs/access-authority.md`.
 
 The dispatch pod runs `socat` from the same tools image. It listens on the
@@ -249,24 +249,19 @@ or publish the app/CLI/tunnel images or create dispatch credentials. The
 plaintext public preview remains a separate chart; do not expose it as the
 authenticated product.
 
-## Optional model gateway
+## Model endpoints and base URLs
 
-`gateway.enabled=true` adds a `<release>-gw` Deployment running the same image
-as `blaxsmith gateway` (docs/model-gateway-plan.md), a Service on port 8443 and,
-by default, a NetworkPolicy that admits only the gateway port and allows egress
-to DNS, PostgreSQL and public HTTPS (provider APIs). It needs
-`accessKeySecretName` (route credentials are decrypted in the gateway) and
-`gateway.publicURL`, which the app receives as `BLAXSMITH_GATEWAY_URL` and
-writes into brokered attempts' harness config. Under exact AX egress the public
-URL must resolve to public IPv4 addresses; put an ingress or LoadBalancer in
-front of the Service and narrow `gateway.networkPolicy.ingressFrom` to it. Set
-`gateway.tlsSecretName` to serve HTTPS directly; without it the gateway serves
-plain HTTP for a TLS-terminating proxy. The app runs migrations; gateway pods
-only verify them. On shutdown in-flight streams get `drainTimeoutSeconds`.
-With the value off, no gateway exists and organizations cannot enable it.
-Pools and personal routes (G2/G4) use the same public HTTPS egress: Bedrock
-(`bedrock-runtime.<region>.amazonaws.com`), Vertex (`<region>-aiplatform.googleapis.com`
-and `oauth2.googleapis.com`) and, for members' Codex sign-ins, `chatgpt.com`.
-`gateway.eventRetention` is only the fallback for organizations that have not
-saved gateway settings; each organization sets its own raw event retention
-in Admin → Settings → Model gateway.
+Blaxsmith has no model gateway of its own. A proxy such as LiteLLM or a
+company gateway is an external service: add it as an ordinary API-key
+connection with an optional base URL (docs/access-authority.md, "Base URLs").
+Costs, usage and budgets are that service's responsibility.
+
+A sandbox calls the base URL's host instead of the provider's. With
+`egressMode: open-dev` (the preview) that needs nothing. Under
+`egressMode: exact` the attempt Gateway allows only the source repository host
+and the provider's own host, so a connection whose base URL is on another host
+is blocked at dispatch with a clear error; such an installation needs open
+egress, or an AX Gateway allowlist extended to the base URL host, before it
+can use one. Base URLs must be public HTTPS endpoints either way: the app's
+model listing dials only public IPv4 addresses.
+

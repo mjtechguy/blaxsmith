@@ -49,6 +49,10 @@ message Connection {
   string models_error = 16; // Last provider error; empty when valid.
   bool can_manage = 17; // The caller may grant, refresh, or revoke it.
   ConnectionHealth health = 18;
+  // API-key connections only: an OpenAI- or Anthropic-compatible endpoint
+  // (LiteLLM, a company gateway) used in place of the provider's own. Not
+  // secret. Empty uses the provider's endpoint.
+  string base_url = 19;
 }
 
 // The health line on every connection card and detail page.
@@ -78,8 +82,17 @@ message CreateApiKeyConnectionRequest {
   string provider = 3; // anthropic, openai, opencode (Zen), or opencode-go.
   string api_key = 4; // Write-only.
   string label = 5;
+  string base_url = 6; // Optional https endpoint; see Connection.base_url.
 }
 message CreateApiKeyConnectionResponse { Connection connection = 1; }
+
+// Set or clear (empty) an API-key connection's base URL. Allowed to whoever
+// manages the connection; audited. The model list is refreshed against it.
+message SetConnectionBaseUrlRequest {
+  string connection_id = 1;
+  string base_url = 2;
+}
+message SetConnectionBaseUrlResponse { Connection connection = 1; }
 
 message CreateGitTokenConnectionRequest {
   string scope = 1; // organization or project.
@@ -98,7 +111,7 @@ message CreateCodexSubscriptionRequest {
 message CreateCodexSubscriptionResponse { Connection connection = 1; }
 
 // A member's own `claude setup-token`, used only for runs they start
-// (docs/model-gateway-plan.md §6.1). Requires the organization switch.
+// (docs/subscription-auth.md). Requires the organization switch.
 message CreateClaudeSubscriptionRequest {
   string setup_token = 1; // Write-only.
 }
@@ -236,6 +249,7 @@ message StartGitHubConnectResponse { string authorize_url = 1; }
 service ConnectionService {
   rpc ListConnections(ListConnectionsRequest) returns (ListConnectionsResponse);
   rpc CreateApiKeyConnection(CreateApiKeyConnectionRequest) returns (CreateApiKeyConnectionResponse);
+  rpc SetConnectionBaseUrl(SetConnectionBaseUrlRequest) returns (SetConnectionBaseUrlResponse);
   rpc CreateGitTokenConnection(CreateGitTokenConnectionRequest) returns (CreateGitTokenConnectionResponse);
   rpc CreateCodexSubscription(CreateCodexSubscriptionRequest) returns (CreateCodexSubscriptionResponse);
   rpc CreateClaudeSubscription(CreateClaudeSubscriptionRequest) returns (CreateClaudeSubscriptionResponse);

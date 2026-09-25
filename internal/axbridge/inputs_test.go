@@ -95,7 +95,7 @@ func TestOpenCodeGoGatewayAllowsOnlyOpenCodeHost(t *testing.T) {
 		t.Fatalf("OpenCode Go egress host: %q", providerHost("opencode-go"))
 	}
 	for provider, want := range map[string]bool{"opencode-go": true, "opencode": true, "openai": false, "opencode-zen": false} {
-		err := bridge.checkGateway(tenant.System(t.Context()), gateway, "public-egress", space, "https://github.com/owner/repo", bridge.modelEgressHost(provider))
+		err := bridge.checkGateway(tenant.System(t.Context()), gateway, "public-egress", space, "https://github.com/owner/repo", providerHost(provider))
 		if (err == nil) != want {
 			t.Fatalf("%s gateway check = %v, want pass %t", provider, err, want)
 		}
@@ -225,5 +225,29 @@ func TestPerAttemptGatewayCopiesOnlyApprovedEgress(t *testing.T) {
 	got.Spec.Egress.Allowlist.Hosts[0].Host = "0.0.0.0/0"
 	if attemptGatewayMatches(got, attemptGateway(template, "space", name)) {
 		t.Fatal("mutated attempt Gateway matched the approved template")
+	}
+}
+
+// A connection base URL is reachable under exact egress only on the
+// provider's own host; open-dev egress reaches any host.
+func TestCheckModelEndpoint(t *testing.T) {
+	exact, open := &Bridge{}, &Bridge{GatewayEgressMode: "open-dev"}
+	for _, c := range []struct {
+		bridge            *Bridge
+		provider, baseURL string
+		ok                bool
+	}{
+		{exact, "openai", "", true},
+		{exact, "openai", "https://api.openai.com/v1", true},
+		{exact, "anthropic", "https://API.anthropic.com", true},
+		{exact, "openai", "https://litellm.example.com/v1", false},
+		{exact, "openai", "https://api.openai.com:8443/v1", false},
+		{exact, "anthropic", "https://api.openai.com", false},
+		{open, "openai", "https://litellm.example.com/v1", true},
+	} {
+		if err := c.bridge.CheckModelEndpoint(c.provider, c.baseURL); (err == nil) != c.ok ||
+			(err != nil && !errors.Is(err, ErrModelEndpointEgress)) {
+			t.Errorf("%s %q (mode %q): %v", c.provider, c.baseURL, c.bridge.GatewayEgressMode, err)
+		}
 	}
 }

@@ -11,7 +11,7 @@ export const Route = createFileRoute("/admin/settings/connections")({ component:
 
 const anthropicTerms = "https://www.anthropic.com/legal/consumer-terms";
 
-// Members' own Claude subscriptions (docs/model-gateway-plan.md §6.1): off by
+// Members' own Claude subscriptions (docs/subscription-auth.md): off by
 // default. Enabling asks for confirmation with the provider's terms linked.
 function ConnectionPolicySettings() {
   const { org } = useOrg();

@@ -9,8 +9,8 @@ import { AccessCheck } from "./access-explain";
 import { ago } from "./admin";
 import { currentSession, sessionQueryKey } from "./auth";
 import {
-  addConnectionUse, apiKeyProviders, authLabel, connectionModelsKey, connectionsKey, createApiKeyConnection, createGitTokenConnection,
-  getGitHubApp, gitHubAppKey, granteeLabel, healthFix, listConnectionModels, listConnections, modelsSummary, providerLabel, startGitHubConnect,
+  addConnectionUse, apiKeyProviders, authLabel, BASE_URL_HELP, BASE_URL_INVALID, baseUrlPlaceholder, connectionModelsKey, connectionsKey, createApiKeyConnection, createGitTokenConnection,
+  getGitHubApp, gitHubAppKey, granteeLabel, healthFix, listConnectionModels, listConnections, modelsSummary, normalizeBaseUrl, providerLabel, startGitHubConnect,
   type ListScope, type Scope,
 } from "./connections";
 import { DataTable } from "./data-table";
@@ -191,7 +191,7 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone, flow }: { sco
   const [signIn, dispatch] = useSignIn();
   const abort = useRef<AbortController | null>(null);
   const form = useForm({
-    defaultValues: { provider: "anthropic", apiKey: "", label: "" },
+    defaultValues: { provider: "anthropic", apiKey: "", label: "", baseUrl: "" },
     onSubmit: async ({ value }) => {
       setError("");
       const apiKey = value.apiKey.trim();
@@ -199,12 +199,14 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone, flow }: { sco
         setError("Paste a single-line API key of at most 8,192 bytes and a label of at most 120 characters.");
         return;
       }
+      const baseUrl = normalizeBaseUrl(value.baseUrl);
+      if (baseUrl === null) { setError(BASE_URL_INVALID); return; }
       form.setFieldValue("apiKey", "");
       dispatch({ type: "start" });
       dispatch({ type: "verify" });
       abort.current = new AbortController();
       try {
-        const connection = await createApiKeyConnection(scope, projectId, value.provider, apiKey, value.label.trim(), abort.current.signal);
+        const connection = await createApiKeyConnection(scope, projectId, value.provider, apiKey, value.label.trim(), baseUrl, abort.current.signal);
         await queryClient.invalidateQueries({ queryKey: ["connections", org] });
         dispatch({ type: "succeed" });
         if (connection) setCreated(connection);
@@ -222,7 +224,8 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone, flow }: { sco
     <p className="form-hint">OpenCode Zen and OpenCode Go are OpenCode’s own providers; OpenCode Go is its subscription and also uses an API key.</p></>;
   if (created) return <CreateFlow {...flow} steps={connectionSteps(flow, scope, signIn)} summary={summary}><section className="editor-card" aria-labelledby="api-key-created-heading">
     <div className="editor-card-heading"><span className="project-symbol"><KeyRound size={18} aria-hidden="true" /></span><div><h2 id="api-key-created-heading">{providerLabel(created.provider)} key added</h2>
-      <p className={created.modelsError ? "form-field-error" : undefined}>{created.modelsError ? `The provider check failed: ${modelsSummary(created)}` : `Validated with the provider: ${modelsSummary(created)}.`}</p></div></div>
+      <p className={created.modelsError ? "form-field-error" : undefined}>{created.modelsError ? `The provider check failed: ${modelsSummary(created)}` : `Validated with the provider: ${modelsSummary(created)}.`}</p>
+      {created.baseUrl ? <p className="form-hint">Endpoint: <span className="mono">{created.baseUrl}</span>{created.modelsError ? ". If this endpoint does not list models, type a model id when you add a use." : ""}</p> : null}</div></div>
     <div className="editor-actions"><button type="button" className="primary-button" onClick={() => onDone(created)}>{scope === "organization" ? "Continue to grants" : "Continue to use it"}</button></div>
   </section></CreateFlow>;
   return <CreateFlow {...flow} steps={connectionSteps(flow, scope, signIn)} summary={summary}>
@@ -237,6 +240,8 @@ export function NewApiKey({ scope, projectId = "", cancel, onDone, flow }: { sco
           </select></div>}</form.Field>
         <form.Field name="apiKey">{(field) => <TextField label="API key" name={field.name} type="password" autoComplete="new-password" placeholder="Paste the provider API key" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} />}</form.Field>
         <form.Field name="label">{(field) => <TextField label="Label (optional)" name={field.name} autoComplete="off" placeholder="e.g. Team billing key" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} required={false} />}</form.Field>
+        <form.Subscribe selector={(state) => state.values.provider}>{(provider) => <form.Field name="baseUrl">{(field) => <TextField label="Base URL (optional)" name={field.name} type="url" autoComplete="off"
+          placeholder={baseUrlPlaceholder(provider)} hint={BASE_URL_HELP} value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} required={false} />}</form.Field>}</form.Subscribe>
         {error ? <p className="auth-alert" role="alert">{error}</p> : null}
         <div className="editor-actions">{cancel}<form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
           {([canSubmit, submitting]) => <button className="primary-button" type="submit" disabled={!canSubmit || submitting}>{submitting ? <RefreshCw size={15} className="spin" aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}{submitting ? "Checking…" : "Add API key"}</button>}

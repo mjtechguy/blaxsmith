@@ -93,8 +93,9 @@ function NewSubscription() {
   </CreateFlow>;
 }
 
-// A member's own `claude setup-token` (docs/model-gateway-plan.md §6.1): only
-// runs this member starts can use it, and only while the org allows it.
+// A member's own `claude setup-token`, delivered directly to the Claude Code
+// sandbox (docs/subscription-auth.md): only runs this member starts can use
+// it, and only while the org allows it.
 function ClaudeSubscription({ onConnected }: { onConnected: (connectionId: string) => Promise<void> }) {
   const { org } = useOrg();
   const [token, setToken] = useState("");

@@ -490,8 +490,7 @@ func (s *workflowService) ListRunTasks(ctx context.Context, req *connect.Request
 		item := &api.RunTask{Id: task.ID, Key: task.Key, State: task.State, Generation: task.Generation,
 			MaxAttempts: task.MaxAttempts, DependsOn: task.DependsOn, Harness: task.Harness,
 			Model: task.Model, Effort: task.Effort, Kind: task.Kind, LoopWith: task.LoopWith,
-			MaxCycles: task.MaxCycles, LoopCycles: task.LoopCycles, PacedReason: task.PacedReason,
-			PacedResetsAt: adminOptionalTime(task.PacedResetsAt)}
+			MaxCycles: task.MaxCycles, LoopCycles: task.LoopCycles}
 		if task.ActiveAttemptID != nil {
 			item.ActiveAttemptId = *task.ActiveAttemptID
 		}

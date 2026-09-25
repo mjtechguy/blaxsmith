@@ -37,17 +37,12 @@ func RenewModelLeases(ctx context.Context, db *pgxpool.Pool, ttl time.Duration) 
 		AND g.version=b.grant_version AND (g.expires_at IS NULL OR g.expires_at>=clock_timestamp()+$1::interval)
 		AND p.organization_id=b.organization_id AND p.project_id=b.project_id AND p.version=b.policy_version
 		AND c.organization_id=g.organization_id AND c.id=g.connection_id AND c.id=l.connection_id AND c.state='active'
+		AND c.base_url=b.model_base_url
 		AND sv.organization_id=c.organization_id AND sv.connection_id=c.id AND sv.version=c.active_secret_version
 		AND (sv.expires_at IS NULL OR sv.expires_at>=clock_timestamp()+$1::interval)
 		AND a.organization_id::text=l.organization_id AND a.id::text=l.attempt_id
 		AND a.state='running' AND a.generation=l.owner_generation
-		RETURNING l.organization_id,l.attempt_id,l.id,
-			-- A lease served through the model gateway delivered a gateway
-			-- token, whatever the grant's mode (an owner's Codex sign-in
-			-- as a personal route): there is no guest file to refresh.
-			CASE WHEN EXISTS (SELECT 1 FROM gateway_tokens t WHERE t.organization_id::text=l.organization_id
-				AND t.lease_id=l.id) THEN 'brokered_gateway' ELSE g.delivery_mode END,
-			l.expires_at`, ttl)
+		RETURNING l.organization_id,l.attempt_id,l.id,g.delivery_mode,l.expires_at`, ttl)
 	if err != nil {
 		return nil, fmt.Errorf("renew model leases: %w", err)
 	}

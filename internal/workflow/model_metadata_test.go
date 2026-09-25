@@ -25,7 +25,7 @@ func TestConnectionModelMetadataEffortFiltering(t *testing.T) {
 		{ID: "claude-sonnet-5", DisplayName: "Claude Sonnet 5", Meta: access.ModelMeta{Efforts: []string{"low", "high", "bogus effort"}}},
 		{ID: "claude-mystery-1", DisplayName: "Mystery"},
 	}
-	c, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopePersonal, "", "anthropic", "", []byte("sk-ant-meta"), models, "", secrets)
+	c, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopePersonal, "", "anthropic", "", "", []byte("sk-ant-meta"), models, "", secrets)
 	if err != nil {
 		t.Fatal(err)
 	}

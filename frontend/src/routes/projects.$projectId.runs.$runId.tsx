@@ -7,22 +7,19 @@ import { ArrowRight, Check, GitCommitHorizontal, RefreshCw, Terminal, TerminalSq
 import { currentSession, sessionQueryKey } from "../auth";
 import { DataTable } from "../data-table";
 import type { RunTask } from "../gen/blaxsmith/api/v1/workflow_pb";
-import { useGatewayEnabled } from "../gateway";
 import { DetailLayout } from "../layouts";
 import { isMissing, NotFoundPage } from "../page";
-import { RunCostTab, StageCostChip, useRunCost } from "../run-cost";
 import { Card, CopyValue, Disclosure, sentence, ShowMore, StatePanel, Timestamp, type TabSpec } from "../ui";
 import { Inbox, interactionsKey, StagePanel, useInteractions } from "../run-live";
 import { needsYou, runStatus, stageStatus, type AgentStatus } from "../agent-view";
 import { StatusPill, useAttentionTitle } from "../work-log";
-import { PacedChip } from "../paced-chip";
 import { appendRunEvent, decideReview, eventsAfter, getCurrentReview, getRun, listCommandExits, listRunTasks, liveEventsUrl, parseLiveEvent, recoverRunEventBatch, type RunEventPages } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId/runs/$runId")({
   component: RunDetail,
   validateSearch: (search: Record<string, unknown>): { stage?: string; tab?: string } => ({
     ...(typeof search.stage === "string" ? { stage: search.stage } : {}),
-    ...(typeof search.tab === "string" && ["stages", "review", "cost"].includes(search.tab) ? { tab: search.tab } : {}),
+    ...(typeof search.tab === "string" && ["stages", "review"].includes(search.tab) ? { tab: search.tab } : {}),
   }),
 });
 
@@ -125,8 +122,6 @@ function RunDetail() {
   const reviewWaiting = !!review.data && !review.data.decision;
   const statuses = useMemo(() => new Map((tasks.data?.tasks || []).map((task) =>
     [task.key, stageStatus(task, interactions.data ?? [], tasks.data!.tasks, reviewWaiting)] as const)), [tasks.data, interactions.data, reviewWaiting]);
-  const gatewayEnabled = useGatewayEnabled();
-  const runCost = useRunCost(scope, runId, gatewayEnabled && run.data?.run?.projectId === projectId);
   const overall = run.data?.run ? runStatus(run.data.run.state, tasks.data?.tasks || [], interactions.data ?? [], reviewWaiting) : null;
   useAttentionTitle([...statuses.values()].filter(needsYou).length);
 
@@ -203,9 +198,8 @@ function RunDetail() {
     { id: "overview", label: "Overview" },
     { id: "stages", label: "Stages", count: tasks.data?.tasks.length },
     { id: "review", label: "Review" },
-    { id: "cost", label: "Cost", hidden: !gatewayEnabled },
   ];
-  const tab = search.tab === "cost" && !gatewayEnabled ? "overview" : search.tab ?? (search.stage ? "stages" : "overview");
+  const tab = search.tab ?? (search.stage ? "stages" : "overview");
   const openItems = (interactions.data ?? []).filter((item) => item.state === "open");
   const stageCounts = new Map<string, number>();
   for (const status of statuses.values()) if (status) stageCounts.set(status, (stageCounts.get(status) ?? 0) + 1);
@@ -243,7 +237,7 @@ function RunDetail() {
         <Card title="Stages" className="dash-main" description={tasks.data ? `${tasks.data.tasks.length} frozen stages. Attempts count reservations, not verified results.` : "Loading stages…"} actions={tabLink("stages", "Open stages")}>
           {tasks.data ? <ul className="stage-strip card-body">{tasks.data.tasks.map((task) => <li key={task.id}>
             <Link from={Route.fullPath} to={Route.fullPath} search={{ tab: "stages", stage: task.key }} className="stage-chip"><strong>{task.key}</strong>
-              <StatusPill status={statuses.get(task.key) ?? null} /><small>{task.state.replaceAll("_", " ")}</small><PacedChip reason={task.pacedReason} resetsAt={task.pacedResetsAt} />{gatewayEnabled ? <StageCostChip stage={task.key} stages={runCost.data?.stages} /> : null}</Link></li>)}</ul> : null}
+              <StatusPill status={statuses.get(task.key) ?? null} /><small>{task.state.replaceAll("_", " ")}</small></Link></li>)}</ul> : null}
           {tasks.isError ? <p className="card-body" role="alert">Stages are unavailable. <button type="button" className="text-action" onClick={() => void tasks.refetch()}>Try again</button></p> : null}
           {stageCounts.size ? <p className="card-note">{[...stageCounts].map(([status, count]) => `${count} ${status.replaceAll("_", " ")}`).join(" · ")}</p> : null}
         </Card>
@@ -283,7 +277,6 @@ function RunDetail() {
       </section>
     </> : null}
     {tab === "review" ? <FinalReview runId={runId} scope={scope} state={runData.state} /> : null}
-    {tab === "cost" ? <RunCostTab scope={scope} runId={runId} /> : null}
   </DetailLayout>;
 }
 

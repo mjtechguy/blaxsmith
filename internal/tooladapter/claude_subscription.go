@@ -29,8 +29,8 @@ var ancestorClaudeConfig = []string{".claude", "CLAUDE.md", "CLAUDE.local.md", "
 // claudeSubscriptionMode rewrites a Claude Code launch that carries a
 // setup-token. `--bare` ignores CLAUDE_CODE_OAUTH_TOKEN, so the token needs
 // non-bare mode; the isolation `--bare` gave is rebuilt with the flags and
-// environment the credential-free probe verified. API-key launches, gateway
-// launches, and every other harness pass through unchanged.
+// environment the credential-free probe verified. API-key launches and every
+// other harness pass through unchanged.
 func claudeSubscriptionMode(harness, workdir, home string, args, resume, env []string) ([]string, []string, []string, error) {
 	if harness != "claude-code" {
 		return args, resume, env, nil

@@ -29,7 +29,7 @@ func workspaceRun(r workflow.WorkspaceRun) *api.WorkspaceRun {
 func inboxItem(i workflow.InboxItem) *api.InboxItem {
 	return &api.InboxItem{Id: i.ID, Kind: i.Kind, RunId: i.RunID, ProjectId: i.ProjectID, ProjectName: i.ProjectName,
 		RunLaunchKey: i.LaunchKey, Stage: i.Stage, Title: i.Title, Blocking: i.Blocking, CreatedAt: adminTime(i.CreatedAt),
-		CanAct: i.CanAct, Target: i.Target}
+		CanAct: i.CanAct}
 }
 
 func (s *workspaceService) GetWorkspaceHome(ctx context.Context, req *connect.Request[api.GetWorkspaceHomeRequest]) (*connect.Response[api.GetWorkspaceHomeResponse], error) {

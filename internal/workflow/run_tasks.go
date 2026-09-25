@@ -3,7 +3,6 @@ package workflow
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
@@ -33,10 +32,6 @@ type RunTask struct {
 	LoopWith        string // Set only on a stage that owns a loop.
 	MaxCycles       int32  // Loop cap including human-granted raises.
 	LoopCycles      int32  // Corrections the loop has requested.
-	// PacedReason is set while the stage waits for model gateway headroom
-	// (docs/model-gateway-plan.md §5); PacedResetsAt when a reset is known.
-	PacedReason   string
-	PacedResetsAt *time.Time
 }
 
 // ListRunTasks returns only the selected organization's run graph. The caller
@@ -87,11 +82,8 @@ func (s *Store) ListRunTasks(ctx context.Context, orgID, runID string) ([]RunTas
 		t.input_sha256,
 		ARRAY(SELECT parent.task_key FROM workflow_task_dependencies d
 		JOIN workflow_tasks parent ON parent.organization_id=d.organization_id AND parent.id=d.depends_on_task_id
-		WHERE d.organization_id=t.organization_id AND d.run_id=t.run_id AND d.task_id=t.id ORDER BY parent.task_key),
-		CASE WHEN t.state='pending' THEN COALESCE(gp.reason,'') ELSE '' END,
-		CASE WHEN t.state='pending' THEN gp.resets_at END
+		WHERE d.organization_id=t.organization_id AND d.run_id=t.run_id AND d.task_id=t.id ORDER BY parent.task_key)
 		FROM workflow_tasks t
-		LEFT JOIN gateway_paced_tasks gp ON gp.organization_id=t.organization_id AND gp.task_id=t.id
 		WHERE t.organization_id=$1 AND t.run_id=$2 ORDER BY t.created_at,t.id`, orgID, runID)
 	if err != nil {
 		return nil, err
@@ -102,7 +94,7 @@ func (s *Store) ListRunTasks(ctx context.Context, orgID, runID string) ([]RunTas
 		var task RunTask
 		var inputSHA string
 		if err := rows.Scan(&task.ID, &task.Key, &task.State, &task.Generation, &task.MaxAttempts,
-			&task.ActiveAttemptID, &inputSHA, &task.DependsOn, &task.PacedReason, &task.PacedResetsAt); err != nil {
+			&task.ActiveAttemptID, &inputSHA, &task.DependsOn); err != nil {
 			return nil, err
 		}
 		if bundle != nil {

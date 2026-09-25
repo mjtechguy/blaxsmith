@@ -13,7 +13,6 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/axbridge"
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
-	"github.com/mjtechguy/blaxsmith/internal/gateway"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
@@ -39,9 +38,6 @@ type Dispatcher struct {
 	// ReleaseModel runs only after AX reports WorkspaceReady and the attempt
 	// has moved to running.
 	ReleaseModel func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error
-	// GatewayURL is the model gateway origin sandboxes call (empty when the
-	// installation has no gateway Deployment); see gateway_delivery.go.
-	GatewayURL string
 }
 
 type Outcome struct {
@@ -137,11 +133,12 @@ func (d *Dispatcher) toolRequest(ctx context.Context, orgID, runID, taskID, hand
 }
 
 // attemptBridge scopes the shared bridge to one attempt's tool selection and
-// attempt-named Workspace/Gateway. It returns nil when names cannot be formed.
+// attempt-named Workspace/Gateway. baseURL is the connection's model endpoint
+// frozen into the attempt's model binding; empty uses the provider's own.
+// It returns nil when names cannot be formed.
 func (d *Dispatcher) attemptBridge(attempt workflow.Attempt, request tooladapter.Request, approved workflow.ApprovedToolRuntime,
-	delivery gateway.Delivery) *axbridge.Bridge {
-	request.AttemptID, request.SourceDirectory = attempt.ID, "source"
-	request.Gateway = gatewayRequest(delivery)
+	baseURL string) *axbridge.Bridge {
+	request.AttemptID, request.SourceDirectory, request.ModelBaseURL = attempt.ID, "source", baseURL
 	bridge := *d.Bridge // the per-attempt tool selection is never shared across launches.
 	bridge.Workspace = axbridge.AttemptWorkspaceName(attempt.ID)
 	bridge.GatewayTemplate = d.Bridge.Gateway
@@ -150,7 +147,6 @@ func (d *Dispatcher) attemptBridge(attempt workflow.Attempt, request tooladapter
 		return nil
 	}
 	bridge.Workflow, bridge.Tool, bridge.Image, bridge.Pool = d.Workflow, &request, approved.Runtime.Image, approved.WorkerPool
-	bridge.ModelGatewayHost = gatewayEgressHost(delivery)
 	return &bridge
 }
 
@@ -172,11 +168,11 @@ func (d *Dispatcher) AttemptBridge(ctx context.Context, attempt workflow.Attempt
 	if err != nil {
 		return nil, err
 	}
-	delivery, err := gateway.AttemptDelivery(ctx, d.DB, attempt.OrganizationID, attempt.ID)
+	baseURL, err := access.AttemptModelBaseURL(ctx, d.DB, attempt.OrganizationID, attempt.ID)
 	if err != nil {
 		return nil, err
 	}
-	bridge := d.attemptBridge(attempt, request, approved, delivery)
+	bridge := d.attemptBridge(attempt, request, approved, baseURL)
 	if bridge == nil {
 		return nil, axbridge.ErrInputs
 	}
@@ -215,11 +211,6 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		outcome.Err = err
 		return outcome
 	}
-	delivery, err := d.gatewayDelivery(ctx, candidate.OrganizationID, candidate.ProjectID)
-	if err != nil {
-		outcome.Err = err
-		return outcome
-	}
 	if err := d.Bridge.CheckToolInputs(ctx, candidate.OrganizationID, frozen.RepositoryURL, provider); err != nil {
 		outcome.Err = err
 		return outcome
@@ -251,11 +242,10 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		outcome.Err = err
 		return outcome
 	}
-	if err := d.pace(ctx, candidate, delivery, provider, authority.Decision.ConnectionID); err != nil {
+	// A base URL on another host than the provider's is reachable only where
+	// sandbox egress allows it (open egress); exact egress refuses it here.
+	if err := d.Bridge.CheckModelEndpoint(provider, authority.BaseURL); err != nil {
 		outcome.Err = err
-		if errors.Is(err, gateway.ErrPaced) {
-			outcome.State = "paced" // stays queued with a visible reason and reset time.
-		}
 		return outcome
 	}
 	var bindingID string
@@ -278,10 +268,6 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 					return err
 				}
 			}
-			if err := gateway.RecordAttemptDelivery(ctx, tx, candidate.OrganizationID, attempt.ID,
-				frozen.Profile.Harness, delivery); err != nil {
-				return err
-			}
 			var err error
 			bindingID, err = access.BindModelInvoke(ctx, tx, grant, authority, attempt.ID)
 			return err
@@ -294,7 +280,7 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		return outcome
 	}
 	outcome.AttemptID, outcome.BindingID = attempt.ID, bindingID
-	bridge := d.attemptBridge(attempt, request, approved, delivery)
+	bridge := d.attemptBridge(attempt, request, approved, authority.BaseURL)
 	if bridge == nil {
 		outcome.State, outcome.Err = "unresolved", d.markActivationUnknown(ctx, attempt, axbridge.ErrInputs)
 		return outcome

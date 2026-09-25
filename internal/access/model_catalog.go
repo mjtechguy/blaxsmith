@@ -31,10 +31,19 @@ type CatalogModel struct {
 //     and anthropic-version; paged by after_id while has_more.
 //   - OpenCode Zen/Go: GET https://opencode.ai/zen[/go]/v1/models is public, so
 //     the key is checked separately (see checkOpenCodeKey).
+//
+// A connection with a base URL (LiteLLM, a company gateway) lists from that
+// endpoint instead: <base>/v1/models for Anthropic, <base>/models for the
+// OpenAI-compatible providers, whose base URL already ends in /v1. It is
+// reached only through endpointClient. An endpoint that lists no models is
+// not an error for the key; the caller stores the message and the user types
+// a model id.
 type ModelCatalog struct {
 	Client *http.Client
 	// Base overrides the provider origin (tests only).
 	Base map[string]string
+	// Endpoint serves base URLs; nil uses endpointClient (tests only).
+	Endpoint *http.Client
 }
 
 func (c ModelCatalog) base(provider string) string {
@@ -51,20 +60,25 @@ func (c ModelCatalog) client() *http.Client {
 	return &http.Client{Timeout: 20 * time.Second}
 }
 
-func (c ModelCatalog) Fetch(ctx context.Context, provider string, key []byte) ([]CatalogModel, error) {
+// Fetch lists provider's models with key, from baseURL when it is set (an
+// already normalized connection base URL) or the provider's own endpoint.
+func (c ModelCatalog) Fetch(ctx context.Context, provider, baseURL string, key []byte) ([]CatalogModel, error) {
 	if modelOrigin(provider) == "" || len(key) == 0 {
 		return nil, ErrDenied
 	}
+	if baseURL != "" {
+		return c.fetchEndpoint(ctx, provider, baseURL, key)
+	}
 	switch provider {
 	case "openai":
-		return c.openAIList(ctx, c.base(provider)+"/v1/models", func(r *http.Request) {
+		return c.openAIList(ctx, c.client(), c.base(provider)+"/v1/models", func(r *http.Request) {
 			r.Header.Set("Authorization", "Bearer "+string(key))
 		})
 	case "anthropic":
-		return c.anthropicList(ctx, key)
+		return c.anthropicList(ctx, c.client(), c.base("anthropic"), key)
 	default: // opencode, opencode-go
 		base := c.base(provider)
-		models, err := c.openAIList(ctx, base+"/models", func(r *http.Request) {
+		models, err := c.openAIList(ctx, c.client(), base+"/models", func(r *http.Request) {
 			r.Header.Set("Authorization", "Bearer "+string(key))
 		})
 		if err != nil {
@@ -77,18 +91,48 @@ func (c ModelCatalog) Fetch(ctx context.Context, provider string, key []byte) ([
 	}
 }
 
-func (c ModelCatalog) get(ctx context.Context, rawURL string, auth func(*http.Request), into any) error {
+// ErrNoModelList means a base URL endpoint did not list models; the key is
+// kept and the user types a model id.
+var ErrNoModelList = errors.New("the endpoint did not list models; enter a model id")
+
+func (c ModelCatalog) fetchEndpoint(ctx context.Context, provider, baseURL string, key []byte) ([]CatalogModel, error) {
+	client := c.Endpoint
+	if client == nil {
+		client = endpointClient()
+	}
+	var models []CatalogModel
+	var err error
+	if provider == "anthropic" {
+		models, err = c.anthropicList(ctx, client, baseURL, key)
+	} else {
+		models, err = c.openAIList(ctx, client, baseURL+"/models", func(r *http.Request) {
+			r.Header.Set("Authorization", "Bearer "+string(key))
+		})
+	}
+	if errors.Is(err, ErrKeyRejected) {
+		return nil, err
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%w (%v)", ErrNoModelList, err)
+	}
+	if len(models) == 0 {
+		return nil, ErrNoModelList
+	}
+	return models, nil
+}
+
+func (c ModelCatalog) get(ctx context.Context, client *http.Client, rawURL string, auth func(*http.Request), into any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return err
 	}
 	auth(req)
-	return c.do(req, into)
+	return c.do(client, req, into)
 }
 
-func (c ModelCatalog) do(req *http.Request, into any) error {
+func (c ModelCatalog) do(client *http.Client, req *http.Request, into any) error {
 	req.Header.Set("Accept", "application/json")
-	resp, err := c.client().Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("provider unreachable: %w", err)
 	}
@@ -112,14 +156,14 @@ func (c ModelCatalog) do(req *http.Request, into any) error {
 	return nil
 }
 
-func (c ModelCatalog) openAIList(ctx context.Context, rawURL string, auth func(*http.Request)) ([]CatalogModel, error) {
+func (c ModelCatalog) openAIList(ctx context.Context, client *http.Client, rawURL string, auth func(*http.Request)) ([]CatalogModel, error) {
 	var page struct {
 		Data []struct {
 			ID      string `json:"id"`
 			Created int64  `json:"created"`
 		} `json:"data"`
 	}
-	if err := c.get(ctx, rawURL, auth, &page); err != nil {
+	if err := c.get(ctx, client, rawURL, auth, &page); err != nil {
 		return nil, err
 	}
 	out := make([]CatalogModel, 0, len(page.Data))
@@ -134,7 +178,7 @@ func (c ModelCatalog) openAIList(ctx context.Context, rawURL string, auth func(*
 	return out, nil
 }
 
-func (c ModelCatalog) anthropicList(ctx context.Context, key []byte) ([]CatalogModel, error) {
+func (c ModelCatalog) anthropicList(ctx context.Context, client *http.Client, base string, key []byte) ([]CatalogModel, error) {
 	var out []CatalogModel
 	after := ""
 	for range 5 {
@@ -153,7 +197,7 @@ func (c ModelCatalog) anthropicList(ctx context.Context, key []byte) ([]CatalogM
 			HasMore bool   `json:"has_more"`
 			LastID  string `json:"last_id"`
 		}
-		err := c.get(ctx, c.base("anthropic")+"/v1/models?"+q.Encode(), func(r *http.Request) {
+		err := c.get(ctx, client, base+"/v1/models?"+q.Encode(), func(r *http.Request) {
 			r.Header.Set("x-api-key", string(key))
 			r.Header.Set("anthropic-version", "2023-06-01")
 		}, &page)

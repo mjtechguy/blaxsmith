@@ -14,11 +14,7 @@ test("navigation IA per role: groups, items, the project group, and Admin", asyn
       ["library", ["Recipes", "Extensions", "Tools & runtimes"]],
     ];
     // Organization recipes live once, in Library; Admin has no Recipes item.
-    const admin = ["admin", ["Operations", "Users", "Connections", "Extensions", "Audit", ["Settings", ["GitHub app", "Model gateway", "Connections", "Policies", "Retention"]]]];
-    // Usage & gateway and Routes & pools appear only while the model gateway master switch is on.
-    assert.deepEqual(shape(navigation({ role: "owner", gatewayEnabled: true })).at(-1),
-      ["admin", ["Operations", "Users", "Connections", "Extensions", "Usage & gateway", "Routes & pools", "Budgets", "Alerts", "Audit", ["Settings", ["GitHub app", "Model gateway", "Connections", "Policies", "Retention"]]]]);
-    assert.deepEqual(shape(navigation({ role: "member", gatewayEnabled: true })), common);
+    const admin = ["admin", ["Operations", "Users", "Connections", "Extensions", "Audit", ["Settings", ["GitHub app", "Connections", "Policies", "Retention"]]]];
     assert.deepEqual(shape(navigation({ role: "member" })), common);
     assert.deepEqual(shape(navigation({ role: "viewer" })), common);
     assert.deepEqual(shape(navigation({ role: "admin" })), [...common, admin]);
@@ -32,9 +28,6 @@ test("navigation IA per role: groups, items, the project group, and Admin", asyn
     const withProject = navigation({ role: "member", projectId: "p1", projectName: "Billing" });
     assert.deepEqual(shape(withProject)[2], ["project", ["Overview", "Runs", "Project recipes", "Project connections", "Source & verification", "Settings"]]);
     assert.equal(withProject[2].label, "Billing");
-    // Project → Usage appears only while the model gateway is on.
-    assert.deepEqual(shape(navigation({ role: "member", projectId: "p1", gatewayEnabled: true }))[2],
-      ["project", ["Overview", "Runs", "Usage", "Project recipes", "Project connections", "Source & verification", "Settings"]]);
     assert.equal(projectIdFrom("/projects/p1/runs/r1"), "p1");
     assert.equal(projectIdFrom("/projects/new"), undefined);
     assert.equal(projectIdFrom("/projects"), undefined);
@@ -79,7 +72,8 @@ test("navigation IA per role: groups, items, the project group, and Admin", asyn
     assert.equal(switchPath("/projects/a/settings/source", "b"), "/projects/b/settings/source");
     assert.equal(switchPath("/projects/a/connections/c1", "b"), "/projects/b/connections");
     assert.equal(switchPath("/inbox", "b"), "/projects/b");
-    assert.equal(switchPath("/projects/a/usage", "b"), "/projects/b/usage");
+    // Project → Usage was removed with the model gateway; it lands on the overview.
+    assert.equal(switchPath("/projects/a/usage", "b"), "/projects/b");
   } finally {
     await server.close();
   }

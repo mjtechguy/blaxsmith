@@ -19,7 +19,7 @@ func TestRecommendedModelsArePinnedByManagers(t *testing.T) {
 	owner := reviewer(t, pool, org, "owner", "recommended-owner")
 	member := reviewer(t, pool, org, "member", "recommended-member")
 	secrets := connectionSecrets(t, store)
-	c, err := store.CreateAPIKeyConnectionAs(ctx, owner, ScopeOrganization, "", "openai", "", []byte("sk-rec"), testModels, "", secrets)
+	c, err := store.CreateAPIKeyConnectionAs(ctx, owner, ScopeOrganization, "", "openai", "", "", []byte("sk-rec"), testModels, "", secrets)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestRecommendedModelsArePinnedByManagers(t *testing.T) {
 			t.Fatalf("recommended flag on %s = %v", m.ID, m.Recommended)
 		}
 	}
-	personal, err := store.CreateAPIKeyConnectionAs(ctx, member, ScopePersonal, "", "openai", "", []byte("sk-mine"), testModels, "", secrets)
+	personal, err := store.CreateAPIKeyConnectionAs(ctx, member, ScopePersonal, "", "openai", "", "", []byte("sk-mine"), testModels, "", secrets)
 	if err != nil {
 		t.Fatal(err)
 	}

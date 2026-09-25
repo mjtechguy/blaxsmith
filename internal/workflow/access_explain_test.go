@@ -34,23 +34,23 @@ func TestExplainAccessMatchesCanUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projectGrant, err := store.CreateAPIKeyConnectionAs(ctx, owner, ScopeOrganization, "", "anthropic", "Anthropic prod", []byte("sk-a"), testModels, "", secrets)
+	projectGrant, err := store.CreateAPIKeyConnectionAs(ctx, owner, ScopeOrganization, "", "anthropic", "Anthropic prod", "", []byte("sk-a"), testModels, "", secrets)
 	if err != nil {
 		t.Fatal(err)
 	}
-	roleGrant, err := store.CreateAPIKeyConnectionAs(ctx, owner, ScopeOrganization, "", "openai", "", []byte("sk-b"), testModels, "", secrets)
+	roleGrant, err := store.CreateAPIKeyConnectionAs(ctx, owner, ScopeOrganization, "", "openai", "", "", []byte("sk-b"), testModels, "", secrets)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ungranted, err := store.CreateAPIKeyConnectionAs(ctx, owner, ScopeOrganization, "", "openai", "Spare", []byte("sk-c"), testModels, "", secrets)
+	ungranted, err := store.CreateAPIKeyConnectionAs(ctx, owner, ScopeOrganization, "", "openai", "Spare", "", []byte("sk-c"), testModels, "", secrets)
 	if err != nil {
 		t.Fatal(err)
 	}
-	personal, err := store.CreateAPIKeyConnectionAs(ctx, member, ScopePersonal, "", "openai", "Mine", []byte("sk-d"), testModels, "", secrets)
+	personal, err := store.CreateAPIKeyConnectionAs(ctx, member, ScopePersonal, "", "openai", "Mine", "", []byte("sk-d"), testModels, "", secrets)
 	if err != nil {
 		t.Fatal(err)
 	}
-	projectOwned, err := store.CreateAPIKeyConnectionAs(ctx, member, ScopeProject, granted, "openai", "Local", []byte("sk-e"), testModels, "", secrets)
+	projectOwned, err := store.CreateAPIKeyConnectionAs(ctx, member, ScopeProject, granted, "openai", "Local", "", []byte("sk-e"), testModels, "", secrets)
 	if err != nil {
 		t.Fatal(err)
 	}

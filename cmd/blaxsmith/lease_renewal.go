@@ -12,7 +12,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/access"
-	"github.com/mjtechguy/blaxsmith/internal/gateway"
 	"github.com/mjtechguy/blaxsmith/internal/terminal"
 	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
@@ -43,12 +42,6 @@ type deliveryRenewer func(context.Context, access.RenewedLease, guestFiles) (tim
 func deliveryRenewers(oauth *access.OAuthRefresher) map[string]deliveryRenewer {
 	renewers := map[string]deliveryRenewer{
 		"native_raw": func(_ context.Context, lease access.RenewedLease, _ guestFiles) (time.Time, error) {
-			return lease.ExpiresAt, nil
-		},
-		// Gateway-mode leases hold no delivered key to refresh: the token is
-		// bound to the lease and renews with it, so announcing the new expiry
-		// is all it takes.
-		gateway.ModeBrokered: func(_ context.Context, lease access.RenewedLease, _ guestFiles) (time.Time, error) {
 			return lease.ExpiresAt, nil
 		},
 	}

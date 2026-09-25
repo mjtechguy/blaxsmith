@@ -210,10 +210,6 @@ spec:
             - name: BLAXSMITH_DISPATCH_EGRESS_MODE
               value: {{ .Values.dispatch.egressMode | quote }}
             {{- end }}
-            {{- if .Values.gateway.enabled }}
-            - name: BLAXSMITH_GATEWAY_URL
-              value: {{ .Values.gateway.publicURL | quote }}
-            {{- end }}
             {{- with .Values.dispatch.guestRouter }}
             - name: BLAXSMITH_GUEST_ROUTER
               value: {{ . | quote }}

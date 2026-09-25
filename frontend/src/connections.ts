@@ -26,6 +26,29 @@ const providerNames: Record<string, string> = {
   github: "GitHub", gitlab: "GitLab", codex: "Codex (ChatGPT)",
 };
 export const providerLabel = (provider: string) => providerNames[provider] ?? provider;
+
+// An API-key connection's optional endpoint: what the harness takes as its
+// base URL (Anthropic without /v1, OpenAI-compatible with /v1). Not secret.
+export const BASE_URL_HELP = "For LiteLLM, a company gateway, or any OpenAI/Anthropic-compatible endpoint";
+export const baseUrlPlaceholder = (provider: string) => provider === "anthropic" ? "https://litellm.example.com" : "https://litellm.example.com/v1";
+
+// Mirrors the server's check so mistakes show before the key is sent: https
+// (http only for loopback), no credentials, query, or fragment, at most 512
+// characters. Returns the normalized URL (trailing slashes stripped), "" for
+// empty, or null when invalid.
+export function normalizeBaseUrl(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return "";
+  if (value.length > 512 || /[\s\0]/.test(value)) return null;
+  let url: URL;
+  try { url = new URL(value); } catch { return null; }
+  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if (!(url.protocol === "https:" || (url.protocol === "http:" && loopback)) || url.username || url.password || url.search || url.hash
+    || value.includes("?") || value.includes("#") || !url.hostname) return null;
+  return value.replace(/\/+$/, "");
+}
+export const BASE_URL_INVALID = "Enter an https URL without credentials, a query, or a fragment (at most 512 characters).";
+
 // "OpenAI · Team key", or just the label when it already names the provider
 // ("OpenAI sandbox", not "OpenAI · OpenAI sandbox").
 export function connectionTitle(c: { provider: string; label: string }): string {
@@ -89,8 +112,8 @@ export async function listConnections(scope: ListScope, projectId = "", signal?:
 }
 
 // Secrets are write-only: sent once, never returned.
-export async function createApiKeyConnection(scope: Scope, projectId: string, provider: string, apiKey: string, label: string, signal?: AbortSignal) {
-  return (await client.createApiKeyConnection({ scope, projectId, provider, apiKey, label }, { ...(await csrf()), signal })).connection;
+export async function createApiKeyConnection(scope: Scope, projectId: string, provider: string, apiKey: string, label: string, baseUrl = "", signal?: AbortSignal) {
+  return (await client.createApiKeyConnection({ scope, projectId, provider, apiKey, label, baseUrl }, { ...(await csrf()), signal })).connection;
 }
 
 export async function createGitTokenConnection(scope: Scope, projectId: string, host: string, username: string, token: string) {
@@ -152,6 +175,10 @@ export async function removeConnectionUse(useId: string) {
 
 export async function setRecommendedModels(connectionId: string, models: string[]) {
   return client.setRecommendedModels({ connectionId, models }, await csrf());
+}
+
+export async function setConnectionBaseUrl(connectionId: string, baseUrl: string) {
+  return (await client.setConnectionBaseUrl({ connectionId, baseUrl }, await csrf())).connection;
 }
 
 export async function revokeConnection(connectionId: string) {

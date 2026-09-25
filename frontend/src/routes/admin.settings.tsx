@@ -5,7 +5,6 @@ export const Route = createFileRoute("/admin/settings")({ component: AdminSettin
 
 const adminSettingsSections = [
   { id: "github-app", label: "GitHub app", href: "/admin/settings/github-app" },
-  { id: "model-gateway", label: "Model gateway", href: "/admin/settings/model-gateway" },
   { id: "connections", label: "Connections", href: "/admin/settings/connections" },
   { id: "policies", label: "Policies", href: "/admin/settings/policies", soon: true },
   { id: "retention", label: "Retention", href: "/admin/settings/retention", soon: true },

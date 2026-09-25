@@ -59,6 +59,7 @@ type Connection struct {
 	ModelCount                                                           int32
 	ModelsError                                                          string
 	CanManage                                                            bool
+	BaseURL                                                              string // API-key connections only; empty is the provider's own endpoint.
 	// Health inputs: the subscription refresh state and the organization's
 	// pinned (approved) harness versions, newest per harness.
 	ReconnectReason string
@@ -215,12 +216,17 @@ func cleanLabel(label string) (*string, error) {
 
 // CreateAPIKeyConnectionAs stores a model API key at scope with the model
 // list the caller already fetched with it (the fetch is the key check).
-func (s *Store) CreateAPIKeyConnectionAs(ctx context.Context, caller identity.Caller, scope, projectID, provider, label string,
+// baseURL is the optional endpoint, already normalized by
+// access.NormalizeBaseURL; empty uses the provider's own.
+func (s *Store) CreateAPIKeyConnectionAs(ctx context.Context, caller identity.Caller, scope, projectID, provider, label, baseURL string,
 	key []byte, models []access.CatalogModel, modelsErr string, secrets *access.SecretStore) (Connection, error) {
 	ctx = tenant.Org(ctx, caller.OrganizationID)
 	origin := access.ModelOrigin(provider)
 	if origin == "" || len(key) == 0 || len(key) > 8192 || strings.ContainsAny(string(key), "\r\n\x00 ") || secrets == nil {
 		return Connection{}, ErrInvalid
+	}
+	if normalized, err := access.NormalizeBaseURL(baseURL); err != nil || normalized != baseURL {
+		return Connection{}, access.ErrBaseURL
 	}
 	cleaned, err := cleanLabel(label)
 	if err != nil {
@@ -240,9 +246,9 @@ func (s *Store) CreateAPIKeyConnectionAs(ctx context.Context, caller identity.Ca
 		return Connection{}, err
 	}
 	if err := tx.QueryRow(ctx, `INSERT INTO access_connections
-		(organization_id,id,owner_kind,owner_id,provider_registration_id,external_account_id,auth_method,state,label)
-		VALUES ($1,gen_random_uuid()::text,$2,$3,$4,$5,'api_key','active',$6) RETURNING id`,
-		caller.OrganizationID, ownerKind, ownerID, providerID, "unverified-"+provider+"-api-key", cleaned).Scan(&connectionID); err != nil {
+		(organization_id,id,owner_kind,owner_id,provider_registration_id,external_account_id,auth_method,state,label,base_url)
+		VALUES ($1,gen_random_uuid()::text,$2,$3,$4,$5,'api_key','active',$6,$7) RETURNING id`,
+		caller.OrganizationID, ownerKind, ownerID, providerID, "unverified-"+provider+"-api-key", cleaned, baseURL).Scan(&connectionID); err != nil {
 		return Connection{}, err
 	}
 	if _, err := secrets.RotateTx(ctx, tx, caller.OrganizationID, connectionID, 0, key, nil); err != nil {
@@ -427,6 +433,7 @@ func (s *Store) StoreConnectionModels(ctx context.Context, orgID, connectionID s
 // (model listing, Git discovery). The caller must Clear it.
 type ConnectionSecret struct {
 	OrganizationID, ConnectionID, Kind, Provider, Host, Account string
+	BaseURL                                                     string // API-key connections: the model endpoint, if set.
 	Secret                                                      access.Secret
 }
 
@@ -453,10 +460,10 @@ func (s *Store) ReadConnectionSecret(ctx context.Context, orgID, connectionID st
 	defer tx.Rollback(ctx)
 	out := ConnectionSecret{OrganizationID: orgID, ConnectionID: connectionID}
 	var origin, authMethod string
-	err = tx.QueryRow(ctx, `SELECT p.provider_kind,p.origin,c.auth_method,c.external_account_id FROM access_connections c
+	err = tx.QueryRow(ctx, `SELECT p.provider_kind,p.origin,c.auth_method,c.external_account_id,c.base_url FROM access_connections c
 		JOIN access_provider_registrations p ON p.organization_id=c.organization_id AND p.id=c.provider_registration_id
 		WHERE c.organization_id=$1 AND c.id=$2 AND c.state='active'`, orgID, connectionID).
-		Scan(&out.Provider, &origin, &authMethod, &out.Account)
+		Scan(&out.Provider, &origin, &authMethod, &out.Account, &out.BaseURL)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ConnectionSecret{}, ErrNotFound
 	}
@@ -526,7 +533,7 @@ const connectionColumns = `c.id,c.owner_kind,c.owner_id,
 	(SELECT max(l.reserved_at) FROM access_leases l WHERE l.organization_id=c.organization_id AND l.connection_id=c.id),
 	c.created_at,c.models_checked_at,COALESCE(c.models_error,''),
 	(SELECT count(*)::integer FROM access_connection_models m WHERE m.organization_id=c.organization_id AND m.connection_id=c.id),
-	COALESCE(os.reconnect_reason,''),os.refreshed_at
+	COALESCE(os.reconnect_reason,''),os.refreshed_at,c.base_url
 	FROM access_connections c
 	JOIN access_provider_registrations p ON p.organization_id=c.organization_id AND p.id=c.provider_registration_id
 	LEFT JOIN access_oauth_sessions os ON os.organization_id=c.organization_id AND os.connection_id=c.id
@@ -538,7 +545,8 @@ func scanConnection(row pgx.Row) (Connection, error) {
 	var c Connection
 	var ownerKind, authMethod, provider, origin string
 	err := row.Scan(&c.ID, &ownerKind, &c.OwnerID, &c.OwnerName, &authMethod, &provider, &origin, &c.Account, &c.Label,
-		&c.State, &c.LastUsed, &c.CreatedAt, &c.ModelsCheckedAt, &c.ModelsError, &c.ModelCount, &c.ReconnectReason, &c.RefreshedAt)
+		&c.State, &c.LastUsed, &c.CreatedAt, &c.ModelsCheckedAt, &c.ModelsError, &c.ModelCount, &c.ReconnectReason, &c.RefreshedAt,
+		&c.BaseURL)
 	if err != nil {
 		return c, err
 	}

@@ -80,7 +80,7 @@ func TestConnectionHealthInputsFromStore(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopeOrganization, "", "anthropic", "Prod", []byte("sk-health"), nil,
+	if _, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopeOrganization, "", "anthropic", "Prod", "", []byte("sk-health"), nil,
 		"the provider rejected this API key", secrets); err != nil {
 		t.Fatal(err)
 	}

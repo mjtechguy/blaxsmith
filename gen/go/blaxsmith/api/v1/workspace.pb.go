@@ -162,25 +162,18 @@ func (x *WorkspaceRun) GetStagesSucceeded() int32 {
 // An item a person may need to handle: an open interaction on a queued or
 // active run, or an undecided final review package on a succeeded run.
 type InboxItem struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // Interaction id, the review package id for kind review, or the alert id for kind budget_alert.
-	// question, approval, escalation, interview_round, review, or budget_alert
-	// (a model-gateway budget threshold; run_id is empty, stage holds the
-	// budget scope: organization, project, or user).
-	Kind         string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
-	RunId        string `protobuf:"bytes,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
-	ProjectId    string `protobuf:"bytes,4,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	ProjectName  string `protobuf:"bytes,5,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
-	RunLaunchKey string `protobuf:"bytes,6,opt,name=run_launch_key,json=runLaunchKey,proto3" json:"run_launch_key,omitempty"`
-	Stage        string `protobuf:"bytes,7,opt,name=stage,proto3" json:"stage,omitempty"` // Frozen stage id; empty for review.
-	Title        string `protobuf:"bytes,8,opt,name=title,proto3" json:"title,omitempty"`
-	Blocking     bool   `protobuf:"varint,9,opt,name=blocking,proto3" json:"blocking,omitempty"`
-	CreatedAt    string `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // RFC 3339.
-	CanAct       bool   `protobuf:"varint,11,opt,name=can_act,json=canAct,proto3" json:"can_act,omitempty"`         // The caller's role may answer or decide it.
-	// budget_alert only, computed per caller: my_usage (the budget is the
-	// caller's own user budget), project_usage (a project budget), or
-	// admin_alerts (organization budgets, and other users' budgets).
-	Target        string `protobuf:"bytes,12,opt,name=target,proto3" json:"target,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`     // Interaction id, or the review package id for kind review.
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // question, approval, escalation, interview_round, or review.
+	RunId         string                 `protobuf:"bytes,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,4,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	ProjectName   string                 `protobuf:"bytes,5,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
+	RunLaunchKey  string                 `protobuf:"bytes,6,opt,name=run_launch_key,json=runLaunchKey,proto3" json:"run_launch_key,omitempty"`
+	Stage         string                 `protobuf:"bytes,7,opt,name=stage,proto3" json:"stage,omitempty"` // Frozen stage id; empty for review.
+	Title         string                 `protobuf:"bytes,8,opt,name=title,proto3" json:"title,omitempty"`
+	Blocking      bool                   `protobuf:"varint,9,opt,name=blocking,proto3" json:"blocking,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // RFC 3339.
+	CanAct        bool                   `protobuf:"varint,11,opt,name=can_act,json=canAct,proto3" json:"can_act,omitempty"`         // The caller's role may answer or decide it.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -290,13 +283,6 @@ func (x *InboxItem) GetCanAct() bool {
 		return x.CanAct
 	}
 	return false
-}
-
-func (x *InboxItem) GetTarget() string {
-	if x != nil {
-		return x.Target
-	}
-	return ""
 }
 
 // A current attempt owner: reserved, starting, running, or reconciling.
@@ -1080,7 +1066,7 @@ const file_blaxsmith_api_v1_workspace_proto_rawDesc = "" +
 	" \x01(\bR\rreviewWaiting\x12\x1f\n" +
 	"\vstage_count\x18\v \x01(\x05R\n" +
 	"stageCount\x12)\n" +
-	"\x10stages_succeeded\x18\f \x01(\x05R\x0fstagesSucceeded\"\xc6\x02\n" +
+	"\x10stages_succeeded\x18\f \x01(\x05R\x0fstagesSucceeded\"\xbc\x02\n" +
 	"\tInboxItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x15\n" +
@@ -1095,8 +1081,7 @@ const file_blaxsmith_api_v1_workspace_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\n" +
 	" \x01(\tR\tcreatedAt\x12\x17\n" +
-	"\acan_act\x18\v \x01(\bR\x06canAct\x12\x16\n" +
-	"\x06target\x18\f \x01(\tR\x06target\"\x86\x03\n" +
+	"\acan_act\x18\v \x01(\bR\x06canActJ\x04\b\f\x10\rR\x06target\"\x86\x03\n" +
 	"\x0eWorkspaceAgent\x12\x1d\n" +
 	"\n" +
 	"attempt_id\x18\x01 \x01(\tR\tattemptId\x12\x15\n" +

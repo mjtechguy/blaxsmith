@@ -26,17 +26,6 @@ type ManifestModel struct {
 	Legacy        bool     `json:"legacy"`
 	Efforts       []string `json:"efforts"`
 	DefaultEffort string   `json:"defaultEffort"`
-	// Price is the bundled list rate in USD per million tokens, used by the
-	// model gateway for estimated costs (docs/model-gateway-plan.md §7).
-	Price *ModelPrice `json:"price,omitempty"`
-}
-
-// ModelPrice holds USD per million tokens for each metered token class.
-type ModelPrice struct {
-	Input      float64 `json:"input"`
-	Output     float64 `json:"output"`
-	CacheRead  float64 `json:"cacheRead"`
-	CacheWrite float64 `json:"cacheWrite"`
 }
 
 type manifestProvider struct {
@@ -45,10 +34,9 @@ type manifestProvider struct {
 }
 
 var modelManifest = func() (m struct {
-	Version    int                         `json:"version"`
-	UpdatedAt  string                      `json:"updatedAt"`
-	PricesAsOf string                      `json:"pricesAsOf"`
-	Providers  map[string]manifestProvider `json:"providers"`
+	Version   int                         `json:"version"`
+	UpdatedAt string                      `json:"updatedAt"`
+	Providers map[string]manifestProvider `json:"providers"`
 }) {
 	if err := json.Unmarshal(manifestJSON, &m); err != nil || m.Version != 1 {
 		panic("invalid bundled model manifest")
@@ -71,16 +59,6 @@ func manifestEntry(provider, model string) (ManifestModel, bool) {
 		}
 	}
 	return ManifestModel{}, false
-}
-
-// ManifestPrice returns the bundled list price for a model (exact slug or a
-// dated snapshot) and the price table version it came from.
-func ManifestPrice(provider, model string) (ModelPrice, string, bool) {
-	entry, ok := manifestEntry(provider, model)
-	if !ok || entry.Price == nil {
-		return ModelPrice{}, "", false
-	}
-	return *entry.Price, "manifest:" + modelManifest.PricesAsOf, true
 }
 
 // ModelMeta is one model's resolved presentation and effort metadata.

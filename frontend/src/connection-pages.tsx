@@ -8,9 +8,10 @@ import { ArrowRight, Pin, RefreshCw, Trash2 } from "lucide-react";
 import { AccessExplanation } from "./access-explain";
 import { ago } from "./admin";
 import { AddUse, ConfirmDialog, failure, HealthLine, RedactedText, ResourceGrants, StateBadge, useOrg } from "./connection-ui";
+import { TextField } from "./form-field";
 import {
-  connectionModelsKey, connectionTitle, grantConnection, granteeLabel, kindLabel, listConnectionModels, modelsSummary, providerLabel, refreshConnectionModels,
-  removeConnectionUse, revokeConnection, revokeConnectionGrant, scopeLabel, setRecommendedModels, type Scope,
+  BASE_URL_HELP, BASE_URL_INVALID, baseUrlPlaceholder, connectionModelsKey, connectionTitle, grantConnection, granteeLabel, kindLabel, listConnectionModels, modelsSummary, normalizeBaseUrl, providerLabel, refreshConnectionModels,
+  removeConnectionUse, revokeConnection, revokeConnectionGrant, scopeLabel, setConnectionBaseUrl, setRecommendedModels, type Scope,
 } from "./connections";
 import { CollectionTable, DataTable, inSet, useLocalView, useUrlView, type GridColumn } from "./data-table";
 import type { Connection, ConnectionModel, ConnectionUse } from "./gen/blaxsmith/api/v1/connections_pb";
@@ -32,7 +33,8 @@ export function ConnectionCollection({ id, label, connections, empty, href, acti
   const [view, setView] = urlState ? url : local;
   const columns = useMemo<GridColumn<Connection>[]>(() => [
     { id: "provider", accessorFn: (c) => c.provider, header: "Provider", enableHiding: false, filterFn: inSet, cell: ({ row }) => <Link className="row-link" to={href(row.original) as "/"}>
-      <span className="task-stage"><strong>{connectionTitle(row.original)}</strong><small>{kindLabel(row.original.kind)}</small></span></Link> },
+      <span className="task-stage"><strong>{connectionTitle(row.original)}</strong><small>{kindLabel(row.original.kind)}</small>
+        {row.original.baseUrl ? <small className="mono endpoint-line">Endpoint: {row.original.baseUrl}</small> : null}</span></Link> },
     { id: "kind", accessorKey: "kind", header: "Kind", filterFn: inSet, cell: ({ row }) => kindLabel(row.original.kind) },
     { id: "scope", accessorKey: "scope", header: "Scope", filterFn: inSet, cell: ({ row }) => <span className="task-stage"><strong>{scopeLabel(row.original.scope)}</strong><small>{row.original.ownerName || row.original.ownerId.slice(0, 8)}</small></span> },
     { id: "account", accessorKey: "account", header: "Account", cell: ({ row }) => row.original.account ? <span className="mono"><RedactedText text={row.original.account} label="account" /></span> : "—" },
@@ -52,6 +54,7 @@ export function ConnectionCollection({ id, label, connections, empty, href, acti
 
 function ConnectionRowSummary({ connection: c, href }: { connection: Connection; href: string }) {
   return <div className="row-summary">
+    {c.baseUrl ? <span><strong>Endpoint</strong> <span className="mono">{c.baseUrl}</span></span> : null}
     <span><strong>Models</strong> {c.kind === "git" ? "Git connections carry no models." : modelsSummary(c)}{c.modelsCheckedAt ? ` · checked ${ago(c.modelsCheckedAt)}` : ""}</span>
     <span><strong>Uses</strong> {c.uses.length ? c.uses.slice(0, 3).map((u) => `${u.projectName || "project"} → ${u.model}`).join(", ") + (c.uses.length > 3 ? ` +${c.uses.length - 3}` : "") : "none"}</span>
     <span><strong>Grants</strong> {c.grants.length ? c.grants.slice(0, 3).map((g) => granteeLabel(g)).join(", ") + (c.grants.length > 3 ? ` +${c.grants.length - 3}` : "") : "none"}</span>
@@ -108,12 +111,14 @@ export function ConnectionDetailPage({ connection, scope, projectId = "", canAdm
           { label: "Provider", value: providerLabel(c.provider) },
           { label: "Owner", value: `${scopeLabel(c.scope)}${c.ownerName ? ` · ${c.ownerName}` : ""}` },
           { label: "Created", value: <Timestamp value={c.createdAt} /> },
+          ...(c.kind === "api_key" ? [{ label: "Base URL", value: c.baseUrl ? <span className="mono">{c.baseUrl}</span> : "Provider default" }] : []),
           ...(c.kind !== "git" ? [{ label: "Models", value: <span className={c.modelsError ? "form-field-error" : undefined}>{modelsSummary(c)}</span> }] : []),
         ]} />
         <div className="card-body"><Disclosure summary="Advanced: identifiers">
           <SummaryList items={[{ label: "Connection ID", value: <CopyValue value={c.id} label="Connection ID" chars={13} /> }, { label: "Owner ID", value: <CopyValue value={c.ownerId} label="Owner ID" chars={13} /> }]} />
         </Disclosure></div>
       </Card>
+      {c.kind === "api_key" && c.canManage && c.state === "active" ? <BaseUrlEditor connection={c} /> : null}
       <Card title="Where this comes from" className="dash-main" description={projectId ? "Why runs in this project may use it." : "Why each project that uses it is allowed to."}>
         <div className="card-body access-list">
           {projectId ? <AccessExplanation projectId={projectId} kind="connection" resourceId={c.id} />
@@ -149,6 +154,41 @@ export function ConnectionDetailPage({ connection, scope, projectId = "", canAdm
     {revoking ? <ConfirmDialog busy={revoke.isPending} error={error} onClose={() => setRevoking(false)} onConfirm={() => revoke.mutate()} title="Revoke connection" confirmLabel="Revoke"
       body={<>Revoke this {providerLabel(c.provider)} connection? Every grant, use, and lease is revoked. Rotate the credential at the provider to invalidate copies already delivered.</>} /> : null}
   </DetailLayout>;
+}
+
+// Set or clear an API-key connection's endpoint. The server validates it,
+// audits the change, and refreshes the model list against it.
+function BaseUrlEditor({ connection }: { connection: Connection }) {
+  const queryClient = useQueryClient();
+  const { org } = useOrg();
+  const [value, setValue] = useState(connection.baseUrl);
+  const [error, setError] = useState("");
+  const [note, setNote] = useState("");
+  const save = useMutation({
+    mutationFn: (next: string) => setConnectionBaseUrl(connection.id, next),
+    onSuccess: async (updated) => {
+      setError(""); setValue(updated?.baseUrl ?? "");
+      setNote(updated?.baseUrl ? `Saved. ${updated.modelsError ? `No model list (${updated.modelsError}). Type a model id when you add a use.` : `Models: ${updated ? modelsSummary(updated) : ""}.`}` : "Cleared. Runs use the provider's own endpoint.");
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["connections", org] }), queryClient.invalidateQueries({ queryKey: ["connection-models", org, connection.id] })]);
+    },
+    onError: (cause) => { setNote(""); setError(failure(cause, "The base URL could not be saved. Please try again.")); },
+  });
+  const submit = (raw: string) => {
+    const next = normalizeBaseUrl(raw);
+    if (next === null) { setNote(""); setError(BASE_URL_INVALID); return; }
+    save.mutate(next);
+  };
+  return <Card title="Endpoint" className="dash-main" description={BASE_URL_HELP}>
+    <form className="editor-form card-body" noValidate aria-label="Base URL" onSubmit={(event) => { event.preventDefault(); submit(value); }}>
+      <TextField label="Base URL (optional)" name="connection-base-url" type="url" autoComplete="off" placeholder={baseUrlPlaceholder(connection.provider)}
+        hint="Empty uses the provider's own endpoint. Changing it stops runs already holding this connection." value={value} onChange={setValue} onBlur={() => {}} required={false} error={error || undefined} />
+      {note ? <p className="form-hint" role="status">{note}</p> : null}
+      <div className="editor-actions">
+        {connection.baseUrl ? <button type="button" className="secondary-button" disabled={save.isPending} onClick={() => { setValue(""); submit(""); }}>Clear</button> : null}
+        <button type="submit" className="primary-button" disabled={save.isPending || value.trim().replace(/\/+$/, "") === connection.baseUrl}>{save.isPending ? "Saving…" : "Save"}</button>
+      </div>
+    </form>
+  </Card>;
 }
 
 function ModelsTab({ connection }: { connection: Connection }) {

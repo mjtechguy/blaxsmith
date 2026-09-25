@@ -37,11 +37,8 @@ message WorkspaceRun {
 // An item a person may need to handle: an open interaction on a queued or
 // active run, or an undecided final review package on a succeeded run.
 message InboxItem {
-  string id = 1; // Interaction id, the review package id for kind review, or the alert id for kind budget_alert.
-  // question, approval, escalation, interview_round, review, or budget_alert
-  // (a model-gateway budget threshold; run_id is empty, stage holds the
-  // budget scope: organization, project, or user).
-  string kind = 2;
+  string id = 1; // Interaction id, or the review package id for kind review.
+  string kind = 2; // question, approval, escalation, interview_round, or review.
   string run_id = 3;
   string project_id = 4;
   string project_name = 5;
@@ -51,10 +48,9 @@ message InboxItem {
   bool blocking = 9;
   string created_at = 10; // RFC 3339.
   bool can_act = 11; // The caller's role may answer or decide it.
-  // budget_alert only, computed per caller: my_usage (the budget is the
-  // caller's own user budget), project_usage (a project budget), or
-  // admin_alerts (organization budgets, and other users' budgets).
-  string target = 12;
+  // Removed with the model gateway's budget alerts.
+  reserved 12;
+  reserved "target";
 }
 
 // A current attempt owner: reserved, starting, running, or reconciling.

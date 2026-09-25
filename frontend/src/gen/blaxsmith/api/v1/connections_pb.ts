@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file blaxsmith/api/v1/connections.proto.
  */
 export const file_blaxsmith_api_v1_connections: GenFile = /*@__PURE__*/
-  fileDesc("CiJibGF4c21pdGgvYXBpL3YxL2Nvbm5lY3Rpb25zLnByb3RvEhBibGF4c21pdGguYXBpLnYxIpsBCg9Db25uZWN0aW9uR3JhbnQSCgoCaWQYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIUCgxwcm9qZWN0X25hbWUYAyABKAkSFAoMZ3JhbnRlZV9raW5kGAQgASgJEhIKCmdyYW50ZWVfaWQYBSABKAkSFAoMZ3JhbnRlZV9uYW1lGAYgASgJEhIKCmNyZWF0ZWRfYXQYByABKAkifgoNQ29ubmVjdGlvblVzZRIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhQKDHByb2plY3RfbmFtZRgDIAEoCRINCgVtb2RlbBgEIAEoCRIUCgxncmFudGVlX2tpbmQYBSABKAkSEgoKY3JlYXRlZF9hdBgGIAEoCSK2AwoKQ29ubmVjdGlvbhIKCgJpZBgBIAEoCRINCgVzY29wZRgCIAEoCRIQCghvd25lcl9pZBgDIAEoCRISCgpvd25lcl9uYW1lGAQgASgJEgwKBGtpbmQYBSABKAkSEAoIcHJvdmlkZXIYBiABKAkSDwoHYWNjb3VudBgHIAEoCRINCgVsYWJlbBgIIAEoCRINCgVzdGF0ZRgJIAEoCRIxCgZncmFudHMYCiADKAsyIS5ibGF4c21pdGguYXBpLnYxLkNvbm5lY3Rpb25HcmFudBItCgR1c2VzGAsgAygLMh8uYmxheHNtaXRoLmFwaS52MS5Db25uZWN0aW9uVXNlEhQKDGxhc3RfdXNlZF9hdBgMIAEoCRISCgpjcmVhdGVkX2F0GA0gASgJEhMKC21vZGVsX2NvdW50GA4gASgFEhkKEW1vZGVsc19jaGVja2VkX2F0GA8gASgJEhQKDG1vZGVsc19lcnJvchgQIAEoCRISCgpjYW5fbWFuYWdlGBEgASgIEjIKBmhlYWx0aBgSIAEoCzIiLmJsYXhzbWl0aC5hcGkudjEuQ29ubmVjdGlvbkhlYWx0aCK3AQoQQ29ubmVjdGlvbkhlYWx0aBINCgVzdGF0ZRgBIAEoCRIMCgRhdXRoGAIgASgJEhAKCGlkZW50aXR5GAMgASgJEhIKCmNoZWNrZWRfYXQYBCABKAkSDgoGcmVhc29uGAUgASgJEg8KB21lc3NhZ2UYBiABKAkSDwoHaGFybmVzcxgHIAEoCRIWCg5waW5uZWRfdmVyc2lvbhgIIAEoCRIWCg5sYXRlc3RfdmVyc2lvbhgJIAEoCSI7ChZMaXN0Q29ubmVjdGlvbnNSZXF1ZXN0Eg0KBXNjb3BlGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkiTAoXTGlzdENvbm5lY3Rpb25zUmVzcG9uc2USMQoLY29ubmVjdGlvbnMYASADKAsyHC5ibGF4c21pdGguYXBpLnYxLkNvbm5lY3Rpb24idAodQ3JlYXRlQXBpS2V5Q29ubmVjdGlvblJlcXVlc3QSDQoFc2NvcGUYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIQCghwcm92aWRlchgDIAEoCRIPCgdhcGlfa2V5GAQgASgJEg0KBWxhYmVsGAUgASgJIlIKHkNyZWF0ZUFwaUtleUNvbm5lY3Rpb25SZXNwb25zZRIwCgpjb25uZWN0aW9uGAEgASgLMhwuYmxheHNtaXRoLmFwaS52MS5Db25uZWN0aW9uInMKH0NyZWF0ZUdpdFRva2VuQ29ubmVjdGlvblJlcXVlc3QSDQoFc2NvcGUYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIMCgRob3N0GAMgASgJEhAKCHVzZXJuYW1lGAQgASgJEg0KBXRva2VuGAUgASgJIlQKIENyZWF0ZUdpdFRva2VuQ29ubmVjdGlvblJlc3BvbnNlEjAKCmNvbm5lY3Rpb24YASABKAsyHC5ibGF4c21pdGguYXBpLnYxLkNvbm5lY3Rpb24iMwoeQ3JlYXRlQ29kZXhTdWJzY3JpcHRpb25SZXF1ZXN0EhEKCWF1dGhfanNvbhgBIAEoCSJTCh9DcmVhdGVDb2RleFN1YnNjcmlwdGlvblJlc3BvbnNlEjAKCmNvbm5lY3Rpb24YASABKAsyHC5ibGF4c21pdGguYXBpLnYxLkNvbm5lY3Rpb24iNgofQ3JlYXRlQ2xhdWRlU3Vic2NyaXB0aW9uUmVxdWVzdBITCgtzZXR1cF90b2tlbhgBIAEoCSJUCiBDcmVhdGVDbGF1ZGVTdWJzY3JpcHRpb25SZXNwb25zZRIwCgpjb25uZWN0aW9uGAEgASgLMhwuYmxheHNtaXRoLmFwaS52MS5Db25uZWN0aW9uIiQKIkdldENsYXVkZVN1YnNjcmlwdGlvblBvbGljeVJlcXVlc3QiTwojR2V0Q2xhdWRlU3Vic2NyaXB0aW9uUG9saWN5UmVzcG9uc2USKAogYWxsb3dfbWVtYmVyX2NsYXVkZV9zdWJzY3JpcHRpb24YASABKAgiTgoiU2V0Q2xhdWRlU3Vic2NyaXB0aW9uUG9saWN5UmVxdWVzdBIoCiBhbGxvd19tZW1iZXJfY2xhdWRlX3N1YnNjcmlwdGlvbhgBIAEoCCJPCiNTZXRDbGF1ZGVTdWJzY3JpcHRpb25Qb2xpY3lSZXNwb25zZRIoCiBhbGxvd19tZW1iZXJfY2xhdWRlX3N1YnNjcmlwdGlvbhgBIAEoCCIeChxTdGFydENvZGV4RGV2aWNlTG9naW5SZXF1ZXN0IowBCh1TdGFydENvZGV4RGV2aWNlTG9naW5SZXNwb25zZRIQCghsb2dpbl9pZBgBIAEoCRIYChB2ZXJpZmljYXRpb25fdXJsGAIgASgJEhEKCXVzZXJfY29kZRgDIAEoCRIYChBpbnRlcnZhbF9zZWNvbmRzGAQgASgFEhIKCmV4cGlyZXNfYXQYBSABKAkiLwobUG9sbENvZGV4RGV2aWNlTG9naW5SZXF1ZXN0EhAKCGxvZ2luX2lkGAEgASgJIm4KHFBvbGxDb2RleERldmljZUxvZ2luUmVzcG9uc2USDQoFc3RhdGUYASABKAkSDQoFZXJyb3IYAiABKAkSMAoKY29ubmVjdGlvbhgDIAEoCzIcLmJsYXhzbWl0aC5hcGkudjEuQ29ubmVjdGlvbiL+AQoPQ29ubmVjdGlvbk1vZGVsEgoKAmlkGAEgASgJEhQKDGRpc3BsYXlfbmFtZRgCIAEoCRISCgpjcmVhdGVkX2F0GAMgASgJEhYKDmNvbnRleHRfdG9rZW5zGAQgASgFEhkKEWNhcGFiaWxpdGllc19qc29uGAUgASgJEhEKCWhhcm5lc3NlcxgGIAMoCRISCgppc19kZWZhdWx0GAcgASgIEg4KBmxlZ2FjeRgIIAEoCBINCgViYWRnZRgJIAEoCRIPCgdlZmZvcnRzGAogAygJEhYKDmRlZmF1bHRfZWZmb3J0GAsgASgJEhMKC3JlY29tbWVuZGVkGAwgASgIIkUKG0xpc3RDb25uZWN0aW9uTW9kZWxzUmVxdWVzdBIVCg1jb25uZWN0aW9uX2lkGAEgASgJEg8KB2hhcm5lc3MYAiABKAkidAocTGlzdENvbm5lY3Rpb25Nb2RlbHNSZXNwb25zZRIxCgZtb2RlbHMYASADKAsyIS5ibGF4c21pdGguYXBpLnYxLkNvbm5lY3Rpb25Nb2RlbBISCgpjaGVja2VkX2F0GAIgASgJEg0KBWVycm9yGAMgASgJIjcKHlJlZnJlc2hDb25uZWN0aW9uTW9kZWxzUmVxdWVzdBIVCg1jb25uZWN0aW9uX2lkGAEgASgJImgKH1JlZnJlc2hDb25uZWN0aW9uTW9kZWxzUmVzcG9uc2USDQoFdmFsaWQYASABKAgSEwoLbW9kZWxfY291bnQYAiABKAUSDQoFZXJyb3IYAyABKAkSEgoKY2hlY2tlZF9hdBgEIAEoCSJtChZHcmFudENvbm5lY3Rpb25SZXF1ZXN0EhUKDWNvbm5lY3Rpb25faWQYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIUCgxncmFudGVlX2tpbmQYAyABKAkSEgoKZ3JhbnRlZV9pZBgEIAEoCSJLChdHcmFudENvbm5lY3Rpb25SZXNwb25zZRIwCgVncmFudBgBIAEoCzIhLmJsYXhzbWl0aC5hcGkudjEuQ29ubmVjdGlvbkdyYW50IjAKHFJldm9rZUNvbm5lY3Rpb25HcmFudFJlcXVlc3QSEAoIZ3JhbnRfaWQYASABKAkiHwodUmV2b2tlQ29ubmVjdGlvbkdyYW50UmVzcG9uc2UiUwoXQWRkQ29ubmVjdGlvblVzZVJlcXVlc3QSFQoNY29ubmVjdGlvbl9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEg0KBW1vZGVsGAMgASgJIkgKGEFkZENvbm5lY3Rpb25Vc2VSZXNwb25zZRIsCgN1c2UYASABKAsyHy5ibGF4c21pdGguYXBpLnYxLkNvbm5lY3Rpb25Vc2UiLAoaUmVtb3ZlQ29ubmVjdGlvblVzZVJlcXVlc3QSDgoGdXNlX2lkGAEgASgJIh0KG1JlbW92ZUNvbm5lY3Rpb25Vc2VSZXNwb25zZSJEChtTZXRSZWNvbW1lbmRlZE1vZGVsc1JlcXVlc3QSFQoNY29ubmVjdGlvbl9pZBgBIAEoCRIOCgZtb2RlbHMYAiADKAkiLgocU2V0UmVjb21tZW5kZWRNb2RlbHNSZXNwb25zZRIOCgZtb2RlbHMYASADKAkiMAoXUmV2b2tlQ29ubmVjdGlvblJlcXVlc3QSFQoNY29ubmVjdGlvbl9pZBgBIAEoCSIaChhSZXZva2VDb25uZWN0aW9uUmVzcG9uc2UiXgoNR2l0UmVwb3NpdG9yeRIRCglmdWxsX25hbWUYASABKAkSEQoJY2xvbmVfdXJsGAIgASgJEhYKDmRlZmF1bHRfYnJhbmNoGAMgASgJEg8KB3ByaXZhdGUYBCABKAgiQgoaTGlzdEdpdFJlcG9zaXRvcmllc1JlcXVlc3QSFQoNY29ubmVjdGlvbl9pZBgBIAEoCRINCgVxdWVyeRgCIAEoCSJUChtMaXN0R2l0UmVwb3NpdG9yaWVzUmVzcG9uc2USNQoMcmVwb3NpdG9yaWVzGAEgAygLMh8uYmxheHNtaXRoLmFwaS52MS5HaXRSZXBvc2l0b3J5IkIKFkxpc3RHaXRCcmFuY2hlc1JlcXVlc3QSFQoNY29ubmVjdGlvbl9pZBgBIAEoCRIRCglmdWxsX25hbWUYAiABKAkiKwoXTGlzdEdpdEJyYW5jaGVzUmVzcG9uc2USEAoIYnJhbmNoZXMYASADKAkiFQoTR2V0R2l0SHViQXBwUmVxdWVzdCJTChRHZXRHaXRIdWJBcHBSZXNwb25zZRIRCgljbGllbnRfaWQYASABKAkSEgoKY29uZmlndXJlZBgCIAEoCBIUCgxjYWxsYmFja191cmwYAyABKAkiPwoTU2V0R2l0SHViQXBwUmVxdWVzdBIRCgljbGllbnRfaWQYASABKAkSFQoNY2xpZW50X3NlY3JldBgCIAEoCSI9ChRTZXRHaXRIdWJBcHBSZXNwb25zZRIRCgljbGllbnRfaWQYASABKAkSEgoKY29uZmlndXJlZBgCIAEoCCJRChlTdGFydEdpdEh1YkNvbm5lY3RSZXF1ZXN0Eg0KBXNjb3BlGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSEQoJcmV0dXJuX3RvGAMgASgJIjMKGlN0YXJ0R2l0SHViQ29ubmVjdFJlc3BvbnNlEhUKDWF1dGhvcml6ZV91cmwYASABKAkysBQKEUNvbm5lY3Rpb25TZXJ2aWNlEmYKD0xpc3RDb25uZWN0aW9ucxIoLmJsYXhzbWl0aC5hcGkudjEuTGlzdENvbm5lY3Rpb25zUmVxdWVzdBopLmJsYXhzbWl0aC5hcGkudjEuTGlzdENvbm5lY3Rpb25zUmVzcG9uc2USewoWQ3JlYXRlQXBpS2V5Q29ubmVjdGlvbhIvLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlQXBpS2V5Q29ubmVjdGlvblJlcXVlc3QaMC5ibGF4c21pdGguYXBpLnYxLkNyZWF0ZUFwaUtleUNvbm5lY3Rpb25SZXNwb25zZRKBAQoYQ3JlYXRlR2l0VG9rZW5Db25uZWN0aW9uEjEuYmxheHNtaXRoLmFwaS52MS5DcmVhdGVHaXRUb2tlbkNvbm5lY3Rpb25SZXF1ZXN0GjIuYmxheHNtaXRoLmFwaS52MS5DcmVhdGVHaXRUb2tlbkNvbm5lY3Rpb25SZXNwb25zZRJ+ChdDcmVhdGVDb2RleFN1YnNjcmlwdGlvbhIwLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlQ29kZXhTdWJzY3JpcHRpb25SZXF1ZXN0GjEuYmxheHNtaXRoLmFwaS52MS5DcmVhdGVDb2RleFN1YnNjcmlwdGlvblJlc3BvbnNlEoEBChhDcmVhdGVDbGF1ZGVTdWJzY3JpcHRpb24SMS5ibGF4c21pdGguYXBpLnYxLkNyZWF0ZUNsYXVkZVN1YnNjcmlwdGlvblJlcXVlc3QaMi5ibGF4c21pdGguYXBpLnYxLkNyZWF0ZUNsYXVkZVN1YnNjcmlwdGlvblJlc3BvbnNlEooBChtHZXRDbGF1ZGVTdWJzY3JpcHRpb25Qb2xpY3kSNC5ibGF4c21pdGguYXBpLnYxLkdldENsYXVkZVN1YnNjcmlwdGlvblBvbGljeVJlcXVlc3QaNS5ibGF4c21pdGguYXBpLnYxLkdldENsYXVkZVN1YnNjcmlwdGlvblBvbGljeVJlc3BvbnNlEooBChtTZXRDbGF1ZGVTdWJzY3JpcHRpb25Qb2xpY3kSNC5ibGF4c21pdGguYXBpLnYxLlNldENsYXVkZVN1YnNjcmlwdGlvblBvbGljeVJlcXVlc3QaNS5ibGF4c21pdGguYXBpLnYxLlNldENsYXVkZVN1YnNjcmlwdGlvblBvbGljeVJlc3BvbnNlEngKFVN0YXJ0Q29kZXhEZXZpY2VMb2dpbhIuLmJsYXhzbWl0aC5hcGkudjEuU3RhcnRDb2RleERldmljZUxvZ2luUmVxdWVzdBovLmJsYXhzbWl0aC5hcGkudjEuU3RhcnRDb2RleERldmljZUxvZ2luUmVzcG9uc2USdQoUUG9sbENvZGV4RGV2aWNlTG9naW4SLS5ibGF4c21pdGguYXBpLnYxLlBvbGxDb2RleERldmljZUxvZ2luUmVxdWVzdBouLmJsYXhzbWl0aC5hcGkudjEuUG9sbENvZGV4RGV2aWNlTG9naW5SZXNwb25zZRJ1ChRMaXN0Q29ubmVjdGlvbk1vZGVscxItLmJsYXhzbWl0aC5hcGkudjEuTGlzdENvbm5lY3Rpb25Nb2RlbHNSZXF1ZXN0Gi4uYmxheHNtaXRoLmFwaS52MS5MaXN0Q29ubmVjdGlvbk1vZGVsc1Jlc3BvbnNlEn4KF1JlZnJlc2hDb25uZWN0aW9uTW9kZWxzEjAuYmxheHNtaXRoLmFwaS52MS5SZWZyZXNoQ29ubmVjdGlvbk1vZGVsc1JlcXVlc3QaMS5ibGF4c21pdGguYXBpLnYxLlJlZnJlc2hDb25uZWN0aW9uTW9kZWxzUmVzcG9uc2USZgoPR3JhbnRDb25uZWN0aW9uEiguYmxheHNtaXRoLmFwaS52MS5HcmFudENvbm5lY3Rpb25SZXF1ZXN0GikuYmxheHNtaXRoLmFwaS52MS5HcmFudENvbm5lY3Rpb25SZXNwb25zZRJ4ChVSZXZva2VDb25uZWN0aW9uR3JhbnQSLi5ibGF4c21pdGguYXBpLnYxLlJldm9rZUNvbm5lY3Rpb25HcmFudFJlcXVlc3QaLy5ibGF4c21pdGguYXBpLnYxLlJldm9rZUNvbm5lY3Rpb25HcmFudFJlc3BvbnNlEmkKEEFkZENvbm5lY3Rpb25Vc2USKS5ibGF4c21pdGguYXBpLnYxLkFkZENvbm5lY3Rpb25Vc2VSZXF1ZXN0GiouYmxheHNtaXRoLmFwaS52MS5BZGRDb25uZWN0aW9uVXNlUmVzcG9uc2UScgoTUmVtb3ZlQ29ubmVjdGlvblVzZRIsLmJsYXhzbWl0aC5hcGkudjEuUmVtb3ZlQ29ubmVjdGlvblVzZVJlcXVlc3QaLS5ibGF4c21pdGguYXBpLnYxLlJlbW92ZUNvbm5lY3Rpb25Vc2VSZXNwb25zZRJpChBSZXZva2VDb25uZWN0aW9uEikuYmxheHNtaXRoLmFwaS52MS5SZXZva2VDb25uZWN0aW9uUmVxdWVzdBoqLmJsYXhzbWl0aC5hcGkudjEuUmV2b2tlQ29ubmVjdGlvblJlc3BvbnNlEnUKFFNldFJlY29tbWVuZGVkTW9kZWxzEi0uYmxheHNtaXRoLmFwaS52MS5TZXRSZWNvbW1lbmRlZE1vZGVsc1JlcXVlc3QaLi5ibGF4c21pdGguYXBpLnYxLlNldFJlY29tbWVuZGVkTW9kZWxzUmVzcG9uc2UScgoTTGlzdEdpdFJlcG9zaXRvcmllcxIsLmJsYXhzbWl0aC5hcGkudjEuTGlzdEdpdFJlcG9zaXRvcmllc1JlcXVlc3QaLS5ibGF4c21pdGguYXBpLnYxLkxpc3RHaXRSZXBvc2l0b3JpZXNSZXNwb25zZRJmCg9MaXN0R2l0QnJhbmNoZXMSKC5ibGF4c21pdGguYXBpLnYxLkxpc3RHaXRCcmFuY2hlc1JlcXVlc3QaKS5ibGF4c21pdGguYXBpLnYxLkxpc3RHaXRCcmFuY2hlc1Jlc3BvbnNlEl0KDEdldEdpdEh1YkFwcBIlLmJsYXhzbWl0aC5hcGkudjEuR2V0R2l0SHViQXBwUmVxdWVzdBomLmJsYXhzbWl0aC5hcGkudjEuR2V0R2l0SHViQXBwUmVzcG9uc2USXQoMU2V0R2l0SHViQXBwEiUuYmxheHNtaXRoLmFwaS52MS5TZXRHaXRIdWJBcHBSZXF1ZXN0GiYuYmxheHNtaXRoLmFwaS52MS5TZXRHaXRIdWJBcHBSZXNwb25zZRJvChJTdGFydEdpdEh1YkNvbm5lY3QSKy5ibGF4c21pdGguYXBpLnYxLlN0YXJ0R2l0SHViQ29ubmVjdFJlcXVlc3QaLC5ibGF4c21pdGguYXBpLnYxLlN0YXJ0R2l0SHViQ29ubmVjdFJlc3BvbnNlQsgBChRjb20uYmxheHNtaXRoLmFwaS52MUIQQ29ubmVjdGlvbnNQcm90b1ABWjxnaXRodWIuY29tL21qdGVjaGd1eS9ibGF4c21pdGgvZ2VuL2dvL2JsYXhzbWl0aC9hcGkvdjE7YXBpdjGiAgNCQViqAhBCbGF4c21pdGguQXBpLlYxygIQQmxheHNtaXRoXEFwaVxWMeICHEJsYXhzbWl0aFxBcGlcVjFcR1BCTWV0YWRhdGHqAhJCbGF4c21pdGg6OkFwaTo6VjFiBnByb3RvMw");
+  fileDesc("CiJibGF4c21pdGgvYXBpL3YxL2Nvbm5lY3Rpb25zLnByb3RvEhBibGF4c21pdGguYXBpLnYxIpsBCg9Db25uZWN0aW9uR3JhbnQSCgoCaWQYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIUCgxwcm9qZWN0X25hbWUYAyABKAkSFAoMZ3JhbnRlZV9raW5kGAQgASgJEhIKCmdyYW50ZWVfaWQYBSABKAkSFAoMZ3JhbnRlZV9uYW1lGAYgASgJEhIKCmNyZWF0ZWRfYXQYByABKAkifgoNQ29ubmVjdGlvblVzZRIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhQKDHByb2plY3RfbmFtZRgDIAEoCRINCgVtb2RlbBgEIAEoCRIUCgxncmFudGVlX2tpbmQYBSABKAkSEgoKY3JlYXRlZF9hdBgGIAEoCSLIAwoKQ29ubmVjdGlvbhIKCgJpZBgBIAEoCRINCgVzY29wZRgCIAEoCRIQCghvd25lcl9pZBgDIAEoCRISCgpvd25lcl9uYW1lGAQgASgJEgwKBGtpbmQYBSABKAkSEAoIcHJvdmlkZXIYBiABKAkSDwoHYWNjb3VudBgHIAEoCRINCgVsYWJlbBgIIAEoCRINCgVzdGF0ZRgJIAEoCRIxCgZncmFudHMYCiADKAsyIS5ibGF4c21pdGguYXBpLnYxLkNvbm5lY3Rpb25HcmFudBItCgR1c2VzGAsgAygLMh8uYmxheHNtaXRoLmFwaS52MS5Db25uZWN0aW9uVXNlEhQKDGxhc3RfdXNlZF9hdBgMIAEoCRISCgpjcmVhdGVkX2F0GA0gASgJEhMKC21vZGVsX2NvdW50GA4gASgFEhkKEW1vZGVsc19jaGVja2VkX2F0GA8gASgJEhQKDG1vZGVsc19lcnJvchgQIAEoCRISCgpjYW5fbWFuYWdlGBEgASgIEjIKBmhlYWx0aBgSIAEoCzIiLmJsYXhzbWl0aC5hcGkudjEuQ29ubmVjdGlvbkhlYWx0aBIQCghiYXNlX3VybBgTIAEoCSK3AQoQQ29ubmVjdGlvbkhlYWx0aBINCgVzdGF0ZRgBIAEoCRIMCgRhdXRoGAIgASgJEhAKCGlkZW50aXR5GAMgASgJEhIKCmNoZWNrZWRfYXQYBCABKAkSDgoGcmVhc29uGAUgASgJEg8KB21lc3NhZ2UYBiABKAkSDwoHaGFybmVzcxgHIAEoCRIWCg5waW5uZWRfdmVyc2lvbhgIIAEoCRIWCg5sYXRlc3RfdmVyc2lvbhgJIAEoCSI7ChZMaXN0Q29ubmVjdGlvbnNSZXF1ZXN0Eg0KBXNjb3BlGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkiTAoXTGlzdENvbm5lY3Rpb25zUmVzcG9uc2USMQoLY29ubmVjdGlvbnMYASADKAsyHC5ibGF4c21pdGguYXBpLnYxLkNvbm5lY3Rpb24ihgEKHUNyZWF0ZUFwaUtleUNvbm5lY3Rpb25SZXF1ZXN0Eg0KBXNjb3BlGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSEAoIcHJvdmlkZXIYAyABKAkSDwoHYXBpX2tleRgEIAEoCRINCgVsYWJlbBgFIAEoCRIQCghiYXNlX3VybBgGIAEoCSJSCh5DcmVhdGVBcGlLZXlDb25uZWN0aW9uUmVzcG9uc2USMAoKY29ubmVjdGlvbhgBIAEoCzIcLmJsYXhzbWl0aC5hcGkudjEuQ29ubmVjdGlvbiJGChtTZXRDb25uZWN0aW9uQmFzZVVybFJlcXVlc3QSFQoNY29ubmVjdGlvbl9pZBgBIAEoCRIQCghiYXNlX3VybBgCIAEoCSJQChxTZXRDb25uZWN0aW9uQmFzZVVybFJlc3BvbnNlEjAKCmNvbm5lY3Rpb24YASABKAsyHC5ibGF4c21pdGguYXBpLnYxLkNvbm5lY3Rpb24icwofQ3JlYXRlR2l0VG9rZW5Db25uZWN0aW9uUmVxdWVzdBINCgVzY29wZRgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEgwKBGhvc3QYAyABKAkSEAoIdXNlcm5hbWUYBCABKAkSDQoFdG9rZW4YBSABKAkiVAogQ3JlYXRlR2l0VG9rZW5Db25uZWN0aW9uUmVzcG9uc2USMAoKY29ubmVjdGlvbhgBIAEoCzIcLmJsYXhzbWl0aC5hcGkudjEuQ29ubmVjdGlvbiIzCh5DcmVhdGVDb2RleFN1YnNjcmlwdGlvblJlcXVlc3QSEQoJYXV0aF9qc29uGAEgASgJIlMKH0NyZWF0ZUNvZGV4U3Vic2NyaXB0aW9uUmVzcG9uc2USMAoKY29ubmVjdGlvbhgBIAEoCzIcLmJsYXhzbWl0aC5hcGkudjEuQ29ubmVjdGlvbiI2Ch9DcmVhdGVDbGF1ZGVTdWJzY3JpcHRpb25SZXF1ZXN0EhMKC3NldHVwX3Rva2VuGAEgASgJIlQKIENyZWF0ZUNsYXVkZVN1YnNjcmlwdGlvblJlc3BvbnNlEjAKCmNvbm5lY3Rpb24YASABKAsyHC5ibGF4c21pdGguYXBpLnYxLkNvbm5lY3Rpb24iJAoiR2V0Q2xhdWRlU3Vic2NyaXB0aW9uUG9saWN5UmVxdWVzdCJPCiNHZXRDbGF1ZGVTdWJzY3JpcHRpb25Qb2xpY3lSZXNwb25zZRIoCiBhbGxvd19tZW1iZXJfY2xhdWRlX3N1YnNjcmlwdGlvbhgBIAEoCCJOCiJTZXRDbGF1ZGVTdWJzY3JpcHRpb25Qb2xpY3lSZXF1ZXN0EigKIGFsbG93X21lbWJlcl9jbGF1ZGVfc3Vic2NyaXB0aW9uGAEgASgIIk8KI1NldENsYXVkZVN1YnNjcmlwdGlvblBvbGljeVJlc3BvbnNlEigKIGFsbG93X21lbWJlcl9jbGF1ZGVfc3Vic2NyaXB0aW9uGAEgASgIIh4KHFN0YXJ0Q29kZXhEZXZpY2VMb2dpblJlcXVlc3QijAEKHVN0YXJ0Q29kZXhEZXZpY2VMb2dpblJlc3BvbnNlEhAKCGxvZ2luX2lkGAEgASgJEhgKEHZlcmlmaWNhdGlvbl91cmwYAiABKAkSEQoJdXNlcl9jb2RlGAMgASgJEhgKEGludGVydmFsX3NlY29uZHMYBCABKAUSEgoKZXhwaXJlc19hdBgFIAEoCSIvChtQb2xsQ29kZXhEZXZpY2VMb2dpblJlcXVlc3QSEAoIbG9naW5faWQYASABKAkibgocUG9sbENvZGV4RGV2aWNlTG9naW5SZXNwb25zZRINCgVzdGF0ZRgBIAEoCRINCgVlcnJvchgCIAEoCRIwCgpjb25uZWN0aW9uGAMgASgLMhwuYmxheHNtaXRoLmFwaS52MS5Db25uZWN0aW9uIv4BCg9Db25uZWN0aW9uTW9kZWwSCgoCaWQYASABKAkSFAoMZGlzcGxheV9uYW1lGAIgASgJEhIKCmNyZWF0ZWRfYXQYAyABKAkSFgoOY29udGV4dF90b2tlbnMYBCABKAUSGQoRY2FwYWJpbGl0aWVzX2pzb24YBSABKAkSEQoJaGFybmVzc2VzGAYgAygJEhIKCmlzX2RlZmF1bHQYByABKAgSDgoGbGVnYWN5GAggASgIEg0KBWJhZGdlGAkgASgJEg8KB2VmZm9ydHMYCiADKAkSFgoOZGVmYXVsdF9lZmZvcnQYCyABKAkSEwoLcmVjb21tZW5kZWQYDCABKAgiRQobTGlzdENvbm5lY3Rpb25Nb2RlbHNSZXF1ZXN0EhUKDWNvbm5lY3Rpb25faWQYASABKAkSDwoHaGFybmVzcxgCIAEoCSJ0ChxMaXN0Q29ubmVjdGlvbk1vZGVsc1Jlc3BvbnNlEjEKBm1vZGVscxgBIAMoCzIhLmJsYXhzbWl0aC5hcGkudjEuQ29ubmVjdGlvbk1vZGVsEhIKCmNoZWNrZWRfYXQYAiABKAkSDQoFZXJyb3IYAyABKAkiNwoeUmVmcmVzaENvbm5lY3Rpb25Nb2RlbHNSZXF1ZXN0EhUKDWNvbm5lY3Rpb25faWQYASABKAkiaAofUmVmcmVzaENvbm5lY3Rpb25Nb2RlbHNSZXNwb25zZRINCgV2YWxpZBgBIAEoCBITCgttb2RlbF9jb3VudBgCIAEoBRINCgVlcnJvchgDIAEoCRISCgpjaGVja2VkX2F0GAQgASgJIm0KFkdyYW50Q29ubmVjdGlvblJlcXVlc3QSFQoNY29ubmVjdGlvbl9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhQKDGdyYW50ZWVfa2luZBgDIAEoCRISCgpncmFudGVlX2lkGAQgASgJIksKF0dyYW50Q29ubmVjdGlvblJlc3BvbnNlEjAKBWdyYW50GAEgASgLMiEuYmxheHNtaXRoLmFwaS52MS5Db25uZWN0aW9uR3JhbnQiMAocUmV2b2tlQ29ubmVjdGlvbkdyYW50UmVxdWVzdBIQCghncmFudF9pZBgBIAEoCSIfCh1SZXZva2VDb25uZWN0aW9uR3JhbnRSZXNwb25zZSJTChdBZGRDb25uZWN0aW9uVXNlUmVxdWVzdBIVCg1jb25uZWN0aW9uX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSDQoFbW9kZWwYAyABKAkiSAoYQWRkQ29ubmVjdGlvblVzZVJlc3BvbnNlEiwKA3VzZRgBIAEoCzIfLmJsYXhzbWl0aC5hcGkudjEuQ29ubmVjdGlvblVzZSIsChpSZW1vdmVDb25uZWN0aW9uVXNlUmVxdWVzdBIOCgZ1c2VfaWQYASABKAkiHQobUmVtb3ZlQ29ubmVjdGlvblVzZVJlc3BvbnNlIkQKG1NldFJlY29tbWVuZGVkTW9kZWxzUmVxdWVzdBIVCg1jb25uZWN0aW9uX2lkGAEgASgJEg4KBm1vZGVscxgCIAMoCSIuChxTZXRSZWNvbW1lbmRlZE1vZGVsc1Jlc3BvbnNlEg4KBm1vZGVscxgBIAMoCSIwChdSZXZva2VDb25uZWN0aW9uUmVxdWVzdBIVCg1jb25uZWN0aW9uX2lkGAEgASgJIhoKGFJldm9rZUNvbm5lY3Rpb25SZXNwb25zZSJeCg1HaXRSZXBvc2l0b3J5EhEKCWZ1bGxfbmFtZRgBIAEoCRIRCgljbG9uZV91cmwYAiABKAkSFgoOZGVmYXVsdF9icmFuY2gYAyABKAkSDwoHcHJpdmF0ZRgEIAEoCCJCChpMaXN0R2l0UmVwb3NpdG9yaWVzUmVxdWVzdBIVCg1jb25uZWN0aW9uX2lkGAEgASgJEg0KBXF1ZXJ5GAIgASgJIlQKG0xpc3RHaXRSZXBvc2l0b3JpZXNSZXNwb25zZRI1CgxyZXBvc2l0b3JpZXMYASADKAsyHy5ibGF4c21pdGguYXBpLnYxLkdpdFJlcG9zaXRvcnkiQgoWTGlzdEdpdEJyYW5jaGVzUmVxdWVzdBIVCg1jb25uZWN0aW9uX2lkGAEgASgJEhEKCWZ1bGxfbmFtZRgCIAEoCSIrChdMaXN0R2l0QnJhbmNoZXNSZXNwb25zZRIQCghicmFuY2hlcxgBIAMoCSIVChNHZXRHaXRIdWJBcHBSZXF1ZXN0IlMKFEdldEdpdEh1YkFwcFJlc3BvbnNlEhEKCWNsaWVudF9pZBgBIAEoCRISCgpjb25maWd1cmVkGAIgASgIEhQKDGNhbGxiYWNrX3VybBgDIAEoCSI/ChNTZXRHaXRIdWJBcHBSZXF1ZXN0EhEKCWNsaWVudF9pZBgBIAEoCRIVCg1jbGllbnRfc2VjcmV0GAIgASgJIj0KFFNldEdpdEh1YkFwcFJlc3BvbnNlEhEKCWNsaWVudF9pZBgBIAEoCRISCgpjb25maWd1cmVkGAIgASgIIlEKGVN0YXJ0R2l0SHViQ29ubmVjdFJlcXVlc3QSDQoFc2NvcGUYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIRCglyZXR1cm5fdG8YAyABKAkiMwoaU3RhcnRHaXRIdWJDb25uZWN0UmVzcG9uc2USFQoNYXV0aG9yaXplX3VybBgBIAEoCTKnFQoRQ29ubmVjdGlvblNlcnZpY2USZgoPTGlzdENvbm5lY3Rpb25zEiguYmxheHNtaXRoLmFwaS52MS5MaXN0Q29ubmVjdGlvbnNSZXF1ZXN0GikuYmxheHNtaXRoLmFwaS52MS5MaXN0Q29ubmVjdGlvbnNSZXNwb25zZRJ7ChZDcmVhdGVBcGlLZXlDb25uZWN0aW9uEi8uYmxheHNtaXRoLmFwaS52MS5DcmVhdGVBcGlLZXlDb25uZWN0aW9uUmVxdWVzdBowLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlQXBpS2V5Q29ubmVjdGlvblJlc3BvbnNlEnUKFFNldENvbm5lY3Rpb25CYXNlVXJsEi0uYmxheHNtaXRoLmFwaS52MS5TZXRDb25uZWN0aW9uQmFzZVVybFJlcXVlc3QaLi5ibGF4c21pdGguYXBpLnYxLlNldENvbm5lY3Rpb25CYXNlVXJsUmVzcG9uc2USgQEKGENyZWF0ZUdpdFRva2VuQ29ubmVjdGlvbhIxLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlR2l0VG9rZW5Db25uZWN0aW9uUmVxdWVzdBoyLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlR2l0VG9rZW5Db25uZWN0aW9uUmVzcG9uc2USfgoXQ3JlYXRlQ29kZXhTdWJzY3JpcHRpb24SMC5ibGF4c21pdGguYXBpLnYxLkNyZWF0ZUNvZGV4U3Vic2NyaXB0aW9uUmVxdWVzdBoxLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlQ29kZXhTdWJzY3JpcHRpb25SZXNwb25zZRKBAQoYQ3JlYXRlQ2xhdWRlU3Vic2NyaXB0aW9uEjEuYmxheHNtaXRoLmFwaS52MS5DcmVhdGVDbGF1ZGVTdWJzY3JpcHRpb25SZXF1ZXN0GjIuYmxheHNtaXRoLmFwaS52MS5DcmVhdGVDbGF1ZGVTdWJzY3JpcHRpb25SZXNwb25zZRKKAQobR2V0Q2xhdWRlU3Vic2NyaXB0aW9uUG9saWN5EjQuYmxheHNtaXRoLmFwaS52MS5HZXRDbGF1ZGVTdWJzY3JpcHRpb25Qb2xpY3lSZXF1ZXN0GjUuYmxheHNtaXRoLmFwaS52MS5HZXRDbGF1ZGVTdWJzY3JpcHRpb25Qb2xpY3lSZXNwb25zZRKKAQobU2V0Q2xhdWRlU3Vic2NyaXB0aW9uUG9saWN5EjQuYmxheHNtaXRoLmFwaS52MS5TZXRDbGF1ZGVTdWJzY3JpcHRpb25Qb2xpY3lSZXF1ZXN0GjUuYmxheHNtaXRoLmFwaS52MS5TZXRDbGF1ZGVTdWJzY3JpcHRpb25Qb2xpY3lSZXNwb25zZRJ4ChVTdGFydENvZGV4RGV2aWNlTG9naW4SLi5ibGF4c21pdGguYXBpLnYxLlN0YXJ0Q29kZXhEZXZpY2VMb2dpblJlcXVlc3QaLy5ibGF4c21pdGguYXBpLnYxLlN0YXJ0Q29kZXhEZXZpY2VMb2dpblJlc3BvbnNlEnUKFFBvbGxDb2RleERldmljZUxvZ2luEi0uYmxheHNtaXRoLmFwaS52MS5Qb2xsQ29kZXhEZXZpY2VMb2dpblJlcXVlc3QaLi5ibGF4c21pdGguYXBpLnYxLlBvbGxDb2RleERldmljZUxvZ2luUmVzcG9uc2USdQoUTGlzdENvbm5lY3Rpb25Nb2RlbHMSLS5ibGF4c21pdGguYXBpLnYxLkxpc3RDb25uZWN0aW9uTW9kZWxzUmVxdWVzdBouLmJsYXhzbWl0aC5hcGkudjEuTGlzdENvbm5lY3Rpb25Nb2RlbHNSZXNwb25zZRJ+ChdSZWZyZXNoQ29ubmVjdGlvbk1vZGVscxIwLmJsYXhzbWl0aC5hcGkudjEuUmVmcmVzaENvbm5lY3Rpb25Nb2RlbHNSZXF1ZXN0GjEuYmxheHNtaXRoLmFwaS52MS5SZWZyZXNoQ29ubmVjdGlvbk1vZGVsc1Jlc3BvbnNlEmYKD0dyYW50Q29ubmVjdGlvbhIoLmJsYXhzbWl0aC5hcGkudjEuR3JhbnRDb25uZWN0aW9uUmVxdWVzdBopLmJsYXhzbWl0aC5hcGkudjEuR3JhbnRDb25uZWN0aW9uUmVzcG9uc2USeAoVUmV2b2tlQ29ubmVjdGlvbkdyYW50Ei4uYmxheHNtaXRoLmFwaS52MS5SZXZva2VDb25uZWN0aW9uR3JhbnRSZXF1ZXN0Gi8uYmxheHNtaXRoLmFwaS52MS5SZXZva2VDb25uZWN0aW9uR3JhbnRSZXNwb25zZRJpChBBZGRDb25uZWN0aW9uVXNlEikuYmxheHNtaXRoLmFwaS52MS5BZGRDb25uZWN0aW9uVXNlUmVxdWVzdBoqLmJsYXhzbWl0aC5hcGkudjEuQWRkQ29ubmVjdGlvblVzZVJlc3BvbnNlEnIKE1JlbW92ZUNvbm5lY3Rpb25Vc2USLC5ibGF4c21pdGguYXBpLnYxLlJlbW92ZUNvbm5lY3Rpb25Vc2VSZXF1ZXN0Gi0uYmxheHNtaXRoLmFwaS52MS5SZW1vdmVDb25uZWN0aW9uVXNlUmVzcG9uc2USaQoQUmV2b2tlQ29ubmVjdGlvbhIpLmJsYXhzbWl0aC5hcGkudjEuUmV2b2tlQ29ubmVjdGlvblJlcXVlc3QaKi5ibGF4c21pdGguYXBpLnYxLlJldm9rZUNvbm5lY3Rpb25SZXNwb25zZRJ1ChRTZXRSZWNvbW1lbmRlZE1vZGVscxItLmJsYXhzbWl0aC5hcGkudjEuU2V0UmVjb21tZW5kZWRNb2RlbHNSZXF1ZXN0Gi4uYmxheHNtaXRoLmFwaS52MS5TZXRSZWNvbW1lbmRlZE1vZGVsc1Jlc3BvbnNlEnIKE0xpc3RHaXRSZXBvc2l0b3JpZXMSLC5ibGF4c21pdGguYXBpLnYxLkxpc3RHaXRSZXBvc2l0b3JpZXNSZXF1ZXN0Gi0uYmxheHNtaXRoLmFwaS52MS5MaXN0R2l0UmVwb3NpdG9yaWVzUmVzcG9uc2USZgoPTGlzdEdpdEJyYW5jaGVzEiguYmxheHNtaXRoLmFwaS52MS5MaXN0R2l0QnJhbmNoZXNSZXF1ZXN0GikuYmxheHNtaXRoLmFwaS52MS5MaXN0R2l0QnJhbmNoZXNSZXNwb25zZRJdCgxHZXRHaXRIdWJBcHASJS5ibGF4c21pdGguYXBpLnYxLkdldEdpdEh1YkFwcFJlcXVlc3QaJi5ibGF4c21pdGguYXBpLnYxLkdldEdpdEh1YkFwcFJlc3BvbnNlEl0KDFNldEdpdEh1YkFwcBIlLmJsYXhzbWl0aC5hcGkudjEuU2V0R2l0SHViQXBwUmVxdWVzdBomLmJsYXhzbWl0aC5hcGkudjEuU2V0R2l0SHViQXBwUmVzcG9uc2USbwoSU3RhcnRHaXRIdWJDb25uZWN0EisuYmxheHNtaXRoLmFwaS52MS5TdGFydEdpdEh1YkNvbm5lY3RSZXF1ZXN0GiwuYmxheHNtaXRoLmFwaS52MS5TdGFydEdpdEh1YkNvbm5lY3RSZXNwb25zZULIAQoUY29tLmJsYXhzbWl0aC5hcGkudjFCEENvbm5lY3Rpb25zUHJvdG9QAVo8Z2l0aHViLmNvbS9tanRlY2hndXkvYmxheHNtaXRoL2dlbi9nby9ibGF4c21pdGgvYXBpL3YxO2FwaXYxogIDQkFYqgIQQmxheHNtaXRoLkFwaS5WMcoCEEJsYXhzbWl0aFxBcGlcVjHiAhxCbGF4c21pdGhcQXBpXFYxXEdQQk1ldGFkYXRh6gISQmxheHNtaXRoOjpBcGk6OlYxYgZwcm90bzM");
 
 /**
  * A standing grant on an organization connection. grantee_kind is project
@@ -232,6 +232,15 @@ export type Connection = Message<"blaxsmith.api.v1.Connection"> & {
    * @generated from field: blaxsmith.api.v1.ConnectionHealth health = 18;
    */
   health?: ConnectionHealth | undefined;
+
+  /**
+   * API-key connections only: an OpenAI- or Anthropic-compatible endpoint
+   * (LiteLLM, a company gateway) used in place of the provider's own. Not
+   * secret. Empty uses the provider's endpoint.
+   *
+   * @generated from field: string base_url = 19;
+   */
+  baseUrl: string;
 };
 
 /**
@@ -396,6 +405,13 @@ export type CreateApiKeyConnectionRequest = Message<"blaxsmith.api.v1.CreateApiK
    * @generated from field: string label = 5;
    */
   label: string;
+
+  /**
+   * Optional https endpoint; see Connection.base_url.
+   *
+   * @generated from field: string base_url = 6;
+   */
+  baseUrl: string;
 };
 
 /**
@@ -421,6 +437,48 @@ export type CreateApiKeyConnectionResponse = Message<"blaxsmith.api.v1.CreateApi
  */
 export const CreateApiKeyConnectionResponseSchema: GenMessage<CreateApiKeyConnectionResponse> = /*@__PURE__*/
   messageDesc(file_blaxsmith_api_v1_connections, 7);
+
+/**
+ * Set or clear (empty) an API-key connection's base URL. Allowed to whoever
+ * manages the connection; audited. The model list is refreshed against it.
+ *
+ * @generated from message blaxsmith.api.v1.SetConnectionBaseUrlRequest
+ */
+export type SetConnectionBaseUrlRequest = Message<"blaxsmith.api.v1.SetConnectionBaseUrlRequest"> & {
+  /**
+   * @generated from field: string connection_id = 1;
+   */
+  connectionId: string;
+
+  /**
+   * @generated from field: string base_url = 2;
+   */
+  baseUrl: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.SetConnectionBaseUrlRequest.
+ * Use `create(SetConnectionBaseUrlRequestSchema)` to create a new message.
+ */
+export const SetConnectionBaseUrlRequestSchema: GenMessage<SetConnectionBaseUrlRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_connections, 8);
+
+/**
+ * @generated from message blaxsmith.api.v1.SetConnectionBaseUrlResponse
+ */
+export type SetConnectionBaseUrlResponse = Message<"blaxsmith.api.v1.SetConnectionBaseUrlResponse"> & {
+  /**
+   * @generated from field: blaxsmith.api.v1.Connection connection = 1;
+   */
+  connection?: Connection | undefined;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.SetConnectionBaseUrlResponse.
+ * Use `create(SetConnectionBaseUrlResponseSchema)` to create a new message.
+ */
+export const SetConnectionBaseUrlResponseSchema: GenMessage<SetConnectionBaseUrlResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_connections, 9);
 
 /**
  * @generated from message blaxsmith.api.v1.CreateGitTokenConnectionRequest
@@ -463,7 +521,7 @@ export type CreateGitTokenConnectionRequest = Message<"blaxsmith.api.v1.CreateGi
  * Use `create(CreateGitTokenConnectionRequestSchema)` to create a new message.
  */
 export const CreateGitTokenConnectionRequestSchema: GenMessage<CreateGitTokenConnectionRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 8);
+  messageDesc(file_blaxsmith_api_v1_connections, 10);
 
 /**
  * @generated from message blaxsmith.api.v1.CreateGitTokenConnectionResponse
@@ -480,7 +538,7 @@ export type CreateGitTokenConnectionResponse = Message<"blaxsmith.api.v1.CreateG
  * Use `create(CreateGitTokenConnectionResponseSchema)` to create a new message.
  */
 export const CreateGitTokenConnectionResponseSchema: GenMessage<CreateGitTokenConnectionResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 9);
+  messageDesc(file_blaxsmith_api_v1_connections, 11);
 
 /**
  * Pasted ~/.codex/auth.json (the Advanced fallback). Subscriptions are always
@@ -502,7 +560,7 @@ export type CreateCodexSubscriptionRequest = Message<"blaxsmith.api.v1.CreateCod
  * Use `create(CreateCodexSubscriptionRequestSchema)` to create a new message.
  */
 export const CreateCodexSubscriptionRequestSchema: GenMessage<CreateCodexSubscriptionRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 10);
+  messageDesc(file_blaxsmith_api_v1_connections, 12);
 
 /**
  * @generated from message blaxsmith.api.v1.CreateCodexSubscriptionResponse
@@ -519,11 +577,11 @@ export type CreateCodexSubscriptionResponse = Message<"blaxsmith.api.v1.CreateCo
  * Use `create(CreateCodexSubscriptionResponseSchema)` to create a new message.
  */
 export const CreateCodexSubscriptionResponseSchema: GenMessage<CreateCodexSubscriptionResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 11);
+  messageDesc(file_blaxsmith_api_v1_connections, 13);
 
 /**
  * A member's own `claude setup-token`, used only for runs they start
- * (docs/model-gateway-plan.md §6.1). Requires the organization switch.
+ * (docs/subscription-auth.md). Requires the organization switch.
  *
  * @generated from message blaxsmith.api.v1.CreateClaudeSubscriptionRequest
  */
@@ -541,7 +599,7 @@ export type CreateClaudeSubscriptionRequest = Message<"blaxsmith.api.v1.CreateCl
  * Use `create(CreateClaudeSubscriptionRequestSchema)` to create a new message.
  */
 export const CreateClaudeSubscriptionRequestSchema: GenMessage<CreateClaudeSubscriptionRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 12);
+  messageDesc(file_blaxsmith_api_v1_connections, 14);
 
 /**
  * @generated from message blaxsmith.api.v1.CreateClaudeSubscriptionResponse
@@ -558,7 +616,7 @@ export type CreateClaudeSubscriptionResponse = Message<"blaxsmith.api.v1.CreateC
  * Use `create(CreateClaudeSubscriptionResponseSchema)` to create a new message.
  */
 export const CreateClaudeSubscriptionResponseSchema: GenMessage<CreateClaudeSubscriptionResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 13);
+  messageDesc(file_blaxsmith_api_v1_connections, 15);
 
 /**
  * @generated from message blaxsmith.api.v1.GetClaudeSubscriptionPolicyRequest
@@ -571,7 +629,7 @@ export type GetClaudeSubscriptionPolicyRequest = Message<"blaxsmith.api.v1.GetCl
  * Use `create(GetClaudeSubscriptionPolicyRequestSchema)` to create a new message.
  */
 export const GetClaudeSubscriptionPolicyRequestSchema: GenMessage<GetClaudeSubscriptionPolicyRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 14);
+  messageDesc(file_blaxsmith_api_v1_connections, 16);
 
 /**
  * @generated from message blaxsmith.api.v1.GetClaudeSubscriptionPolicyResponse
@@ -588,7 +646,7 @@ export type GetClaudeSubscriptionPolicyResponse = Message<"blaxsmith.api.v1.GetC
  * Use `create(GetClaudeSubscriptionPolicyResponseSchema)` to create a new message.
  */
 export const GetClaudeSubscriptionPolicyResponseSchema: GenMessage<GetClaudeSubscriptionPolicyResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 15);
+  messageDesc(file_blaxsmith_api_v1_connections, 17);
 
 /**
  * @generated from message blaxsmith.api.v1.SetClaudeSubscriptionPolicyRequest
@@ -605,7 +663,7 @@ export type SetClaudeSubscriptionPolicyRequest = Message<"blaxsmith.api.v1.SetCl
  * Use `create(SetClaudeSubscriptionPolicyRequestSchema)` to create a new message.
  */
 export const SetClaudeSubscriptionPolicyRequestSchema: GenMessage<SetClaudeSubscriptionPolicyRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 16);
+  messageDesc(file_blaxsmith_api_v1_connections, 18);
 
 /**
  * @generated from message blaxsmith.api.v1.SetClaudeSubscriptionPolicyResponse
@@ -622,7 +680,7 @@ export type SetClaudeSubscriptionPolicyResponse = Message<"blaxsmith.api.v1.SetC
  * Use `create(SetClaudeSubscriptionPolicyResponseSchema)` to create a new message.
  */
 export const SetClaudeSubscriptionPolicyResponseSchema: GenMessage<SetClaudeSubscriptionPolicyResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 17);
+  messageDesc(file_blaxsmith_api_v1_connections, 19);
 
 /**
  * Codex ChatGPT sign-in through the device-code flow. The platform requests
@@ -638,7 +696,7 @@ export type StartCodexDeviceLoginRequest = Message<"blaxsmith.api.v1.StartCodexD
  * Use `create(StartCodexDeviceLoginRequestSchema)` to create a new message.
  */
 export const StartCodexDeviceLoginRequestSchema: GenMessage<StartCodexDeviceLoginRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 18);
+  messageDesc(file_blaxsmith_api_v1_connections, 20);
 
 /**
  * @generated from message blaxsmith.api.v1.StartCodexDeviceLoginResponse
@@ -679,7 +737,7 @@ export type StartCodexDeviceLoginResponse = Message<"blaxsmith.api.v1.StartCodex
  * Use `create(StartCodexDeviceLoginResponseSchema)` to create a new message.
  */
 export const StartCodexDeviceLoginResponseSchema: GenMessage<StartCodexDeviceLoginResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 19);
+  messageDesc(file_blaxsmith_api_v1_connections, 21);
 
 /**
  * @generated from message blaxsmith.api.v1.PollCodexDeviceLoginRequest
@@ -696,7 +754,7 @@ export type PollCodexDeviceLoginRequest = Message<"blaxsmith.api.v1.PollCodexDev
  * Use `create(PollCodexDeviceLoginRequestSchema)` to create a new message.
  */
 export const PollCodexDeviceLoginRequestSchema: GenMessage<PollCodexDeviceLoginRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 20);
+  messageDesc(file_blaxsmith_api_v1_connections, 22);
 
 /**
  * @generated from message blaxsmith.api.v1.PollCodexDeviceLoginResponse
@@ -727,7 +785,7 @@ export type PollCodexDeviceLoginResponse = Message<"blaxsmith.api.v1.PollCodexDe
  * Use `create(PollCodexDeviceLoginResponseSchema)` to create a new message.
  */
 export const PollCodexDeviceLoginResponseSchema: GenMessage<PollCodexDeviceLoginResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 21);
+  messageDesc(file_blaxsmith_api_v1_connections, 23);
 
 /**
  * @generated from message blaxsmith.api.v1.ConnectionModel
@@ -822,7 +880,7 @@ export type ConnectionModel = Message<"blaxsmith.api.v1.ConnectionModel"> & {
  * Use `create(ConnectionModelSchema)` to create a new message.
  */
 export const ConnectionModelSchema: GenMessage<ConnectionModel> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 22);
+  messageDesc(file_blaxsmith_api_v1_connections, 24);
 
 /**
  * @generated from message blaxsmith.api.v1.ListConnectionModelsRequest
@@ -846,7 +904,7 @@ export type ListConnectionModelsRequest = Message<"blaxsmith.api.v1.ListConnecti
  * Use `create(ListConnectionModelsRequestSchema)` to create a new message.
  */
 export const ListConnectionModelsRequestSchema: GenMessage<ListConnectionModelsRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 23);
+  messageDesc(file_blaxsmith_api_v1_connections, 25);
 
 /**
  * @generated from message blaxsmith.api.v1.ListConnectionModelsResponse
@@ -873,7 +931,7 @@ export type ListConnectionModelsResponse = Message<"blaxsmith.api.v1.ListConnect
  * Use `create(ListConnectionModelsResponseSchema)` to create a new message.
  */
 export const ListConnectionModelsResponseSchema: GenMessage<ListConnectionModelsResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 24);
+  messageDesc(file_blaxsmith_api_v1_connections, 26);
 
 /**
  * @generated from message blaxsmith.api.v1.RefreshConnectionModelsRequest
@@ -890,7 +948,7 @@ export type RefreshConnectionModelsRequest = Message<"blaxsmith.api.v1.RefreshCo
  * Use `create(RefreshConnectionModelsRequestSchema)` to create a new message.
  */
 export const RefreshConnectionModelsRequestSchema: GenMessage<RefreshConnectionModelsRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 25);
+  messageDesc(file_blaxsmith_api_v1_connections, 27);
 
 /**
  * @generated from message blaxsmith.api.v1.RefreshConnectionModelsResponse
@@ -922,7 +980,7 @@ export type RefreshConnectionModelsResponse = Message<"blaxsmith.api.v1.RefreshC
  * Use `create(RefreshConnectionModelsResponseSchema)` to create a new message.
  */
 export const RefreshConnectionModelsResponseSchema: GenMessage<RefreshConnectionModelsResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 26);
+  messageDesc(file_blaxsmith_api_v1_connections, 28);
 
 /**
  * @generated from message blaxsmith.api.v1.GrantConnectionRequest
@@ -958,7 +1016,7 @@ export type GrantConnectionRequest = Message<"blaxsmith.api.v1.GrantConnectionRe
  * Use `create(GrantConnectionRequestSchema)` to create a new message.
  */
 export const GrantConnectionRequestSchema: GenMessage<GrantConnectionRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 27);
+  messageDesc(file_blaxsmith_api_v1_connections, 29);
 
 /**
  * @generated from message blaxsmith.api.v1.GrantConnectionResponse
@@ -975,7 +1033,7 @@ export type GrantConnectionResponse = Message<"blaxsmith.api.v1.GrantConnectionR
  * Use `create(GrantConnectionResponseSchema)` to create a new message.
  */
 export const GrantConnectionResponseSchema: GenMessage<GrantConnectionResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 28);
+  messageDesc(file_blaxsmith_api_v1_connections, 30);
 
 /**
  * @generated from message blaxsmith.api.v1.RevokeConnectionGrantRequest
@@ -992,7 +1050,7 @@ export type RevokeConnectionGrantRequest = Message<"blaxsmith.api.v1.RevokeConne
  * Use `create(RevokeConnectionGrantRequestSchema)` to create a new message.
  */
 export const RevokeConnectionGrantRequestSchema: GenMessage<RevokeConnectionGrantRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 29);
+  messageDesc(file_blaxsmith_api_v1_connections, 31);
 
 /**
  * @generated from message blaxsmith.api.v1.RevokeConnectionGrantResponse
@@ -1005,7 +1063,7 @@ export type RevokeConnectionGrantResponse = Message<"blaxsmith.api.v1.RevokeConn
  * Use `create(RevokeConnectionGrantResponseSchema)` to create a new message.
  */
 export const RevokeConnectionGrantResponseSchema: GenMessage<RevokeConnectionGrantResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 30);
+  messageDesc(file_blaxsmith_api_v1_connections, 32);
 
 /**
  * Use a connection for one model in a project. Organization and project
@@ -1036,7 +1094,7 @@ export type AddConnectionUseRequest = Message<"blaxsmith.api.v1.AddConnectionUse
  * Use `create(AddConnectionUseRequestSchema)` to create a new message.
  */
 export const AddConnectionUseRequestSchema: GenMessage<AddConnectionUseRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 31);
+  messageDesc(file_blaxsmith_api_v1_connections, 33);
 
 /**
  * @generated from message blaxsmith.api.v1.AddConnectionUseResponse
@@ -1053,7 +1111,7 @@ export type AddConnectionUseResponse = Message<"blaxsmith.api.v1.AddConnectionUs
  * Use `create(AddConnectionUseResponseSchema)` to create a new message.
  */
 export const AddConnectionUseResponseSchema: GenMessage<AddConnectionUseResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 32);
+  messageDesc(file_blaxsmith_api_v1_connections, 34);
 
 /**
  * @generated from message blaxsmith.api.v1.RemoveConnectionUseRequest
@@ -1070,7 +1128,7 @@ export type RemoveConnectionUseRequest = Message<"blaxsmith.api.v1.RemoveConnect
  * Use `create(RemoveConnectionUseRequestSchema)` to create a new message.
  */
 export const RemoveConnectionUseRequestSchema: GenMessage<RemoveConnectionUseRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 33);
+  messageDesc(file_blaxsmith_api_v1_connections, 35);
 
 /**
  * @generated from message blaxsmith.api.v1.RemoveConnectionUseResponse
@@ -1083,7 +1141,7 @@ export type RemoveConnectionUseResponse = Message<"blaxsmith.api.v1.RemoveConnec
  * Use `create(RemoveConnectionUseResponseSchema)` to create a new message.
  */
 export const RemoveConnectionUseResponseSchema: GenMessage<RemoveConnectionUseResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 34);
+  messageDesc(file_blaxsmith_api_v1_connections, 36);
 
 /**
  * Replace a connection's recommended models (in order, at most 50). Allowed
@@ -1108,7 +1166,7 @@ export type SetRecommendedModelsRequest = Message<"blaxsmith.api.v1.SetRecommend
  * Use `create(SetRecommendedModelsRequestSchema)` to create a new message.
  */
 export const SetRecommendedModelsRequestSchema: GenMessage<SetRecommendedModelsRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 35);
+  messageDesc(file_blaxsmith_api_v1_connections, 37);
 
 /**
  * @generated from message blaxsmith.api.v1.SetRecommendedModelsResponse
@@ -1125,7 +1183,7 @@ export type SetRecommendedModelsResponse = Message<"blaxsmith.api.v1.SetRecommen
  * Use `create(SetRecommendedModelsResponseSchema)` to create a new message.
  */
 export const SetRecommendedModelsResponseSchema: GenMessage<SetRecommendedModelsResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 36);
+  messageDesc(file_blaxsmith_api_v1_connections, 38);
 
 /**
  * @generated from message blaxsmith.api.v1.RevokeConnectionRequest
@@ -1142,7 +1200,7 @@ export type RevokeConnectionRequest = Message<"blaxsmith.api.v1.RevokeConnection
  * Use `create(RevokeConnectionRequestSchema)` to create a new message.
  */
 export const RevokeConnectionRequestSchema: GenMessage<RevokeConnectionRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 37);
+  messageDesc(file_blaxsmith_api_v1_connections, 39);
 
 /**
  * @generated from message blaxsmith.api.v1.RevokeConnectionResponse
@@ -1155,7 +1213,7 @@ export type RevokeConnectionResponse = Message<"blaxsmith.api.v1.RevokeConnectio
  * Use `create(RevokeConnectionResponseSchema)` to create a new message.
  */
 export const RevokeConnectionResponseSchema: GenMessage<RevokeConnectionResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 38);
+  messageDesc(file_blaxsmith_api_v1_connections, 40);
 
 /**
  * Git discovery for the project source page.
@@ -1193,7 +1251,7 @@ export type GitRepository = Message<"blaxsmith.api.v1.GitRepository"> & {
  * Use `create(GitRepositorySchema)` to create a new message.
  */
 export const GitRepositorySchema: GenMessage<GitRepository> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 39);
+  messageDesc(file_blaxsmith_api_v1_connections, 41);
 
 /**
  * @generated from message blaxsmith.api.v1.ListGitRepositoriesRequest
@@ -1215,7 +1273,7 @@ export type ListGitRepositoriesRequest = Message<"blaxsmith.api.v1.ListGitReposi
  * Use `create(ListGitRepositoriesRequestSchema)` to create a new message.
  */
 export const ListGitRepositoriesRequestSchema: GenMessage<ListGitRepositoriesRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 40);
+  messageDesc(file_blaxsmith_api_v1_connections, 42);
 
 /**
  * @generated from message blaxsmith.api.v1.ListGitRepositoriesResponse
@@ -1232,7 +1290,7 @@ export type ListGitRepositoriesResponse = Message<"blaxsmith.api.v1.ListGitRepos
  * Use `create(ListGitRepositoriesResponseSchema)` to create a new message.
  */
 export const ListGitRepositoriesResponseSchema: GenMessage<ListGitRepositoriesResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 41);
+  messageDesc(file_blaxsmith_api_v1_connections, 43);
 
 /**
  * @generated from message blaxsmith.api.v1.ListGitBranchesRequest
@@ -1254,7 +1312,7 @@ export type ListGitBranchesRequest = Message<"blaxsmith.api.v1.ListGitBranchesRe
  * Use `create(ListGitBranchesRequestSchema)` to create a new message.
  */
 export const ListGitBranchesRequestSchema: GenMessage<ListGitBranchesRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 42);
+  messageDesc(file_blaxsmith_api_v1_connections, 44);
 
 /**
  * @generated from message blaxsmith.api.v1.ListGitBranchesResponse
@@ -1271,7 +1329,7 @@ export type ListGitBranchesResponse = Message<"blaxsmith.api.v1.ListGitBranchesR
  * Use `create(ListGitBranchesResponseSchema)` to create a new message.
  */
 export const ListGitBranchesResponseSchema: GenMessage<ListGitBranchesResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 43);
+  messageDesc(file_blaxsmith_api_v1_connections, 45);
 
 /**
  * GitHub OAuth App registration for "Connect GitHub". client_secret is
@@ -1287,7 +1345,7 @@ export type GetGitHubAppRequest = Message<"blaxsmith.api.v1.GetGitHubAppRequest"
  * Use `create(GetGitHubAppRequestSchema)` to create a new message.
  */
 export const GetGitHubAppRequestSchema: GenMessage<GetGitHubAppRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 44);
+  messageDesc(file_blaxsmith_api_v1_connections, 46);
 
 /**
  * @generated from message blaxsmith.api.v1.GetGitHubAppResponse
@@ -1314,7 +1372,7 @@ export type GetGitHubAppResponse = Message<"blaxsmith.api.v1.GetGitHubAppRespons
  * Use `create(GetGitHubAppResponseSchema)` to create a new message.
  */
 export const GetGitHubAppResponseSchema: GenMessage<GetGitHubAppResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 45);
+  messageDesc(file_blaxsmith_api_v1_connections, 47);
 
 /**
  * @generated from message blaxsmith.api.v1.SetGitHubAppRequest
@@ -1338,7 +1396,7 @@ export type SetGitHubAppRequest = Message<"blaxsmith.api.v1.SetGitHubAppRequest"
  * Use `create(SetGitHubAppRequestSchema)` to create a new message.
  */
 export const SetGitHubAppRequestSchema: GenMessage<SetGitHubAppRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 46);
+  messageDesc(file_blaxsmith_api_v1_connections, 48);
 
 /**
  * @generated from message blaxsmith.api.v1.SetGitHubAppResponse
@@ -1360,7 +1418,7 @@ export type SetGitHubAppResponse = Message<"blaxsmith.api.v1.SetGitHubAppRespons
  * Use `create(SetGitHubAppResponseSchema)` to create a new message.
  */
 export const SetGitHubAppResponseSchema: GenMessage<SetGitHubAppResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 47);
+  messageDesc(file_blaxsmith_api_v1_connections, 49);
 
 /**
  * @generated from message blaxsmith.api.v1.StartGitHubConnectRequest
@@ -1391,7 +1449,7 @@ export type StartGitHubConnectRequest = Message<"blaxsmith.api.v1.StartGitHubCon
  * Use `create(StartGitHubConnectRequestSchema)` to create a new message.
  */
 export const StartGitHubConnectRequestSchema: GenMessage<StartGitHubConnectRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 48);
+  messageDesc(file_blaxsmith_api_v1_connections, 50);
 
 /**
  * @generated from message blaxsmith.api.v1.StartGitHubConnectResponse
@@ -1408,7 +1466,7 @@ export type StartGitHubConnectResponse = Message<"blaxsmith.api.v1.StartGitHubCo
  * Use `create(StartGitHubConnectResponseSchema)` to create a new message.
  */
 export const StartGitHubConnectResponseSchema: GenMessage<StartGitHubConnectResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_connections, 49);
+  messageDesc(file_blaxsmith_api_v1_connections, 51);
 
 /**
  * @generated from service blaxsmith.api.v1.ConnectionService
@@ -1429,6 +1487,14 @@ export const ConnectionService: GenService<{
     methodKind: "unary";
     input: typeof CreateApiKeyConnectionRequestSchema;
     output: typeof CreateApiKeyConnectionResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.ConnectionService.SetConnectionBaseUrl
+   */
+  setConnectionBaseUrl: {
+    methodKind: "unary";
+    input: typeof SetConnectionBaseUrlRequestSchema;
+    output: typeof SetConnectionBaseUrlResponseSchema;
   },
   /**
    * @generated from rpc blaxsmith.api.v1.ConnectionService.CreateGitTokenConnection

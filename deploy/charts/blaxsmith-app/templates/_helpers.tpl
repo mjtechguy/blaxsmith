@@ -1,5 +1,5 @@
 {{/*
-Access master keys shared by the app and gateway containers. With only
+Access master keys for the app container. With only
 accessKeySecretName set, these render exactly the single-key configuration.
 */}}
 {{- define "blaxsmith.accessKeyEnv" -}}

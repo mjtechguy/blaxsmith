@@ -70,17 +70,14 @@ type Bridge struct {
 	Actor             Inspector
 	Image             string // exact digest-pinned AX runner image
 	Pool              string
-	Signer            string               // enrolled bootstrap public key, base64
-	Storage           string               // approved data-only snapshot location
-	Tool              *tooladapter.Request // frozen, public CLI selection; nil runs the synthetic probe
-	Workspace         string               // approved AX Workspace bound at /workspace for tool tasks
-	Gateway           string               // attempt-scoped AX Gateway with exact public-IP egress rules
-	GatewayTemplate   string               // statically configured Gateway copied after validation
-	GatewayEgressMode string               // "exact" (default) or explicitly selected "open-dev"
-	// ModelGatewayHost replaces the provider host in this attempt's egress for
-	// brokered_gateway attempts with direct provider egress removed.
-	ModelGatewayHost string
-	LookupIPv4       func(context.Context, string) ([]netip.Addr, error) // nil uses system DNS
+	Signer            string                                              // enrolled bootstrap public key, base64
+	Storage           string                                              // approved data-only snapshot location
+	Tool              *tooladapter.Request                                // frozen, public CLI selection; nil runs the synthetic probe
+	Workspace         string                                              // approved AX Workspace bound at /workspace for tool tasks
+	Gateway           string                                              // attempt-scoped AX Gateway with exact public-IP egress rules
+	GatewayTemplate   string                                              // statically configured Gateway copied after validation
+	GatewayEgressMode string                                              // "exact" (default) or explicitly selected "open-dev"
+	LookupIPv4        func(context.Context, string) ([]netip.Addr, error) // nil uses system DNS
 	// RevokeOwner must fence the bootstrap owner and any access lease before
 	// deletion. A nil revoker fails closed.
 	RevokeOwner func(context.Context, workflow.Attempt) error
@@ -251,10 +248,7 @@ func (b *Bridge) ensureGateway(ctx context.Context, attempt workflow.Attempt) er
 	if err := b.checkGateway(ctx, template, b.GatewayTemplate, space, b.Tool.RepositoryURL, providerHost(provider)); err != nil {
 		return b.uncertain(attempt, err)
 	}
-	expected, err := b.attemptGatewayFor(ctx, template, space, name, provider)
-	if err != nil {
-		return b.uncertain(attempt, err)
-	}
+	expected := attemptGateway(template, space, name)
 	current, err := manager.GetGateway(ctx, space, name)
 	if err == nil {
 		if !attemptGatewayMatches(current, expected) {

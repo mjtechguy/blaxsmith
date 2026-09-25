@@ -49,8 +49,9 @@ type Request struct {
 	MaxOutputBytes    int `json:"max_output_bytes"`
 	// Extension is set for an embedded extension stage template.
 	Extension *ExtensionMount `json:"extension,omitempty"`
-	// Gateway is set for brokered_gateway attempts (gateway.go).
-	Gateway *Gateway `json:"gateway,omitempty"`
+	// ModelBaseURL is the leased API-key connection's base URL, frozen at
+	// dispatch; empty uses the provider's own endpoint (endpoint.go).
+	ModelBaseURL string `json:"model_base_url,omitempty"`
 }
 
 // ArtifactDigest binds prompt context to regular files in the pinned checkout.
@@ -90,7 +91,7 @@ func Command(request Request) ([]string, error) {
 			return nil, err
 		}
 	}
-	if err := request.Gateway.validate(); err != nil {
+	if err := validModelBaseURL(request.ModelBaseURL); err != nil {
 		return nil, err
 	}
 	body, err := json.Marshal(request)
@@ -182,6 +183,9 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 	leaseContext, cancel := watchLease(ctx, expiry)
 	defer cancel()
 	if codexAuth != nil {
+		if request.ModelBaseURL != "" {
+			return nil, fmt.Errorf("%w: a subscription has no base URL", ErrBlocked)
+		}
 		secrets, err := ParseCodexAuth(codexAuth)
 		if err != nil {
 			return nil, err
@@ -189,10 +193,11 @@ func execute(ctx context.Context, encoded, workdir, credentialPath string,
 		output, err := Run(leaseContext, in.withCodexAuth(codexAuth), sourcePath, nil)
 		return redactSecrets(output, secrets), err
 	}
-	env := []string{nativeCredentialEnv(request.Profile.Harness, provider) + "=" + string(key)}
-	if request.Gateway != nil {
-		env, in.gatewayBaseURL = gatewayCredentialEnv(request.Gateway, request.Profile.Harness, provider, key), request.Gateway.BaseURL
+	env, err := modelEnv(request.Profile.Harness, provider, request.ModelBaseURL, key)
+	if err != nil {
+		return nil, err
 	}
+	in.modelBaseURL = request.ModelBaseURL
 	output, err := Run(leaseContext, in, sourcePath, env)
 	return bytes.ReplaceAll(output, key, []byte("[redacted]")), err
 }
@@ -692,9 +697,9 @@ func CredentialEnv(provider string) string {
 
 // nativeCredentialEnv is where a native_raw attempt's key goes. Codex 0.156.1
 // `codex exec` never sends OPENAI_API_KEY for its built-in openai provider;
-// it reads CODEX_API_KEY (internal/tooladapter/codex_probe_test.go). A
-// brokered attempt instead names OPENAI_API_KEY as its gateway provider's
-// env_key (codexGatewayArgs).
+// it reads CODEX_API_KEY (internal/tooladapter/codex_probe_test.go). With a
+// base URL the key goes in OPENAI_API_KEY instead, the endpoint provider's
+// env_key (codexEndpointArgs).
 func nativeCredentialEnv(harness, provider string) string {
 	if harness == "codex" && provider == "openai" {
 		return "CODEX_API_KEY"

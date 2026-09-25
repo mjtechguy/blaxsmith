@@ -32,7 +32,8 @@ const optionText = (m: PickerModel, info?: ConnectionModel) =>
 
 // Models the connection(s) can actually use: searchable, recommended first,
 // then favourites, then grouped by connection; legacy behind a toggle; free
-// text only under Advanced. With `connections`, picking a model also picks
+// text under Advanced, opened when the endpoint listed no models (a custom
+// base URL may not list any). With `connections`, picking a model also picks
 // its connection (onChange's second argument). harness fixes the harness
 // filter; fieldId keeps element ids unique when several pickers share a page.
 export function ModelSelect({ connectionId, connections, value, onChange, harness: fixedHarness, fieldId, error }: {
@@ -95,7 +96,7 @@ export function ModelSelect({ connectionId, connections, value, onChange, harnes
       {queries.some((q) => q.isError) ? <span className="form-field-error">Models could not be loaded.</span> : null}
       {error && listed ? <span className="form-field-error">{error}</span> : null}
     </div> : null}
-    <Disclosure key={`${id}:${pending ? "loading" : "ready"}`} summary="Advanced: type a model id" defaultOpen={!sources.length || (Boolean(value) && !listed && !pending)}>
+    <Disclosure key={`${id}:${pending ? "loading" : "ready"}`} summary="Advanced: type a model id" defaultOpen={!sources.length || (!pending && (!models.length || errors.length > 0)) || (Boolean(value) && !listed && !pending)}>
       <TextField label="Model id" name={`model-free-text-${id}`} autoComplete="off" placeholder="Exact provider model id" value={listed ? "" : value} onChange={(v) => onChange(v, connectionId)} onBlur={() => {}} required={false}
         error={value && !listed && !modelId.test(value) ? "Use up to 128 letters, numbers, periods, underscores, slashes, or hyphens." : !listed ? error : undefined} />
     </Disclosure>

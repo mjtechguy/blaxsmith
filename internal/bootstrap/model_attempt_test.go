@@ -69,6 +69,7 @@ func modelAttemptFixture(t *testing.T) (*pgxpool.Pool, *Ledger, *access.SecretSt
 type modelFixtureSpec struct {
 	provider, model, origin, authMethod, key string
 	ownerKind, owner, granteeKind, grantee   string // owner "" = the organization
+	baseURL                                  string // the connection's model endpoint; "" = the provider's
 }
 
 func modelAttemptFixtureWith(t *testing.T, spec modelFixtureSpec) (*pgxpool.Pool, *Ledger, *access.SecretStore, ModelAttempt, Runtime, Redeemed) {
@@ -148,8 +149,8 @@ func modelAttemptFixtureWith(t *testing.T, spec modelFixtureSpec) (*pgxpool.Pool
 			(organization_id,id,provider_kind,origin,delivery_modes,state)
 			VALUES ($1,'provider',$2,$3,ARRAY['native_raw'],'active')`, []any{orgID, spec.provider, spec.origin}},
 		{`INSERT INTO access_connections
-			(organization_id,id,owner_kind,owner_id,provider_registration_id,external_account_id,auth_method,state)
-			VALUES ($1,'connection',$2,$3,'provider','account',$4,'active')`, []any{orgID, spec.ownerKind, spec.owner, spec.authMethod}},
+			(organization_id,id,owner_kind,owner_id,provider_registration_id,external_account_id,auth_method,state,base_url)
+			VALUES ($1,'connection',$2,$3,'provider','account',$4,'active',$5)`, []any{orgID, spec.ownerKind, spec.owner, spec.authMethod, spec.baseURL}},
 		{`INSERT INTO access_project_policies
 			(organization_id,project_id,version,git_read_enabled,delivery_modes)
 			VALUES ($1,$2,1,false,ARRAY['native_raw'])`, []any{orgID, projectID}},

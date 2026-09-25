@@ -198,12 +198,33 @@ func (b *Bridge) CheckGateway(ctx context.Context, organizationID, repositoryURL
 	if err != nil {
 		return ErrInputs
 	}
-	return b.checkGateway(ctx, gateway, b.Gateway, space, repositoryURL, b.modelEgressHost(provider))
+	return b.checkGateway(ctx, gateway, b.Gateway, space, repositoryURL, providerHost(provider))
 }
 
-// checkGateway verifies a Gateway allows exactly the Git host and modelHost:
-// the provider's host, or the model gateway's for brokered attempts whose
-// direct provider egress is removed (model_gateway.go).
+// ErrModelEndpointEgress refuses an attempt whose connection has a base URL
+// on another host than the provider's while sandbox egress is exact: the
+// sandbox could not reach it.
+var ErrModelEndpointEgress = errors.New("the connection's base URL host is not allowed by the sandbox egress; " +
+	"it needs open egress or an allowlist entry for that host")
+
+// CheckModelEndpoint admits a connection base URL (LiteLLM, a company
+// gateway) for provider. Exact egress allows only the Git host and the
+// provider's own host, so a base URL elsewhere is refused before reservation;
+// open-dev egress reaches any host. Empty uses the provider's endpoint.
+func (b *Bridge) CheckModelEndpoint(provider, baseURL string) error {
+	if baseURL == "" || (b != nil && b.GatewayEgressMode == "open-dev") {
+		return nil
+	}
+	u, err := url.Parse(baseURL)
+	if err != nil || u.Scheme != "https" || (u.Port() != "" && u.Port() != "443") ||
+		!strings.EqualFold(u.Hostname(), providerHost(provider)) {
+		return ErrModelEndpointEgress
+	}
+	return nil
+}
+
+// checkGateway verifies a Gateway allows exactly the Git host and modelHost,
+// the provider's host.
 func (b *Bridge) checkGateway(ctx context.Context, gateway Gateway, name, space, repositoryURL, modelHost string) error {
 	if gateway.APIVersion != "ax.io/v1alpha1" || gateway.Kind != "Gateway" ||
 		gateway.Metadata.Name != name || gateway.Metadata.Atespace != space ||

@@ -25,11 +25,6 @@ type ModelAttempt struct {
 	// OAuth serves oauth_access bindings (personal Codex login). Nil denies
 	// them; the refresh token itself never enters the envelope.
 	OAuth *access.OAuthRefresher
-	// Gateway mints a run-scoped gateway token in place of the raw key when
-	// the attempt was dispatched in brokered_gateway mode
-	// (docs/model-gateway-plan.md §3); ok=false keeps native_raw delivery.
-	// Nil never brokers, and a brokered_gateway grant then fails closed.
-	Gateway func(ctx context.Context, tx pgx.Tx, leaseID string) (token []byte, ok bool, err error)
 }
 
 // GitAttempt adds one frozen private-repository input to the setup release.
@@ -154,29 +149,6 @@ func NewModelAttemptConnector(base Connector, db *pgxpool.Pool, secrets *access.
 			return ModelCredential{}, err
 		}
 		if decision.DeliveryMode == "oauth_access" {
-			if model.Gateway != nil {
-				// The owner's Codex sign-in as a personal gateway route
-				// (docs/model-gateway-plan.md §6): the sandbox gets a
-				// run-scoped gateway token, not even the access token.
-				token, brokered, err := model.Gateway(ctx, tx, id)
-				if err != nil {
-					return ModelCredential{}, err
-				}
-				if brokered {
-					secret, err := secrets.ReadCurrent(ctx, tx, model.Invoke.OrganizationID, decision.ConnectionID)
-					if err != nil {
-						clear(token)
-						return ModelCredential{}, err
-					}
-					secret.Clear()
-					if err := access.MarkLeaseAttempt(ctx, tx, model.Invoke.OrganizationID, id, decision.ConnectionID, secret.Version); err != nil {
-						clear(token)
-						return ModelCredential{}, err
-					}
-					return ModelCredential{AttemptID: model.Attempt.ID, Provider: model.Invoke.Provider,
-						ExpiresAt: expiry, APIKey: token}, nil
-				}
-			}
 			if model.OAuth == nil {
 				return ModelCredential{}, ErrDenied
 			}
@@ -192,33 +164,8 @@ func NewModelAttemptConnector(base Connector, db *pgxpool.Pool, secrets *access.
 			return ModelCredential{AttemptID: model.Attempt.ID, Provider: model.Invoke.Provider,
 				ExpiresAt: expiry, CodexAuthJSON: delivery.File}, nil
 		}
-		if decision.DeliveryMode != "native_raw" && decision.DeliveryMode != "brokered_gateway" {
+		if decision.DeliveryMode != "native_raw" {
 			return ModelCredential{}, ErrDenied
-		}
-		if model.Gateway != nil {
-			token, brokered, err := model.Gateway(ctx, tx, id)
-			if err != nil {
-				return ModelCredential{}, err
-			}
-			if brokered {
-				// The key stays on the platform; the lease still records the
-				// secret version so renewal and rotation fencing apply.
-				secret, err := secrets.ReadCurrent(ctx, tx, model.Invoke.OrganizationID, decision.ConnectionID)
-				if err != nil {
-					clear(token)
-					return ModelCredential{}, err
-				}
-				secret.Clear()
-				if err := access.MarkLeaseAttempt(ctx, tx, model.Invoke.OrganizationID, id, decision.ConnectionID, secret.Version); err != nil {
-					clear(token)
-					return ModelCredential{}, err
-				}
-				return ModelCredential{AttemptID: model.Attempt.ID, Provider: model.Invoke.Provider,
-					ExpiresAt: expiry, APIKey: token}, nil
-			}
-		}
-		if decision.DeliveryMode == "brokered_gateway" {
-			return ModelCredential{}, ErrDenied // a brokered grant never releases the raw key.
 		}
 		secret, err := secrets.ReadCurrent(ctx, tx, model.Invoke.OrganizationID, decision.ConnectionID)
 		if err != nil {

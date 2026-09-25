@@ -74,6 +74,8 @@ func connectionError(err error) error {
 		return connect.NewError(connect.CodeFailedPrecondition, access.ErrClaudeSubscriptionDisabled)
 	case errors.Is(err, access.ErrKeyRejected):
 		return connect.NewError(connect.CodeInvalidArgument, errors.New("the provider rejected this credential"))
+	case errors.Is(err, access.ErrBaseURL):
+		return connect.NewError(connect.CodeInvalidArgument, access.ErrBaseURL)
 	}
 	return workflowError(err)
 }
@@ -108,7 +110,7 @@ func (s *connectionService) connectionMessage(c workflow.Connection) *api.Connec
 		Id: c.ID, Scope: c.Scope, OwnerId: c.OwnerID, OwnerName: c.OwnerName, Kind: c.Kind,
 		Provider: c.Provider, Account: c.Account, Label: c.Label, State: c.State, LastUsedAt: optionalTime(c.LastUsed),
 		CreatedAt: adminTime(c.CreatedAt), ModelCount: c.ModelCount, ModelsCheckedAt: optionalTime(c.ModelsCheckedAt),
-		ModelsError: c.ModelsError, CanManage: c.CanManage}
+		ModelsError: c.ModelsError, CanManage: c.CanManage, BaseUrl: c.BaseURL}
 	for _, g := range c.Grants {
 		out.Grants = append(out.Grants, grantMessage(g))
 	}
@@ -144,12 +146,13 @@ func (s *connectionService) ListConnections(ctx context.Context, req *connect.Re
 	return connect.NewResponse(out), nil
 }
 
-// fetchModels lists the provider's models with key; a rejected key is an
-// error, anything else is stored as the connection's model error.
-func (s *connectionService) fetchModels(ctx context.Context, provider string, key []byte) ([]access.CatalogModel, string, error) {
+// fetchModels lists the provider's models with key, from baseURL when set; a
+// rejected key is an error, anything else is stored as the connection's model
+// error (for a base URL that lists no models, the user types a model id).
+func (s *connectionService) fetchModels(ctx context.Context, provider, baseURL string, key []byte) ([]access.CatalogModel, string, error) {
 	fetchCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
-	models, err := s.catalog.Fetch(fetchCtx, provider, key)
+	models, err := s.catalog.Fetch(fetchCtx, provider, baseURL, key)
 	if errors.Is(err, access.ErrKeyRejected) || errors.Is(err, access.ErrDenied) {
 		return nil, "", err
 	}
@@ -169,16 +172,52 @@ func (s *connectionService) CreateApiKeyConnection(ctx context.Context, req *con
 	if access.ModelOrigin(req.Msg.Provider) == "" || len(key) == 0 {
 		return nil, connectionError(workflow.ErrInvalid)
 	}
-	models, modelsErr, err := s.fetchModels(ctx, req.Msg.Provider, key)
+	baseURL, err := access.NormalizeBaseURL(req.Msg.BaseUrl)
+	if err != nil {
+		return nil, connectionError(err)
+	}
+	// Authorize before the key or the base URL is used for any request.
+	if err := s.store.CheckConnectionScopeAs(ctx, caller, req.Msg.Scope, req.Msg.ProjectId); err != nil {
+		return nil, connectionError(err)
+	}
+	models, modelsErr, err := s.fetchModels(ctx, req.Msg.Provider, baseURL, key)
 	if err != nil {
 		return nil, connectionError(err)
 	}
 	c, err := s.store.CreateAPIKeyConnectionAs(ctx, caller, req.Msg.Scope, req.Msg.ProjectId, req.Msg.Provider, req.Msg.Label,
-		key, models, modelsErr, s.secrets)
+		baseURL, key, models, modelsErr, s.secrets)
 	if err != nil {
 		return nil, connectionError(err)
 	}
 	return connect.NewResponse(&api.CreateApiKeyConnectionResponse{Connection: s.connectionMessage(c)}), nil
+}
+
+// SetConnectionBaseUrl sets or clears an API-key connection's base URL, then
+// lists models from the new endpoint with the stored key.
+func (s *connectionService) SetConnectionBaseUrl(ctx context.Context, req *connect.Request[api.SetConnectionBaseUrlRequest]) (*connect.Response[api.SetConnectionBaseUrlResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	baseURL, err := access.NormalizeBaseURL(req.Msg.BaseUrl)
+	if err != nil {
+		return nil, connectionError(err)
+	}
+	if err := s.store.SetConnectionBaseURLAs(ctx, caller, req.Msg.ConnectionId, baseURL); err != nil {
+		return nil, connectionError(err)
+	}
+	secret, err := s.store.ReadConnectionSecretAs(ctx, caller, req.Msg.ConnectionId, s.secrets)
+	if err == nil {
+		_, _, err = s.refresh(ctx, secret)
+	}
+	if err != nil {
+		slog.Warn("model list refresh after a base URL change failed", "error", err)
+	}
+	c, err := s.store.ManagedConnectionAs(ctx, caller, req.Msg.ConnectionId)
+	if err != nil {
+		return nil, connectionError(err)
+	}
+	return connect.NewResponse(&api.SetConnectionBaseUrlResponse{Connection: s.connectionMessage(c)}), nil
 }
 
 func (s *connectionService) CreateGitTokenConnection(ctx context.Context, req *connect.Request[api.CreateGitTokenConnectionRequest]) (*connect.Response[api.CreateGitTokenConnectionResponse], error) {
@@ -351,7 +390,7 @@ func (s *connectionService) refresh(ctx context.Context, secret workflow.Connect
 	if secret.Kind != "api_key" {
 		return 0, "", workflow.ErrInvalid
 	}
-	models, modelsErr, err := s.fetchModels(ctx, secret.Provider, secret.Secret.Bytes)
+	models, modelsErr, err := s.fetchModels(ctx, secret.Provider, secret.BaseURL, secret.Secret.Bytes)
 	if errors.Is(err, access.ErrKeyRejected) {
 		modelsErr, err = "the provider rejected this API key", nil
 	}
