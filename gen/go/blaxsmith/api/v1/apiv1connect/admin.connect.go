@@ -36,6 +36,9 @@ const (
 	// AdminServiceGetAdminOverviewProcedure is the fully-qualified name of the AdminService's
 	// GetAdminOverview RPC.
 	AdminServiceGetAdminOverviewProcedure = "/blaxsmith.api.v1.AdminService/GetAdminOverview"
+	// AdminServiceGetSessionPolicyProcedure is the fully-qualified name of the AdminService's
+	// GetSessionPolicy RPC.
+	AdminServiceGetSessionPolicyProcedure = "/blaxsmith.api.v1.AdminService/GetSessionPolicy"
 	// AdminServiceListAuditEventsProcedure is the fully-qualified name of the AdminService's
 	// ListAuditEvents RPC.
 	AdminServiceListAuditEventsProcedure = "/blaxsmith.api.v1.AdminService/ListAuditEvents"
@@ -52,6 +55,7 @@ const (
 // AdminServiceClient is a client for the blaxsmith.api.v1.AdminService service.
 type AdminServiceClient interface {
 	GetAdminOverview(context.Context, *connect.Request[v1.GetAdminOverviewRequest]) (*connect.Response[v1.GetAdminOverviewResponse], error)
+	GetSessionPolicy(context.Context, *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.GetSessionPolicyResponse], error)
 	ListAuditEvents(context.Context, *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error)
 	ListAuditActions(context.Context, *connect.Request[v1.ListAuditActionsRequest]) (*connect.Response[v1.ListAuditActionsResponse], error)
 	HaltRun(context.Context, *connect.Request[v1.HaltRunRequest]) (*connect.Response[v1.HaltRunResponse], error)
@@ -73,6 +77,12 @@ func NewAdminServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AdminServiceGetAdminOverviewProcedure,
 			connect.WithSchema(adminServiceMethods.ByName("GetAdminOverview")),
+			connect.WithClientOptions(opts...),
+		),
+		getSessionPolicy: connect.NewClient[v1.GetSessionPolicyRequest, v1.GetSessionPolicyResponse](
+			httpClient,
+			baseURL+AdminServiceGetSessionPolicyProcedure,
+			connect.WithSchema(adminServiceMethods.ByName("GetSessionPolicy")),
 			connect.WithClientOptions(opts...),
 		),
 		listAuditEvents: connect.NewClient[v1.ListAuditEventsRequest, v1.ListAuditEventsResponse](
@@ -105,6 +115,7 @@ func NewAdminServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 // adminServiceClient implements AdminServiceClient.
 type adminServiceClient struct {
 	getAdminOverview *connect.Client[v1.GetAdminOverviewRequest, v1.GetAdminOverviewResponse]
+	getSessionPolicy *connect.Client[v1.GetSessionPolicyRequest, v1.GetSessionPolicyResponse]
 	listAuditEvents  *connect.Client[v1.ListAuditEventsRequest, v1.ListAuditEventsResponse]
 	listAuditActions *connect.Client[v1.ListAuditActionsRequest, v1.ListAuditActionsResponse]
 	haltRun          *connect.Client[v1.HaltRunRequest, v1.HaltRunResponse]
@@ -114,6 +125,11 @@ type adminServiceClient struct {
 // GetAdminOverview calls blaxsmith.api.v1.AdminService.GetAdminOverview.
 func (c *adminServiceClient) GetAdminOverview(ctx context.Context, req *connect.Request[v1.GetAdminOverviewRequest]) (*connect.Response[v1.GetAdminOverviewResponse], error) {
 	return c.getAdminOverview.CallUnary(ctx, req)
+}
+
+// GetSessionPolicy calls blaxsmith.api.v1.AdminService.GetSessionPolicy.
+func (c *adminServiceClient) GetSessionPolicy(ctx context.Context, req *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.GetSessionPolicyResponse], error) {
+	return c.getSessionPolicy.CallUnary(ctx, req)
 }
 
 // ListAuditEvents calls blaxsmith.api.v1.AdminService.ListAuditEvents.
@@ -139,6 +155,7 @@ func (c *adminServiceClient) RevokeGrant(ctx context.Context, req *connect.Reque
 // AdminServiceHandler is an implementation of the blaxsmith.api.v1.AdminService service.
 type AdminServiceHandler interface {
 	GetAdminOverview(context.Context, *connect.Request[v1.GetAdminOverviewRequest]) (*connect.Response[v1.GetAdminOverviewResponse], error)
+	GetSessionPolicy(context.Context, *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.GetSessionPolicyResponse], error)
 	ListAuditEvents(context.Context, *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error)
 	ListAuditActions(context.Context, *connect.Request[v1.ListAuditActionsRequest]) (*connect.Response[v1.ListAuditActionsResponse], error)
 	HaltRun(context.Context, *connect.Request[v1.HaltRunRequest]) (*connect.Response[v1.HaltRunResponse], error)
@@ -156,6 +173,12 @@ func NewAdminServiceHandler(svc AdminServiceHandler, opts ...connect.HandlerOpti
 		AdminServiceGetAdminOverviewProcedure,
 		svc.GetAdminOverview,
 		connect.WithSchema(adminServiceMethods.ByName("GetAdminOverview")),
+		connect.WithHandlerOptions(opts...),
+	)
+	adminServiceGetSessionPolicyHandler := connect.NewUnaryHandler(
+		AdminServiceGetSessionPolicyProcedure,
+		svc.GetSessionPolicy,
+		connect.WithSchema(adminServiceMethods.ByName("GetSessionPolicy")),
 		connect.WithHandlerOptions(opts...),
 	)
 	adminServiceListAuditEventsHandler := connect.NewUnaryHandler(
@@ -186,6 +209,8 @@ func NewAdminServiceHandler(svc AdminServiceHandler, opts ...connect.HandlerOpti
 		switch r.URL.Path {
 		case AdminServiceGetAdminOverviewProcedure:
 			adminServiceGetAdminOverviewHandler.ServeHTTP(w, r)
+		case AdminServiceGetSessionPolicyProcedure:
+			adminServiceGetSessionPolicyHandler.ServeHTTP(w, r)
 		case AdminServiceListAuditEventsProcedure:
 			adminServiceListAuditEventsHandler.ServeHTTP(w, r)
 		case AdminServiceListAuditActionsProcedure:
@@ -205,6 +230,10 @@ type UnimplementedAdminServiceHandler struct{}
 
 func (UnimplementedAdminServiceHandler) GetAdminOverview(context.Context, *connect.Request[v1.GetAdminOverviewRequest]) (*connect.Response[v1.GetAdminOverviewResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.AdminService.GetAdminOverview is not implemented"))
+}
+
+func (UnimplementedAdminServiceHandler) GetSessionPolicy(context.Context, *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.GetSessionPolicyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.AdminService.GetSessionPolicy is not implemented"))
 }
 
 func (UnimplementedAdminServiceHandler) ListAuditEvents(context.Context, *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error) {

@@ -39,10 +39,13 @@ func testAdminBrowserAPI(t *testing.T, ctx context.Context, client *http.Client,
 	kindsReq := connect.NewRequest(&api.ListAuditActionsRequest{})
 	kindsReq.Header().Set("Origin", origin)
 	kinds, kindsErr := c.ListAuditActions(ctx, kindsReq)
+	policyReq := connect.NewRequest(&api.GetSessionPolicyRequest{})
+	policyReq.Header().Set("Origin", origin)
+	policy, policyErr := c.GetSessionPolicy(ctx, policyReq)
 	if !admin {
 		if connect.CodeOf(err) != connect.CodePermissionDenied || connect.CodeOf(auditErr) != connect.CodePermissionDenied ||
-			connect.CodeOf(kindsErr) != connect.CodePermissionDenied {
-			t.Fatalf("non-admin read admin dashboard: %v, %v, %v", err, auditErr, kindsErr)
+			connect.CodeOf(kindsErr) != connect.CodePermissionDenied || connect.CodeOf(policyErr) != connect.CodePermissionDenied {
+			t.Fatalf("non-admin read admin dashboard: %v, %v, %v, %v", err, auditErr, kindsErr, policyErr)
 		}
 		halt := connect.NewRequest(&api.HaltRunRequest{RunId: "00000000-0000-0000-0000-000000000001"})
 		halt.Header().Set("Origin", origin)
@@ -54,6 +57,10 @@ func testAdminBrowserAPI(t *testing.T, ctx context.Context, client *http.Client,
 	}
 	if err != nil || got.Msg.Capacity == nil || len(got.Msg.RunStates) != 6 || got.Msg.GeneratedAt == "" {
 		t.Fatalf("owner overview: %+v, %v", got, err)
+	}
+	if policyErr != nil || policy.Msg.IdleTimeoutSeconds != 7*86400 || policy.Msg.AbsoluteLifetimeSeconds != 30*86400 ||
+		policy.Msg.AccessTokenSeconds != 600 || policy.Msg.RefreshGraceSeconds != 60 {
+		t.Fatalf("owner session policy: %+v, %v", policy, policyErr)
 	}
 	if auditErr != nil || len(events.Msg.Events) == 0 {
 		t.Fatalf("owner audit: %+v, %v", events, auditErr)

@@ -5,6 +5,7 @@ import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { ArrowRight, Check, GitCommitHorizontal, RefreshCw, Terminal, TerminalSquare } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
+import { openLiveStream } from "../live";
 import { DataTable } from "../data-table";
 import type { RunTask } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { useGatewayEnabled } from "../gateway";
@@ -137,9 +138,7 @@ function RunDetail() {
     latestDelivered.current = cursor();
     let closed = false;
     let recovering = false;
-    let checkedSession = false;
     let retryRecovery: number | undefined;
-    setEventStream("connecting");
     const recover = async () => {
       if (closed || recovering) return;
       window.clearTimeout(retryRecovery);
@@ -161,9 +160,7 @@ function RunDetail() {
       }
     };
     recoverRef.current = recover;
-    const source = new EventSource(liveEventsUrl(runId, cursor()));
-    source.onopen = () => { setEventStream("connected"); checkedSession = false; void recover(); };
-    source.onmessage = ({ data }) => {
+    const onMessage = (data: string) => {
       try {
         const event = parseLiveEvent(data, runId);
         latestDelivered.current = event.id > latestDelivered.current ? event.id : latestDelivered.current;
@@ -181,11 +178,13 @@ function RunDetail() {
         if (event.kind === "attempt.command_exited") void queryClient.invalidateQueries({ queryKey: ["run-command-exits", scope, runId] });
       } catch { void recover(); }
     };
-    source.onerror = () => {
-      setEventStream("reconnecting");
-      if (!checkedSession) { checkedSession = true; void queryClient.invalidateQueries({ queryKey: sessionQueryKey }); }
-    };
-    return () => { closed = true; window.clearTimeout(retryRecovery); recoverRef.current = null; source.close(); };
+    // Reconnects after a restart (renewing the session first) and replays
+    // from the newest cursor; recover() fills any gap once it reopens.
+    const stop = openLiveStream(() => liveEventsUrl(runId, cursor()), {
+      open: () => void recover(), message: onMessage, state: setEventStream,
+      sessionEnded: () => void queryClient.invalidateQueries({ queryKey: sessionQueryKey }),
+    });
+    return () => { closed = true; window.clearTimeout(retryRecovery); recoverRef.current = null; stop(); };
   }, [activity.isSuccess, projectId, queryClient, run.data?.run?.projectId, runId, scope]);
 
   useEffect(() => {

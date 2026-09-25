@@ -12,7 +12,35 @@ rendered=$(mktemp)
 trap 'rm "$rendered"' EXIT
 helm template app "$chart" "$@" > "$rendered"
 grep -F -q 'replicas: 1' "$rendered"
+grep -F -q 'type: RollingUpdate' "$rendered"
+grep -F -q 'maxSurge: 1' "$rendered"
+grep -F -q 'maxUnavailable: 0' "$rendered"
+grep -F -q 'command: ["sleep", "5"]' "$rendered"
+grep -F -q 'terminationGracePeriodSeconds: 30' "$rendered"
+grep -F -A1 -- '- --session-idle-timeout' "$rendered" | grep -F -q '"168h"'
+grep -F -A1 -- '- --session-absolute-lifetime' "$rendered" | grep -F -q '"720h"'
+grep -F -A1 -- '- --shutdown-timeout' "$rendered" | grep -F -q '"20s"'
+grep -F -A3 'readinessProbe:' "$rendered" | grep -F -q 'path: /healthz'
+grep -F -A3 'livenessProbe:' "$rendered" | grep -F -q 'path: /livez'
+helm template app "$chart" "$@" --set updateStrategy=Recreate --set shutdown.preStopSleepSeconds=0 \
+  --set shutdown.drainTimeoutSeconds=60 --set-string session.idleTimeout=8h --set-string session.absoluteLifetime=24h > "$rendered"
 grep -F -q 'type: Recreate' "$rendered"
+if grep -F -q 'maxSurge' "$rendered" || grep -F -q 'preStop:' "$rendered"; then
+  echo 'Recreate or a zero preStop sleep still rendered rolling or preStop settings' >&2
+  exit 1
+fi
+grep -F -q 'terminationGracePeriodSeconds: 65' "$rendered"
+grep -F -A1 -- '- --session-idle-timeout' "$rendered" | grep -F -q '"8h"'
+grep -F -A1 -- '- --shutdown-timeout' "$rendered" | grep -F -q '"60s"'
+for invalid in '--set updateStrategy=BlueGreen' '--set-string session.idleTimeout=7d' \
+  '--set-string session.absoluteLifetime=' '--set shutdown.drainTimeoutSeconds=0'; do
+  # Intentional splitting: fixed test arguments.
+  if helm template app "$chart" "$@" $invalid >/dev/null 2>&1; then
+    echo "invalid session or shutdown values unexpectedly accepted: $invalid" >&2
+    exit 1
+  fi
+done
+helm template app "$chart" "$@" > "$rendered"
 if grep -F -q -- '--migrations' "$rendered" || grep -F -q 'kind: Job' "$rendered"; then
   echo 'single-node defaults unexpectedly enable explicit migrations' >&2
   exit 1
@@ -54,7 +82,7 @@ grep -F -q 'kind: PodDisruptionBudget' "$rendered"
 grep -F -q 'maxUnavailable: 1' "$rendered"
 grep -F -q 'replicas: 3' "$rendered"
 grep -F -q 'minReadySeconds: 5' "$rendered"
-grep -F -q 'type: Recreate' "$rendered"
+grep -F -q 'type: RollingUpdate' "$rendered"
 grep -F -q -- '--migrations' "$rendered"
 grep -F -q -- '- verify' "$rendered"
 grep -F -q 'minDomains: 2' "$rendered"

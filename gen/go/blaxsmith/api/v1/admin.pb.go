@@ -1276,6 +1276,112 @@ func (x *RevokeGrantResponse) GetGrantId() string {
 	return ""
 }
 
+// GetSessionPolicy reports the browser session lifetime this installation
+// enforces. It is platform configuration (serve-app flags), read-only here.
+type GetSessionPolicyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSessionPolicyRequest) Reset() {
+	*x = GetSessionPolicyRequest{}
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSessionPolicyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSessionPolicyRequest) ProtoMessage() {}
+
+func (x *GetSessionPolicyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSessionPolicyRequest.ProtoReflect.Descriptor instead.
+func (*GetSessionPolicyRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_admin_proto_rawDescGZIP(), []int{17}
+}
+
+type GetSessionPolicyResponse struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	IdleTimeoutSeconds      int64                  `protobuf:"varint,1,opt,name=idle_timeout_seconds,json=idleTimeoutSeconds,proto3" json:"idle_timeout_seconds,omitempty"`                // A session ends after this long without activity (sliding).
+	AbsoluteLifetimeSeconds int64                  `protobuf:"varint,2,opt,name=absolute_lifetime_seconds,json=absoluteLifetimeSeconds,proto3" json:"absolute_lifetime_seconds,omitempty"` // A session ends this long after sign-in, whatever the activity.
+	AccessTokenSeconds      int64                  `protobuf:"varint,3,opt,name=access_token_seconds,json=accessTokenSeconds,proto3" json:"access_token_seconds,omitempty"`                // Access token lifetime; browsers renew it silently.
+	RefreshGraceSeconds     int64                  `protobuf:"varint,4,opt,name=refresh_grace_seconds,json=refreshGraceSeconds,proto3" json:"refresh_grace_seconds,omitempty"`             // A rotated refresh token still answers concurrent tabs this long.
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *GetSessionPolicyResponse) Reset() {
+	*x = GetSessionPolicyResponse{}
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSessionPolicyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSessionPolicyResponse) ProtoMessage() {}
+
+func (x *GetSessionPolicyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSessionPolicyResponse.ProtoReflect.Descriptor instead.
+func (*GetSessionPolicyResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_admin_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GetSessionPolicyResponse) GetIdleTimeoutSeconds() int64 {
+	if x != nil {
+		return x.IdleTimeoutSeconds
+	}
+	return 0
+}
+
+func (x *GetSessionPolicyResponse) GetAbsoluteLifetimeSeconds() int64 {
+	if x != nil {
+		return x.AbsoluteLifetimeSeconds
+	}
+	return 0
+}
+
+func (x *GetSessionPolicyResponse) GetAccessTokenSeconds() int64 {
+	if x != nil {
+		return x.AccessTokenSeconds
+	}
+	return 0
+}
+
+func (x *GetSessionPolicyResponse) GetRefreshGraceSeconds() int64 {
+	if x != nil {
+		return x.RefreshGraceSeconds
+	}
+	return 0
+}
+
 var File_blaxsmith_api_v1_admin_proto protoreflect.FileDescriptor
 
 const file_blaxsmith_api_v1_admin_proto_rawDesc = "" +
@@ -1402,9 +1508,16 @@ const file_blaxsmith_api_v1_admin_proto_rawDesc = "" +
 	"\x12RevokeGrantRequest\x12\x19\n" +
 	"\bgrant_id\x18\x01 \x01(\tR\agrantId\"0\n" +
 	"\x13RevokeGrantResponse\x12\x19\n" +
-	"\bgrant_id\x18\x01 \x01(\tR\agrantId2\xf8\x03\n" +
+	"\bgrant_id\x18\x01 \x01(\tR\agrantId\"\x19\n" +
+	"\x17GetSessionPolicyRequest\"\xee\x01\n" +
+	"\x18GetSessionPolicyResponse\x120\n" +
+	"\x14idle_timeout_seconds\x18\x01 \x01(\x03R\x12idleTimeoutSeconds\x12:\n" +
+	"\x19absolute_lifetime_seconds\x18\x02 \x01(\x03R\x17absoluteLifetimeSeconds\x120\n" +
+	"\x14access_token_seconds\x18\x03 \x01(\x03R\x12accessTokenSeconds\x122\n" +
+	"\x15refresh_grace_seconds\x18\x04 \x01(\x03R\x13refreshGraceSeconds2\xe3\x04\n" +
 	"\fAdminService\x12i\n" +
-	"\x10GetAdminOverview\x12).blaxsmith.api.v1.GetAdminOverviewRequest\x1a*.blaxsmith.api.v1.GetAdminOverviewResponse\x12f\n" +
+	"\x10GetAdminOverview\x12).blaxsmith.api.v1.GetAdminOverviewRequest\x1a*.blaxsmith.api.v1.GetAdminOverviewResponse\x12i\n" +
+	"\x10GetSessionPolicy\x12).blaxsmith.api.v1.GetSessionPolicyRequest\x1a*.blaxsmith.api.v1.GetSessionPolicyResponse\x12f\n" +
 	"\x0fListAuditEvents\x12(.blaxsmith.api.v1.ListAuditEventsRequest\x1a).blaxsmith.api.v1.ListAuditEventsResponse\x12i\n" +
 	"\x10ListAuditActions\x12).blaxsmith.api.v1.ListAuditActionsRequest\x1a*.blaxsmith.api.v1.ListAuditActionsResponse\x12N\n" +
 	"\aHaltRun\x12 .blaxsmith.api.v1.HaltRunRequest\x1a!.blaxsmith.api.v1.HaltRunResponse\x12Z\n" +
@@ -1424,7 +1537,7 @@ func file_blaxsmith_api_v1_admin_proto_rawDescGZIP() []byte {
 	return file_blaxsmith_api_v1_admin_proto_rawDescData
 }
 
-var file_blaxsmith_api_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_blaxsmith_api_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_blaxsmith_api_v1_admin_proto_goTypes = []any{
 	(*AdminLiveAttempt)(nil),         // 0: blaxsmith.api.v1.AdminLiveAttempt
 	(*AdminOpenInteraction)(nil),     // 1: blaxsmith.api.v1.AdminOpenInteraction
@@ -1443,6 +1556,8 @@ var file_blaxsmith_api_v1_admin_proto_goTypes = []any{
 	(*HaltRunResponse)(nil),          // 14: blaxsmith.api.v1.HaltRunResponse
 	(*RevokeGrantRequest)(nil),       // 15: blaxsmith.api.v1.RevokeGrantRequest
 	(*RevokeGrantResponse)(nil),      // 16: blaxsmith.api.v1.RevokeGrantResponse
+	(*GetSessionPolicyRequest)(nil),  // 17: blaxsmith.api.v1.GetSessionPolicyRequest
+	(*GetSessionPolicyResponse)(nil), // 18: blaxsmith.api.v1.GetSessionPolicyResponse
 }
 var file_blaxsmith_api_v1_admin_proto_depIdxs = []int32{
 	0,  // 0: blaxsmith.api.v1.GetAdminOverviewResponse.live_attempts:type_name -> blaxsmith.api.v1.AdminLiveAttempt
@@ -1453,17 +1568,19 @@ var file_blaxsmith_api_v1_admin_proto_depIdxs = []int32{
 	5,  // 5: blaxsmith.api.v1.GetAdminOverviewResponse.grants:type_name -> blaxsmith.api.v1.AdminGrant
 	8,  // 6: blaxsmith.api.v1.ListAuditEventsResponse.events:type_name -> blaxsmith.api.v1.AdminAuditEvent
 	6,  // 7: blaxsmith.api.v1.AdminService.GetAdminOverview:input_type -> blaxsmith.api.v1.GetAdminOverviewRequest
-	9,  // 8: blaxsmith.api.v1.AdminService.ListAuditEvents:input_type -> blaxsmith.api.v1.ListAuditEventsRequest
-	11, // 9: blaxsmith.api.v1.AdminService.ListAuditActions:input_type -> blaxsmith.api.v1.ListAuditActionsRequest
-	13, // 10: blaxsmith.api.v1.AdminService.HaltRun:input_type -> blaxsmith.api.v1.HaltRunRequest
-	15, // 11: blaxsmith.api.v1.AdminService.RevokeGrant:input_type -> blaxsmith.api.v1.RevokeGrantRequest
-	7,  // 12: blaxsmith.api.v1.AdminService.GetAdminOverview:output_type -> blaxsmith.api.v1.GetAdminOverviewResponse
-	10, // 13: blaxsmith.api.v1.AdminService.ListAuditEvents:output_type -> blaxsmith.api.v1.ListAuditEventsResponse
-	12, // 14: blaxsmith.api.v1.AdminService.ListAuditActions:output_type -> blaxsmith.api.v1.ListAuditActionsResponse
-	14, // 15: blaxsmith.api.v1.AdminService.HaltRun:output_type -> blaxsmith.api.v1.HaltRunResponse
-	16, // 16: blaxsmith.api.v1.AdminService.RevokeGrant:output_type -> blaxsmith.api.v1.RevokeGrantResponse
-	12, // [12:17] is the sub-list for method output_type
-	7,  // [7:12] is the sub-list for method input_type
+	17, // 8: blaxsmith.api.v1.AdminService.GetSessionPolicy:input_type -> blaxsmith.api.v1.GetSessionPolicyRequest
+	9,  // 9: blaxsmith.api.v1.AdminService.ListAuditEvents:input_type -> blaxsmith.api.v1.ListAuditEventsRequest
+	11, // 10: blaxsmith.api.v1.AdminService.ListAuditActions:input_type -> blaxsmith.api.v1.ListAuditActionsRequest
+	13, // 11: blaxsmith.api.v1.AdminService.HaltRun:input_type -> blaxsmith.api.v1.HaltRunRequest
+	15, // 12: blaxsmith.api.v1.AdminService.RevokeGrant:input_type -> blaxsmith.api.v1.RevokeGrantRequest
+	7,  // 13: blaxsmith.api.v1.AdminService.GetAdminOverview:output_type -> blaxsmith.api.v1.GetAdminOverviewResponse
+	18, // 14: blaxsmith.api.v1.AdminService.GetSessionPolicy:output_type -> blaxsmith.api.v1.GetSessionPolicyResponse
+	10, // 15: blaxsmith.api.v1.AdminService.ListAuditEvents:output_type -> blaxsmith.api.v1.ListAuditEventsResponse
+	12, // 16: blaxsmith.api.v1.AdminService.ListAuditActions:output_type -> blaxsmith.api.v1.ListAuditActionsResponse
+	14, // 17: blaxsmith.api.v1.AdminService.HaltRun:output_type -> blaxsmith.api.v1.HaltRunResponse
+	16, // 18: blaxsmith.api.v1.AdminService.RevokeGrant:output_type -> blaxsmith.api.v1.RevokeGrantResponse
+	13, // [13:19] is the sub-list for method output_type
+	7,  // [7:13] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -1480,7 +1597,7 @@ func file_blaxsmith_api_v1_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blaxsmith_api_v1_admin_proto_rawDesc), len(file_blaxsmith_api_v1_admin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

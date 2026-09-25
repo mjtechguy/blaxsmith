@@ -172,6 +172,7 @@ func TestSessionLifecyclePostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	expireGrace(t, pool)
 	if _, err := manager.Refresh(ctx, second.Refresh); !errors.Is(err, ErrRefreshReuse) {
 		t.Fatalf("refresh replay did not revoke session: %v", err)
 	}

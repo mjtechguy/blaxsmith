@@ -41,6 +41,9 @@ type terminalHandler struct {
 	hub     *terminal.Hub
 	slots   chan struct{}
 	recheck time.Duration
+	// closing ends every socket on shutdown with 1001 Going Away, which the
+	// browser treats as "reconnect now" rather than a terminal failure.
+	closing <-chan struct{}
 }
 
 func newTerminalHandler(guard *identity.BrowserGuard, origin string, store *workflow.Store, router *terminal.Router, hub *terminal.Hub) *terminalHandler {
@@ -103,10 +106,20 @@ func (h *terminalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	member := h.hub.Join(attemptID, caller.SessionID)
 	defer member.Leave()
-	header := r.Header.Clone()
+	served := make(chan struct{})
+	defer close(served)
+	go func() {
+		select {
+		case <-h.closing:
+			_ = conn.Close(websocket.StatusGoingAway, "server restarting")
+		case <-served:
+		}
+	}()
 	session := &terminal.Session{Guest: guest, Wake: member.Wake(), Recheck: h.recheck,
 		Check: func(ctx context.Context) (terminal.Access, error) {
-			current, err := h.guard.StreamCaller(ctx, header)
+			// The live session, not the upgrade's access cookie, so the socket
+			// outlives that token's expiry but not revocation.
+			current, err := h.guard.RecheckStream(ctx, caller)
 			if err != nil || current.OrganizationID != caller.OrganizationID || current.PrincipalID != caller.PrincipalID ||
 				current.SessionID != caller.SessionID || current.Role != caller.Role {
 				return terminal.Access{}, errors.New("session changed")

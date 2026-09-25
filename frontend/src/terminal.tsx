@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { currentSession } from "./auth";
+import { socketRetryDelay } from "./live";
 import { terminalUrl, type TerminalFrame, type TerminalState } from "./run-control";
 
 export type TerminalLink = { status: "connecting" | "open" | "closed" | "ended"; message?: string };
@@ -41,7 +43,7 @@ export function AttemptTerminal({ attemptId, inControl, onState, onLink }: {
     const encoder = new TextEncoder();
     let socket: WebSocket | undefined;
     let timer: number | undefined;
-    let delay = 1_000;
+    let attempt = 0;
     let stopped = false;
     terminal.options.disableStdin = !inControl;
     terminal.options.cursorBlink = inControl;
@@ -52,7 +54,7 @@ export function AttemptTerminal({ attemptId, inControl, onState, onLink }: {
       callbacks.current.onLink({ status: "connecting" });
       const ws = socket = new WebSocket(terminalUrl(attemptId));
       ws.binaryType = "arraybuffer";
-      ws.onopen = () => { delay = 1_000; terminal.reset(); callbacks.current.onLink({ status: "open" }); sendSize(); };
+      ws.onopen = () => { attempt = 0; terminal.reset(); callbacks.current.onLink({ status: "open" }); sendSize(); };
       ws.onmessage = ({ data }) => {
         if (typeof data !== "string") {
           // Ack once xterm has parsed the bytes: the server's output window
@@ -68,11 +70,18 @@ export function AttemptTerminal({ attemptId, inControl, onState, onLink }: {
         // Transient server errors fall through to onclose and retry; access errors are final.
         else if (frame.type === "error" && !/unavailable|disconnected|overflowed/.test(frame.message)) { stopped = true; callbacks.current.onLink({ status: "ended", message: frame.message }); }
       };
-      ws.onclose = () => {
+      // A restart or rollout closes the socket (1001 when the server drains);
+      // renew the session cookie first so the next upgrade authenticates, then
+      // reconnect with jittered backoff. A refused refresh ends the terminal.
+      ws.onclose = ({ code }) => {
         if (stopped || socket !== ws) return;
         callbacks.current.onLink({ status: "closed" });
-        timer = window.setTimeout(connect, delay);
-        delay = Math.min(delay * 2, 30_000);
+        timer = window.setTimeout(async () => {
+          try {
+            if (!(await currentSession())) { stopped = true; callbacks.current.onLink({ status: "ended", message: "Your session ended. Sign in again." }); return; }
+          } catch { /* still unreachable: try anyway, then back off again */ }
+          if (!stopped) connect();
+        }, socketRetryDelay(code, attempt++));
       };
     };
     const input = terminal.onData((data) => { if (inControl && socket?.readyState === WebSocket.OPEN) socket.send(encoder.encode(data)); });

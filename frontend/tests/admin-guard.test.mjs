@@ -18,7 +18,7 @@ test("admin is one guarded section; the sidebar carries its navigation", async (
   try {
     const { renderApp } = await server.ssrLoadModule("/tests/render-app.tsx");
     for (const role of ["member", "viewer"]) {
-      for (const path of ["/admin/connections/new/git", "/admin", "/admin/users", "/admin/settings/policies"]) {
+      for (const path of ["/admin/connections/new/git", "/admin", "/admin/users", "/admin/settings/policies", "/admin/settings/sessions"]) {
         const html = await renderApp(path, session(role));
         assert.match(html, /Administration is restricted/, `${role} at ${path}`);
         assert.doesNotMatch(html, /Connect Git|Recipe library|Organization recipes|Organization settings/, `${role} saw admin page content at ${path}`);

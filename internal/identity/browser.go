@@ -19,6 +19,15 @@ import (
 	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
 )
 
+// Every cookie is __Host- (Secure, Path=/, no Domain: a sibling subdomain
+// cannot set or shadow it) and HttpOnly. The CSRF token reaches script through
+// the GetCsrf response body, never document.cookie, so its cookie is HttpOnly
+// too. The refresh cookie is SameSite=Strict: only same-site script calls
+// RefreshSession and Logout, so no cross-site navigation ever needs it. The
+// access cookie stays Lax because a top-level return from an OAuth provider
+// (the GitHub callback) must still carry it. __Host- requires Path=/, which
+// rules out scoping the refresh cookie to the AuthService path; the prefix's
+// integrity guarantee is worth more than the narrower path.
 const accessCookie = "__Host-blaxsmith_access"
 const refreshCookie = "__Host-blaxsmith_refresh"
 const csrfCookie = "__Host-blaxsmith_csrf"
@@ -122,6 +131,13 @@ func (g *BrowserGuard) StreamCaller(ctx context.Context, header http.Header) (Ca
 	return g.guarded(g.manager.ValidateAccess(ctx, cookieValue(header, accessCookie)))
 }
 
+// RecheckStream revalidates a stream's caller against the live session. A
+// stream authenticated once by StreamCaller survives its access token's
+// expiry, but not revocation, expiry of the session, or a role change.
+func (g *BrowserGuard) RecheckStream(ctx context.Context, caller Caller) (Caller, error) {
+	return g.guarded(g.manager.CheckSession(ctx, caller))
+}
+
 func NewBrowserHandler(manager *SessionManager, origin string) (string, http.Handler, error) {
 	guard, err := NewBrowserGuard(manager, origin)
 	if err != nil {
@@ -146,7 +162,7 @@ func (s *browserService) GetCsrf(_ context.Context, req *connect.Request[api.Get
 		clear(secret[:])
 	}
 	response := connect.NewResponse(&api.GetCsrfResponse{Token: token})
-	response.Header().Add("Set-Cookie", browserCookie(csrfCookie, token, 3600).String())
+	response.Header().Add("Set-Cookie", browserCookie(csrfCookie, token, 3600, http.SameSiteLaxMode).String())
 	response.Header().Set("Cache-Control", "no-store")
 	return response, nil
 }
@@ -264,20 +280,23 @@ func cookieValue(header http.Header, name string) string {
 	return cookie.Value
 }
 
-func browserCookie(name, value string, seconds int) *http.Cookie {
+func browserCookie(name, value string, seconds int, site http.SameSite) *http.Cookie {
 	return &http.Cookie{Name: name, Value: value, Path: "/", MaxAge: seconds,
-		Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode}
+		Secure: true, HttpOnly: true, SameSite: site}
 }
 
+// setSessionCookies keeps the refresh cookie exactly as long as the session:
+// its lifetime slides with each refresh, up to the absolute limit.
 func setSessionCookies(header http.Header, tokens Tokens) {
-	header.Add("Set-Cookie", browserCookie(accessCookie, tokens.Access, int(accessLifetime.Seconds())).String())
-	header.Add("Set-Cookie", browserCookie(refreshCookie, tokens.Refresh, int(sessionLifetime.Seconds())).String())
+	header.Add("Set-Cookie", browserCookie(accessCookie, tokens.Access, int(accessLifetime.Seconds()), http.SameSiteLaxMode).String())
+	refreshSeconds := max(int(time.Until(tokens.SessionExpires).Seconds()), 1)
+	header.Add("Set-Cookie", browserCookie(refreshCookie, tokens.Refresh, refreshSeconds, http.SameSiteStrictMode).String())
 	header.Set("Cache-Control", "no-store")
 }
 
 func clearSessionCookies(header http.Header) {
-	header.Add("Set-Cookie", browserCookie(accessCookie, "", -1).String())
-	header.Add("Set-Cookie", browserCookie(refreshCookie, "", -1).String())
+	header.Add("Set-Cookie", browserCookie(accessCookie, "", -1, http.SameSiteLaxMode).String())
+	header.Add("Set-Cookie", browserCookie(refreshCookie, "", -1, http.SameSiteStrictMode).String())
 	header.Set("Cache-Control", "no-store")
 }
 
@@ -303,6 +322,8 @@ func browserAuthError(err error) *connect.Error {
 	case errors.Is(err, ErrUnauthenticated), errors.Is(err, ErrRefreshReuse):
 		return connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
 	default:
-		return connect.NewError(connect.CodeInternal, errors.New("authentication unavailable"))
+		// A database outage or restart is transient: Unavailable tells the
+		// browser to keep the session and retry rather than sign out.
+		return connect.NewError(connect.CodeUnavailable, errors.New("authentication unavailable"))
 	}
 }
