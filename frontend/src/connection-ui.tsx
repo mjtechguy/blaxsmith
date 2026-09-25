@@ -22,6 +22,8 @@ import { isBusy, type SignInState } from "./sign-in";
 import { SignInStatus, useSignIn } from "./sign-in-flow";
 import { Disclosure, sentence, useModalDialog } from "./ui";
 import { listProjects } from "./workflow";
+import { listMembersPage, membersPageKey } from "./workspace";
+import { personLabel } from "./account";
 
 export function useOrg() {
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
@@ -121,6 +123,26 @@ export function ProjectSelect({ value, onChange, idPrefix = "project" }: { value
       <select id={`${idPrefix}-select`} value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">Choose a project</option>
         {(projects.data?.projects ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select></div>
+  </>;
+}
+
+// Admins pick a person by name or email instead of typing a principal ID.
+export function MemberSelect({ value, onChange, idPrefix = "member", label = "User", emptyLabel = "Choose a user" }: {
+  value: string; onChange: (id: string) => void; idPrefix?: string; label?: string; emptyLabel?: string;
+}) {
+  const { org } = useOrg();
+  const [search, setSearch] = useState("");
+  const [submitted, setSubmitted] = useState("");
+  useEffect(() => { const t = window.setTimeout(() => setSubmitted(search.trim()), 250); return () => window.clearTimeout(t); }, [search]);
+  const view = { q: submitted, sort: [{ id: "member", desc: false }], page: 1, size: 50, filters: { status: ["active", "invited"] } };
+  const members = useQuery({ queryKey: [...membersPageKey(org, view), "picker"], enabled: Boolean(org), queryFn: ({ signal }) => listMembersPage(view, signal) });
+  return <>
+    <TextField label={`Find ${label.toLowerCase()}`} name={`${idPrefix}-search`} autoComplete="off" placeholder="Search by name or email…" value={search} onChange={setSearch} onBlur={() => {}} required={false} />
+    <div className="form-field"><label htmlFor={`${idPrefix}-select`}>{label}</label>
+      <select id={`${idPrefix}-select`} value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">{members.isPending ? "Loading people…" : members.isError ? "People could not be loaded" : emptyLabel}</option>
+        {(members.data?.members ?? []).map((m) => <option key={m.principalId} value={m.principalId}>{personLabel(m)}{m.email && m.email !== personLabel(m) ? ` · ${m.email}` : ""}</option>)}
       </select></div>
   </>;
 }
@@ -317,7 +339,8 @@ export function ResourceGrants({ grants, label, description, canManage, canAdd, 
     <DataTable table={table} label={label} empty="Not granted to any project, user, or role." />
     {canAdd ? <AddGrant grant={grant} onChanged={onChanged} /> : null}
     {explain ? <AccessCheck kind={explain.kind} resourceId={explain.resourceId}
-      projectPicker={(value, onChange) => <ProjectSelect value={value} onChange={onChange} idPrefix="explain" />} /> : null}
+      projectPicker={(value, onChange) => <ProjectSelect value={value} onChange={onChange} idPrefix="explain" />}
+      memberPicker={(value, onChange) => <MemberSelect value={value} onChange={onChange} idPrefix={`explain-member-${explain.kind}`} label="Member" emptyLabel="You" />} /> : null}
     {pending ? <ConfirmDialog busy={remove.isPending} error={error} onClose={() => setPending(null)} onConfirm={() => remove.mutate(pending)}
       title="Revoke grant" confirmLabel="Revoke"
       body={<>Revoke this grant for <strong>{pending.granteeKind === "project" ? pending.projectName || pending.projectId : pending.granteeName || pending.granteeId}</strong>?{revokeNote ? ` ${revokeNote}` : ""}</>} /> : null}
@@ -341,7 +364,7 @@ function AddGrant({ grant, onChanged }: { grant: (kind: string, projectId: strin
         <option value="project">A project</option><option value="user">A user (all projects)</option><option value="role">A minimum role (all projects)</option>
       </select></div>
     {kind === "project" ? <ProjectSelect value={project} onChange={setProject} /> : null}
-    {kind === "user" ? <TextField label="User principal id" name="grantee-user" autoComplete="off" placeholder="Principal id" value={grantee} onChange={setGrantee} onBlur={() => {}} /> : null}
+    {kind === "user" ? <MemberSelect value={grantee} onChange={setGrantee} idPrefix="grantee-user" /> : null}
     {kind === "role" ? <div className="form-field"><label htmlFor="grantee-role">Role</label>
       <select id="grantee-role" value={grantee} onChange={(event) => setGrantee(event.target.value)}>
         {[["member", "Members and above"], ["admin", "Admins and owners"], ["owner", "Owners only"]].map(([r, name]) => <option key={r} value={r}>{name}</option>)}
