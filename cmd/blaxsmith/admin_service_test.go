@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -35,9 +36,13 @@ func testAdminBrowserAPI(t *testing.T, ctx context.Context, client *http.Client,
 	audit := connect.NewRequest(&api.ListAuditEventsRequest{PageSize: 5})
 	audit.Header().Set("Origin", origin)
 	events, auditErr := c.ListAuditEvents(ctx, audit)
+	kindsReq := connect.NewRequest(&api.ListAuditActionsRequest{})
+	kindsReq.Header().Set("Origin", origin)
+	kinds, kindsErr := c.ListAuditActions(ctx, kindsReq)
 	if !admin {
-		if connect.CodeOf(err) != connect.CodePermissionDenied || connect.CodeOf(auditErr) != connect.CodePermissionDenied {
-			t.Fatalf("non-admin read admin dashboard: %v, %v", err, auditErr)
+		if connect.CodeOf(err) != connect.CodePermissionDenied || connect.CodeOf(auditErr) != connect.CodePermissionDenied ||
+			connect.CodeOf(kindsErr) != connect.CodePermissionDenied {
+			t.Fatalf("non-admin read admin dashboard: %v, %v, %v", err, auditErr, kindsErr)
 		}
 		halt := connect.NewRequest(&api.HaltRunRequest{RunId: "00000000-0000-0000-0000-000000000001"})
 		halt.Header().Set("Origin", origin)
@@ -52,6 +57,15 @@ func testAdminBrowserAPI(t *testing.T, ctx context.Context, client *http.Client,
 	}
 	if auditErr != nil || len(events.Msg.Events) == 0 {
 		t.Fatalf("owner audit: %+v, %v", events, auditErr)
+	}
+	// Every recorded action is offered as a filter, sorted and distinct.
+	if kindsErr != nil || !slices.IsSorted(kinds.Msg.Actions) || len(slices.Compact(slices.Clone(kinds.Msg.Actions))) != len(kinds.Msg.Actions) {
+		t.Fatalf("owner audit actions: %+v, %v", kinds, kindsErr)
+	}
+	for _, e := range events.Msg.Events {
+		if !slices.Contains(kinds.Msg.Actions, e.Action) {
+			t.Fatalf("audit action %q missing from %v", e.Action, kinds.Msg.Actions)
+		}
 	}
 	if events.Msg.NextPageToken != "" {
 		audit.Msg.PageToken = events.Msg.NextPageToken

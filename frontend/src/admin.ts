@@ -22,6 +22,12 @@ export async function listAuditEvents(pageToken: string, action: string, actor: 
   return client.listAuditEvents({ pageSize: 50, pageToken, action, actor, projectId }, { signal });
 }
 
+// Every action this organization has recorded, for the audit log's event filter.
+export const auditActionsKey = (organizationId: string) => ["admin-audit-actions", organizationId] as const;
+export async function listAuditActions(signal?: AbortSignal) {
+  return (await client.listAuditActions({}, { signal })).actions;
+}
+
 export async function haltRun(runId: string) {
   const token = await csrfToken();
   return client.haltRun({ runId }, { headers: { "X-Blaxsmith-CSRF": token } });
@@ -31,19 +37,6 @@ export async function revokeGrant(grantId: string) {
   const token = await csrfToken();
   return client.revokeGrant({ grantId }, { headers: { "X-Blaxsmith-CSRF": token } });
 }
-
-export const auditActions = [
-  "access.git_connection.created", "access.grant.revoked", "access.project_model.created", "access.project_model.revoked",
-  "access.resource_grant.created", "access.resource_grant.revoked", "gateway.price.overridden", "gateway.project_delivery.updated", "gateway.settings.updated",
-  "identity.account.reset_completed", "identity.account.setup_completed",
-  "identity.login", "identity.logout", "identity.refresh", "identity.refresh_reuse", "identity.user.disabled", "identity.user.enabled",
-  "identity.user.invited", "identity.user.reset_link_issued", "identity.user.role_changed", "identity.user.sessions_revoked",
-  "identity.user.setup_link_issued", "installation.bootstrap_owner",
-  "workflow.attempt.steered", "workflow.extension.installed", "workflow.interaction.answered", "workflow.project.created", "workflow.project_source.set",
-  "workflow.project_verification.set", "workflow.recipe.created", "workflow.recipe.current_set", "workflow.recipe.version_created",
-  "workflow.review.presented", "workflow.review.superseded",
-  "workflow.run.halted", "workflow.run.launched",
-];
 
 export function ago(value: string, now = Date.now()): string {
   if (!value) return "—";

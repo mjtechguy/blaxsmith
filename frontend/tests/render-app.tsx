@@ -54,3 +54,9 @@ export async function renderChecklist(items: Array<{ id: string; done: boolean |
   return renderInRouter(<SetupChecklist title="Set up this project" storageKey="test-checklist"
     items={items.map((i) => ({ ...i, label: `Step ${i.id}`, hint: `Do ${i.id}`, to: "/" }))} />);
 }
+
+// Agent Markdown as static HTML.
+export async function renderMarkdown(text: string) {
+  const { Markdown } = await import("../src/markdown");
+  return renderToString(<Markdown text={text} />);
+}

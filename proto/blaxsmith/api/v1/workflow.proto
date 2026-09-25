@@ -37,7 +37,14 @@ message CreateProjectRequest {
 message CreateProjectResponse { Project project = 1; }
 
 message GetProjectRequest { string project_id = 1; }
-message GetProjectResponse { Project project = 1; }
+// The caller's effective permissions on this project, from the same server
+// rules that enforce them: can_administer gates project connections, model
+// uses, and delivery; can_launch gates new runs.
+message GetProjectResponse {
+  Project project = 1;
+  bool can_administer = 2;
+  bool can_launch = 3;
+}
 
 message ProjectSource {
   string project_id = 1;

@@ -50,7 +50,7 @@ function open(stage, fields) {
 }
 const rounds = [
   { title: "Who is the primary user of the export feature?", options: [option("ops", "Operations admins", "Bulk exports for audits", true), option("customers", "End customers"), option("both", "Both")] },
-  { title: "Which export formats must ship in v1?", multiSelect: true, bodyMd: "The transcript mentions CSV twice and JSON once.\nXLSX appears only in the stretch-goals list.", options: [option("csv", "CSV", "Spreadsheet-friendly", true), option("json", "JSON", "For API consumers"), option("xlsx", "XLSX")] },
+  { title: "Which export formats must ship in v1?", multiSelect: true, bodyMd: "The transcript mentions **CSV** twice and `JSON` once.\n\n- XLSX appears only in the [stretch-goals list](https://example.com/spec#stretch).\n- <img src=x onerror=alert(1)> raw HTML is dropped.", options: [option("csv", "CSV", "Spreadsheet-friendly", true), option("json", "JSON", "For API consumers"), option("xlsx", "XLSX")] },
   { title: "How long should generated exports be retained?", options: [option("1d", "24 hours"), option("7d", "7 days", "Matches the audit window in docs/spec.md", true), option("30d", "30 days")] },
   { title: "Anything else before I write the spec?", options: [] },
 ];
@@ -321,6 +321,7 @@ const rpc = {
       grants: adminGrants,
     };
   },
+  ListAuditActions: () => ({ actions: [...new Set(audit.map((e) => e.action))].sort() }),
   ListAuditEvents: ({ pageToken = "", action = "", actor = "", projectId: project = "", pageSize = 50 }) => {
     const before = pageToken ? Number(atob(pageToken)) : Infinity;
     const rows = audit.filter((e) => Number(e.id) < before && (!action || e.action === action) && (!actor || e.actorUsername === actor || e.actorId === actor) && (!project || e.projectId === project));
@@ -341,7 +342,7 @@ const rpc = {
     return { grantId };
   },
   // ConnectionService: an in-memory hub. No handler ever echoes a secret.
-  ListConnections: ({ scope = "", projectId: pid = "" }) => ({ connections: hub.filter((c) => scope === "project_available" ? c.scope === "organization" && c.grants.some((g) => g.projectId === pid) : c.scope === scope && (scope !== "project" || c.ownerId === pid)) }),
+  ListConnections: ({ scope = "", projectId: pid = "" }) => scope === "project" && !administers(pid) ? connectError(403, "permission_denied", "connection access denied") : ({ connections: hub.filter((c) => scope === "project_available" ? c.scope === "organization" && c.grants.some((g) => g.projectId === pid) : c.scope === scope && (scope !== "project" || c.ownerId === pid)) }),
   CreateApiKeyConnection: ({ scope, projectId: pid = "", provider, label = "" }) => hubAdd({ scope, ownerId: scope === "project" ? pid : scope === "personal" ? principalId : "org-demo", kind: "api_key", provider, label, account: `${provider} key`, modelCount: 3, modelsCheckedAt: now() }),
   CreateGitTokenConnection: ({ scope, projectId: pid = "", host, username }) => hubAdd({ scope, ownerId: scope === "project" ? pid : "org-demo", kind: "git", provider: host === "gitlab.com" ? "gitlab" : "github", account: username }),
   CreateCodexSubscription: () => hubAdd({ scope: "personal", ownerId: principalId, kind: "subscription", provider: "codex", account: "acct-demo", modelCount: 2, modelsCheckedAt: now() }),
@@ -449,6 +450,9 @@ for (const [i, action] of ["installation.bootstrap_owner", "identity.login", "wo
 const mockRole = process.env.MOCK_ROLE || "owner";
 const mayAnswer = () => ["owner", "admin", "member"].includes(mockRole);
 const mayDecide = () => ["owner", "admin"].includes(mockRole);
+// Members administer projects they created; in the mock, Mobile app and any project made this session.
+const memberAdministers = new Set(["proj-mobile"]);
+const administers = (pid) => mayDecide() || (mockRole === "member" && memberAdministers.has(pid));
 const projects = [
   { id: projectId, slug: "demo", name: "Demo project", createdAt: minutesAgo(60 * 24 * 21) },
   { id: "proj-billing", slug: "billing-service", name: "Billing service", createdAt: minutesAgo(60 * 24 * 14) },
@@ -500,12 +504,13 @@ const members = [
 const roleOrder = ["owner", "admin", "member", "viewer"];
 Object.assign(rpc, {
   CurrentSession: () => ({ session: { organizationId: "org-demo", principalId, role: mockRole, accessExpiresAt: new Date(Date.now() + 3_600_000).toISOString() } }),
-  GetProject: ({ projectId: pid = projectId }) => { const p = projects.find((x) => x.id === pid); return p ? { project: p } : connectError(404, "not_found", "workflow resource not found"); },
+  GetProject: ({ projectId: pid = projectId }) => { const p = projects.find((x) => x.id === pid); return p ? { project: p, canAdminister: administers(pid), canLaunch: mayAnswer() } : connectError(404, "not_found", "workflow resource not found"); },
   // New projects start with no source or checks, so the setup flow's repository prefill shows.
   CreateProject: ({ slug, name }) => {
     if (projects.some((p) => p.slug === slug)) return connectError(409, "already_exists", "project slug already exists");
     const p = { id: `proj-${slug}`, slug, name, createdAt: now() };
     projects.push(p);
+    memberAdministers.add(p.id);
     return { project: p };
   },
   GetProjectSource: ({ projectId: pid = projectId }) => pid === projectId ? { source: { projectId, repositoryUrl: "https://github.com/example/blaxsmith-demo.git", ref: "main" } } : projectSources.has(pid) ? { source: projectSources.get(pid) } : {},

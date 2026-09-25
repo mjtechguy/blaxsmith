@@ -1007,6 +1007,88 @@ func (x *ListAuditEventsResponse) GetNextPageToken() string {
 	return ""
 }
 
+// ListAuditActions lists the distinct actions recorded for this organization,
+// for the audit log's event filter.
+type ListAuditActionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAuditActionsRequest) Reset() {
+	*x = ListAuditActionsRequest{}
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAuditActionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAuditActionsRequest) ProtoMessage() {}
+
+func (x *ListAuditActionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAuditActionsRequest.ProtoReflect.Descriptor instead.
+func (*ListAuditActionsRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_admin_proto_rawDescGZIP(), []int{11}
+}
+
+type ListAuditActionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Actions       []string               `protobuf:"bytes,1,rep,name=actions,proto3" json:"actions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAuditActionsResponse) Reset() {
+	*x = ListAuditActionsResponse{}
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAuditActionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAuditActionsResponse) ProtoMessage() {}
+
+func (x *ListAuditActionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAuditActionsResponse.ProtoReflect.Descriptor instead.
+func (*ListAuditActionsResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_admin_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ListAuditActionsResponse) GetActions() []string {
+	if x != nil {
+		return x.Actions
+	}
+	return nil
+}
+
 // HaltRun requests cancellation: pending stages are cancelled and running
 // attempts are stopped by the completion sweep before the run is cancelled.
 type HaltRunRequest struct {
@@ -1018,7 +1100,7 @@ type HaltRunRequest struct {
 
 func (x *HaltRunRequest) Reset() {
 	*x = HaltRunRequest{}
-	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[11]
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1030,7 +1112,7 @@ func (x *HaltRunRequest) String() string {
 func (*HaltRunRequest) ProtoMessage() {}
 
 func (x *HaltRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[11]
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1043,7 +1125,7 @@ func (x *HaltRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HaltRunRequest.ProtoReflect.Descriptor instead.
 func (*HaltRunRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_admin_proto_rawDescGZIP(), []int{11}
+	return file_blaxsmith_api_v1_admin_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *HaltRunRequest) GetRunId() string {
@@ -1063,7 +1145,7 @@ type HaltRunResponse struct {
 
 func (x *HaltRunResponse) Reset() {
 	*x = HaltRunResponse{}
-	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[12]
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1075,7 +1157,7 @@ func (x *HaltRunResponse) String() string {
 func (*HaltRunResponse) ProtoMessage() {}
 
 func (x *HaltRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[12]
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1088,7 +1170,7 @@ func (x *HaltRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HaltRunResponse.ProtoReflect.Descriptor instead.
 func (*HaltRunResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_admin_proto_rawDescGZIP(), []int{12}
+	return file_blaxsmith_api_v1_admin_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *HaltRunResponse) GetRunId() string {
@@ -1115,7 +1197,7 @@ type RevokeGrantRequest struct {
 
 func (x *RevokeGrantRequest) Reset() {
 	*x = RevokeGrantRequest{}
-	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[13]
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1127,7 +1209,7 @@ func (x *RevokeGrantRequest) String() string {
 func (*RevokeGrantRequest) ProtoMessage() {}
 
 func (x *RevokeGrantRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[13]
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1140,7 +1222,7 @@ func (x *RevokeGrantRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeGrantRequest.ProtoReflect.Descriptor instead.
 func (*RevokeGrantRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_admin_proto_rawDescGZIP(), []int{13}
+	return file_blaxsmith_api_v1_admin_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *RevokeGrantRequest) GetGrantId() string {
@@ -1159,7 +1241,7 @@ type RevokeGrantResponse struct {
 
 func (x *RevokeGrantResponse) Reset() {
 	*x = RevokeGrantResponse{}
-	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[14]
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1171,7 +1253,7 @@ func (x *RevokeGrantResponse) String() string {
 func (*RevokeGrantResponse) ProtoMessage() {}
 
 func (x *RevokeGrantResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[14]
+	mi := &file_blaxsmith_api_v1_admin_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1184,7 +1266,7 @@ func (x *RevokeGrantResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeGrantResponse.ProtoReflect.Descriptor instead.
 func (*RevokeGrantResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_admin_proto_rawDescGZIP(), []int{14}
+	return file_blaxsmith_api_v1_admin_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *RevokeGrantResponse) GetGrantId() string {
@@ -1308,7 +1390,10 @@ const file_blaxsmith_api_v1_admin_proto_rawDesc = "" +
 	"project_id\x18\x05 \x01(\tR\tprojectId\"|\n" +
 	"\x17ListAuditEventsResponse\x129\n" +
 	"\x06events\x18\x01 \x03(\v2!.blaxsmith.api.v1.AdminAuditEventR\x06events\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"'\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\x19\n" +
+	"\x17ListAuditActionsRequest\"4\n" +
+	"\x18ListAuditActionsResponse\x12\x18\n" +
+	"\aactions\x18\x01 \x03(\tR\aactions\"'\n" +
 	"\x0eHaltRunRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\">\n" +
 	"\x0fHaltRunResponse\x12\x15\n" +
@@ -1317,10 +1402,11 @@ const file_blaxsmith_api_v1_admin_proto_rawDesc = "" +
 	"\x12RevokeGrantRequest\x12\x19\n" +
 	"\bgrant_id\x18\x01 \x01(\tR\agrantId\"0\n" +
 	"\x13RevokeGrantResponse\x12\x19\n" +
-	"\bgrant_id\x18\x01 \x01(\tR\agrantId2\x8d\x03\n" +
+	"\bgrant_id\x18\x01 \x01(\tR\agrantId2\xf8\x03\n" +
 	"\fAdminService\x12i\n" +
 	"\x10GetAdminOverview\x12).blaxsmith.api.v1.GetAdminOverviewRequest\x1a*.blaxsmith.api.v1.GetAdminOverviewResponse\x12f\n" +
-	"\x0fListAuditEvents\x12(.blaxsmith.api.v1.ListAuditEventsRequest\x1a).blaxsmith.api.v1.ListAuditEventsResponse\x12N\n" +
+	"\x0fListAuditEvents\x12(.blaxsmith.api.v1.ListAuditEventsRequest\x1a).blaxsmith.api.v1.ListAuditEventsResponse\x12i\n" +
+	"\x10ListAuditActions\x12).blaxsmith.api.v1.ListAuditActionsRequest\x1a*.blaxsmith.api.v1.ListAuditActionsResponse\x12N\n" +
 	"\aHaltRun\x12 .blaxsmith.api.v1.HaltRunRequest\x1a!.blaxsmith.api.v1.HaltRunResponse\x12Z\n" +
 	"\vRevokeGrant\x12$.blaxsmith.api.v1.RevokeGrantRequest\x1a%.blaxsmith.api.v1.RevokeGrantResponseB\xc2\x01\n" +
 	"\x14com.blaxsmith.api.v1B\n" +
@@ -1338,7 +1424,7 @@ func file_blaxsmith_api_v1_admin_proto_rawDescGZIP() []byte {
 	return file_blaxsmith_api_v1_admin_proto_rawDescData
 }
 
-var file_blaxsmith_api_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_blaxsmith_api_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_blaxsmith_api_v1_admin_proto_goTypes = []any{
 	(*AdminLiveAttempt)(nil),         // 0: blaxsmith.api.v1.AdminLiveAttempt
 	(*AdminOpenInteraction)(nil),     // 1: blaxsmith.api.v1.AdminOpenInteraction
@@ -1351,10 +1437,12 @@ var file_blaxsmith_api_v1_admin_proto_goTypes = []any{
 	(*AdminAuditEvent)(nil),          // 8: blaxsmith.api.v1.AdminAuditEvent
 	(*ListAuditEventsRequest)(nil),   // 9: blaxsmith.api.v1.ListAuditEventsRequest
 	(*ListAuditEventsResponse)(nil),  // 10: blaxsmith.api.v1.ListAuditEventsResponse
-	(*HaltRunRequest)(nil),           // 11: blaxsmith.api.v1.HaltRunRequest
-	(*HaltRunResponse)(nil),          // 12: blaxsmith.api.v1.HaltRunResponse
-	(*RevokeGrantRequest)(nil),       // 13: blaxsmith.api.v1.RevokeGrantRequest
-	(*RevokeGrantResponse)(nil),      // 14: blaxsmith.api.v1.RevokeGrantResponse
+	(*ListAuditActionsRequest)(nil),  // 11: blaxsmith.api.v1.ListAuditActionsRequest
+	(*ListAuditActionsResponse)(nil), // 12: blaxsmith.api.v1.ListAuditActionsResponse
+	(*HaltRunRequest)(nil),           // 13: blaxsmith.api.v1.HaltRunRequest
+	(*HaltRunResponse)(nil),          // 14: blaxsmith.api.v1.HaltRunResponse
+	(*RevokeGrantRequest)(nil),       // 15: blaxsmith.api.v1.RevokeGrantRequest
+	(*RevokeGrantResponse)(nil),      // 16: blaxsmith.api.v1.RevokeGrantResponse
 }
 var file_blaxsmith_api_v1_admin_proto_depIdxs = []int32{
 	0,  // 0: blaxsmith.api.v1.GetAdminOverviewResponse.live_attempts:type_name -> blaxsmith.api.v1.AdminLiveAttempt
@@ -1366,14 +1454,16 @@ var file_blaxsmith_api_v1_admin_proto_depIdxs = []int32{
 	8,  // 6: blaxsmith.api.v1.ListAuditEventsResponse.events:type_name -> blaxsmith.api.v1.AdminAuditEvent
 	6,  // 7: blaxsmith.api.v1.AdminService.GetAdminOverview:input_type -> blaxsmith.api.v1.GetAdminOverviewRequest
 	9,  // 8: blaxsmith.api.v1.AdminService.ListAuditEvents:input_type -> blaxsmith.api.v1.ListAuditEventsRequest
-	11, // 9: blaxsmith.api.v1.AdminService.HaltRun:input_type -> blaxsmith.api.v1.HaltRunRequest
-	13, // 10: blaxsmith.api.v1.AdminService.RevokeGrant:input_type -> blaxsmith.api.v1.RevokeGrantRequest
-	7,  // 11: blaxsmith.api.v1.AdminService.GetAdminOverview:output_type -> blaxsmith.api.v1.GetAdminOverviewResponse
-	10, // 12: blaxsmith.api.v1.AdminService.ListAuditEvents:output_type -> blaxsmith.api.v1.ListAuditEventsResponse
-	12, // 13: blaxsmith.api.v1.AdminService.HaltRun:output_type -> blaxsmith.api.v1.HaltRunResponse
-	14, // 14: blaxsmith.api.v1.AdminService.RevokeGrant:output_type -> blaxsmith.api.v1.RevokeGrantResponse
-	11, // [11:15] is the sub-list for method output_type
-	7,  // [7:11] is the sub-list for method input_type
+	11, // 9: blaxsmith.api.v1.AdminService.ListAuditActions:input_type -> blaxsmith.api.v1.ListAuditActionsRequest
+	13, // 10: blaxsmith.api.v1.AdminService.HaltRun:input_type -> blaxsmith.api.v1.HaltRunRequest
+	15, // 11: blaxsmith.api.v1.AdminService.RevokeGrant:input_type -> blaxsmith.api.v1.RevokeGrantRequest
+	7,  // 12: blaxsmith.api.v1.AdminService.GetAdminOverview:output_type -> blaxsmith.api.v1.GetAdminOverviewResponse
+	10, // 13: blaxsmith.api.v1.AdminService.ListAuditEvents:output_type -> blaxsmith.api.v1.ListAuditEventsResponse
+	12, // 14: blaxsmith.api.v1.AdminService.ListAuditActions:output_type -> blaxsmith.api.v1.ListAuditActionsResponse
+	14, // 15: blaxsmith.api.v1.AdminService.HaltRun:output_type -> blaxsmith.api.v1.HaltRunResponse
+	16, // 16: blaxsmith.api.v1.AdminService.RevokeGrant:output_type -> blaxsmith.api.v1.RevokeGrantResponse
+	12, // [12:17] is the sub-list for method output_type
+	7,  // [7:12] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -1390,7 +1480,7 @@ func file_blaxsmith_api_v1_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blaxsmith_api_v1_admin_proto_rawDesc), len(file_blaxsmith_api_v1_admin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
