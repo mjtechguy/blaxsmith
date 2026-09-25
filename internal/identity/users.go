@@ -743,6 +743,61 @@ func setEmail(ctx context.Context, tx pgx.Tx, principalID, email string) (int64,
 	return tag.RowsAffected(), err
 }
 
+// OperatorResetLink is the restricted operator recovery behind `blaxsmith admin
+// reset-link`: it issues the same single-use setup/reset link an admin can, for
+// an active principal found by email or handle, in its one organization (or
+// the named one). There is no operator principal, so the link records the
+// account itself as issuer; the audit event records the operator.
+func OperatorResetLink(ctx context.Context, pool *pgxpool.Pool, login, organizationSlug string) (AccountLink, error) {
+	ctx = tenant.System(ctx)
+	login = strings.ToLower(strings.TrimSpace(login))
+	if pool == nil || login == "" {
+		return AccountLink{}, ErrUserNotFound
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return AccountLink{}, err
+	}
+	defer tx.Rollback(ctx)
+	var principalID string
+	var hasPassword bool
+	err = tx.QueryRow(ctx, `SELECT id,password_hash IS NOT NULL FROM identity_principals
+		WHERE (lower(email)=$1 OR username=$1) AND state='active'
+		ORDER BY lower(email)=$1 DESC NULLS LAST LIMIT 1 FOR UPDATE`, login).Scan(&principalID, &hasPassword)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return AccountLink{}, ErrUserNotFound
+	}
+	if err != nil {
+		return AccountLink{}, err
+	}
+	rows, err := tx.Query(ctx, `SELECT m.organization_id::text FROM identity_memberships m
+		JOIN identity_organizations o ON o.id=m.organization_id
+		WHERE m.principal_id=$1 AND m.state='active' AND ($2='' OR o.slug=$2)`, principalID, organizationSlug)
+	if err != nil {
+		return AccountLink{}, err
+	}
+	orgs, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return AccountLink{}, err
+	}
+	if len(orgs) != 1 {
+		return AccountLink{}, ErrUserInvalid // none, or several without --organization
+	}
+	purpose := "reset"
+	if !hasPassword {
+		purpose = "setup"
+	}
+	link, err := issueLink(ctx, tx, Caller{OrganizationID: orgs[0], PrincipalID: principalID}, principalID, purpose)
+	if err != nil {
+		return AccountLink{}, err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO identity_audit_events (organization_id,actor_kind,action,subject_id)
+		VALUES ($1,'operator',$2,$3)`, orgs[0], "identity.user."+purpose+"_link_issued", principalID); err != nil {
+		return AccountLink{}, err
+	}
+	return link, tx.Commit(ctx)
+}
+
 // OperatorSetEmail is the restricted operator repair behind `blaxsmith admin
 // set-email`: it finds the principal by current email or handle, sets the new
 // email as SetEmail does, revokes its sessions, and audits the change as the

@@ -6,8 +6,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/mjtechguy/blaxsmith/db"
@@ -84,8 +86,12 @@ func adminCommand(args []string) error {
 	if len(args) == 1 && args[0] == "upgrade-secrets" {
 		return adminUpgradeSecrets()
 	}
+	if len(args) > 0 && args[0] == "reset-link" {
+		return adminResetLink(args[1:])
+	}
 	if len(args) == 0 || args[0] != "set-email" {
 		return errors.New("usage: blaxsmith admin set-email --login <current email or handle> --email <new email>\n" +
+			"       blaxsmith admin reset-link --login <email or handle> --origin https://<host> [--organization <slug>]\n" +
 			"       blaxsmith admin upgrade-secrets")
 	}
 	flags := flag.NewFlagSet("admin set-email", flag.ContinueOnError)
@@ -166,4 +172,43 @@ func upgradeSecrets(ctx context.Context, secrets *access.SecretStore) (string, e
 		return "", err
 	}
 	return fmt.Sprintf("Access secrets upgraded: %d data keys under a non-current master key, %d legacy rows remaining", keys, rows), nil
+}
+
+// adminResetLink prints a single-use link for the account to choose its own
+// password; no password ever passes through the operator.
+func adminResetLink(args []string) error {
+	flags := flag.NewFlagSet("admin reset-link", flag.ContinueOnError)
+	login := flags.String("login", "", "the account's email or internal handle")
+	origin := flags.String("origin", "", "the app's public origin, e.g. https://blaxsmith.example.com")
+	org := flags.String("organization", "", "organization slug, if the account belongs to several")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	u, err := url.Parse(*origin)
+	if flags.NArg() != 0 || *login == "" || err != nil || u.Scheme != "https" || u.Host == "" || u.Path != "" && u.Path != "/" {
+		return errors.New("admin reset-link requires --login and an https --origin with no path")
+	}
+	dsn := os.Getenv("BLAXSMITH_DATABASE_URL")
+	if dsn == "" {
+		return errors.New("set BLAXSMITH_DATABASE_URL")
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	pool, err := tenant.NewPool(ctx, dsn)
+	if err != nil {
+		return fmt.Errorf("configure database: %w", err)
+	}
+	defer pool.Close()
+	if err := db.Verify(ctx, pool); err != nil {
+		return fmt.Errorf("verify database migrations: %w", err)
+	}
+	link, err := identity.OperatorResetLink(ctx, pool, *login, *org)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Single-use %s link, valid until %s:\n%s/setup/%s\n", link.Purpose,
+		link.ExpiresAt.UTC().Format(time.RFC3339), strings.TrimSuffix(u.String(), "/"), url.PathEscape(link.Token))
+	return nil
 }
