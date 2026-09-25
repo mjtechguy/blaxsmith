@@ -8,8 +8,10 @@ kubectl apply -f "$(dirname "$0")/atenet-router-callers.yaml"
 sleep 5
 probe='127.0.0.1:5001/blaxsmith-dispatch-tools@sha256:f5824b7b21e60327e9d336a7023d054e818f0c2c85fb9f78813cec1dad191079'
 for port in 80 443 8081 8444; do
-  r=$(kubectl -n default run "np-probe-$port" --rm -i --restart=Never --image="$probe" --command -- \
-      sh -c "nc -z -w3 atenet-router.ate-system.svc.cluster.local $port && echo OPEN || echo BLOCKED" | head -1)
+  kubectl -n default run "np-probe-$port" --restart=Never --image="$probe" --command -- \
+    sh -c "nc -z -w3 atenet-router.ate-system.svc.cluster.local $port && echo OPEN || echo BLOCKED" >/dev/null
+  kubectl -n default wait --for=jsonpath='{.status.phase}'=Succeeded "pod/np-probe-$port" --timeout=60s >/dev/null
+  r=$(kubectl -n default logs "np-probe-$port"); kubectl -n default delete pod "np-probe-$port" --wait=false >/dev/null
   echo "default-ns -> router:$port $r"; test "$r" = BLOCKED
 done
 kubectl -n ax-system exec deploy/ax-controller -- nc -z -w3 atenet-router.ate-system.svc.cluster.local 80

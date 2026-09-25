@@ -42,19 +42,21 @@ hdr=(-H "ate-target-actor: $GATE_SPACE/$GATE_TASK" -H 'content-type: application
 tls=(--http2 --cacert "$DEV/dispatch-router-ca.pem" --resolve "atenet-router.ate-system.svc:443:$ROUTER_IP")
 url=https://atenet-router.ate-system.svc$grpc
 umask 077; t=$(mktemp -d); trap 'rm -rf "$t"' EXIT
-code=$(curl -s -o /dev/null -w '%{http_code}' --http2-prior-knowledge -X POST "${hdr[@]}" "http://$ROUTER_IP$grpc")
-echo "plaintext guest gRPC -> $code"; test "$code" = 426
-code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${hdr[@]}" "${tls[@]}" "$url")
-echo "HTTPS guest gRPC without token -> $code"; test "$code" = 401
+# Envoy answers gRPC denials as HTTP 200 with the status in grpc-status.
+gs() { curl -s -o /dev/null -D - "$@" | tr -d '\r' | sed -n 's/^grpc-status: //Ip' | head -1; }
+code=$(gs --http2-prior-knowledge -X POST "${hdr[@]}" "http://$ROUTER_IP$grpc")
+echo "plaintext guest gRPC -> grpc-status $code"; test "$code" = 2          # requires TLS
+code=$(gs -X POST "${hdr[@]}" "${tls[@]}" "$url")
+echo "HTTPS guest gRPC without token -> grpc-status $code"; test "$code" = 16   # unauthenticated
 printf 'Authorization: Bearer %s\n' "$(kubectl -n "$APP_NS" get secret preview-app-dispatch \
   -o jsonpath='{.data.bootstrap-token}' | base64 -d)" > "$t/connector"
-code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${hdr[@]}" -H @"$t/connector" "${tls[@]}" "$url")
-echo "HTTPS guest gRPC with the bootstrap connector token -> $code"; test "$code" = 403
+code=$(gs -X POST "${hdr[@]}" -H @"$t/connector" "${tls[@]}" "$url")
+echo "HTTPS guest gRPC with the bootstrap connector token -> grpc-status $code"; test "$code" = 7  # denied
 if kubectl -n "$APP_NS" get sa "$APP_SA" >/dev/null 2>&1; then
   # Same identity and audience as the app's projected token; 10-minute TokenRequest.
   printf 'Authorization: Bearer %s\n' "$(kubectl -n "$APP_NS" create token "$APP_SA" \
     --audience=blaxsmith-bootstrap --duration=10m)" > "$t/app"
-  echo "HTTPS guest gRPC as $GUEST_CLIENT_USERNAME (expect HTTP 200, grpc-status 12):"
+  echo "HTTPS guest gRPC as $GUEST_CLIENT_USERNAME (expect no grpc-status auth error; the gate runner answers 404):"
   curl -s -o /dev/null -D - -X POST "${hdr[@]}" -H @"$t/app" "${tls[@]}" "$url" | grep -i -E '^(HTTP|grpc-status)'
 else
   echo "ServiceAccount $APP_NS/$APP_SA not yet created (step 10); rerun this script afterwards"

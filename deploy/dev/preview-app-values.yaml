@@ -1,5 +1,5 @@
 replicaCount: 1
-image: 127.0.0.1:5001/blaxsmith-app@sha256:eb44ccab799440fddd1e5acac55cca92d34f5bb129ffcf3794ef61d54cc9dd6c
+image: 127.0.0.1:5001/blaxsmith-app@sha256:5ba0b2ae676064f24a3d459e0879081a8138fd016393c26245afabfba02d56b4
 imagePullPolicy: IfNotPresent
 origin: https://135.181.34.21
 tlsSecretName: preview-app-tls
