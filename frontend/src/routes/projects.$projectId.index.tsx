@@ -4,7 +4,7 @@ import { ArrowRight, KeyRound, Plus, Settings } from "lucide-react";
 import { HealthLine, useConnections } from "../connection-ui";
 import { providerLabel } from "../connections";
 import { DashboardLayout } from "../layouts";
-import { checklistProgress, useProjectSetupItems } from "../setup-checklist";
+import { checklistProgress, doneLabel, useProjectSetupItems } from "../setup-checklist";
 import { Slot } from "../slots";
 import type { TableView } from "../table-state";
 import { isMissing, NotFoundPage } from "../page";
@@ -63,9 +63,9 @@ function ProjectOverview() {
     tiles={<>
       <StatTile label="Waiting on you" value={waiting.data?.totalCount ?? "—"} tone={waiting.data?.totalCount ? "attention" : undefined} href={`/inbox?q=${encodeURIComponent(p.name)}`} />
       <StatTile label="Runs" value={runs.data?.totalCount ?? "—"} meta="All time" href={`${base}/runs`} />
-      <StatTile label="Setup" value={checklist.loading ? "—" : checklist.complete ? "Ready" : checklist.label} tone={!checklist.loading && checklist.complete ? "ok" : undefined}
-        meta={checklist.loading ? "Checking…" : checklist.complete ? `All ${checklist.total} steps done` : checklist.leftLabel}
-        href={!checklist.loading && checklist.next ? checklist.next.to : undefined} />
+      {checklist.total ? <StatTile label="Setup" value={checklist.loading ? "—" : checklist.complete ? "Ready" : checklist.label} tone={!checklist.loading && checklist.complete ? "ok" : undefined}
+        meta={checklist.loading ? "Checking…" : checklist.complete ? doneLabel(checklist.total) : checklist.leftLabel}
+        href={!checklist.loading && checklist.next ? checklist.next.to : undefined} /> : null}
       <StatTile label="New runs" value={launch.data ? launch.data.enabled ? "Enabled" : "Blocked" : "—"} tone={launch.data && !launch.data.enabled ? "danger" : undefined}
         meta={launch.data && !launch.data.enabled ? launch.data.reason : "Launch availability"} />
     </>}
@@ -91,7 +91,7 @@ function ProjectOverview() {
         <div className="ledger-main"><Link className="row-title" to="/projects/$projectId/connections/$connectionId" params={{ projectId, connectionId: c.id }}>{c.label || `${providerLabel(c.provider)} ${c.kind === "subscription" ? "subscription" : "key"}`}</Link>
           <small>{providerLabel(c.provider)} · {c.scope === "project" ? "project" : "organization, granted"} · <span className="mono">{models.join(", ")}</span></small>
           <HealthLine connection={c} compact /></div></li>)}</ul>
-        : (own.isSuccess || !project.data?.canAdminister) && granted.isSuccess ? <EmptyState title="No connections in use yet">{available ? `${available} ${available === 1 ? "connection is" : "connections are"} available; choose models to use from Connections.` : "Add a key or ask an admin to grant a connection."}</EmptyState> : null}
+        : (own.isSuccess || !project.data?.canAdminister) && granted.isSuccess ? <EmptyState title="No connections in use yet">{available ? project.data?.canAdminister ? `${available} ${available === 1 ? "connection is" : "connections are"} available; choose models to use from Connections.` : `${available} ${available === 1 ? "connection is" : "connections are"} available; a project admin chooses the models runs use.` : project.data?.canAdminister ? "Add a key or ask an admin to grant a connection." : "Ask a project admin to give this project's runs model access."}</EmptyState> : null}
     </Card>
 
     <Card title="Recent runs" className="dash-wide" description="The latest runs in this project."

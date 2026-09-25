@@ -20,9 +20,9 @@ function OrgChecklist({ role }: { role: string }) {
   return isAdmin(role) ? <OrgSetupChecklist /> : null;
 }
 
-// Viewers cannot change a project, so its steps would only be noise.
+// Each person sees only the steps they can take; with none (viewers), no checklist.
 function ProjectChecklist({ projectId, role }: SlotProps["project.checklist"]) {
-  return role && role !== "viewer" ? <ProjectSetupChecklist projectId={projectId} /> : null;
+  return role ? <ProjectSetupChecklist projectId={projectId} /> : null;
 }
 
 // The detail page already loaded the connection list this reads from the cache.

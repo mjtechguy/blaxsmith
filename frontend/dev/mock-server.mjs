@@ -267,7 +267,7 @@ const rpc = {
   CreateRecipeVersion: ({ recipeId, recipeJson, frozenPath = "", makeCurrent = false }) => { const r = recipes.find((x) => x.id === recipeId); return { version: addVersion(r, recipeJson, frozenPath, makeCurrent) }; },
   SetCurrentRecipeVersion: ({ recipeId, versionId }) => { const r = recipes.find((x) => x.id === recipeId); r.current = versionId; return { recipe: recipeSummary(r) }; },
   CloneRecipe: ({ sourceVersionId, projectId: project = "", name, description = "" }) => { const v = recipes.flatMap((r) => r.versions).find((x) => x.id === sourceVersionId); return rpc.CreateRecipe({ projectId: project, name, description, recipeJson: v.recipeJson, frozenPath: v.frozenPath }); },
-  GrantRecipe: ({ recipeId, projectId: pid = "", granteeKind, granteeId = "" }) => { const r = recipes.find((x) => x.id === recipeId); if (!r || r.projectId) return connectError(400, "invalid_argument", "invalid workflow request"); const grant = { id: `rgrant-${Date.now()}`, projectId: pid, projectName: pid ? "Demo project" : "", granteeKind, granteeId, granteeName: granteeKind === "user" ? "teammate" : "", createdAt: now() }; (r.grants ||= []).push(grant); return { grant }; },
+  GrantRecipe: ({ recipeId, projectId: pid = "", granteeKind, granteeId = "" }) => { const r = recipes.find((x) => x.id === recipeId); if (!r || r.projectId) return connectError(400, "invalid_argument", "invalid workflow request"); const grant = { id: `rgrant-${Date.now()}`, projectId: pid, projectName: pid ? "Demo project" : "", granteeKind, granteeId, granteeName: granteeLabel(granteeKind, granteeId), createdAt: now() }; (r.grants ||= []).push(grant); return { grant }; },
   RevokeRecipeGrant: ({ grantId }) => { for (const r of recipes) r.grants = (r.grants || []).filter((g) => g.id !== grantId); return {}; },
   // ExtensionService: previews derive permissions from the example Guild
   // manifest (or an overlay); the real server validates against the Git tree.
@@ -352,7 +352,7 @@ const rpc = {
     .map((m) => ({ ...m, recommended: (recommended.get(connectionId) ?? ["claude-opus-5"]).includes(m.id), efforts: harness === "codex" ? m.efforts.filter((e) => e !== "max") : m.efforts })) }),
   SetRecommendedModels: ({ connectionId, models = [] }) => { recommended.set(connectionId, models); return { models }; },
   RefreshConnectionModels: () => ({ valid: true, modelCount: 2, checkedAt: now() }),
-  GrantConnection: ({ connectionId, projectId: pid = "", granteeKind, granteeId = "" }) => { const grant = { id: `grant-${hub.length}-${Date.now()}`, projectId: pid, projectName: pid ? "Demo project" : "", granteeKind, granteeId, createdAt: now() }; hub.find((c) => c.id === connectionId)?.grants.push(grant); return { grant }; },
+  GrantConnection: ({ connectionId, projectId: pid = "", granteeKind, granteeId = "" }) => { const grant = { id: `grant-${hub.length}-${Date.now()}`, projectId: pid, projectName: pid ? "Demo project" : "", granteeKind, granteeId, granteeName: granteeLabel(granteeKind, granteeId), createdAt: now() }; hub.find((c) => c.id === connectionId)?.grants.push(grant); return { grant }; },
   RevokeConnectionGrant: ({ grantId }) => { for (const c of hub) c.grants = c.grants.filter((g) => g.id !== grantId); return {}; },
   AddConnectionUse: ({ connectionId, projectId: pid, model }) => { const c = hub.find((x) => x.id === connectionId); const use = { id: `use-${Date.now()}`, projectId: pid, projectName: "Demo project", model, granteeKind: c?.scope === "personal" ? "user" : "workload", createdAt: now() }; c?.uses.push(use); return { use }; },
   RemoveConnectionUse: ({ useId }) => { for (const c of hub) c.uses = c.uses.filter((u) => u.id !== useId); return {}; },
@@ -450,6 +450,8 @@ for (const [i, action] of ["installation.bootstrap_owner", "identity.login", "wo
 const mockRole = process.env.MOCK_ROLE || "owner";
 const mayAnswer = () => ["owner", "admin", "member"].includes(mockRole);
 const mayDecide = () => ["owner", "admin"].includes(mockRole);
+// Like the server, user grants carry the grantee's display label.
+const granteeLabel = (kind, id) => kind === "user" ? (members.find((m) => m.principalId === id)?.displayName ?? "") : "";
 // Members administer projects they created; in the mock, Mobile app and any project made this session.
 const memberAdministers = new Set(["proj-mobile"]);
 const administers = (pid) => mayDecide() || (mockRole === "member" && memberAdministers.has(pid));

@@ -9,7 +9,7 @@ import { AccessExplanation } from "./access-explain";
 import { ago } from "./admin";
 import { AddUse, ConfirmDialog, failure, HealthLine, RedactedText, ResourceGrants, StateBadge, useOrg } from "./connection-ui";
 import {
-  connectionModelsKey, connectionTitle, grantConnection, kindLabel, listConnectionModels, modelsSummary, providerLabel, refreshConnectionModels,
+  connectionModelsKey, connectionTitle, grantConnection, granteeLabel, kindLabel, listConnectionModels, modelsSummary, providerLabel, refreshConnectionModels,
   removeConnectionUse, revokeConnection, revokeConnectionGrant, scopeLabel, setRecommendedModels, type Scope,
 } from "./connections";
 import { CollectionTable, DataTable, inSet, useLocalView, useUrlView, type GridColumn } from "./data-table";
@@ -54,7 +54,7 @@ function ConnectionRowSummary({ connection: c, href }: { connection: Connection;
   return <div className="row-summary">
     <span><strong>Models</strong> {c.kind === "git" ? "Git connections carry no models." : modelsSummary(c)}{c.modelsCheckedAt ? ` · checked ${ago(c.modelsCheckedAt)}` : ""}</span>
     <span><strong>Uses</strong> {c.uses.length ? c.uses.slice(0, 3).map((u) => `${u.projectName || "project"} → ${u.model}`).join(", ") + (c.uses.length > 3 ? ` +${c.uses.length - 3}` : "") : "none"}</span>
-    <span><strong>Grants</strong> {c.grants.length ? c.grants.slice(0, 3).map((g) => g.granteeKind === "project" ? g.projectName || "project" : g.granteeKind === "role" ? `${g.granteeId}+` : g.granteeName || "user").join(", ") + (c.grants.length > 3 ? ` +${c.grants.length - 3}` : "") : "none"}</span>
+    <span><strong>Grants</strong> {c.grants.length ? c.grants.slice(0, 3).map((g) => granteeLabel(g)).join(", ") + (c.grants.length > 3 ? ` +${c.grants.length - 3}` : "") : "none"}</span>
     <Link className="text-action" to={href as "/"}>Open <ArrowRight size={13} aria-hidden="true" /></Link>
   </div>;
 }
@@ -140,7 +140,7 @@ export function ConnectionDetailPage({ connection, scope, projectId = "", canAdm
       actions={isAdmin ? <Link className="text-action" to="/admin/audit">Audit log <ArrowRight size={13} aria-hidden="true" /></Link> : undefined}>
       <ol className="timeline">{[
         { at: c.createdAt, text: "Connection added" },
-        ...c.grants.map((g) => ({ at: g.createdAt, text: `Granted to ${g.granteeKind === "project" ? g.projectName || "a project" : g.granteeKind === "role" ? `${g.granteeId} and above` : g.granteeName || "a user"}` })),
+        ...c.grants.map((g) => ({ at: g.createdAt, text: `Granted to ${granteeLabel(g, " and above")}` })),
         ...c.uses.map((u) => ({ at: u.createdAt, text: `${u.projectName || "A project"} started using ${u.model}` })),
         ...(c.modelsCheckedAt ? [{ at: c.modelsCheckedAt, text: c.modelsError ? `Model check failed: ${c.modelsError}` : `Models checked: ${c.modelCount}` }] : []),
         ...(c.lastUsedAt ? [{ at: c.lastUsedAt, text: "Last leased to a run" }] : []),
