@@ -136,3 +136,35 @@ test("unknown detail IDs render one shared not-found page with an h1 and a way b
     assert.match(await renderApp("/no/such/page", session("owner")), /<h1>Page not found<\/h1>/);
   });
 });
+
+test("the project setup checklist lists only the steps each person can take", async () => {
+  await withApp(async ({ renderApp }) => {
+    const org = session("owner").organizationId;
+    const seeds = (canAdminister, canLaunch) => [
+      [["project", org, "p1"], { project: { id: "p1", slug: "p", name: "Payments", createdAt: "2026-09-01T00:00:00Z" }, canAdminister, canLaunch }],
+      [["project-source", org, "p1"], null], [["project-verification", org, "p1"], null],
+      [["recipes", org, "p1"], { recipes: [] }], [["project-model-access", org, "p1"], { access: [] }],
+      [["runs", org, "p1", "checklist"], { runs: [] }],
+    ];
+    const steps = (html) => [...html.matchAll(/<li[^>]*>.*?<strong>([^<]+)<\/strong>/gs)].map((m) => m[1])
+      .filter((label) => /repository|checks|recipe|model access|first run/.test(label));
+    assert.deepEqual(steps(await renderApp("/projects/p1", session("owner"), seeds(true, true))),
+      ["Connect the repository", "Set verification checks", "Make a recipe available", "Give runs model access", "Start the first run"]);
+    assert.deepEqual(steps(await renderApp("/projects/p1", session("member"), seeds(true, true))), ["Give runs model access", "Start the first run"], "project admin member");
+    const member = await renderApp("/projects/p1", session("member"), seeds(false, true));
+    assert.deepEqual(steps(member), ["Start the first run"], "member without project admin");
+    assert.match(member, /An admin still has to finish this project/);
+    const viewer = await renderApp("/projects/p1", session("viewer"), seeds(false, false));
+    assert.doesNotMatch(viewer, /Set up this project|>Setup</, "viewers get no checklist or Setup tile");
+  });
+});
+
+test("grants name users by label and never show a bare principal id", async () => {
+  await withApp(async (_app, server) => {
+    const { granteeLabel } = await server.ssrLoadModule("/src/connections.ts");
+    assert.equal(granteeLabel({ granteeKind: "user", granteeId: "p-mara", granteeName: "Mara Lin" }), "Mara Lin");
+    assert.equal(granteeLabel({ granteeKind: "user", granteeId: "0f3c9a1e-1111-4000-8000-000000000000", granteeName: "" }), "Unknown user · 0f3c9a1e");
+    assert.equal(granteeLabel({ granteeKind: "role", granteeId: "member", granteeName: "" }, " and above"), "member and above");
+    assert.equal(granteeLabel({ granteeKind: "project", granteeId: "", granteeName: "", projectName: "Payments" }), "Payments");
+  });
+});
