@@ -146,19 +146,10 @@ func (s *SecretStore) insertVersion(ctx context.Context, tx pgx.Tx, organization
 	if len(plaintext) == 0 || len(plaintext) > maxSecretBytes {
 		return ErrDenied
 	}
-	block, err := aes.NewCipher(s.keys[s.current])
+	nonce, ciphertext, err := s.seal(plaintext, secretAAD(organizationID, connectionID, version, s.current))
 	if err != nil {
 		return err
 	}
-	aead, err := cipher.NewGCM(block)
-	if err != nil {
-		return err
-	}
-	nonce := make([]byte, aead.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
-		return err
-	}
-	ciphertext := aead.Seal(nil, nonce, plaintext, secretAAD(organizationID, connectionID, version, s.current))
 	if _, err := tx.Exec(ctx, `INSERT INTO access_secret_versions
 		(organization_id,connection_id,version,key_id,algorithm,nonce,ciphertext,expires_at)
 		VALUES ($1,$2,$3,$4,'AES-256-GCM',$5,$6,$7)`,
@@ -185,23 +176,48 @@ func (s *SecretStore) readVersion(ctx context.Context, tx pgx.Tx, organizationID
 	if expiresAt != nil && !expiresAt.After(now) {
 		return Secret{}, ErrDenied
 	}
-	key, ok := s.keys[keyID]
-	if !ok || len(nonce) != 12 || len(ciphertext) < 17 || len(ciphertext) > maxSecretBytes+16 {
-		return Secret{}, ErrDenied
-	}
-	block, err := aes.NewCipher(key)
+	data, err := s.open(keyID, nonce, ciphertext, secretAAD(organizationID, connectionID, version, keyID))
 	if err != nil {
-		return Secret{}, ErrDenied
+		return Secret{}, err
+	}
+	return Secret{Version: version, KeyID: keyID, Bytes: data, ExpiresAt: expiresAt}, nil
+}
+
+// seal encrypts under the current key; aad binds the ciphertext to its row.
+func (s *SecretStore) seal(plaintext, aad []byte) (nonce, ciphertext []byte, err error) {
+	block, err := aes.NewCipher(s.keys[s.current])
+	if err != nil {
+		return nil, nil, err
 	}
 	aead, err := cipher.NewGCM(block)
 	if err != nil {
-		return Secret{}, ErrDenied
+		return nil, nil, err
 	}
-	data, err := aead.Open(nil, nonce, ciphertext, secretAAD(organizationID, connectionID, version, keyID))
+	nonce = make([]byte, aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, nil, err
+	}
+	return nonce, aead.Seal(nil, nonce, plaintext, aad), nil
+}
+
+func (s *SecretStore) open(keyID string, nonce, ciphertext, aad []byte) ([]byte, error) {
+	key, ok := s.keys[keyID]
+	if !ok || len(nonce) != 12 || len(ciphertext) < 17 || len(ciphertext) > maxSecretBytes+16 {
+		return nil, ErrDenied
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, ErrDenied
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, ErrDenied
+	}
+	data, err := aead.Open(nil, nonce, ciphertext, aad)
 	if err != nil || len(data) == 0 || len(data) > maxSecretBytes {
-		return Secret{}, ErrDenied
+		return nil, ErrDenied
 	}
-	return Secret{Version: version, KeyID: keyID, Bytes: data, ExpiresAt: expiresAt}, nil
+	return data, nil
 }
 
 func secretAAD(organizationID, connectionID string, version int64, keyID string) []byte {

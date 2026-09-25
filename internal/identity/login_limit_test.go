@@ -121,3 +121,41 @@ func TestLoginLimitAcrossSourcesPostgres(t *testing.T) {
 		t.Fatalf("an email login was blocked by the username budget: %v", err)
 	}
 }
+
+// Public link endpoints are budgeted per link and per source address in the
+// database, so two replicas share one budget.
+func TestLinkLimitPostgres(t *testing.T) {
+	pool := identityTestPool(t)
+	ctx := context.Background()
+	one, err := NewUserAdmin(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := NewUserAdmin(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 10 {
+		replica := []*UserAdmin{one, two}[i%2]
+		if err := replica.AllowLink(ctx, "link-a", fmt.Sprintf("192.0.2.%d:443", i+1)); err != nil {
+			t.Fatalf("link attempt %d: %v", i, err)
+		}
+	}
+	if err := one.AllowLink(ctx, "link-a", "192.0.2.99:443"); !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("one link hammered from many sources: %v", err)
+	}
+	for i := range 29 {
+		if err := two.AllowLink(ctx, fmt.Sprintf("guess-%d", i), "198.51.100.7:1"); err != nil {
+			t.Fatalf("guess %d: %v", i, err)
+		}
+	}
+	if err := one.AllowLink(ctx, "guess-last", "198.51.100.7:2"); err != nil {
+		t.Fatalf("source budget spent early: %v", err)
+	}
+	if err := two.AllowLink(ctx, "guess-over", "198.51.100.7:3"); !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("one source guessed links unbounded: %v", err)
+	}
+	if err := one.AllowLink(ctx, "link-b", "not-an-address"); err == nil {
+		t.Fatal("request without a client address was allowed")
+	}
+}

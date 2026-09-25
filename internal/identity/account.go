@@ -159,11 +159,12 @@ func (m *SessionManager) UpdateProfile(ctx context.Context, caller Caller, chang
 		if used, err := emailInUse(ctx, tx, email, caller.PrincipalID); err != nil {
 			return Profile{}, 0, err
 		} else if used {
-			return Profile{}, 0, ErrEmailTaken
+			// No mail verification exists to answer "pending", so a taken address gets the invalid-address error.
+			return Profile{}, 0, ErrEmailInvalid
 		}
 		if _, err := tx.Exec(ctx, `UPDATE identity_principals SET email=$2,email_verified=false WHERE id=$1`,
 			caller.PrincipalID, email); err != nil {
-			return Profile{}, 0, emailWriteError(err)
+			return Profile{}, 0, hideTaken(emailWriteError(err))
 		}
 		if _, err := tx.Exec(ctx, `UPDATE identity_sessions SET email_required=false
 			WHERE organization_id=$1 AND id=$2`, caller.OrganizationID, caller.SessionID); err != nil {

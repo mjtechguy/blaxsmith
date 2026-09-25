@@ -33,6 +33,8 @@ func userAdminError(err error) error {
 		return connect.NewError(connect.CodeInvalidArgument, err)
 	case errors.Is(err, identity.ErrUnauthenticated):
 		return connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
+	case errors.Is(err, identity.ErrRateLimited):
+		return connect.NewError(connect.CodeResourceExhausted, errors.New("too many attempts; try again soon"))
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("user administration unavailable"))
 	}
@@ -131,6 +133,9 @@ func (s *userAdminService) GetAccountLink(ctx context.Context, req *connect.Requ
 	if err := s.guard.CheckRequest(req.Header(), false); err != nil {
 		return nil, err
 	}
+	if err := s.users.AllowLink(ctx, req.Msg.Token, req.Peer().Addr); err != nil {
+		return nil, userAdminError(err)
+	}
 	info, err := s.users.InspectLink(ctx, req.Msg.Token)
 	if err != nil {
 		return nil, userAdminError(err)
@@ -143,6 +148,9 @@ func (s *userAdminService) GetAccountLink(ctx context.Context, req *connect.Requ
 func (s *userAdminService) CompleteAccountLink(ctx context.Context, req *connect.Request[api.CompleteAccountLinkRequest]) (*connect.Response[api.CompleteAccountLinkResponse], error) {
 	if err := s.guard.CheckRequest(req.Header(), true); err != nil {
 		return nil, err
+	}
+	if err := s.users.AllowLink(ctx, req.Msg.Token, req.Peer().Addr); err != nil {
+		return nil, userAdminError(err)
 	}
 	password := []byte(req.Msg.Password)
 	defer clear(password)

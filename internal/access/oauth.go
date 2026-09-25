@@ -160,6 +160,10 @@ type OAuthRefresher struct {
 	Secrets  *SecretStore
 	Client   *http.Client // nil selects a 30-second client.
 	TokenURL string       // empty selects the Codex production endpoint.
+
+	// afterPersist, when set by a test, runs after a rotated token is
+	// durable and before the session adopts it; an error simulates a crash.
+	afterPersist func() error
 }
 
 // Delivery is what one attempt may receive: an access token, its provider
@@ -293,7 +297,9 @@ func (r *OAuthRefresher) RenewLease(ctx context.Context, renewed RenewedLease) (
 
 // accessToken serializes refresh per connection with a row lock on its
 // session. Refresh tokens rotate on use, so only the lock holder may spend
-// one, and the rotated token commits before the new access token is used.
+// one. The rotated token set commits in its own short transaction as soon as
+// the provider answers, so a crash before the session row adopts it cannot
+// strand the connection: the next lock holder adopts the newest version.
 func (r *OAuthRefresher) accessToken(ctx context.Context, organizationID, connectionID string,
 	until time.Time) (codexTokens, time.Time, int64, error) {
 	if r == nil || r.DB == nil || r.Secrets == nil || organizationID == "" || connectionID == "" {
@@ -322,7 +328,14 @@ func (r *OAuthRefresher) accessToken(ctx context.Context, organizationID, connec
 	if reason != nil {
 		return codexTokens{}, time.Time{}, 0, ErrReconnect
 	}
-	secret, err := r.Secrets.readVersion(ctx, tx, organizationID, connectionID, version)
+	// Only this refresher inserts versions past the session's, always under
+	// this lock and only with provider-issued tokens.
+	var newest int64
+	if err := tx.QueryRow(ctx, `SELECT max(version) FROM access_secret_versions
+		WHERE organization_id=$1 AND connection_id=$2`, organizationID, connectionID).Scan(&newest); err != nil {
+		return codexTokens{}, time.Time{}, 0, err
+	}
+	secret, err := r.Secrets.readVersion(ctx, tx, organizationID, connectionID, newest)
 	if err != nil {
 		return codexTokens{}, time.Time{}, 0, err
 	}
@@ -332,9 +345,32 @@ func (r *OAuthRefresher) accessToken(ctx context.Context, organizationID, connec
 	if err != nil || tokens.RefreshToken == "" {
 		return codexTokens{}, time.Time{}, 0, ErrDenied
 	}
+	if newest != version {
+		// A previous refresh persisted this rotation and then died.
+		account, err := codexAccount(tokens)
+		if err != nil || account.AccountID != tokens.AccountID {
+			tokens.clear()
+			return codexTokens{}, time.Time{}, 0, ErrDenied
+		}
+		if _, err := tx.Exec(ctx, `UPDATE access_oauth_sessions SET secret_version=$3,access_expires_at=$4,
+			refreshed_at=clock_timestamp() WHERE organization_id=$1 AND connection_id=$2`,
+			organizationID, connectionID, newest, account.AccessExpiresAt); err != nil {
+			tokens.clear()
+			return codexTokens{}, time.Time{}, 0, err
+		}
+		version, expiresAt = newest, account.AccessExpiresAt
+	}
 	if expiresAt.After(until.Add(codexRefreshSkew)) {
 		return tokens, expiresAt, version, tx.Commit(ctx)
 	}
+	// Hold the connection the rotation will commit on before spending the
+	// token, so a full pool of waiters on this lock cannot strand it.
+	persist, err := r.DB.Acquire(ctx)
+	if err != nil {
+		tokens.clear()
+		return codexTokens{}, time.Time{}, 0, err
+	}
+	defer persist.Release()
 	fresh, outcome := r.refresh(ctx, tokens)
 	tokens.clear()
 	if outcome != "" {
@@ -362,8 +398,15 @@ func (r *OAuthRefresher) accessToken(ctx context.Context, organizationID, connec
 		return codexTokens{}, time.Time{}, 0, err
 	}
 	defer clear(bundle)
-	if err := r.Secrets.insertVersion(ctx, tx, organizationID, connectionID, version+1, bundle, nil); err != nil {
+	if err := r.persistRotation(ctx, persist, organizationID, connectionID, version+1, bundle); err != nil {
+		fresh.clear()
 		return codexTokens{}, time.Time{}, 0, err
+	}
+	if r.afterPersist != nil {
+		if err := r.afterPersist(); err != nil {
+			fresh.clear()
+			return codexTokens{}, time.Time{}, 0, err
+		}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE access_oauth_sessions SET secret_version=$3,access_expires_at=$4,
 		refreshed_at=clock_timestamp() WHERE organization_id=$1 AND connection_id=$2`,
@@ -374,6 +417,24 @@ func (r *OAuthRefresher) accessToken(ctx context.Context, organizationID, connec
 		return codexTokens{}, time.Time{}, 0, err
 	}
 	return fresh, account.AccessExpiresAt, version + 1, nil
+}
+
+// persistRotation commits a provider-issued token set right away, outside the
+// session lock's transaction. It does not touch the session row, so it cannot
+// wait on the lock its caller holds. A cancelled request still persists.
+func (r *OAuthRefresher) persistRotation(ctx context.Context, conn *pgxpool.Conn, organizationID, connectionID string,
+	version int64, bundle []byte) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err := r.Secrets.insertVersion(ctx, tx, organizationID, connectionID, version, bundle, nil); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // refresh returns a non-empty outcome for any failure: rate_limited,

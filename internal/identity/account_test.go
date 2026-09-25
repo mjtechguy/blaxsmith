@@ -167,7 +167,7 @@ func TestEmailIdentityPostgres(t *testing.T) {
 		t.Fatalf("legacy session changed its name first: %v", err)
 	}
 	taken := "ALICE@example.com"
-	if _, _, err := manager.UpdateProfile(ctx, olga, ProfileChange{Email: &taken, CurrentPassword: []byte("olga password 12")}); !errors.Is(err, ErrEmailTaken) {
+	if _, _, err := manager.UpdateProfile(ctx, olga, ProfileChange{Email: &taken, CurrentPassword: []byte("olga password 12")}); !errors.Is(err, ErrEmailInvalid) {
 		t.Fatalf("legacy session took a used email: %v", err)
 	}
 	olgaEmail := "olga@example.com"
@@ -193,7 +193,7 @@ func TestEmailIdentityPostgres(t *testing.T) {
 	if _, _, err := manager.UpdateProfile(ctx, bob, ProfileChange{Email: &newBob}); !errors.Is(err, ErrCurrentPassword) {
 		t.Fatalf("email change without a password: %v", err)
 	}
-	if _, _, err := manager.UpdateProfile(ctx, bob, ProfileChange{Email: &olgaEmail, CurrentPassword: []byte("bob password 123")}); !errors.Is(err, ErrEmailTaken) {
+	if _, _, err := manager.UpdateProfile(ctx, bob, ProfileChange{Email: &olgaEmail, CurrentPassword: []byte("bob password 123")}); !errors.Is(err, ErrEmailInvalid) {
 		t.Fatalf("email change to a used email: %v", err)
 	}
 	profile, revoked, err := manager.UpdateProfile(ctx, bob, ProfileChange{Email: &newBob, CurrentPassword: []byte("bob password 123")})

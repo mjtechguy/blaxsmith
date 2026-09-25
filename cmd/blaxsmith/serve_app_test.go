@@ -848,6 +848,7 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	testWorkspaceBrowserAPI(t, ctx, client, origin, true)
 	testExtensionBrowserAPI(t, ctx, client, origin, csrf, true)
 	testUsersBrowserAPI(t, ctx, client, origin, csrf, owner.PrincipalID, true)
+	testGitHubConnectGate(t, ctx, client, origin, csrf, first.Id, true)
 	if _, err := pool.Exec(ctx, `UPDATE identity_memberships SET role='viewer'
 		WHERE organization_id=$1 AND principal_id=$2`, owner.OrganizationID, owner.PrincipalID); err != nil {
 		t.Fatal(err)
@@ -863,6 +864,7 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	testWorkspaceBrowserAPI(t, ctx, client, origin, false)
 	testExtensionBrowserAPI(t, ctx, client, origin, csrf, false)
 	testUsersBrowserAPI(t, ctx, client, origin, csrf, owner.PrincipalID, false)
+	testGitHubConnectGate(t, ctx, client, origin, csrf, first.Id, false)
 	viewerCreate := connect.NewRequest(&api.CreateProjectRequest{Slug: "viewer-denied", Name: "Denied"})
 	viewerCreate.Header().Set("Origin", origin)
 	viewerCreate.Header().Set("X-Blaxsmith-CSRF", csrf)

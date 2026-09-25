@@ -67,9 +67,9 @@ export function userAdminError(cause: unknown): string {
         : "Your session is not allowed to do this.";
     case Code.FailedPrecondition: return error.rawMessage.includes("yourself") || error.rawMessage.includes("your own")
       ? "You cannot disable your own account." : "The organization must keep at least one active owner who can sign in.";
-    case Code.AlreadyExists: return "That email is already used by another account.";
+    case Code.AlreadyExists: return "That email belongs to someone who is already a member of this organization.";
     case Code.NotFound: return "This member no longer exists. The list will refresh.";
-    case Code.InvalidArgument: return error.rawMessage.includes("email") ? "Enter a valid email address." : "Check the details and try again.";
+    case Code.InvalidArgument: return error.rawMessage.includes("email") ? "This email address can't be used. Check it or try a different one." : "Check the details and try again.";
     case Code.Unauthenticated: return "Your session changed. Sign in again and retry.";
     default: return "The change could not be completed. Please try again.";
   }
