@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var (
@@ -132,6 +133,7 @@ func publicSourceAddress(ip netip.Addr) bool {
 }
 
 func (s *Store) GetProjectSource(ctx context.Context, orgID, projectID string) (ProjectSource, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, projectID) {
 		return ProjectSource{}, ErrInvalid
 	}
@@ -150,6 +152,7 @@ func (s *Store) GetProjectSource(ctx context.Context, orgID, projectID string) (
 // A non-empty gitConnectionID makes the source private: the dispatcher is
 // granted git.read and git.write on that connection for this repository.
 func (s *Store) SetProjectSourceAs(ctx context.Context, caller identity.Caller, projectID, rawURL, ref, gitConnectionID string) (ProjectSource, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID) ||
 		(caller.Role != "owner" && caller.Role != "admin") {
 		return ProjectSource{}, ErrProjectSourceDenied

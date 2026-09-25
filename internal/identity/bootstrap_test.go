@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestPassword(t *testing.T) {
@@ -30,7 +31,7 @@ func TestPassword(t *testing.T) {
 
 func TestBootstrapOwnerPostgres(t *testing.T) {
 	pool := identityTestPool(t)
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	password := []byte("correct horse battery staple")
 	var wg sync.WaitGroup
 	type result struct {
@@ -88,7 +89,7 @@ func identityTestPool(t *testing.T) *pgxpool.Pool {
 	if dsn == "" {
 		t.Skip("set BLAXSMITH_TEST_DATABASE_URL")
 	}
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	admin, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -103,7 +104,7 @@ func identityTestPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(tenant.System(context.Background()), 10*time.Second)
 		defer cancel()
 		if _, err := admin.Exec(cleanupCtx, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE"); err != nil {
 			t.Error(err)
@@ -114,7 +115,7 @@ func identityTestPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	config.ConnConfig.RuntimeParams["search_path"] = schema
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := pgxpool.NewWithConfig(ctx, tenant.Configure(config))
 	if err != nil {
 		t.Fatal(err)
 	}

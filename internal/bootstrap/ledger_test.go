@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestLedgerPostgres(t *testing.T) {
@@ -29,7 +30,7 @@ func TestLedgerPostgres(t *testing.T) {
 	if dsn == "" {
 		t.Skip("set BLAXSMITH_TEST_DATABASE_URL for the PostgreSQL concurrency test")
 	}
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	admin, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +45,7 @@ func TestLedgerPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(tenant.System(context.Background()), 10*time.Second)
 		defer cancel()
 		if _, err := admin.Exec(cleanupCtx, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE"); err != nil {
 			t.Error(err)
@@ -55,7 +56,7 @@ func TestLedgerPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	config.ConnConfig.RuntimeParams["search_path"] = schema
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := pgxpool.NewWithConfig(ctx, tenant.Configure(config))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +111,7 @@ func TestLedgerPostgres(t *testing.T) {
 	second := issue(owner)
 	denied(owner, first, proof, roots) // issuing again cancels the first challenge
 	secondProof, secondRoots := signedProof(t, second)
-	otherPool, err := pgxpool.NewWithConfig(ctx, config.Copy())
+	otherPool, err := pgxpool.NewWithConfig(ctx, tenant.Configure(config.Copy()))
 	if err != nil {
 		t.Fatal(err)
 	}

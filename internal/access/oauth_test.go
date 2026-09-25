@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func fakeJWT(claims map[string]any) string {
@@ -50,7 +52,7 @@ func TestParseCodexAuthRejectsUnsafeMaterial(t *testing.T) {
 }
 
 func TestCodexSubscriptionRefreshCustodyPostgres(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	pool := testPool(t)
 	store, err := NewSecretStore(pool, "key", map[string][]byte{"key": []byte(strings.Repeat("k", 32))})
 	if err != nil {
@@ -303,7 +305,7 @@ func TestCodexSubscriptionRefreshCustodyPostgres(t *testing.T) {
 // adopted it must not strand the login: the next renewal resumes from the
 // persisted rotation instead of spending the old token again.
 func TestCodexRefreshSurvivesCrashAfterRotationPostgres(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	pool := testPool(t)
 	store, err := NewSecretStore(pool, "key", map[string][]byte{"key": []byte(strings.Repeat("k", 32))})
 	if err != nil {

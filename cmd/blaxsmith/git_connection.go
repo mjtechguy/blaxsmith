@@ -8,6 +8,7 @@ import (
 	"connectrpc.com/connect"
 	api "github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1"
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -54,6 +55,7 @@ func (s *workflowService) CreateGitConnection(ctx context.Context, req *connect.
 // privateSourceCredential reads the private source's token for the platform's
 // own admission fetch, only while the project's git.read grant is live.
 func (s *workflowService) privateSourceCredential(ctx context.Context, orgID string, source workflow.ProjectSource) (string, []byte, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if s.dispatcher == nil || s.dispatcher.DB == nil || s.secrets == nil {
 		return "", nil, workflow.ErrGitConnection
 	}

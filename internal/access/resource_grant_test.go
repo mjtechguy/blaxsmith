@@ -7,11 +7,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func grantOrg(t *testing.T, pool *pgxpool.Pool, slug string) (org, project string) {
 	t.Helper()
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	if err := pool.QueryRow(ctx, `INSERT INTO identity_organizations (id,slug,name) VALUES (gen_random_uuid(),$1,$1) RETURNING id`,
 		slug).Scan(&org); err != nil {
 		t.Fatal(err)
@@ -26,11 +27,11 @@ func grantOrg(t *testing.T, pool *pgxpool.Pool, slug string) (org, project strin
 func grantMember(t *testing.T, pool *pgxpool.Pool, org, username, role string) identity.Caller {
 	t.Helper()
 	var id string
-	if err := pool.QueryRow(t.Context(), `INSERT INTO identity_principals (id,username) VALUES (gen_random_uuid(),$1) RETURNING id`,
+	if err := pool.QueryRow(tenant.System(t.Context()), `INSERT INTO identity_principals (id,username) VALUES (gen_random_uuid(),$1) RETURNING id`,
 		username).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(t.Context(), `INSERT INTO identity_memberships (organization_id,principal_id,role) VALUES ($1,$2,$3)`,
+	if _, err := pool.Exec(tenant.System(t.Context()), `INSERT INTO identity_memberships (organization_id,principal_id,role) VALUES ($1,$2,$3)`,
 		org, id, role); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +40,7 @@ func grantMember(t *testing.T, pool *pgxpool.Pool, org, username, role string) i
 
 func TestCanUseResourceGrantsPostgres(t *testing.T) {
 	pool := testPool(t)
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	org, project := grantOrg(t, pool, "grants-a")
 	other, otherProject := grantOrg(t, pool, "grants-b")
 	owner := grantMember(t, pool, org, "g-owner", "owner")

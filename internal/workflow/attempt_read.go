@@ -5,11 +5,13 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // CurrentAttempt checks the persisted owner before any external dispatch or
 // recovery operation. It does not authorize the caller or prove AX state.
 func (s *Store) CurrentAttempt(ctx context.Context, a Attempt) (runState, attemptState string, graphSealed bool, err error) {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if !validAttempt(a) {
 		return "", "", false, ErrInvalid
 	}
@@ -37,5 +39,6 @@ func (s *Store) CurrentAttempt(ctx context.Context, a Attempt) (runState, attemp
 // ConfirmRecovered returns a reconciled AX actor to initialization. It remains
 // unresolved until WaitWorkspaceReady confirms WorkspaceReady=SetupComplete.
 func (s *Store) ConfirmRecovered(ctx context.Context, a Attempt) error {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	return s.transition(ctx, a, "reconciling", "starting", "attempt.starting")
 }

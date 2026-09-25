@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Private Git source: a project references one organization Git connection.
@@ -117,6 +118,7 @@ func BindGitRead(ctx context.Context, tx pgx.Tx, organizationID, projectID, conn
 // PreflightGitRead reports ErrDenied when a private source's connection has
 // no active git.read grant, before any attempt is reserved.
 func PreflightGitRead(ctx context.Context, db *pgxpool.Pool, organizationID, projectID, connectionID, repoURL string) error {
+	ctx = tenant.Org(ctx, organizationID)
 	tx, err := db.Begin(ctx)
 	if err != nil {
 		return err
@@ -153,6 +155,7 @@ func gitReadGrant(ctx context.Context, tx pgx.Tx, organizationID, projectID, con
 // phase, with the connection account as the Git username. ok is false for
 // public sources (no binding).
 func AttemptGitRead(ctx context.Context, db *pgxpool.Pool, organizationID, attemptID string) (GitRead, string, bool, error) {
+	ctx = tenant.Org(ctx, organizationID)
 	var r GitRead
 	var username string
 	err := db.QueryRow(ctx, `SELECT b.id,b.project_id,g.grantee_kind,g.grantee_id,b.resource,b.input_commit,b.policy_version,

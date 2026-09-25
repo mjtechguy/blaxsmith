@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Workspace read models for the application shell: Home, Inbox, and all runs.
@@ -149,6 +150,7 @@ const inboxItems = `WITH items AS (
 // ListInbox pages the items a person may need to handle, blocking and oldest
 // first, with the total count under the same filters.
 func (s *Store) ListInbox(ctx context.Context, caller identity.Caller, f InboxFilter) ([]InboxItem, int32, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	limit, offset, err := workspacePage(f.Page, f.PageSize)
 	if err != nil {
 		return nil, 0, err
@@ -198,6 +200,7 @@ func (s *Store) inbox(ctx context.Context, caller identity.Caller, f InboxFilter
 // ListWorkspaceRuns pages every run in the organization with its project and
 // a status rollup that mirrors the browser's runStatus.
 func (s *Store) ListWorkspaceRuns(ctx context.Context, caller identity.Caller, f RunFilter) ([]WorkspaceRun, int32, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if _, _, err := workspaceCaller(caller); err != nil {
 		return nil, 0, err
 	}
@@ -277,6 +280,7 @@ func (s *Store) workspaceRuns(ctx context.Context, page string, args ...any) ([]
 // WorkspaceHome reads the caller's landing summary: what waits on them, live
 // agents, and recent runs.
 func (s *Store) WorkspaceHome(ctx context.Context, caller identity.Caller) (WorkspaceHome, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if _, _, err := workspaceCaller(caller); err != nil {
 		return WorkspaceHome{}, err
 	}

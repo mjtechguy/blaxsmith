@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Organization recipe grants are lane U resource grants (access_resource_grants,
@@ -30,6 +31,7 @@ func scanRecipeGrant(row pgx.Row) (ConnectionGrant, error) {
 // RecipeGrants lists live grants on an organization recipe. Only organization
 // owners/admins see grants; others get none.
 func (s *Store) RecipeGrants(ctx context.Context, caller identity.Caller, recipeID string) ([]ConnectionGrant, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, recipeID) {
 		return nil, ErrInvalid
 	}
@@ -48,6 +50,7 @@ func (s *Store) RecipeGrants(ctx context.Context, caller identity.Caller, recipe
 // minimum role (member, admin, owner). Organization owners/admins only;
 // access.GrantResource audits it.
 func (s *Store) GrantRecipeAs(ctx context.Context, caller identity.Caller, recipeID, projectID, granteeKind, granteeID string) (ConnectionGrant, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if caller.Role != "owner" && caller.Role != "admin" {
 		return ConnectionGrant{}, ErrRecipeDenied
 	}
@@ -100,6 +103,7 @@ func (s *Store) GrantRecipeAs(ctx context.Context, caller identity.Caller, recip
 // RevokeRecipeGrantAs revokes one live organization recipe grant; runs
 // already launched keep the bytes they froze.
 func (s *Store) RevokeRecipeGrantAs(ctx context.Context, caller identity.Caller, grantID string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if caller.Role != "owner" && caller.Role != "admin" {
 		return ErrRecipeDenied
 	}

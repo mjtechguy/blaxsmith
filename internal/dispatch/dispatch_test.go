@@ -21,6 +21,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/axbridge"
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
@@ -135,7 +136,7 @@ func TestDispatchBatchPostgres(t *testing.T) {
 	if dsn == "" {
 		t.Skip("set BLAXSMITH_TEST_DATABASE_URL")
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	admin, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +151,7 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanup, cancel := context.WithTimeout(tenant.System(context.Background()), 10*time.Second)
 		defer cancel()
 		if _, err := admin.Exec(cleanup, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE"); err != nil {
 			t.Errorf("drop temporary schema: %v", err)
@@ -161,7 +162,7 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	config.ConnConfig.RuntimeParams["search_path"] = schema
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := pgxpool.NewWithConfig(ctx, tenant.Configure(config))
 	if err != nil {
 		t.Fatal(err)
 	}

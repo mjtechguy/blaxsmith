@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestBudgetForecastAndThresholds(t *testing.T) {
@@ -47,7 +48,7 @@ func TestBudgetForecastAndThresholds(t *testing.T) {
 func setDailySpend(t *testing.T, pool *pgxpool.Pool, org, project, principal string, micros int64) {
 	t.Helper()
 	day := time.Now().UTC().Format("2006-01-02")
-	if _, err := pool.Exec(t.Context(), `INSERT INTO gateway_usage_daily (organization_id,day,project_id,principal_id,pool_id,route_id,
+	if _, err := pool.Exec(tenant.System(t.Context()), `INSERT INTO gateway_usage_daily (organization_id,day,project_id,principal_id,pool_id,route_id,
 		route_kind,model,requests,errors,rate_limited,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,
 		reasoning_tokens,cost_usd_micros,ttft_ms_sum,ttft_count)
 		VALUES ($1,$2,$3,$4,'','c','anthropic','claude-opus-5-5',1,0,0,10,10,0,0,0,$5,0,0)
@@ -59,7 +60,7 @@ func setDailySpend(t *testing.T, pool *pgxpool.Pool, org, project, principal str
 
 func inboxAlerts(t *testing.T, store *Store, caller identity.Caller) []InboxItem {
 	t.Helper()
-	items, _, err := store.ListInbox(t.Context(), caller, InboxFilter{Kinds: []string{"budget_alert"}})
+	items, _, err := store.ListInbox(tenant.System(t.Context()), caller, InboxFilter{Kinds: []string{"budget_alert"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +73,7 @@ func TestBudgetsAlertsExactlyOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org := organization(t, pool, "gw-budgets")
 	owner := reviewer(t, pool, org, "owner", "gwb-owner")
 	lead := reviewer(t, pool, org, "member", "gwb-lead") // creates the project, so administers it.
@@ -282,7 +283,7 @@ func TestRunCostPersonalSubscriptionPrivacy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org := organization(t, pool, "gw-privacy")
 	admin := reviewer(t, pool, org, "admin", "gwp-admin")
 	alice := reviewer(t, pool, org, "member", "gwp-alice")

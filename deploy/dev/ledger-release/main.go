@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func main() {
@@ -66,8 +66,9 @@ func main() {
 
 func deactivate(space, task, database string, generation int64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx = tenant.System(ctx) // operator tool: seeds and reads every organization
 	defer cancel()
-	poolDB, err := pgxpool.New(ctx, database)
+	poolDB, err := tenant.NewPool(ctx, database)
 	if err != nil {
 		return err
 	}
@@ -131,8 +132,9 @@ func run(space, task, image, pool, routerIP, routerCA, actorCA, signerFile, data
 		return errors.New("connector token unavailable")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx = tenant.System(ctx) // operator tool: seeds and reads every organization
 	defer cancel()
-	poolDB, err := pgxpool.New(ctx, database)
+	poolDB, err := tenant.NewPool(ctx, database)
 	if err != nil {
 		return err
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func manifestName(provider, model string) string {
@@ -138,6 +139,7 @@ func (s *Store) beginScoped(ctx context.Context, caller identity.Caller, scope, 
 // CheckConnectionScopeAs applies beginScoped's rule without writing, so a
 // flow that ends in a connection (GitHub OAuth) can refuse before it starts.
 func (s *Store) CheckConnectionScopeAs(ctx context.Context, caller identity.Caller, scope, projectID string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := s.beginScoped(ctx, caller, scope, projectID)
 	if err != nil {
 		return err
@@ -215,6 +217,7 @@ func cleanLabel(label string) (*string, error) {
 // list the caller already fetched with it (the fetch is the key check).
 func (s *Store) CreateAPIKeyConnectionAs(ctx context.Context, caller identity.Caller, scope, projectID, provider, label string,
 	key []byte, models []access.CatalogModel, modelsErr string, secrets *access.SecretStore) (Connection, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	origin := access.ModelOrigin(provider)
 	if origin == "" || len(key) == 0 || len(key) > 8192 || strings.ContainsAny(string(key), "\r\n\x00 ") || secrets == nil {
 		return Connection{}, ErrInvalid
@@ -261,6 +264,7 @@ func (s *Store) CreateAPIKeyConnectionAs(ctx context.Context, caller identity.Ca
 // project scope. Organization scope is CreateGitConnectionAs.
 func (s *Store) CreateGitTokenConnectionAs(ctx context.Context, caller identity.Caller, scope, projectID, host, username, authMethod string,
 	token []byte, secrets *access.SecretStore) (Connection, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if scope == ScopePersonal {
 		return Connection{}, ErrInvalid
 	}
@@ -311,6 +315,7 @@ func insertGitConnection(ctx context.Context, tx pgx.Tx, caller identity.Caller,
 // owner adds a use in a project.
 func (s *Store) CreateCodexSubscriptionAs(ctx context.Context, caller identity.Caller, credential []byte,
 	secrets *access.SecretStore) (Connection, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if len(credential) == 0 || secrets == nil {
 		return Connection{}, ErrInvalid
 	}
@@ -406,6 +411,7 @@ func replaceModels(ctx context.Context, tx pgx.Tx, orgID, connectionID string, m
 // StoreConnectionModels records a refresh. A failed refresh keeps the last
 // good list and records the error.
 func (s *Store) StoreConnectionModels(ctx context.Context, orgID, connectionID string, models []access.CatalogModel, modelsErr string) error {
+	ctx = tenant.Org(ctx, orgID)
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -427,6 +433,7 @@ type ConnectionSecret struct {
 // ReadConnectionSecretAs returns a secret for platform-side provider calls
 // after the same visibility check as ListConnectionModels.
 func (s *Store) ReadConnectionSecretAs(ctx context.Context, caller identity.Caller, connectionID string, secrets *access.SecretStore) (ConnectionSecret, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if _, err := s.visibleConnection(ctx, caller, connectionID); err != nil {
 		return ConnectionSecret{}, err
 	}
@@ -435,6 +442,7 @@ func (s *Store) ReadConnectionSecretAs(ctx context.Context, caller identity.Call
 
 // ReadConnectionSecret is the unauthenticated form for the background model refresh.
 func (s *Store) ReadConnectionSecret(ctx context.Context, orgID, connectionID string, secrets *access.SecretStore) (ConnectionSecret, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if secrets == nil {
 		return ConnectionSecret{}, ErrInvalid
 	}
@@ -471,6 +479,7 @@ func (s *Store) ReadConnectionSecret(ctx context.Context, orgID, connectionID st
 
 // DueModelRefresh lists active API-key connections whose model list is older than age.
 func (s *Store) DueModelRefresh(ctx context.Context, age time.Duration, limit int) ([][2]string, error) {
+	ctx = tenant.System(ctx)
 	rows, err := s.pool.Query(ctx, `SELECT organization_id,id FROM access_connections
 		WHERE state='active' AND auth_method='api_key'
 		AND (models_checked_at IS NULL OR models_checked_at<clock_timestamp()-$1::interval)
@@ -547,6 +556,7 @@ func scanConnection(row pgx.Row) (Connection, error) {
 
 // ListConnectionsAs returns connections at scope with their grants and uses.
 func (s *Store) ListConnectionsAs(ctx context.Context, caller identity.Caller, scope, projectID string) ([]Connection, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID) || (projectID != "" && !ids(projectID)) {
 		return nil, ErrInvalid
 	}
@@ -778,6 +788,7 @@ func (s *Store) visibleConnection(ctx context.Context, caller identity.Caller, c
 // ListConnectionModelsAs returns the connection's stored model list,
 // optionally only models a pinned harness accepts.
 func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Caller, connectionID, harness string) ([]ConnectionModel, *time.Time, string, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	r, err := s.visibleConnection(ctx, caller, connectionID)
 	if err != nil {
 		return nil, nil, "", err
@@ -888,6 +899,7 @@ func ensurePolicyMode(ctx context.Context, tx pgx.Tx, orgID, projectID, mode str
 // project's model selection; a personal connection becomes a grant to its
 // owner, honoured only for runs the owner launches.
 func (s *Store) AddConnectionUseAs(ctx context.Context, caller identity.Caller, connectionID, projectID, model string) (ConnectionUse, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID, projectID) || connectionID == "" ||
 		len(connectionID) > 64 || !projectModelName.MatchString(model) {
 		return ConnectionUse{}, ErrInvalid
@@ -1025,6 +1037,7 @@ func revokeGrants(ctx context.Context, tx pgx.Tx, where string, args ...any) err
 
 // RemoveConnectionUseAs revokes one model use (a model.invoke grant).
 func (s *Store) RemoveConnectionUseAs(ctx context.Context, caller identity.Caller, useID string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID) || useID == "" || len(useID) > 64 {
 		return ErrInvalid
 	}
@@ -1066,6 +1079,7 @@ func (s *Store) RemoveConnectionUseAs(ctx context.Context, caller identity.Calle
 // connection: to a project, a member, or a minimum role (member, admin,
 // owner). Organization owners/admins only.
 func (s *Store) GrantConnectionAs(ctx context.Context, caller identity.Caller, connectionID, projectID, granteeKind, granteeID string) (ConnectionGrant, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if caller.Role != "owner" && caller.Role != "admin" {
 		return ConnectionGrant{}, ErrConnectionDenied
 	}
@@ -1128,6 +1142,7 @@ func (s *Store) GrantConnectionAs(ctx context.Context, caller identity.Caller, c
 // grant only gates who may attach the connection; existing uses stay until
 // removed.
 func (s *Store) RevokeConnectionGrantAs(ctx context.Context, caller identity.Caller, grantID string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if caller.Role != "owner" && caller.Role != "admin" {
 		return ErrConnectionDenied
 	}
@@ -1167,6 +1182,7 @@ func (s *Store) RevokeConnectionGrantAs(ctx context.Context, caller identity.Cal
 // RevokeConnectionAs disables a connection and everything granted from it.
 // Org owners/admins may disable (never read) any connection in their org.
 func (s *Store) RevokeConnectionAs(ctx context.Context, caller identity.Caller, connectionID string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID) || connectionID == "" || len(connectionID) > 64 {
 		return ErrInvalid
 	}

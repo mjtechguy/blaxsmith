@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Rates are USD micros per million tokens ($15/MTok = 15_000_000).
@@ -63,6 +64,7 @@ type cachedPrice struct {
 }
 
 func (b *PriceBook) Lookup(ctx context.Context, orgID, provider, model string, at time.Time) Price {
+	ctx = tenant.Org(ctx, orgID)
 	if b == nil || b.DB == nil {
 		return ManifestPrice(provider, model)
 	}

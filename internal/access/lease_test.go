@@ -6,10 +6,12 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestLeaseIntentAndRevocationPostgres(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	pool := testPool(t)
 	const repo = "https://git.example.invalid/team/private.git"
 	const commit = "0123456789abcdef0123456789abcdef01234567"
@@ -167,7 +169,7 @@ func TestLeaseIntentAndRevocationPostgres(t *testing.T) {
 }
 
 func TestConnectionRevocationFencesDeliveryPostgres(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	pool := testPool(t)
 	_, err := pool.Exec(ctx, `
 		INSERT INTO access_provider_registrations (organization_id,id,provider_kind,origin,delivery_modes,state)

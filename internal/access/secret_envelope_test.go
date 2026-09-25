@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func envelopeFixture(t *testing.T, pool *pgxpool.Pool, organizationID string, connections ...string) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	if _, err := pool.Exec(ctx, `INSERT INTO access_provider_registrations
 		(organization_id,id,provider_kind,origin,delivery_modes,state)
 		VALUES ($1,'git','git','https://git.example.invalid',ARRAY['native_raw'],'active')`, organizationID); err != nil {
@@ -28,7 +29,7 @@ func envelopeFixture(t *testing.T, pool *pgxpool.Pool, organizationID string, co
 
 func readSecret(t *testing.T, pool *pgxpool.Pool, store *SecretStore, organizationID, connectionID string, version int64) (string, error) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +49,7 @@ func organizationKey(t *testing.T, pool *pgxpool.Pool, store *SecretStore, organ
 	t.Helper()
 	var masterKeyID string
 	var nonce, wrapped []byte
-	if err := pool.QueryRow(context.Background(), `SELECT master_key_id, nonce, wrapped_key
+	if err := pool.QueryRow(tenant.System(context.Background()), `SELECT master_key_id, nonce, wrapped_key
 		FROM access_organization_keys WHERE organization_id=$1 AND version=1`, organizationID).
 		Scan(&masterKeyID, &nonce, &wrapped); err != nil {
 		t.Fatal(err)
@@ -61,7 +62,7 @@ func organizationKey(t *testing.T, pool *pgxpool.Pool, store *SecretStore, organ
 }
 
 func TestSecretEnvelopeOrganizationSeparation(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	pool := testPool(t)
 	envelopeFixture(t, pool, "org-a", "conn")
 	envelopeFixture(t, pool, "org-b", "conn")
@@ -131,7 +132,7 @@ func TestSecretEnvelopeOrganizationSeparation(t *testing.T) {
 }
 
 func TestSecretEnvelopeLegacyUpgrade(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	pool := testPool(t)
 	envelopeFixture(t, pool, "org-a", "lazy", "batch-1", "batch-2", "orphan")
 	master := bytes.Repeat([]byte{3}, 32)
@@ -234,7 +235,7 @@ func TestSecretEnvelopeLegacyUpgrade(t *testing.T) {
 }
 
 func TestSecretEnvelopeMasterKeyRotation(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	pool := testPool(t)
 	envelopeFixture(t, pool, "org-a", "conn")
 	envelopeFixture(t, pool, "org-b", "conn")

@@ -7,6 +7,8 @@ import (
 	"net/netip"
 	"sync"
 	"testing"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestLoginLimitPostgres(t *testing.T) {
@@ -15,7 +17,7 @@ func TestLoginLimitPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	source := netip.MustParseAddr("192.0.2.1")
 	var wg sync.WaitGroup
 	results := make(chan error, 20)
@@ -95,7 +97,7 @@ func TestLoginLimitAcrossSourcesPostgres(t *testing.T) {
 			if i%2 == 1 {
 				limiter = second
 			}
-			results <- limiter.Allow(context.Background(), "alice", netip.AddrFrom4([4]byte{192, 0, 2, byte(i + 1)}))
+			results <- limiter.Allow(tenant.System(context.Background()), "alice", netip.AddrFrom4([4]byte{192, 0, 2, byte(i + 1)}))
 		}()
 	}
 	wg.Wait()
@@ -114,10 +116,10 @@ func TestLoginLimitAcrossSourcesPostgres(t *testing.T) {
 	if allowed != 30 || denied != 10 {
 		t.Fatalf("distributed account limit: %d allowed, %d denied", allowed, denied)
 	}
-	if err := first.Allow(context.Background(), "bob", netip.MustParseAddr("192.0.2.1")); err != nil {
+	if err := first.Allow(tenant.System(context.Background()), "bob", netip.MustParseAddr("192.0.2.1")); err != nil {
 		t.Fatalf("other account was blocked: %v", err)
 	}
-	if err := first.Allow(context.Background(), "alice@example.com", netip.MustParseAddr("192.0.2.1")); err != nil {
+	if err := first.Allow(tenant.System(context.Background()), "alice@example.com", netip.MustParseAddr("192.0.2.1")); err != nil {
 		t.Fatalf("an email login was blocked by the username budget: %v", err)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // insertVersion encrypts one new version without moving the connection's
@@ -251,6 +252,7 @@ func (s *SecretStore) upgradeLegacy(ctx context.Context, tx pgx.Tx, organization
 // idempotent and safe beside live traffic; rows a reader holds are retried on
 // the next run. It returns the number of legacy rows remaining afterwards.
 func (s *SecretStore) UpgradeLegacy(ctx context.Context, batch int) (int, error) {
+	ctx = tenant.System(ctx) // lists every organization; each one is then processed under its own scope
 	if s == nil || batch <= 0 {
 		return 0, ErrDenied
 	}
@@ -286,6 +288,7 @@ func (s *SecretStore) UpgradeLegacy(ctx context.Context, batch int) (int, error)
 }
 
 func (s *SecretStore) upgradeBatch(ctx context.Context, organizationID string, after legacyCursor, batch int) (legacyCursor, error) {
+	ctx = tenant.Org(ctx, organizationID)
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return legacyCursor{}, err
@@ -309,6 +312,7 @@ func (s *SecretStore) upgradeBatch(ctx context.Context, organizationID string, a
 // key (those whose master key is not configured); at zero, older master keys
 // no longer protect any data key.
 func (s *SecretStore) RewrapKeys(ctx context.Context) (int, error) {
+	ctx = tenant.System(ctx) // lists every organization; each one is then processed under its own scope
 	if s == nil {
 		return 0, ErrDenied
 	}
@@ -335,6 +339,7 @@ func (s *SecretStore) RewrapKeys(ctx context.Context) (int, error) {
 }
 
 func (s *SecretStore) rewrapOrganization(ctx context.Context, organizationID string) error {
+	ctx = tenant.Org(ctx, organizationID)
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err

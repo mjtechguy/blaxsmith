@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var ErrProjectDenied = errors.New("project creation denied")
@@ -14,6 +15,7 @@ var ErrProjectDenied = errors.New("project creation denied")
 // CreateProjectAs rechecks the live session under locks and records the
 // project and principal audit event in one transaction.
 func (s *Store) CreateProjectAs(ctx context.Context, caller identity.Caller, slug, name string) (string, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID) ||
 		!slugPattern.MatchString(slug) || strings.TrimSpace(name) == "" || len(name) > 160 {
 		return "", ErrInvalid

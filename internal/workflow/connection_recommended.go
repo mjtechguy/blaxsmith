@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var recommendedModelID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`)
@@ -15,6 +16,7 @@ var recommendedModelID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}
 // admins for organization connections, project admins for project ones, and
 // the owner of a personal one.
 func (s *Store) SetRecommendedModelsAs(ctx context.Context, caller identity.Caller, connectionID string, models []string) ([]string, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID) || connectionID == "" || len(connectionID) > 64 || len(models) > 50 {
 		return nil, ErrInvalid
 	}

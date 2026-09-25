@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Model gateway G3 (docs/model-gateway-plan.md §8, §9): soft budgets and
@@ -149,6 +150,7 @@ type BudgetsView struct {
 
 // BudgetsAs is Admin → Budgets (owners and admins).
 func (s *Store) BudgetsAs(ctx context.Context, caller identity.Caller) (BudgetsView, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := s.beginScoped(ctx, caller, ScopeOrganization, "")
 	if err != nil {
 		return BudgetsView{}, adminScopeError(err)
@@ -174,6 +176,7 @@ func auditGateway(ctx context.Context, tx pgx.Tx, caller identity.Caller, action
 
 // SetBudgetsEnabledAs flips the §15.1 "Budgets & alerts" switch (audited old → new).
 func (s *Store) SetBudgetsEnabledAs(ctx context.Context, caller identity.Caller, enabled bool) (bool, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := s.beginScoped(ctx, caller, ScopeOrganization, "")
 	if err != nil {
 		return false, adminScopeError(err)
@@ -237,6 +240,7 @@ func uniqueViolation(err error) bool {
 // CreateBudgetAs adds a budget (owners and admins, audited). One active
 // budget per organization, project or user.
 func (s *Store) CreateBudgetAs(ctx context.Context, caller identity.Caller, in BudgetInput) (Budget, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	in, ok := validBudget(in)
 	if !ok {
 		return Budget{}, ErrInvalid
@@ -285,6 +289,7 @@ func (s *Store) CreateBudgetAs(ctx context.Context, caller identity.Caller, in B
 // to move a budget. Raising the amount does not re-fire thresholds already
 // alerted this period.
 func (s *Store) UpdateBudgetAs(ctx context.Context, caller identity.Caller, id string, in BudgetInput, expectedVersion int64) (Budget, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(id) {
 		return Budget{}, ErrInvalid
 	}
@@ -330,6 +335,7 @@ func (s *Store) UpdateBudgetAs(ctx context.Context, caller identity.Caller, id s
 
 // ArchiveBudgetAs retires a budget (audited). Its alerts stay in the feed.
 func (s *Store) ArchiveBudgetAs(ctx context.Context, caller identity.Caller, id string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(id) {
 		return ErrInvalid
 	}
@@ -378,6 +384,7 @@ func (s *Store) alerts(ctx context.Context, tx pgx.Tx, where string, args ...any
 
 // BudgetAlertsAs is Admin → Alerts: every alert in the organization.
 func (s *Store) BudgetAlertsAs(ctx context.Context, caller identity.Caller, openOnly bool) ([]BudgetAlert, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := s.beginScoped(ctx, caller, ScopeOrganization, "")
 	if err != nil {
 		return nil, adminScopeError(err)
@@ -416,6 +423,7 @@ func isOrgAdmin(caller identity.Caller) bool { return caller.Role == "owner" || 
 
 // AcknowledgeBudgetAlertAs closes an alert for every recipient (audited).
 func (s *Store) AcknowledgeBudgetAlertAs(ctx context.Context, caller identity.Caller, id string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -438,6 +446,7 @@ func (s *Store) AcknowledgeBudgetAlertAs(ctx context.Context, caller identity.Ca
 
 // SnoozeBudgetAlertAs hides an open alert from the inbox for 1–720 hours.
 func (s *Store) SnoozeBudgetAlertAs(ctx context.Context, caller identity.Caller, id string, hours int) (time.Time, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if hours < 1 || hours > 720 {
 		return time.Time{}, ErrInvalid
 	}
@@ -478,6 +487,7 @@ type ProjectUsage struct {
 // ProjectUsageAs is Project → Usage for this month to date: any member of
 // the organization. Spend by user is shown to project administrators only.
 func (s *Store) ProjectUsageAs(ctx context.Context, caller identity.Caller, projectID string) (ProjectUsage, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID, projectID) {
 		return ProjectUsage{}, ErrInvalid
 	}
@@ -590,6 +600,7 @@ func (s *Store) projectTopRuns(ctx context.Context, tx pgx.Tx, org, projectID st
 // from several gateway replicas: a losing insert does nothing and writes no
 // audit event. It returns the number of alerts created.
 func EvaluateBudgets(ctx context.Context, pool *pgxpool.Pool, now time.Time) (int, error) {
+	ctx = tenant.System(ctx) // lists every organization's budgets; each alert then fires under its own organization
 	start, end := BudgetPeriod(now)
 	rows, err := pool.Query(ctx, `SELECT b.organization_id::text,b.id::text,b.name,b.scope,COALESCE(b.project_id::text,''),
 		COALESCE(b.principal_id::text,''),b.amount_usd_micros,b.thresholds,`+budgetSpend+`
@@ -637,6 +648,7 @@ func EvaluateBudgets(ctx context.Context, pool *pgxpool.Pool, now time.Time) (in
 
 func fireBudgetAlert(ctx context.Context, pool *pgxpool.Pool, org, budgetID, name, scope, projectID, principalID string,
 	threshold int32, spend, amount, forecast int64, period time.Time) (bool, error) {
+	ctx = tenant.Org(ctx, org)
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return false, err

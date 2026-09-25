@@ -9,11 +9,12 @@ import (
 
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestAdminDashboardIsScopedDeniesNonAdminsAndHidesSecrets(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)

@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var imageDigestPattern = regexp.MustCompile(`@sha256:[0-9a-f]{64}$`)
@@ -23,6 +24,7 @@ type RuntimeBinding struct {
 // BindRuntime pins the read-back AX/Substrate identity before the attempt is
 // acknowledged as running. Only the current reserved/reconciling owner may bind.
 func (s *Store) BindRuntime(ctx context.Context, a Attempt, b RuntimeBinding) error {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if !validAttempt(a) || b.AXAtespace == "" || b.AXTask == "" || b.ActorUID == "" ||
 		b.TemplateUID == "" || b.WorkerPool == "" || !imageDigestPattern.MatchString(b.Image) ||
 		!hashPattern.MatchString(b.CommandSHA256) {
@@ -92,6 +94,7 @@ func (s *Store) BindRuntime(ctx context.Context, a Attempt, b RuntimeBinding) er
 // GetRuntimeBinding returns the actor identity already read back and pinned
 // for this exact attempt. Callers still recheck current ownership before use.
 func (s *Store) GetRuntimeBinding(ctx context.Context, a Attempt) (RuntimeBinding, error) {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if !validAttempt(a) {
 		return RuntimeBinding{}, ErrInvalid
 	}

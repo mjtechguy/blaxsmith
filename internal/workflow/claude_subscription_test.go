@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestClaudeSubscriptionIsOwnerOnlyAndOrgGated(t *testing.T) {
@@ -15,7 +16,7 @@ func TestClaudeSubscriptionIsOwnerOnlyAndOrgGated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org := organization(t, pool, "claude-sub")
 	owner := reviewer(t, pool, org, "owner", "claude-sub-owner")
 	alice := reviewer(t, pool, org, "member", "claude-sub-alice")
