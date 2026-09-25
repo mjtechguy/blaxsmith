@@ -128,8 +128,19 @@ message HaltRunResponse { string run_id = 1; string state = 2; }
 message RevokeGrantRequest { string grant_id = 1; }
 message RevokeGrantResponse { string grant_id = 1; }
 
+// GetSessionPolicy reports the browser session lifetime this installation
+// enforces. It is platform configuration (serve-app flags), read-only here.
+message GetSessionPolicyRequest {}
+message GetSessionPolicyResponse {
+  int64 idle_timeout_seconds = 1; // A session ends after this long without activity (sliding).
+  int64 absolute_lifetime_seconds = 2; // A session ends this long after sign-in, whatever the activity.
+  int64 access_token_seconds = 3; // Access token lifetime; browsers renew it silently.
+  int64 refresh_grace_seconds = 4; // A rotated refresh token still answers concurrent tabs this long.
+}
+
 service AdminService {
   rpc GetAdminOverview(GetAdminOverviewRequest) returns (GetAdminOverviewResponse);
+  rpc GetSessionPolicy(GetSessionPolicyRequest) returns (GetSessionPolicyResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
   rpc ListAuditActions(ListAuditActionsRequest) returns (ListAuditActionsResponse);
   rpc HaltRun(HaltRunRequest) returns (HaltRunResponse);

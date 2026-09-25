@@ -134,6 +134,8 @@ func TestTerminalTakeoverPostgres(t *testing.T) {
 	}
 	handler := newTerminalHandler(guard, origin, store, router, hub)
 	handler.recheck = time.Hour // only hub wakes drive rechecks in this test
+	closing := make(chan struct{})
+	handler.closing = closing
 	mux := http.NewServeMux()
 	mux.Handle("/api/terminal/attempts/{attemptID}", guard.Wrap(handler))
 	server.Config.Handler = mux
@@ -332,6 +334,20 @@ func TestTerminalTakeoverPostgres(t *testing.T) {
 			t.Fatalf("revoked socket closed without error frame: %v", err)
 		}
 		if kind == websocket.MessageText && strings.Contains(string(data), `"type":"error"`) {
+			break
+		}
+	}
+
+	// Shutdown sends live sockets away with 1001 so browsers reconnect at once.
+	close(closing)
+	for {
+		readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		_, _, err := aliceAgain.Read(readCtx)
+		cancel()
+		if err != nil {
+			if status := websocket.CloseStatus(err); status != websocket.StatusGoingAway {
+				t.Fatalf("draining socket closed with %v (%v), want 1001", status, err)
+			}
 			break
 		}
 	}

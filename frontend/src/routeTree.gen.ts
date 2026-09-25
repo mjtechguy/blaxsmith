@@ -41,6 +41,7 @@ import { Route as AdminSettingsConnectionsRouteImport } from './routes/admin.set
 import { Route as AdminSettingsGithubAppRouteImport } from './routes/admin.settings.github-app'
 import { Route as AdminSettingsPoliciesRouteImport } from './routes/admin.settings.policies'
 import { Route as AdminSettingsRetentionRouteImport } from './routes/admin.settings.retention'
+import { Route as AdminSettingsSessionsRouteImport } from './routes/admin.settings.sessions'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin.users.index'
 import { Route as AdminUsersPrincipalIdRouteImport } from './routes/admin.users.$principalId'
 import { Route as AdminUsersNewRouteImport } from './routes/admin.users.new'
@@ -246,6 +247,11 @@ const AdminSettingsPoliciesRoute = AdminSettingsPoliciesRouteImport.update({
 const AdminSettingsRetentionRoute = AdminSettingsRetentionRouteImport.update({
   id: '/retention',
   path: '/retention',
+  getParentRoute: () => AdminSettingsRoute,
+} as any)
+const AdminSettingsSessionsRoute = AdminSettingsSessionsRouteImport.update({
+  id: '/sessions',
+  path: '/sessions',
   getParentRoute: () => AdminSettingsRoute,
 } as any)
 const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
@@ -514,6 +520,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
   '/admin/settings/retention': typeof AdminSettingsRetentionRoute
+  '/admin/settings/sessions': typeof AdminSettingsSessionsRoute
   '/admin/users/$principalId': typeof AdminUsersPrincipalIdRoute
   '/admin/users/new': typeof AdminUsersNewRoute
   '/me/connections/$connectionId': typeof MeConnectionsConnectionIdRoute
@@ -586,6 +593,7 @@ export interface FileRoutesByTo {
   '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
   '/admin/settings/retention': typeof AdminSettingsRetentionRoute
+  '/admin/settings/sessions': typeof AdminSettingsSessionsRoute
   '/admin/users/$principalId': typeof AdminUsersPrincipalIdRoute
   '/admin/users/new': typeof AdminUsersNewRoute
   '/me/connections/$connectionId': typeof MeConnectionsConnectionIdRoute
@@ -662,6 +670,7 @@ export interface FileRoutesById {
   '/admin/settings/github-app': typeof AdminSettingsGithubAppRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
   '/admin/settings/retention': typeof AdminSettingsRetentionRoute
+  '/admin/settings/sessions': typeof AdminSettingsSessionsRoute
   '/admin/users/$principalId': typeof AdminUsersPrincipalIdRoute
   '/admin/users/new': typeof AdminUsersNewRoute
   '/me/connections/$connectionId': typeof MeConnectionsConnectionIdRoute
@@ -740,6 +749,7 @@ export interface FileRouteTypes {
     | '/admin/settings/github-app'
     | '/admin/settings/policies'
     | '/admin/settings/retention'
+    | '/admin/settings/sessions'
     | '/admin/users/$principalId'
     | '/admin/users/new'
     | '/me/connections/$connectionId'
@@ -812,6 +822,7 @@ export interface FileRouteTypes {
     | '/admin/settings/github-app'
     | '/admin/settings/policies'
     | '/admin/settings/retention'
+    | '/admin/settings/sessions'
     | '/admin/users/$principalId'
     | '/admin/users/new'
     | '/me/connections/$connectionId'
@@ -887,6 +898,7 @@ export interface FileRouteTypes {
     | '/admin/settings/github-app'
     | '/admin/settings/policies'
     | '/admin/settings/retention'
+    | '/admin/settings/sessions'
     | '/admin/users/$principalId'
     | '/admin/users/new'
     | '/me/connections/$connectionId'
@@ -1184,6 +1196,13 @@ declare module '@tanstack/react-router' {
       path: '/retention'
       fullPath: '/admin/settings/retention'
       preLoaderRoute: typeof AdminSettingsRetentionRouteImport
+      parentRoute: typeof AdminSettingsRoute
+    }
+    '/admin/settings/sessions': {
+      id: '/admin/settings/sessions'
+      path: '/sessions'
+      fullPath: '/admin/settings/sessions'
+      preLoaderRoute: typeof AdminSettingsSessionsRouteImport
       parentRoute: typeof AdminSettingsRoute
     }
     '/admin/users/': {
@@ -1488,6 +1507,7 @@ interface AdminSettingsRouteChildren {
   AdminSettingsGithubAppRoute: typeof AdminSettingsGithubAppRoute
   AdminSettingsPoliciesRoute: typeof AdminSettingsPoliciesRoute
   AdminSettingsRetentionRoute: typeof AdminSettingsRetentionRoute
+  AdminSettingsSessionsRoute: typeof AdminSettingsSessionsRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
 }
 
@@ -1496,6 +1516,7 @@ const AdminSettingsRouteChildren: AdminSettingsRouteChildren = {
   AdminSettingsGithubAppRoute: AdminSettingsGithubAppRoute,
   AdminSettingsPoliciesRoute: AdminSettingsPoliciesRoute,
   AdminSettingsRetentionRoute: AdminSettingsRetentionRoute,
+  AdminSettingsSessionsRoute: AdminSettingsSessionsRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
 }
 

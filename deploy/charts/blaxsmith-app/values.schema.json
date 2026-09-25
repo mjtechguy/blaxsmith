@@ -3,6 +3,25 @@
   "type": "object",
   "properties": {
     "replicaCount": { "type": "integer", "minimum": 1 },
+    "updateStrategy": { "type": "string", "enum": ["RollingUpdate", "Recreate"] },
+    "session": {
+      "type": "object",
+      "properties": {
+        "idleTimeout": { "type": "string", "pattern": "^[0-9]+(h|m)$" },
+        "absoluteLifetime": { "type": "string", "pattern": "^[0-9]+(h|m)$" }
+      },
+      "required": ["idleTimeout", "absoluteLifetime"],
+      "additionalProperties": false
+    },
+    "shutdown": {
+      "type": "object",
+      "properties": {
+        "preStopSleepSeconds": { "type": "integer", "minimum": 0, "maximum": 120 },
+        "drainTimeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 600 }
+      },
+      "required": ["preStopSleepSeconds", "drainTimeoutSeconds"],
+      "additionalProperties": false
+    },
     "ha": {
       "type": "object",
       "properties": { "enabled": { "type": "boolean" } },

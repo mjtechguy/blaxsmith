@@ -24,11 +24,13 @@ type adminService struct {
 	// ponytail: the app cannot read AX pool replicas; operators may set
 	// BLAXSMITH_ADMIN_ATTEMPT_CAPACITY to show in-flight attempts against a max.
 	capacity int32
+	sessions identity.SessionPolicy
 }
 
 func newAdminService(guard *identity.BrowserGuard, store *workflow.Store, workerPool string) *adminService {
 	capacity, _ := strconv.ParseInt(os.Getenv("BLAXSMITH_ADMIN_ATTEMPT_CAPACITY"), 10, 32)
-	return &adminService{guard: guard, store: store, workerPool: workerPool, capacity: int32(max(capacity, 0))}
+	return &adminService{guard: guard, store: store, workerPool: workerPool, capacity: int32(max(capacity, 0)),
+		sessions: identity.DefaultSessionPolicy}
 }
 
 func adminTime(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
@@ -132,6 +134,20 @@ func (s *adminService) ListAuditActions(ctx context.Context, req *connect.Reques
 		return nil, adminError(err)
 	}
 	return connect.NewResponse(&api.ListAuditActionsResponse{Actions: actions}), nil
+}
+
+// GetSessionPolicy shows owners and admins the session lifetime in force.
+func (s *adminService) GetSessionPolicy(ctx context.Context, req *connect.Request[api.GetSessionPolicyRequest]) (*connect.Response[api.GetSessionPolicyResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	if caller.Role != "owner" && caller.Role != "admin" {
+		return nil, adminError(workflow.ErrAdminDenied)
+	}
+	return connect.NewResponse(&api.GetSessionPolicyResponse{
+		IdleTimeoutSeconds: int64(s.sessions.Idle.Seconds()), AbsoluteLifetimeSeconds: int64(s.sessions.Absolute.Seconds()),
+		AccessTokenSeconds: int64(identity.AccessLifetime.Seconds()), RefreshGraceSeconds: int64(identity.RefreshGrace.Seconds())}), nil
 }
 
 func (s *adminService) HaltRun(ctx context.Context, req *connect.Request[api.HaltRunRequest]) (*connect.Response[api.HaltRunResponse], error) {

@@ -36,6 +36,8 @@ type appConfig struct {
 	enableDispatch                                                                                        bool
 	allowOpenEgressDev                                                                                    bool
 	dispatchConfig                                                                                        dispatchConfig
+	sessionPolicy                                                                                         identity.SessionPolicy
+	shutdownTimeout                                                                                       time.Duration
 }
 
 func serveApp(args []string) error {
@@ -116,6 +118,9 @@ func serveAppContext(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := manager.SetPolicy(config.sessionPolicy); err != nil {
+		return err
+	}
 	serveCtx, stopServing := context.WithCancel(ctx)
 	defer stopServing()
 	activity := newActivityHub(pool)
@@ -138,8 +143,9 @@ func serveAppContext(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	drain := newDrainer()
 	handler, product, err := newAppHandler(startupCtx, pool, manager, config.origin, config.staticDir, activity,
-		config.dispatchConfig, interactions, guests)
+		config.dispatchConfig, interactions, guests, drain)
 	if err != nil {
 		return err
 	}
@@ -165,9 +171,10 @@ func serveAppContext(ctx context.Context, args []string) error {
 	shutdownDone := make(chan error, 1)
 	go func() {
 		<-serveCtx.Done()
-		shutdownCtx, stop := context.WithTimeout(context.WithoutCancel(serveCtx), 10*time.Second)
-		defer stop()
-		shutdownDone <- server.Shutdown(shutdownCtx)
+		// SIGTERM: fail readiness and send streams away, then stop accepting
+		// and let in-flight RPCs finish. In Kubernetes the pod's preStop sleep
+		// has already let endpoints drop this pod before SIGTERM arrives.
+		shutdownDone <- drain.shutdown(serveCtx, server, config.shutdownTimeout)
 	}()
 	pruneDone := make(chan struct{})
 	go func() {
@@ -243,6 +250,11 @@ func parseAppConfig(args []string) (appConfig, error) {
 	flags.BoolVar(&c.allowLocalDatabase, "allow-insecure-local-database", false, "allow plaintext PostgreSQL only over a literal loopback address or Unix socket")
 	flags.BoolVar(&c.enableDispatch, "enable-dispatch", false, "enable AX run dispatch after validating pinned runtime and credential configuration")
 	flags.BoolVar(&c.allowOpenEgressDev, "allow-open-egress-dev", false, "permit an explicitly configured open AX Gateway for development")
+	flags.DurationVar(&c.sessionPolicy.Idle, "session-idle-timeout", identity.DefaultSessionPolicy.Idle,
+		"browser sessions end after this long without a refresh (sliding)")
+	flags.DurationVar(&c.sessionPolicy.Absolute, "session-absolute-lifetime", identity.DefaultSessionPolicy.Absolute,
+		"browser sessions end this long after sign-in regardless of activity")
+	flags.DurationVar(&c.shutdownTimeout, "shutdown-timeout", 20*time.Second, "how long in-flight requests may finish after SIGTERM")
 	if err := flags.Parse(args); err != nil {
 		return c, err
 	}
@@ -251,6 +263,12 @@ func parseAppConfig(args []string) (appConfig, error) {
 	if flags.NArg() != 0 || (c.migrations != "apply" && c.migrations != "verify") || c.listen == "" || c.certFile == "" || c.keyFile == "" || c.signerFile == "" || c.databaseURL == "" ||
 		err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.String() != c.origin {
 		return c, errors.New("serve-app requires --listen, exact HTTPS --origin, --tls-cert-file, --tls-key-file, --signer-file, and BLAXSMITH_DATABASE_URL")
+	}
+	if err := c.sessionPolicy.Validate(); err != nil {
+		return c, err
+	}
+	if c.shutdownTimeout <= 0 || c.shutdownTimeout > 10*time.Minute {
+		return c, errors.New("--shutdown-timeout must be positive and at most 10m")
 	}
 	c.dispatchConfig, err = parseDispatchConfig(c.enableDispatch, c.allowOpenEgressDev, os.LookupEnv)
 	if err != nil {
@@ -289,7 +307,7 @@ func validateDatabaseTransport(config *pgxpool.Config, allowLocal bool) error {
 
 func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.SessionManager,
 	origin, staticDir string, activity *activityHub, dispatchConfig dispatchConfig, interactions *interact.Store,
-	guests *terminal.Router) (http.Handler, *productDispatch, error) {
+	guests *terminal.Router, drain *drainer) (http.Handler, *productDispatch, error) {
 	authPath, authHandler, err := identity.NewBrowserHandler(manager, origin)
 	if err != nil {
 		return nil, nil, err
@@ -329,7 +347,9 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	}
 	workflowPath, workflowHandler := apiv1connect.NewWorkflowServiceHandler(service, connect.WithReadMaxBytes(1<<20))
 	mux.Handle("/api"+workflowPath, http.StripPrefix("/api", guard.Wrap(workflowHandler)))
-	adminPath, adminHandler := apiv1connect.NewAdminServiceHandler(newAdminService(guard, store, dispatchConfig.workerPool),
+	admin := newAdminService(guard, store, dispatchConfig.workerPool)
+	admin.sessions = manager.Policy()
+	adminPath, adminHandler := apiv1connect.NewAdminServiceHandler(admin,
 		connect.WithReadMaxBytes(1<<16))
 	mux.Handle("/api"+adminPath, http.StripPrefix("/api", guard.Wrap(adminHandler)))
 	tools := &catalogService{client: &http.Client{Timeout: 30 * time.Second}}
@@ -362,8 +382,10 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	extensionPath, extensionHandler := apiv1connect.NewExtensionServiceHandler(newExtensionService(guard, store),
 		connect.WithReadMaxBytes(256<<10))
 	mux.Handle("/api"+extensionPath, http.StripPrefix("/api", guard.Wrap(extensionHandler)))
-	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity}))
-	mux.Handle("/api/terminal/attempts/{attemptID}", guard.Wrap(newTerminalHandler(guard, origin, store, guests, terminals)))
+	mux.Handle("/api/runs/{runID}/events", guard.Wrap(&runActivityHandler{guard: guard, store: store, hub: activity, closing: drain.done()}))
+	terminalHandler := newTerminalHandler(guard, origin, store, guests, terminals)
+	terminalHandler.closing = drain.done()
+	mux.Handle("/api/terminal/attempts/{attemptID}", guard.Wrap(terminalHandler))
 	catalogPath, catalogHandler := apiv1connect.NewCatalogServiceHandler(tools)
 	mux.Handle("/api"+catalogPath, http.StripPrefix("/api", catalogHandler))
 	mux.HandleFunc("/api", http.NotFound)
@@ -376,10 +398,16 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusOK)
 	})
+	// Readiness: fails while draining so no new traffic is routed here, and
+	// while PostgreSQL is unreachable. Liveness (/livez) depends on neither.
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if drain.draining() {
+			http.Error(w, "shutting down", http.StatusServiceUnavailable)
 			return
 		}
 		checkCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)

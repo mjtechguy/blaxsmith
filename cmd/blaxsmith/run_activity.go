@@ -109,6 +109,9 @@ type runActivityHandler struct {
 	guard *identity.BrowserGuard
 	store *workflow.Store
 	hub   *activityHub
+	// closing ends every stream on shutdown with a short retry hint, so
+	// EventSource reconnects promptly to a replica that is still serving.
+	closing <-chan struct{}
 }
 
 func (h *runActivityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +171,7 @@ func (h *runActivityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for {
-		count, ok := h.replay(w, flusher, r.Context(), r.Header, caller, runID, &after)
+		count, ok := h.replay(w, flusher, r.Context(), caller, runID, &after)
 		if !ok || count == activityReplayLimit {
 			return
 		}
@@ -176,11 +179,14 @@ func (h *runActivityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-h.closing:
+			writeActivity(w, flusher, "retry: 1000\n: server restarting\n\n")
+			return
 		case <-wake:
 		case <-ticker.C:
 			heartbeat = true
 		}
-		if !h.sameCaller(r.Context(), r.Header, caller) {
+		if !h.sameCaller(r.Context(), caller) {
 			return
 		}
 		if heartbeat && !writeActivity(w, flusher, ": heartbeat\n\n") {
@@ -214,16 +220,18 @@ func activityCursor(r *http.Request) (int64, error) {
 	return n, nil
 }
 
-func (h *runActivityHandler) sameCaller(ctx context.Context, header http.Header, caller identity.Caller) bool {
-	current, err := h.guard.StreamCaller(ctx, header)
+// sameCaller rechecks the live session, not the connect-time access cookie,
+// so a stream outlives that token's expiry but not revocation.
+func (h *runActivityHandler) sameCaller(ctx context.Context, caller identity.Caller) bool {
+	current, err := h.guard.RecheckStream(ctx, caller)
 	return err == nil && current.OrganizationID == caller.OrganizationID && current.PrincipalID == caller.PrincipalID &&
 		current.SessionID == caller.SessionID && current.Role == caller.Role
 }
 
-func (h *runActivityHandler) replay(w http.ResponseWriter, flusher http.Flusher, ctx context.Context, header http.Header, caller identity.Caller, runID string, after *int64) (int, bool) {
+func (h *runActivityHandler) replay(w http.ResponseWriter, flusher http.Flusher, ctx context.Context, caller identity.Caller, runID string, after *int64) (int, bool) {
 	count := 0
 	for count < activityReplayLimit {
-		if count > 0 && !h.sameCaller(ctx, header, caller) {
+		if count > 0 && !h.sameCaller(ctx, caller) {
 			return count, false
 		}
 		events, err := h.store.EventsAfter(ctx, caller.OrganizationID, runID, *after, activityBatch)

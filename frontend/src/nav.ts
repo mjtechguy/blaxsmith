@@ -72,6 +72,7 @@ export function navigation({ role, projectId, projectName }: NavContext): NavGro
     { id: "admin-settings", label: "Settings", href: "/admin/settings", icon: Settings, children: [
       { id: "admin-github-app", label: "GitHub app", href: "/admin/settings/github-app", icon: GitPullRequest },
       { id: "admin-connection-policy", label: "Connections", href: "/admin/settings/connections", icon: PlugZap },
+      { id: "admin-sessions", label: "Sessions", href: "/admin/settings/sessions", icon: KeyRound },
       { id: "admin-policies", label: "Policies", href: "/admin/settings/policies", icon: ShieldCheck, soon: true },
       { id: "admin-retention", label: "Retention", href: "/admin/settings/retention", icon: Timer, soon: true },
     ] },
@@ -164,3 +165,6 @@ export function safeNext(value: unknown): string {
   if (/[\\\u0000-\u001f\u007f]/.test(value) || /^\/login(?:[/?#]|$)/.test(value)) return "/";
   return value;
 }
+
+// Where an ended session goes: sign-in, then back to the page it was on.
+export const loginTarget = (href: string) => ({ to: "/login", search: { next: safeNext(href) } }) as const;

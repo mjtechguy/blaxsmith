@@ -129,6 +129,9 @@ a { color: inherit; text-decoration: none; }
 .state-panel h1 { margin: 0 0 8px; font-size: 22px; font-weight: 650; letter-spacing: -.025em; line-height: 1.25; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* Non-blocking reconnect notice: floats over the page, never replaces it. */
+.connection-banner { position: fixed; bottom: 16px; left: 50%; z-index: 90; display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 32px); padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; transform: translateX(-50%); background: var(--warning-soft); color: var(--warning-text); box-shadow: var(--pop-shadow); font-size: 13px; line-height: 1.35; }
+.connection-banner .text-action { flex: none; color: inherit; }
 
 .auth-frame { display: flex; min-height: 100vh; }
 .auth-story { position: relative; display: flex; flex: 1; overflow: hidden; background: radial-gradient(circle at 82% 18%, var(--story-glow-top), transparent 35%), radial-gradient(circle at 14% 82%, var(--story-glow-bottom), transparent 38%), var(--story-base); color: var(--story-text); }

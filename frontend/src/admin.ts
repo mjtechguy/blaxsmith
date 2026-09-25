@@ -46,3 +46,18 @@ export function ago(value: string, now = Date.now()): string {
   if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86_400)}d ago`;
 }
+
+// The platform's browser session lifetime (serve-app flags; read-only here).
+export const sessionPolicyKey = (organizationId: string) => ["admin-session-policy", organizationId] as const;
+export async function getSessionPolicy(signal?: AbortSignal) {
+  return client.getSessionPolicy({}, { signal });
+}
+
+// "7 days", "12 hours", "10 minutes": whole units only, the largest that fits.
+export function lifetimeLabel(seconds: bigint | number): string {
+  const s = Number(seconds);
+  for (const [unit, size] of [["day", 86_400], ["hour", 3_600], ["minute", 60]] as const) {
+    if (s >= size && s % size === 0) return `${s / size} ${unit}${s / size === 1 ? "" : "s"}`;
+  }
+  return `${s} second${s === 1 ? "" : "s"}`;
+}
