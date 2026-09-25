@@ -2,6 +2,20 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createServer } from "vite";
 
+test("sign-in returns only to same-origin app paths", async () => {
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { safeNext } = await server.ssrLoadModule("/src/nav.ts");
+    assert.equal(safeNext("/projects/p1/runs/r1?tab=review"), "/projects/p1/runs/r1?tab=review");
+    assert.equal(safeNext("/tools"), "/tools");
+    for (const bad of [undefined, "", "https://evil.test/", "//evil.test", "/\\evil.test", "javascript:alert(1)", "/login", "/login?next=/x", "/a\nb", `/${"x".repeat(600)}`]) {
+      assert.equal(safeNext(bad), "/", String(bad));
+    }
+  } finally {
+    await server.close();
+  }
+});
+
 test("concurrent tabs recheck the access cookie before rotating refresh", async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
   const previousWindow = globalThis.window;
