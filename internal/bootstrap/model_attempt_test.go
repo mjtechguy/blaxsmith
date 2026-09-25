@@ -60,6 +60,31 @@ func modelAttemptPool(t *testing.T) *pgxpool.Pool {
 
 func modelAttemptFixture(t *testing.T) (*pgxpool.Pool, *Ledger, *access.SecretStore, ModelAttempt, Runtime, Redeemed) {
 	t.Helper()
+	return modelAttemptFixtureWith(t, modelFixtureSpec{})
+}
+
+// modelFixtureSpec varies the fixture's model connection; the zero value is
+// an organization OpenAI API key granted to a workload.
+type modelFixtureSpec struct {
+	provider, model, origin, authMethod, key string
+	ownerKind, owner, granteeKind, grantee   string // owner "" = the organization
+}
+
+func modelAttemptFixtureWith(t *testing.T, spec modelFixtureSpec) (*pgxpool.Pool, *Ledger, *access.SecretStore, ModelAttempt, Runtime, Redeemed) {
+	t.Helper()
+	def := func(v *string, d string) {
+		if *v == "" {
+			*v = d
+		}
+	}
+	def(&spec.provider, "openai")
+	def(&spec.model, "gpt-6-luna")
+	def(&spec.origin, "https://api.openai.com")
+	def(&spec.authMethod, "api_key")
+	def(&spec.key, "private-provider-key")
+	def(&spec.ownerKind, "organization")
+	def(&spec.granteeKind, "workload")
+	def(&spec.grantee, "worker")
 	ctx := t.Context()
 	pool := modelAttemptPool(t)
 	var orgID string
@@ -102,25 +127,37 @@ func modelAttemptFixture(t *testing.T) (*pgxpool.Pool, *Ledger, *access.SecretSt
 	if err := store.ConfirmStarting(ctx, attempt); err != nil {
 		t.Fatal(err)
 	}
-	for _, statement := range []string{
-		`INSERT INTO access_provider_registrations
-			(organization_id,id,provider_kind,origin,delivery_modes,state)
-			VALUES ($1,'provider','openai','https://api.openai.com',ARRAY['native_raw'],'active')`,
-		`INSERT INTO access_connections
-			(organization_id,id,owner_kind,owner_id,provider_registration_id,external_account_id,auth_method,state)
-			VALUES ($1,'connection','organization',$1,'provider','account','api_key','active')`,
-		`INSERT INTO access_project_policies
-			(organization_id,project_id,version,git_read_enabled,delivery_modes)
-			VALUES ($1,$2,1,false,ARRAY['native_raw'])`,
-		`INSERT INTO access_grants
-			(organization_id,id,connection_id,project_id,grantee_kind,grantee_id,capability,resource,delivery_mode,issuer_id,expires_at)
-			VALUES ($1,'grant','connection',$2,'workload','worker','model.invoke','openai/gpt-6-luna','native_raw','owner',clock_timestamp()+interval '1 hour')`,
-	} {
-		args := []any{orgID}
-		if strings.Contains(statement, "$2") {
-			args = append(args, projectID)
+	def(&spec.owner, orgID)
+	if spec.authMethod == access.ClaudeSetupTokenAuth {
+		if _, err := pool.Exec(ctx, `UPDATE identity_organizations SET allow_member_claude_subscription=true WHERE id=$1`, orgID); err != nil {
+			t.Fatal(err)
 		}
-		if _, err := pool.Exec(ctx, statement, args...); err != nil {
+	}
+	if spec.granteeKind == "user" {
+		if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET initiator_principal_id=$3 WHERE organization_id=$1 AND id=$2`,
+			orgID, run.ID, spec.grantee); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, statement := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO access_provider_registrations
+			(organization_id,id,provider_kind,origin,delivery_modes,state)
+			VALUES ($1,'provider',$2,$3,ARRAY['native_raw'],'active')`, []any{orgID, spec.provider, spec.origin}},
+		{`INSERT INTO access_connections
+			(organization_id,id,owner_kind,owner_id,provider_registration_id,external_account_id,auth_method,state)
+			VALUES ($1,'connection',$2,$3,'provider','account',$4,'active')`, []any{orgID, spec.ownerKind, spec.owner, spec.authMethod}},
+		{`INSERT INTO access_project_policies
+			(organization_id,project_id,version,git_read_enabled,delivery_modes)
+			VALUES ($1,$2,1,false,ARRAY['native_raw'])`, []any{orgID, projectID}},
+		{`INSERT INTO access_grants
+			(organization_id,id,connection_id,project_id,grantee_kind,grantee_id,capability,resource,delivery_mode,issuer_id,expires_at)
+			VALUES ($1,'grant','connection',$2,$3,$4,'model.invoke',$5,'native_raw','owner',clock_timestamp()+interval '1 hour')`,
+			[]any{orgID, projectID, spec.granteeKind, spec.grantee, spec.provider + "/" + spec.model}},
+	} {
+		if _, err := pool.Exec(ctx, statement.sql, statement.args...); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -128,11 +165,11 @@ func modelAttemptFixture(t *testing.T) (*pgxpool.Pool, *Ledger, *access.SecretSt
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := secrets.Rotate(ctx, orgID, "connection", 0, []byte("private-provider-key"), nil); err != nil {
+	if _, err := secrets.Rotate(ctx, orgID, "connection", 0, []byte(spec.key), nil); err != nil {
 		t.Fatal(err)
 	}
 	grant := access.ModelGrant{OrganizationID: orgID, ProjectID: projectID, GrantID: "grant",
-		GranteeKind: "workload", GranteeID: "worker", Provider: "openai", Model: "gpt-6-luna"}
+		GranteeKind: spec.granteeKind, GranteeID: spec.grantee, Provider: spec.provider, Model: spec.model}
 	preflight, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -170,8 +207,8 @@ func modelAttemptFixture(t *testing.T) (*pgxpool.Pool, *Ledger, *access.SecretSt
 	}
 	model := ModelAttempt{Scope: scope, Attempt: attempt, Runtime: runtimeBinding, TTL: 10 * time.Minute,
 		Invoke: access.ModelInvoke{OrganizationID: orgID, ProjectID: projectID, AttemptID: attempt.ID,
-			BindingID: bindingID, GranteeKind: "workload", GranteeID: "worker",
-			Provider: "openai", Model: "gpt-6-luna", PolicyVersion: 1}}
+			BindingID: bindingID, GranteeKind: spec.granteeKind, GranteeID: spec.grantee,
+			Provider: spec.provider, Model: spec.model, PolicyVersion: 1}}
 	runtime := Runtime{Actor: actor, TemplateUID: runtimeBinding.TemplateUID,
 		Image: runtimeBinding.Image, WorkerPool: runtimeBinding.WorkerPool}
 	return pool, ledger, secrets, model, runtime, redeemed

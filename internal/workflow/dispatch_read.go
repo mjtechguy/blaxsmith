@@ -72,6 +72,10 @@ func (s *Store) ListReadyTasks(ctx context.Context, orgID string, limit int) ([]
 				AND parent.run_id=d.run_id AND parent.id=d.depends_on_task_id
 			WHERE d.organization_id=t.organization_id AND d.run_id=t.run_id AND d.task_id=t.id
 				AND parent.state<>'succeeded')
+		-- A stage paced for gateway headroom waits until its retry time, so
+		-- it cannot hold up other ready stages (docs/model-gateway-plan.md §5).
+		AND NOT EXISTS (SELECT 1 FROM gateway_paced_tasks gp WHERE gp.organization_id=t.organization_id
+			AND gp.task_id=t.id AND gp.retry_at>clock_timestamp())
 		ORDER BY r.created_at,t.created_at,t.id LIMIT $2`, orgID, limit)
 	if err != nil {
 		return nil, err

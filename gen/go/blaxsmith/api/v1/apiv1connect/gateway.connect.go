@@ -50,6 +50,18 @@ const (
 	// GatewayAdminServiceSetModelPriceOverrideProcedure is the fully-qualified name of the
 	// GatewayAdminService's SetModelPriceOverride RPC.
 	GatewayAdminServiceSetModelPriceOverrideProcedure = "/blaxsmith.api.v1.GatewayAdminService/SetModelPriceOverride"
+	// GatewayAdminServiceListGatewayRoutesProcedure is the fully-qualified name of the
+	// GatewayAdminService's ListGatewayRoutes RPC.
+	GatewayAdminServiceListGatewayRoutesProcedure = "/blaxsmith.api.v1.GatewayAdminService/ListGatewayRoutes"
+	// GatewayAdminServiceSaveGatewayRouteProcedure is the fully-qualified name of the
+	// GatewayAdminService's SaveGatewayRoute RPC.
+	GatewayAdminServiceSaveGatewayRouteProcedure = "/blaxsmith.api.v1.GatewayAdminService/SaveGatewayRoute"
+	// GatewayAdminServiceSetGatewayRouteStateProcedure is the fully-qualified name of the
+	// GatewayAdminService's SetGatewayRouteState RPC.
+	GatewayAdminServiceSetGatewayRouteStateProcedure = "/blaxsmith.api.v1.GatewayAdminService/SetGatewayRouteState"
+	// GatewayAdminServiceSaveGatewayPoolProcedure is the fully-qualified name of the
+	// GatewayAdminService's SaveGatewayPool RPC.
+	GatewayAdminServiceSaveGatewayPoolProcedure = "/blaxsmith.api.v1.GatewayAdminService/SaveGatewayPool"
 	// UsageServiceGetGatewayStatusProcedure is the fully-qualified name of the UsageService's
 	// GetGatewayStatus RPC.
 	UsageServiceGetGatewayStatusProcedure = "/blaxsmith.api.v1.UsageService/GetGatewayStatus"
@@ -63,6 +75,9 @@ const (
 	// UsageServiceSetProjectDeliveryProcedure is the fully-qualified name of the UsageService's
 	// SetProjectDelivery RPC.
 	UsageServiceSetProjectDeliveryProcedure = "/blaxsmith.api.v1.UsageService/SetProjectDelivery"
+	// UsageServiceListMySubscriptionLimitsProcedure is the fully-qualified name of the UsageService's
+	// ListMySubscriptionLimits RPC.
+	UsageServiceListMySubscriptionLimitsProcedure = "/blaxsmith.api.v1.UsageService/ListMySubscriptionLimits"
 )
 
 // GatewayAdminServiceClient is a client for the blaxsmith.api.v1.GatewayAdminService service.
@@ -72,6 +87,11 @@ type GatewayAdminServiceClient interface {
 	GetUsageOverview(context.Context, *connect.Request[v1.GetUsageOverviewRequest]) (*connect.Response[v1.GetUsageOverviewResponse], error)
 	ListModelPrices(context.Context, *connect.Request[v1.ListModelPricesRequest]) (*connect.Response[v1.ListModelPricesResponse], error)
 	SetModelPriceOverride(context.Context, *connect.Request[v1.SetModelPriceOverrideRequest]) (*connect.Response[v1.SetModelPriceOverrideResponse], error)
+	// Routes & pools (§4, §5, §9.1).
+	ListGatewayRoutes(context.Context, *connect.Request[v1.ListGatewayRoutesRequest]) (*connect.Response[v1.ListGatewayRoutesResponse], error)
+	SaveGatewayRoute(context.Context, *connect.Request[v1.SaveGatewayRouteRequest]) (*connect.Response[v1.SaveGatewayRouteResponse], error)
+	SetGatewayRouteState(context.Context, *connect.Request[v1.SetGatewayRouteStateRequest]) (*connect.Response[v1.SetGatewayRouteStateResponse], error)
+	SaveGatewayPool(context.Context, *connect.Request[v1.SaveGatewayPoolRequest]) (*connect.Response[v1.SaveGatewayPoolResponse], error)
 }
 
 // NewGatewayAdminServiceClient constructs a client for the blaxsmith.api.v1.GatewayAdminService
@@ -115,6 +135,30 @@ func NewGatewayAdminServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(gatewayAdminServiceMethods.ByName("SetModelPriceOverride")),
 			connect.WithClientOptions(opts...),
 		),
+		listGatewayRoutes: connect.NewClient[v1.ListGatewayRoutesRequest, v1.ListGatewayRoutesResponse](
+			httpClient,
+			baseURL+GatewayAdminServiceListGatewayRoutesProcedure,
+			connect.WithSchema(gatewayAdminServiceMethods.ByName("ListGatewayRoutes")),
+			connect.WithClientOptions(opts...),
+		),
+		saveGatewayRoute: connect.NewClient[v1.SaveGatewayRouteRequest, v1.SaveGatewayRouteResponse](
+			httpClient,
+			baseURL+GatewayAdminServiceSaveGatewayRouteProcedure,
+			connect.WithSchema(gatewayAdminServiceMethods.ByName("SaveGatewayRoute")),
+			connect.WithClientOptions(opts...),
+		),
+		setGatewayRouteState: connect.NewClient[v1.SetGatewayRouteStateRequest, v1.SetGatewayRouteStateResponse](
+			httpClient,
+			baseURL+GatewayAdminServiceSetGatewayRouteStateProcedure,
+			connect.WithSchema(gatewayAdminServiceMethods.ByName("SetGatewayRouteState")),
+			connect.WithClientOptions(opts...),
+		),
+		saveGatewayPool: connect.NewClient[v1.SaveGatewayPoolRequest, v1.SaveGatewayPoolResponse](
+			httpClient,
+			baseURL+GatewayAdminServiceSaveGatewayPoolProcedure,
+			connect.WithSchema(gatewayAdminServiceMethods.ByName("SaveGatewayPool")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -125,6 +169,10 @@ type gatewayAdminServiceClient struct {
 	getUsageOverview      *connect.Client[v1.GetUsageOverviewRequest, v1.GetUsageOverviewResponse]
 	listModelPrices       *connect.Client[v1.ListModelPricesRequest, v1.ListModelPricesResponse]
 	setModelPriceOverride *connect.Client[v1.SetModelPriceOverrideRequest, v1.SetModelPriceOverrideResponse]
+	listGatewayRoutes     *connect.Client[v1.ListGatewayRoutesRequest, v1.ListGatewayRoutesResponse]
+	saveGatewayRoute      *connect.Client[v1.SaveGatewayRouteRequest, v1.SaveGatewayRouteResponse]
+	setGatewayRouteState  *connect.Client[v1.SetGatewayRouteStateRequest, v1.SetGatewayRouteStateResponse]
+	saveGatewayPool       *connect.Client[v1.SaveGatewayPoolRequest, v1.SaveGatewayPoolResponse]
 }
 
 // GetGatewaySettings calls blaxsmith.api.v1.GatewayAdminService.GetGatewaySettings.
@@ -152,6 +200,26 @@ func (c *gatewayAdminServiceClient) SetModelPriceOverride(ctx context.Context, r
 	return c.setModelPriceOverride.CallUnary(ctx, req)
 }
 
+// ListGatewayRoutes calls blaxsmith.api.v1.GatewayAdminService.ListGatewayRoutes.
+func (c *gatewayAdminServiceClient) ListGatewayRoutes(ctx context.Context, req *connect.Request[v1.ListGatewayRoutesRequest]) (*connect.Response[v1.ListGatewayRoutesResponse], error) {
+	return c.listGatewayRoutes.CallUnary(ctx, req)
+}
+
+// SaveGatewayRoute calls blaxsmith.api.v1.GatewayAdminService.SaveGatewayRoute.
+func (c *gatewayAdminServiceClient) SaveGatewayRoute(ctx context.Context, req *connect.Request[v1.SaveGatewayRouteRequest]) (*connect.Response[v1.SaveGatewayRouteResponse], error) {
+	return c.saveGatewayRoute.CallUnary(ctx, req)
+}
+
+// SetGatewayRouteState calls blaxsmith.api.v1.GatewayAdminService.SetGatewayRouteState.
+func (c *gatewayAdminServiceClient) SetGatewayRouteState(ctx context.Context, req *connect.Request[v1.SetGatewayRouteStateRequest]) (*connect.Response[v1.SetGatewayRouteStateResponse], error) {
+	return c.setGatewayRouteState.CallUnary(ctx, req)
+}
+
+// SaveGatewayPool calls blaxsmith.api.v1.GatewayAdminService.SaveGatewayPool.
+func (c *gatewayAdminServiceClient) SaveGatewayPool(ctx context.Context, req *connect.Request[v1.SaveGatewayPoolRequest]) (*connect.Response[v1.SaveGatewayPoolResponse], error) {
+	return c.saveGatewayPool.CallUnary(ctx, req)
+}
+
 // GatewayAdminServiceHandler is an implementation of the blaxsmith.api.v1.GatewayAdminService
 // service.
 type GatewayAdminServiceHandler interface {
@@ -160,6 +228,11 @@ type GatewayAdminServiceHandler interface {
 	GetUsageOverview(context.Context, *connect.Request[v1.GetUsageOverviewRequest]) (*connect.Response[v1.GetUsageOverviewResponse], error)
 	ListModelPrices(context.Context, *connect.Request[v1.ListModelPricesRequest]) (*connect.Response[v1.ListModelPricesResponse], error)
 	SetModelPriceOverride(context.Context, *connect.Request[v1.SetModelPriceOverrideRequest]) (*connect.Response[v1.SetModelPriceOverrideResponse], error)
+	// Routes & pools (§4, §5, §9.1).
+	ListGatewayRoutes(context.Context, *connect.Request[v1.ListGatewayRoutesRequest]) (*connect.Response[v1.ListGatewayRoutesResponse], error)
+	SaveGatewayRoute(context.Context, *connect.Request[v1.SaveGatewayRouteRequest]) (*connect.Response[v1.SaveGatewayRouteResponse], error)
+	SetGatewayRouteState(context.Context, *connect.Request[v1.SetGatewayRouteStateRequest]) (*connect.Response[v1.SetGatewayRouteStateResponse], error)
+	SaveGatewayPool(context.Context, *connect.Request[v1.SaveGatewayPoolRequest]) (*connect.Response[v1.SaveGatewayPoolResponse], error)
 }
 
 // NewGatewayAdminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -199,6 +272,30 @@ func NewGatewayAdminServiceHandler(svc GatewayAdminServiceHandler, opts ...conne
 		connect.WithSchema(gatewayAdminServiceMethods.ByName("SetModelPriceOverride")),
 		connect.WithHandlerOptions(opts...),
 	)
+	gatewayAdminServiceListGatewayRoutesHandler := connect.NewUnaryHandler(
+		GatewayAdminServiceListGatewayRoutesProcedure,
+		svc.ListGatewayRoutes,
+		connect.WithSchema(gatewayAdminServiceMethods.ByName("ListGatewayRoutes")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gatewayAdminServiceSaveGatewayRouteHandler := connect.NewUnaryHandler(
+		GatewayAdminServiceSaveGatewayRouteProcedure,
+		svc.SaveGatewayRoute,
+		connect.WithSchema(gatewayAdminServiceMethods.ByName("SaveGatewayRoute")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gatewayAdminServiceSetGatewayRouteStateHandler := connect.NewUnaryHandler(
+		GatewayAdminServiceSetGatewayRouteStateProcedure,
+		svc.SetGatewayRouteState,
+		connect.WithSchema(gatewayAdminServiceMethods.ByName("SetGatewayRouteState")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gatewayAdminServiceSaveGatewayPoolHandler := connect.NewUnaryHandler(
+		GatewayAdminServiceSaveGatewayPoolProcedure,
+		svc.SaveGatewayPool,
+		connect.WithSchema(gatewayAdminServiceMethods.ByName("SaveGatewayPool")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blaxsmith.api.v1.GatewayAdminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case GatewayAdminServiceGetGatewaySettingsProcedure:
@@ -211,6 +308,14 @@ func NewGatewayAdminServiceHandler(svc GatewayAdminServiceHandler, opts ...conne
 			gatewayAdminServiceListModelPricesHandler.ServeHTTP(w, r)
 		case GatewayAdminServiceSetModelPriceOverrideProcedure:
 			gatewayAdminServiceSetModelPriceOverrideHandler.ServeHTTP(w, r)
+		case GatewayAdminServiceListGatewayRoutesProcedure:
+			gatewayAdminServiceListGatewayRoutesHandler.ServeHTTP(w, r)
+		case GatewayAdminServiceSaveGatewayRouteProcedure:
+			gatewayAdminServiceSaveGatewayRouteHandler.ServeHTTP(w, r)
+		case GatewayAdminServiceSetGatewayRouteStateProcedure:
+			gatewayAdminServiceSetGatewayRouteStateHandler.ServeHTTP(w, r)
+		case GatewayAdminServiceSaveGatewayPoolProcedure:
+			gatewayAdminServiceSaveGatewayPoolHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -240,6 +345,22 @@ func (UnimplementedGatewayAdminServiceHandler) SetModelPriceOverride(context.Con
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.SetModelPriceOverride is not implemented"))
 }
 
+func (UnimplementedGatewayAdminServiceHandler) ListGatewayRoutes(context.Context, *connect.Request[v1.ListGatewayRoutesRequest]) (*connect.Response[v1.ListGatewayRoutesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.ListGatewayRoutes is not implemented"))
+}
+
+func (UnimplementedGatewayAdminServiceHandler) SaveGatewayRoute(context.Context, *connect.Request[v1.SaveGatewayRouteRequest]) (*connect.Response[v1.SaveGatewayRouteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.SaveGatewayRoute is not implemented"))
+}
+
+func (UnimplementedGatewayAdminServiceHandler) SetGatewayRouteState(context.Context, *connect.Request[v1.SetGatewayRouteStateRequest]) (*connect.Response[v1.SetGatewayRouteStateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.SetGatewayRouteState is not implemented"))
+}
+
+func (UnimplementedGatewayAdminServiceHandler) SaveGatewayPool(context.Context, *connect.Request[v1.SaveGatewayPoolRequest]) (*connect.Response[v1.SaveGatewayPoolResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.GatewayAdminService.SaveGatewayPool is not implemented"))
+}
+
 // UsageServiceClient is a client for the blaxsmith.api.v1.UsageService service.
 type UsageServiceClient interface {
 	GetGatewayStatus(context.Context, *connect.Request[v1.GetGatewayStatusRequest]) (*connect.Response[v1.GetGatewayStatusResponse], error)
@@ -247,6 +368,8 @@ type UsageServiceClient interface {
 	GetRunCost(context.Context, *connect.Request[v1.GetRunCostRequest]) (*connect.Response[v1.GetRunCostResponse], error)
 	GetProjectDelivery(context.Context, *connect.Request[v1.GetProjectDeliveryRequest]) (*connect.Response[v1.GetProjectDeliveryResponse], error)
 	SetProjectDelivery(context.Context, *connect.Request[v1.SetProjectDeliveryRequest]) (*connect.Response[v1.SetProjectDeliveryResponse], error)
+	// The caller's own personal subscriptions only (§6, §9.2).
+	ListMySubscriptionLimits(context.Context, *connect.Request[v1.ListMySubscriptionLimitsRequest]) (*connect.Response[v1.ListMySubscriptionLimitsResponse], error)
 }
 
 // NewUsageServiceClient constructs a client for the blaxsmith.api.v1.UsageService service. By
@@ -290,16 +413,23 @@ func NewUsageServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(usageServiceMethods.ByName("SetProjectDelivery")),
 			connect.WithClientOptions(opts...),
 		),
+		listMySubscriptionLimits: connect.NewClient[v1.ListMySubscriptionLimitsRequest, v1.ListMySubscriptionLimitsResponse](
+			httpClient,
+			baseURL+UsageServiceListMySubscriptionLimitsProcedure,
+			connect.WithSchema(usageServiceMethods.ByName("ListMySubscriptionLimits")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // usageServiceClient implements UsageServiceClient.
 type usageServiceClient struct {
-	getGatewayStatus   *connect.Client[v1.GetGatewayStatusRequest, v1.GetGatewayStatusResponse]
-	getMyUsage         *connect.Client[v1.GetMyUsageRequest, v1.GetMyUsageResponse]
-	getRunCost         *connect.Client[v1.GetRunCostRequest, v1.GetRunCostResponse]
-	getProjectDelivery *connect.Client[v1.GetProjectDeliveryRequest, v1.GetProjectDeliveryResponse]
-	setProjectDelivery *connect.Client[v1.SetProjectDeliveryRequest, v1.SetProjectDeliveryResponse]
+	getGatewayStatus         *connect.Client[v1.GetGatewayStatusRequest, v1.GetGatewayStatusResponse]
+	getMyUsage               *connect.Client[v1.GetMyUsageRequest, v1.GetMyUsageResponse]
+	getRunCost               *connect.Client[v1.GetRunCostRequest, v1.GetRunCostResponse]
+	getProjectDelivery       *connect.Client[v1.GetProjectDeliveryRequest, v1.GetProjectDeliveryResponse]
+	setProjectDelivery       *connect.Client[v1.SetProjectDeliveryRequest, v1.SetProjectDeliveryResponse]
+	listMySubscriptionLimits *connect.Client[v1.ListMySubscriptionLimitsRequest, v1.ListMySubscriptionLimitsResponse]
 }
 
 // GetGatewayStatus calls blaxsmith.api.v1.UsageService.GetGatewayStatus.
@@ -327,6 +457,11 @@ func (c *usageServiceClient) SetProjectDelivery(ctx context.Context, req *connec
 	return c.setProjectDelivery.CallUnary(ctx, req)
 }
 
+// ListMySubscriptionLimits calls blaxsmith.api.v1.UsageService.ListMySubscriptionLimits.
+func (c *usageServiceClient) ListMySubscriptionLimits(ctx context.Context, req *connect.Request[v1.ListMySubscriptionLimitsRequest]) (*connect.Response[v1.ListMySubscriptionLimitsResponse], error) {
+	return c.listMySubscriptionLimits.CallUnary(ctx, req)
+}
+
 // UsageServiceHandler is an implementation of the blaxsmith.api.v1.UsageService service.
 type UsageServiceHandler interface {
 	GetGatewayStatus(context.Context, *connect.Request[v1.GetGatewayStatusRequest]) (*connect.Response[v1.GetGatewayStatusResponse], error)
@@ -334,6 +469,8 @@ type UsageServiceHandler interface {
 	GetRunCost(context.Context, *connect.Request[v1.GetRunCostRequest]) (*connect.Response[v1.GetRunCostResponse], error)
 	GetProjectDelivery(context.Context, *connect.Request[v1.GetProjectDeliveryRequest]) (*connect.Response[v1.GetProjectDeliveryResponse], error)
 	SetProjectDelivery(context.Context, *connect.Request[v1.SetProjectDeliveryRequest]) (*connect.Response[v1.SetProjectDeliveryResponse], error)
+	// The caller's own personal subscriptions only (§6, §9.2).
+	ListMySubscriptionLimits(context.Context, *connect.Request[v1.ListMySubscriptionLimitsRequest]) (*connect.Response[v1.ListMySubscriptionLimitsResponse], error)
 }
 
 // NewUsageServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -373,6 +510,12 @@ func NewUsageServiceHandler(svc UsageServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(usageServiceMethods.ByName("SetProjectDelivery")),
 		connect.WithHandlerOptions(opts...),
 	)
+	usageServiceListMySubscriptionLimitsHandler := connect.NewUnaryHandler(
+		UsageServiceListMySubscriptionLimitsProcedure,
+		svc.ListMySubscriptionLimits,
+		connect.WithSchema(usageServiceMethods.ByName("ListMySubscriptionLimits")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blaxsmith.api.v1.UsageService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case UsageServiceGetGatewayStatusProcedure:
@@ -385,6 +528,8 @@ func NewUsageServiceHandler(svc UsageServiceHandler, opts ...connect.HandlerOpti
 			usageServiceGetProjectDeliveryHandler.ServeHTTP(w, r)
 		case UsageServiceSetProjectDeliveryProcedure:
 			usageServiceSetProjectDeliveryHandler.ServeHTTP(w, r)
+		case UsageServiceListMySubscriptionLimitsProcedure:
+			usageServiceListMySubscriptionLimitsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -412,4 +557,8 @@ func (UnimplementedUsageServiceHandler) GetProjectDelivery(context.Context, *con
 
 func (UnimplementedUsageServiceHandler) SetProjectDelivery(context.Context, *connect.Request[v1.SetProjectDeliveryRequest]) (*connect.Response[v1.SetProjectDeliveryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.UsageService.SetProjectDelivery is not implemented"))
+}
+
+func (UnimplementedUsageServiceHandler) ListMySubscriptionLimits(context.Context, *connect.Request[v1.ListMySubscriptionLimitsRequest]) (*connect.Response[v1.ListMySubscriptionLimitsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.UsageService.ListMySubscriptionLimits is not implemented"))
 }

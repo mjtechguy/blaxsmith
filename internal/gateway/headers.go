@@ -2,7 +2,10 @@ package gateway
 
 import (
 	"net/http"
+	"slices"
 	"strings"
+
+	"github.com/mjtechguy/blaxsmith/internal/access"
 )
 
 // hopByHop headers are connection-scoped (RFC 9110 §7.6.1) and never forwarded.
@@ -39,12 +42,31 @@ func copyRequestHeaders(dst, src http.Header) {
 	}
 }
 
+// claudeOAuthBeta is the beta a Claude subscription token requires when sent
+// as an OAuth bearer (docs/model-gateway-plan.md §6.1).
+const claudeOAuthBeta = "oauth-2025-04-20"
+
 // injectCredential adds the route's real credential; the only one sent.
-func injectCredential(h http.Header, family, path string, key []byte) {
-	switch family {
-	case "anthropic":
+// A member's own Claude setup-token goes as Authorization: Bearer with the
+// OAuth beta instead of x-api-key; the owner's Codex sign-in goes as a
+// bearer with its ChatGPT account id, as Codex itself sends it.
+func injectCredential(h http.Header, family, path string, key []byte, authMethod, accountID string) {
+	switch {
+	case authMethod == access.ClaudeSetupTokenAuth:
+		h.Set("Authorization", "Bearer "+string(key))
+		betas := headerList(h, "Anthropic-Beta")
+		if !slices.Contains(betas, claudeOAuthBeta) {
+			betas = append(betas, claudeOAuthBeta)
+		}
+		h.Set("Anthropic-Beta", strings.Join(betas, ","))
+	case authMethod == access.CodexSubscriptionAuth:
+		h.Set("Authorization", "Bearer "+string(key))
+		if accountID != "" {
+			h.Set("Chatgpt-Account-Id", accountID)
+		}
+	case family == "anthropic":
 		h.Set("X-Api-Key", string(key))
-	case "opencode", "opencode-go":
+	case family == "opencode" || family == "opencode-go":
 		h.Set("Authorization", "Bearer "+string(key))
 		if path == "/v1/messages" { // Zen's Anthropic-format endpoint also reads x-api-key.
 			h.Set("X-Api-Key", string(key))

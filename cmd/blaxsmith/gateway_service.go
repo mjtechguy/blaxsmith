@@ -6,6 +6,7 @@ import (
 
 	"connectrpc.com/connect"
 	api "github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1"
+	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
@@ -18,6 +19,9 @@ type gatewayAdminService struct {
 	// installed reports whether this installation runs the gateway
 	// Deployment (BLAXSMITH_GATEWAY_URL set by the Helm chart).
 	installed bool
+	// secrets seals Bedrock and Vertex route credentials (nil: cloud routes
+	// cannot be created on this installation).
+	secrets *access.SecretStore
 }
 
 // usageService serves any member's usage, the run Cost tab, and the
@@ -41,7 +45,9 @@ func gatewayError(err error) error {
 
 func settingsMessage(s workflow.GatewaySettings) *api.GatewaySettings {
 	return &api.GatewaySettings{Enabled: s.Enabled, DefaultDeliveryMode: s.DefaultDeliveryMode,
-		AllowProjectChoice: s.AllowProjectChoice, RemoveDirectEgress: s.RemoveDirectEgress}
+		AllowProjectChoice: s.AllowProjectChoice, RemoveDirectEgress: s.RemoveDirectEgress,
+		PoolsEnabled: s.PoolsEnabled, PacingEnabled: s.PacingEnabled, PersonalRoutesEnabled: s.PersonalRoutesEnabled,
+		EventRetentionDays: int32(s.EventRetentionDays)}
 }
 
 func totalsMessage(t workflow.UsageTotals) *api.UsageTotals {
@@ -83,7 +89,9 @@ func (s *gatewayAdminService) UpdateGatewaySettings(ctx context.Context, req *co
 	}
 	view, err := s.store.UpdateGatewaySettingsAs(ctx, caller, workflow.GatewaySettings{Enabled: in.Enabled,
 		DefaultDeliveryMode: in.DefaultDeliveryMode, AllowProjectChoice: in.AllowProjectChoice,
-		RemoveDirectEgress: in.RemoveDirectEgress}, req.Msg.ExpectedVersion, s.installed)
+		RemoveDirectEgress: in.RemoveDirectEgress, PoolsEnabled: in.PoolsEnabled, PacingEnabled: in.PacingEnabled,
+		PersonalRoutesEnabled: in.PersonalRoutesEnabled, EventRetentionDays: int(in.EventRetentionDays)},
+		req.Msg.ExpectedVersion, s.installed)
 	if err != nil {
 		return nil, gatewayError(err)
 	}

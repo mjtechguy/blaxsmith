@@ -1,9 +1,10 @@
 // Model gateway client (docs/model-gateway-plan.md): settings, usage and
 // run cost. Every cost is an estimate from list or contracted rates.
 import { createClient } from "@connectrpc/connect";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { browserTransport, csrfToken, currentSession, sessionQueryKey } from "./auth";
-import { GatewayAdminService, UsageService, type GatewaySettings, type ModelPrice, type UsageTotals } from "./gen/blaxsmith/api/v1/gateway_pb";
+import { GatewayAdminService, UsageService, type GatewayPool, type GatewayRoute, type GatewaySettings, type ModelPrice, type UsageTotals } from "./gen/blaxsmith/api/v1/gateway_pb";
 
 const admin = createClient(GatewayAdminService, browserTransport);
 const usage = createClient(UsageService, browserTransport);
@@ -76,4 +77,51 @@ export const deliveryLabels: Record<string, string> = {
 
 export const routeKindLabels: Record<string, string> = {
   anthropic: "Anthropic", openai: "OpenAI", opencode_zen: "OpenCode Zen", opencode_go: "OpenCode Go",
+  bedrock: "Amazon Bedrock", vertex: "Google Vertex AI", personal_subscription: "Personal subscription",
 };
+
+// Routes & pools (docs/model-gateway-plan.md §4, §5): API-key and cloud
+// routes an organization owns. Personal subscriptions are never routes.
+export const gatewayRoutesKey = (org: string) => ["gateway-routes", org] as const;
+export const mySubscriptionLimitsKey = (scope: string) => ["my-subscription-limits", scope] as const;
+export const listGatewayRoutes = (signal?: AbortSignal) => admin.listGatewayRoutes({}, { signal });
+export const saveGatewayRoute = async (route: Partial<Omit<GatewayRoute, "$typeName" | "$unknown">>, cloudCredential = "") =>
+  admin.saveGatewayRoute({ route, cloudCredential }, await csrf());
+export const setGatewayRouteState = async (id: string, state: string) => admin.setGatewayRouteState({ id, state }, await csrf());
+export const saveGatewayPool = async (pool: Partial<Omit<GatewayPool, "$typeName" | "$unknown">>) => admin.saveGatewayPool({ pool }, await csrf());
+export const listMySubscriptionLimits = (signal?: AbortSignal) => usage.listMySubscriptionLimits({}, { signal });
+
+export const familyLabels: Record<string, string> = { anthropic: "Claude (Anthropic)", openai: "OpenAI", opencode: "OpenCode Zen", "opencode-go": "OpenCode Go" };
+export const strategyLabels: Record<string, string> = { priority_headroom: "Priority, then headroom", weighted: "Weighted", fill_first: "Fill first" };
+// Which route kinds serve a pool family; the server enforces the same.
+export const familyKinds: Record<string, string[]> = { anthropic: ["anthropic", "bedrock", "vertex"], openai: ["openai"], opencode: ["opencode_zen"], "opencode-go": ["opencode_go"] };
+
+// "42 s" style countdown to an RFC 3339 time; "" when unknown or past.
+export function countdown(at: string, now: number): string {
+  if (!at) return "";
+  const seconds = Math.ceil((Date.parse(at) - now) / 1000);
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  if (seconds < 90) return `${seconds} s`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours} h ${minutes % 60} min`;
+  return `${Math.round(hours / 24)} d`;
+}
+
+// Window names as the owner sees them: primary (Codex), claude_5h, …
+export function windowLabel(name: string, minutes: number): string {
+  const span = !minutes ? "" : minutes % 1440 === 0 ? `${minutes / 1440}-day` : minutes % 60 === 0 ? `${minutes / 60}-hour` : `${minutes}-minute`;
+  const base = name === "primary" ? "Primary" : name === "secondary" ? "Secondary" : name.replace(/^claude_/, "").replaceAll("_", " ");
+  return span ? `${base} (${span} window)` : base;
+}
+
+// A clock that ticks once a second while mounted, for reset countdowns.
+export function useNow(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
+}

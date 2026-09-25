@@ -12,6 +12,11 @@ message GatewaySettings {
   string default_delivery_mode = 2; // native_raw or brokered_gateway.
   bool allow_project_choice = 3;
   bool remove_direct_egress = 4;
+  // G2 and G4 (§4, §5, §6). Personal routes stay owner-only and are never pooled.
+  bool pools_enabled = 20;
+  bool pacing_enabled = 21;
+  bool personal_routes_enabled = 22;
+  int32 event_retention_days = 23; // Raw usage events, 7–400; 0 keeps 90.
 }
 
 message GetGatewaySettingsRequest {}
@@ -116,6 +121,144 @@ service GatewayAdminService {
   rpc GetUsageOverview(GetUsageOverviewRequest) returns (GetUsageOverviewResponse);
   rpc ListModelPrices(ListModelPricesRequest) returns (ListModelPricesResponse);
   rpc SetModelPriceOverride(SetModelPriceOverrideRequest) returns (SetModelPriceOverrideResponse);
+  // Routes & pools (§4, §5, §9.1).
+  rpc ListGatewayRoutes(ListGatewayRoutesRequest) returns (ListGatewayRoutesResponse);
+  rpc SaveGatewayRoute(SaveGatewayRouteRequest) returns (SaveGatewayRouteResponse);
+  rpc SetGatewayRouteState(SetGatewayRouteStateRequest) returns (SetGatewayRouteStateResponse);
+  rpc SaveGatewayPool(SaveGatewayPoolRequest) returns (SaveGatewayPoolResponse);
+}
+
+// One provider-reported limit window on a route (§5).
+message GatewayRouteMetric {
+  string name = 1; // requests, tokens, input-tokens, output-tokens
+  int64 limit = 2;
+  int64 remaining = 3;
+  string reset_at = 4; // RFC 3339; empty when unknown
+}
+
+// A route: one organization-owned API-key or cloud connection plus an
+// endpoint kind. Personal subscriptions are never routes.
+message GatewayRoute {
+  string id = 1; // Empty on create.
+  string name = 2;
+  string kind = 3; // anthropic, bedrock, vertex, openai, opencode_zen, opencode_go
+  string connection_id = 4; // API-key routes; cloud routes get a new connection.
+  string connection_label = 5;
+  string region = 6; // bedrock and vertex
+  string cloud_project = 7; // vertex
+  map<string, string> model_map = 8; // our model id -> the route's model id
+  int32 weight = 9;
+  int32 priority = 10; // lower first
+  int32 concurrency_cap = 11; // 0 = none
+  int32 requests_per_minute = 12; // configured quota; 0 = none
+  int64 tokens_per_minute = 13;
+  string state = 14; // enabled, draining, disabled
+  repeated string pool_ids = 15;
+  // Live state, as the gateway last persisted it.
+  string breaker = 16; // closed, open, half_open
+  string cooldown_until = 17;
+  int32 inflight = 18;
+  repeated GatewayRouteMetric metrics = 19;
+  int32 requests_15m = 20;
+  int32 errors_15m = 21;
+  string last_429_at = 22;
+  string state_updated_at = 23;
+}
+
+message GatewayPool {
+  string id = 1; // Empty on create.
+  string name = 2;
+  string family = 3; // anthropic, openai, opencode, opencode-go
+  string strategy = 4; // priority_headroom, weighted, fill_first
+  int32 concurrency_cap = 5;
+  bool affinity = 6; // prompt-cache affinity
+  string state = 7; // enabled, disabled
+  repeated string route_ids = 8;
+  repeated string project_ids = 9; // projects granted this pool
+}
+
+// A ready stage queued for pool headroom (§5).
+message PacedStage {
+  string task_id = 1;
+  string run_id = 2;
+  string project_id = 3;
+  string stage = 4;
+  string pool_id = 5;
+  string reason = 6;
+  string resets_at = 7;
+  string since = 8;
+}
+
+message GatewayRouteOption {
+  string id = 1;
+  string label = 2;
+  string detail = 3; // provider, or project name
+}
+
+message ListGatewayRoutesRequest {}
+
+message ListGatewayRoutesResponse {
+  repeated GatewayRoute routes = 1;
+  repeated GatewayPool pools = 2;
+  repeated PacedStage paced = 3;
+  // Organization API-key connections a route may use.
+  repeated GatewayRouteOption connections = 4;
+  repeated GatewayRouteOption projects = 5;
+  bool pools_enabled = 6;
+  bool pacing_enabled = 7;
+}
+
+message SaveGatewayRouteRequest {
+  GatewayRoute route = 1;
+  // Bedrock: {"access_key_id","secret_access_key"[,"session_token"]}.
+  // Vertex: a service-account key JSON. Required when creating a cloud
+  // route, optional (rotation) when updating one. Never returned.
+  string cloud_credential = 2;
+}
+
+message SaveGatewayRouteResponse {
+  GatewayRoute route = 1;
+}
+
+message SetGatewayRouteStateRequest {
+  string id = 1;
+  string state = 2; // enabled, draining, disabled
+}
+
+message SetGatewayRouteStateResponse {}
+
+message SaveGatewayPoolRequest {
+  GatewayPool pool = 1;
+}
+
+message SaveGatewayPoolResponse {
+  GatewayPool pool = 1;
+}
+
+// A personal subscription's usage window as its provider reported it on the
+// owner's own gateway traffic (§6, §9.2). Display only.
+message SubscriptionLimitWindow {
+  string name = 1; // primary, secondary, claude_5h, ...
+  double used_pct = 2;
+  int32 window_minutes = 3; // 0 when not reported
+  string resets_at = 4;
+  string observed_at = 5;
+}
+
+message SubscriptionLimits {
+  string connection_id = 1;
+  string label = 2;
+  string provider = 3;
+  string auth_method = 4;
+  string state = 5;
+  repeated SubscriptionLimitWindow windows = 6; // empty: not reported by provider
+}
+
+message ListMySubscriptionLimitsRequest {}
+
+message ListMySubscriptionLimitsResponse {
+  repeated SubscriptionLimits subscriptions = 1;
+  bool personal_routes_enabled = 2;
 }
 
 message GetGatewayStatusRequest {}
@@ -204,4 +347,6 @@ service UsageService {
   rpc GetRunCost(GetRunCostRequest) returns (GetRunCostResponse);
   rpc GetProjectDelivery(GetProjectDeliveryRequest) returns (GetProjectDeliveryResponse);
   rpc SetProjectDelivery(SetProjectDeliveryRequest) returns (SetProjectDeliveryResponse);
+  // The caller's own personal subscriptions only (§6, §9.2).
+  rpc ListMySubscriptionLimits(ListMySubscriptionLimitsRequest) returns (ListMySubscriptionLimitsResponse);
 }

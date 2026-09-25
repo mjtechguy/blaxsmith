@@ -16,7 +16,10 @@ func TestClaudeSetupTokenDeliveryIsOwnerOnly(t *testing.T) {
 		{"org-owned connection", "native_raw", "anthropic", "organization", "o1", "user", "o1", false},
 		{"wrong provider", "native_raw", "openai", "user", "alice", "user", "alice", false},
 		{"empty owner", "native_raw", "anthropic", "user", "", "user", "", false},
-		{"gateway mode", "brokered_gateway", "anthropic", "user", "alice", "user", "alice", false},
+		{"gateway mode, owner's own run", "brokered_gateway", "anthropic", "user", "alice", "user", "alice", true},
+		{"gateway mode, another user", "brokered_gateway", "anthropic", "user", "alice", "user", "bob", false},
+		{"gateway mode, workload", "brokered_gateway", "anthropic", "user", "alice", "workload", "dispatcher", false},
+		{"gateway mode, org-owned", "brokered_gateway", "anthropic", "organization", "o1", "user", "o1", false},
 		{"oauth mode", "oauth_access", "anthropic", "user", "alice", "user", "alice", false},
 	}
 	for _, c := range cases {

@@ -28,8 +28,13 @@ type GatewaySettings struct {
 	DefaultDeliveryMode string                 `protobuf:"bytes,2,opt,name=default_delivery_mode,json=defaultDeliveryMode,proto3" json:"default_delivery_mode,omitempty"` // native_raw or brokered_gateway.
 	AllowProjectChoice  bool                   `protobuf:"varint,3,opt,name=allow_project_choice,json=allowProjectChoice,proto3" json:"allow_project_choice,omitempty"`
 	RemoveDirectEgress  bool                   `protobuf:"varint,4,opt,name=remove_direct_egress,json=removeDirectEgress,proto3" json:"remove_direct_egress,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// G2 and G4 (§4, §5, §6). Personal routes stay owner-only and are never pooled.
+	PoolsEnabled          bool  `protobuf:"varint,20,opt,name=pools_enabled,json=poolsEnabled,proto3" json:"pools_enabled,omitempty"`
+	PacingEnabled         bool  `protobuf:"varint,21,opt,name=pacing_enabled,json=pacingEnabled,proto3" json:"pacing_enabled,omitempty"`
+	PersonalRoutesEnabled bool  `protobuf:"varint,22,opt,name=personal_routes_enabled,json=personalRoutesEnabled,proto3" json:"personal_routes_enabled,omitempty"`
+	EventRetentionDays    int32 `protobuf:"varint,23,opt,name=event_retention_days,json=eventRetentionDays,proto3" json:"event_retention_days,omitempty"` // Raw usage events, 7–400; 0 keeps 90.
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *GatewaySettings) Reset() {
@@ -88,6 +93,34 @@ func (x *GatewaySettings) GetRemoveDirectEgress() bool {
 		return x.RemoveDirectEgress
 	}
 	return false
+}
+
+func (x *GatewaySettings) GetPoolsEnabled() bool {
+	if x != nil {
+		return x.PoolsEnabled
+	}
+	return false
+}
+
+func (x *GatewaySettings) GetPacingEnabled() bool {
+	if x != nil {
+		return x.PacingEnabled
+	}
+	return false
+}
+
+func (x *GatewaySettings) GetPersonalRoutesEnabled() bool {
+	if x != nil {
+		return x.PersonalRoutesEnabled
+	}
+	return false
+}
+
+func (x *GatewaySettings) GetEventRetentionDays() int32 {
+	if x != nil {
+		return x.EventRetentionDays
+	}
+	return 0
 }
 
 type GetGatewaySettingsRequest struct {
@@ -1006,6 +1039,1221 @@ func (x *SetModelPriceOverrideResponse) GetPrice() *ModelPrice {
 	return nil
 }
 
+// One provider-reported limit window on a route (§5).
+type GatewayRouteMetric struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // requests, tokens, input-tokens, output-tokens
+	Limit         int64                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	Remaining     int64                  `protobuf:"varint,3,opt,name=remaining,proto3" json:"remaining,omitempty"`
+	ResetAt       string                 `protobuf:"bytes,4,opt,name=reset_at,json=resetAt,proto3" json:"reset_at,omitempty"` // RFC 3339; empty when unknown
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GatewayRouteMetric) Reset() {
+	*x = GatewayRouteMetric{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayRouteMetric) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayRouteMetric) ProtoMessage() {}
+
+func (x *GatewayRouteMetric) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayRouteMetric.ProtoReflect.Descriptor instead.
+func (*GatewayRouteMetric) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *GatewayRouteMetric) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *GatewayRouteMetric) GetLimit() int64 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *GatewayRouteMetric) GetRemaining() int64 {
+	if x != nil {
+		return x.Remaining
+	}
+	return 0
+}
+
+func (x *GatewayRouteMetric) GetResetAt() string {
+	if x != nil {
+		return x.ResetAt
+	}
+	return ""
+}
+
+// A route: one organization-owned API-key or cloud connection plus an
+// endpoint kind. Personal subscriptions are never routes.
+type GatewayRoute struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // Empty on create.
+	Name              string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Kind              string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`                                     // anthropic, bedrock, vertex, openai, opencode_zen, opencode_go
+	ConnectionId      string                 `protobuf:"bytes,4,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"` // API-key routes; cloud routes get a new connection.
+	ConnectionLabel   string                 `protobuf:"bytes,5,opt,name=connection_label,json=connectionLabel,proto3" json:"connection_label,omitempty"`
+	Region            string                 `protobuf:"bytes,6,opt,name=region,proto3" json:"region,omitempty"`                                                                                               // bedrock and vertex
+	CloudProject      string                 `protobuf:"bytes,7,opt,name=cloud_project,json=cloudProject,proto3" json:"cloud_project,omitempty"`                                                               // vertex
+	ModelMap          map[string]string      `protobuf:"bytes,8,rep,name=model_map,json=modelMap,proto3" json:"model_map,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // our model id -> the route's model id
+	Weight            int32                  `protobuf:"varint,9,opt,name=weight,proto3" json:"weight,omitempty"`
+	Priority          int32                  `protobuf:"varint,10,opt,name=priority,proto3" json:"priority,omitempty"`                                              // lower first
+	ConcurrencyCap    int32                  `protobuf:"varint,11,opt,name=concurrency_cap,json=concurrencyCap,proto3" json:"concurrency_cap,omitempty"`            // 0 = none
+	RequestsPerMinute int32                  `protobuf:"varint,12,opt,name=requests_per_minute,json=requestsPerMinute,proto3" json:"requests_per_minute,omitempty"` // configured quota; 0 = none
+	TokensPerMinute   int64                  `protobuf:"varint,13,opt,name=tokens_per_minute,json=tokensPerMinute,proto3" json:"tokens_per_minute,omitempty"`
+	State             string                 `protobuf:"bytes,14,opt,name=state,proto3" json:"state,omitempty"` // enabled, draining, disabled
+	PoolIds           []string               `protobuf:"bytes,15,rep,name=pool_ids,json=poolIds,proto3" json:"pool_ids,omitempty"`
+	// Live state, as the gateway last persisted it.
+	Breaker        string                `protobuf:"bytes,16,opt,name=breaker,proto3" json:"breaker,omitempty"` // closed, open, half_open
+	CooldownUntil  string                `protobuf:"bytes,17,opt,name=cooldown_until,json=cooldownUntil,proto3" json:"cooldown_until,omitempty"`
+	Inflight       int32                 `protobuf:"varint,18,opt,name=inflight,proto3" json:"inflight,omitempty"`
+	Metrics        []*GatewayRouteMetric `protobuf:"bytes,19,rep,name=metrics,proto3" json:"metrics,omitempty"`
+	Requests_15M   int32                 `protobuf:"varint,20,opt,name=requests_15m,json=requests15m,proto3" json:"requests_15m,omitempty"`
+	Errors_15M     int32                 `protobuf:"varint,21,opt,name=errors_15m,json=errors15m,proto3" json:"errors_15m,omitempty"`
+	Last_429At     string                `protobuf:"bytes,22,opt,name=last_429_at,json=last429At,proto3" json:"last_429_at,omitempty"`
+	StateUpdatedAt string                `protobuf:"bytes,23,opt,name=state_updated_at,json=stateUpdatedAt,proto3" json:"state_updated_at,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GatewayRoute) Reset() {
+	*x = GatewayRoute{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayRoute) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayRoute) ProtoMessage() {}
+
+func (x *GatewayRoute) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayRoute.ProtoReflect.Descriptor instead.
+func (*GatewayRoute) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *GatewayRoute) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetConnectionLabel() string {
+	if x != nil {
+		return x.ConnectionLabel
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetCloudProject() string {
+	if x != nil {
+		return x.CloudProject
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetModelMap() map[string]string {
+	if x != nil {
+		return x.ModelMap
+	}
+	return nil
+}
+
+func (x *GatewayRoute) GetWeight() int32 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
+}
+
+func (x *GatewayRoute) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
+}
+
+func (x *GatewayRoute) GetConcurrencyCap() int32 {
+	if x != nil {
+		return x.ConcurrencyCap
+	}
+	return 0
+}
+
+func (x *GatewayRoute) GetRequestsPerMinute() int32 {
+	if x != nil {
+		return x.RequestsPerMinute
+	}
+	return 0
+}
+
+func (x *GatewayRoute) GetTokensPerMinute() int64 {
+	if x != nil {
+		return x.TokensPerMinute
+	}
+	return 0
+}
+
+func (x *GatewayRoute) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetPoolIds() []string {
+	if x != nil {
+		return x.PoolIds
+	}
+	return nil
+}
+
+func (x *GatewayRoute) GetBreaker() string {
+	if x != nil {
+		return x.Breaker
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetCooldownUntil() string {
+	if x != nil {
+		return x.CooldownUntil
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetInflight() int32 {
+	if x != nil {
+		return x.Inflight
+	}
+	return 0
+}
+
+func (x *GatewayRoute) GetMetrics() []*GatewayRouteMetric {
+	if x != nil {
+		return x.Metrics
+	}
+	return nil
+}
+
+func (x *GatewayRoute) GetRequests_15M() int32 {
+	if x != nil {
+		return x.Requests_15M
+	}
+	return 0
+}
+
+func (x *GatewayRoute) GetErrors_15M() int32 {
+	if x != nil {
+		return x.Errors_15M
+	}
+	return 0
+}
+
+func (x *GatewayRoute) GetLast_429At() string {
+	if x != nil {
+		return x.Last_429At
+	}
+	return ""
+}
+
+func (x *GatewayRoute) GetStateUpdatedAt() string {
+	if x != nil {
+		return x.StateUpdatedAt
+	}
+	return ""
+}
+
+type GatewayPool struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // Empty on create.
+	Name           string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Family         string                 `protobuf:"bytes,3,opt,name=family,proto3" json:"family,omitempty"`     // anthropic, openai, opencode, opencode-go
+	Strategy       string                 `protobuf:"bytes,4,opt,name=strategy,proto3" json:"strategy,omitempty"` // priority_headroom, weighted, fill_first
+	ConcurrencyCap int32                  `protobuf:"varint,5,opt,name=concurrency_cap,json=concurrencyCap,proto3" json:"concurrency_cap,omitempty"`
+	Affinity       bool                   `protobuf:"varint,6,opt,name=affinity,proto3" json:"affinity,omitempty"` // prompt-cache affinity
+	State          string                 `protobuf:"bytes,7,opt,name=state,proto3" json:"state,omitempty"`        // enabled, disabled
+	RouteIds       []string               `protobuf:"bytes,8,rep,name=route_ids,json=routeIds,proto3" json:"route_ids,omitempty"`
+	ProjectIds     []string               `protobuf:"bytes,9,rep,name=project_ids,json=projectIds,proto3" json:"project_ids,omitempty"` // projects granted this pool
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GatewayPool) Reset() {
+	*x = GatewayPool{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayPool) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayPool) ProtoMessage() {}
+
+func (x *GatewayPool) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayPool.ProtoReflect.Descriptor instead.
+func (*GatewayPool) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GatewayPool) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *GatewayPool) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *GatewayPool) GetFamily() string {
+	if x != nil {
+		return x.Family
+	}
+	return ""
+}
+
+func (x *GatewayPool) GetStrategy() string {
+	if x != nil {
+		return x.Strategy
+	}
+	return ""
+}
+
+func (x *GatewayPool) GetConcurrencyCap() int32 {
+	if x != nil {
+		return x.ConcurrencyCap
+	}
+	return 0
+}
+
+func (x *GatewayPool) GetAffinity() bool {
+	if x != nil {
+		return x.Affinity
+	}
+	return false
+}
+
+func (x *GatewayPool) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *GatewayPool) GetRouteIds() []string {
+	if x != nil {
+		return x.RouteIds
+	}
+	return nil
+}
+
+func (x *GatewayPool) GetProjectIds() []string {
+	if x != nil {
+		return x.ProjectIds
+	}
+	return nil
+}
+
+// A ready stage queued for pool headroom (§5).
+type PacedStage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	RunId         string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Stage         string                 `protobuf:"bytes,4,opt,name=stage,proto3" json:"stage,omitempty"`
+	PoolId        string                 `protobuf:"bytes,5,opt,name=pool_id,json=poolId,proto3" json:"pool_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`
+	ResetsAt      string                 `protobuf:"bytes,7,opt,name=resets_at,json=resetsAt,proto3" json:"resets_at,omitempty"`
+	Since         string                 `protobuf:"bytes,8,opt,name=since,proto3" json:"since,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PacedStage) Reset() {
+	*x = PacedStage{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PacedStage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PacedStage) ProtoMessage() {}
+
+func (x *PacedStage) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PacedStage.ProtoReflect.Descriptor instead.
+func (*PacedStage) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *PacedStage) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *PacedStage) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *PacedStage) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *PacedStage) GetStage() string {
+	if x != nil {
+		return x.Stage
+	}
+	return ""
+}
+
+func (x *PacedStage) GetPoolId() string {
+	if x != nil {
+		return x.PoolId
+	}
+	return ""
+}
+
+func (x *PacedStage) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *PacedStage) GetResetsAt() string {
+	if x != nil {
+		return x.ResetsAt
+	}
+	return ""
+}
+
+func (x *PacedStage) GetSince() string {
+	if x != nil {
+		return x.Since
+	}
+	return ""
+}
+
+type GatewayRouteOption struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	Detail        string                 `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"` // provider, or project name
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GatewayRouteOption) Reset() {
+	*x = GatewayRouteOption{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayRouteOption) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayRouteOption) ProtoMessage() {}
+
+func (x *GatewayRouteOption) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayRouteOption.ProtoReflect.Descriptor instead.
+func (*GatewayRouteOption) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *GatewayRouteOption) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *GatewayRouteOption) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *GatewayRouteOption) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+type ListGatewayRoutesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGatewayRoutesRequest) Reset() {
+	*x = ListGatewayRoutesRequest{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGatewayRoutesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGatewayRoutesRequest) ProtoMessage() {}
+
+func (x *ListGatewayRoutesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGatewayRoutesRequest.ProtoReflect.Descriptor instead.
+func (*ListGatewayRoutesRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{20}
+}
+
+type ListGatewayRoutesResponse struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Routes []*GatewayRoute        `protobuf:"bytes,1,rep,name=routes,proto3" json:"routes,omitempty"`
+	Pools  []*GatewayPool         `protobuf:"bytes,2,rep,name=pools,proto3" json:"pools,omitempty"`
+	Paced  []*PacedStage          `protobuf:"bytes,3,rep,name=paced,proto3" json:"paced,omitempty"`
+	// Organization API-key connections a route may use.
+	Connections   []*GatewayRouteOption `protobuf:"bytes,4,rep,name=connections,proto3" json:"connections,omitempty"`
+	Projects      []*GatewayRouteOption `protobuf:"bytes,5,rep,name=projects,proto3" json:"projects,omitempty"`
+	PoolsEnabled  bool                  `protobuf:"varint,6,opt,name=pools_enabled,json=poolsEnabled,proto3" json:"pools_enabled,omitempty"`
+	PacingEnabled bool                  `protobuf:"varint,7,opt,name=pacing_enabled,json=pacingEnabled,proto3" json:"pacing_enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGatewayRoutesResponse) Reset() {
+	*x = ListGatewayRoutesResponse{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGatewayRoutesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGatewayRoutesResponse) ProtoMessage() {}
+
+func (x *ListGatewayRoutesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGatewayRoutesResponse.ProtoReflect.Descriptor instead.
+func (*ListGatewayRoutesResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ListGatewayRoutesResponse) GetRoutes() []*GatewayRoute {
+	if x != nil {
+		return x.Routes
+	}
+	return nil
+}
+
+func (x *ListGatewayRoutesResponse) GetPools() []*GatewayPool {
+	if x != nil {
+		return x.Pools
+	}
+	return nil
+}
+
+func (x *ListGatewayRoutesResponse) GetPaced() []*PacedStage {
+	if x != nil {
+		return x.Paced
+	}
+	return nil
+}
+
+func (x *ListGatewayRoutesResponse) GetConnections() []*GatewayRouteOption {
+	if x != nil {
+		return x.Connections
+	}
+	return nil
+}
+
+func (x *ListGatewayRoutesResponse) GetProjects() []*GatewayRouteOption {
+	if x != nil {
+		return x.Projects
+	}
+	return nil
+}
+
+func (x *ListGatewayRoutesResponse) GetPoolsEnabled() bool {
+	if x != nil {
+		return x.PoolsEnabled
+	}
+	return false
+}
+
+func (x *ListGatewayRoutesResponse) GetPacingEnabled() bool {
+	if x != nil {
+		return x.PacingEnabled
+	}
+	return false
+}
+
+type SaveGatewayRouteRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Route *GatewayRoute          `protobuf:"bytes,1,opt,name=route,proto3" json:"route,omitempty"`
+	// Bedrock: {"access_key_id","secret_access_key"[,"session_token"]}.
+	// Vertex: a service-account key JSON. Required when creating a cloud
+	// route, optional (rotation) when updating one. Never returned.
+	CloudCredential string `protobuf:"bytes,2,opt,name=cloud_credential,json=cloudCredential,proto3" json:"cloud_credential,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SaveGatewayRouteRequest) Reset() {
+	*x = SaveGatewayRouteRequest{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveGatewayRouteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveGatewayRouteRequest) ProtoMessage() {}
+
+func (x *SaveGatewayRouteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveGatewayRouteRequest.ProtoReflect.Descriptor instead.
+func (*SaveGatewayRouteRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *SaveGatewayRouteRequest) GetRoute() *GatewayRoute {
+	if x != nil {
+		return x.Route
+	}
+	return nil
+}
+
+func (x *SaveGatewayRouteRequest) GetCloudCredential() string {
+	if x != nil {
+		return x.CloudCredential
+	}
+	return ""
+}
+
+type SaveGatewayRouteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Route         *GatewayRoute          `protobuf:"bytes,1,opt,name=route,proto3" json:"route,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveGatewayRouteResponse) Reset() {
+	*x = SaveGatewayRouteResponse{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveGatewayRouteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveGatewayRouteResponse) ProtoMessage() {}
+
+func (x *SaveGatewayRouteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveGatewayRouteResponse.ProtoReflect.Descriptor instead.
+func (*SaveGatewayRouteResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *SaveGatewayRouteResponse) GetRoute() *GatewayRoute {
+	if x != nil {
+		return x.Route
+	}
+	return nil
+}
+
+type SetGatewayRouteStateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	State         string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"` // enabled, draining, disabled
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetGatewayRouteStateRequest) Reset() {
+	*x = SetGatewayRouteStateRequest{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetGatewayRouteStateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetGatewayRouteStateRequest) ProtoMessage() {}
+
+func (x *SetGatewayRouteStateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetGatewayRouteStateRequest.ProtoReflect.Descriptor instead.
+func (*SetGatewayRouteStateRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *SetGatewayRouteStateRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SetGatewayRouteStateRequest) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+type SetGatewayRouteStateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetGatewayRouteStateResponse) Reset() {
+	*x = SetGatewayRouteStateResponse{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetGatewayRouteStateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetGatewayRouteStateResponse) ProtoMessage() {}
+
+func (x *SetGatewayRouteStateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetGatewayRouteStateResponse.ProtoReflect.Descriptor instead.
+func (*SetGatewayRouteStateResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{25}
+}
+
+type SaveGatewayPoolRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pool          *GatewayPool           `protobuf:"bytes,1,opt,name=pool,proto3" json:"pool,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveGatewayPoolRequest) Reset() {
+	*x = SaveGatewayPoolRequest{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveGatewayPoolRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveGatewayPoolRequest) ProtoMessage() {}
+
+func (x *SaveGatewayPoolRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveGatewayPoolRequest.ProtoReflect.Descriptor instead.
+func (*SaveGatewayPoolRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *SaveGatewayPoolRequest) GetPool() *GatewayPool {
+	if x != nil {
+		return x.Pool
+	}
+	return nil
+}
+
+type SaveGatewayPoolResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pool          *GatewayPool           `protobuf:"bytes,1,opt,name=pool,proto3" json:"pool,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveGatewayPoolResponse) Reset() {
+	*x = SaveGatewayPoolResponse{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveGatewayPoolResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveGatewayPoolResponse) ProtoMessage() {}
+
+func (x *SaveGatewayPoolResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveGatewayPoolResponse.ProtoReflect.Descriptor instead.
+func (*SaveGatewayPoolResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *SaveGatewayPoolResponse) GetPool() *GatewayPool {
+	if x != nil {
+		return x.Pool
+	}
+	return nil
+}
+
+// A personal subscription's usage window as its provider reported it on the
+// owner's own gateway traffic (§6, §9.2). Display only.
+type SubscriptionLimitWindow struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // primary, secondary, claude_5h, ...
+	UsedPct       float64                `protobuf:"fixed64,2,opt,name=used_pct,json=usedPct,proto3" json:"used_pct,omitempty"`
+	WindowMinutes int32                  `protobuf:"varint,3,opt,name=window_minutes,json=windowMinutes,proto3" json:"window_minutes,omitempty"` // 0 when not reported
+	ResetsAt      string                 `protobuf:"bytes,4,opt,name=resets_at,json=resetsAt,proto3" json:"resets_at,omitempty"`
+	ObservedAt    string                 `protobuf:"bytes,5,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubscriptionLimitWindow) Reset() {
+	*x = SubscriptionLimitWindow{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubscriptionLimitWindow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubscriptionLimitWindow) ProtoMessage() {}
+
+func (x *SubscriptionLimitWindow) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubscriptionLimitWindow.ProtoReflect.Descriptor instead.
+func (*SubscriptionLimitWindow) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *SubscriptionLimitWindow) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SubscriptionLimitWindow) GetUsedPct() float64 {
+	if x != nil {
+		return x.UsedPct
+	}
+	return 0
+}
+
+func (x *SubscriptionLimitWindow) GetWindowMinutes() int32 {
+	if x != nil {
+		return x.WindowMinutes
+	}
+	return 0
+}
+
+func (x *SubscriptionLimitWindow) GetResetsAt() string {
+	if x != nil {
+		return x.ResetsAt
+	}
+	return ""
+}
+
+func (x *SubscriptionLimitWindow) GetObservedAt() string {
+	if x != nil {
+		return x.ObservedAt
+	}
+	return ""
+}
+
+type SubscriptionLimits struct {
+	state         protoimpl.MessageState     `protogen:"open.v1"`
+	ConnectionId  string                     `protobuf:"bytes,1,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	Label         string                     `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	Provider      string                     `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
+	AuthMethod    string                     `protobuf:"bytes,4,opt,name=auth_method,json=authMethod,proto3" json:"auth_method,omitempty"`
+	State         string                     `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
+	Windows       []*SubscriptionLimitWindow `protobuf:"bytes,6,rep,name=windows,proto3" json:"windows,omitempty"` // empty: not reported by provider
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubscriptionLimits) Reset() {
+	*x = SubscriptionLimits{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubscriptionLimits) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubscriptionLimits) ProtoMessage() {}
+
+func (x *SubscriptionLimits) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubscriptionLimits.ProtoReflect.Descriptor instead.
+func (*SubscriptionLimits) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *SubscriptionLimits) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *SubscriptionLimits) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *SubscriptionLimits) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *SubscriptionLimits) GetAuthMethod() string {
+	if x != nil {
+		return x.AuthMethod
+	}
+	return ""
+}
+
+func (x *SubscriptionLimits) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *SubscriptionLimits) GetWindows() []*SubscriptionLimitWindow {
+	if x != nil {
+		return x.Windows
+	}
+	return nil
+}
+
+type ListMySubscriptionLimitsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMySubscriptionLimitsRequest) Reset() {
+	*x = ListMySubscriptionLimitsRequest{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMySubscriptionLimitsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMySubscriptionLimitsRequest) ProtoMessage() {}
+
+func (x *ListMySubscriptionLimitsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMySubscriptionLimitsRequest.ProtoReflect.Descriptor instead.
+func (*ListMySubscriptionLimitsRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{30}
+}
+
+type ListMySubscriptionLimitsResponse struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Subscriptions         []*SubscriptionLimits  `protobuf:"bytes,1,rep,name=subscriptions,proto3" json:"subscriptions,omitempty"`
+	PersonalRoutesEnabled bool                   `protobuf:"varint,2,opt,name=personal_routes_enabled,json=personalRoutesEnabled,proto3" json:"personal_routes_enabled,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *ListMySubscriptionLimitsResponse) Reset() {
+	*x = ListMySubscriptionLimitsResponse{}
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMySubscriptionLimitsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMySubscriptionLimitsResponse) ProtoMessage() {}
+
+func (x *ListMySubscriptionLimitsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMySubscriptionLimitsResponse.ProtoReflect.Descriptor instead.
+func (*ListMySubscriptionLimitsResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ListMySubscriptionLimitsResponse) GetSubscriptions() []*SubscriptionLimits {
+	if x != nil {
+		return x.Subscriptions
+	}
+	return nil
+}
+
+func (x *ListMySubscriptionLimitsResponse) GetPersonalRoutesEnabled() bool {
+	if x != nil {
+		return x.PersonalRoutesEnabled
+	}
+	return false
+}
+
 type GetGatewayStatusRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1014,7 +2262,7 @@ type GetGatewayStatusRequest struct {
 
 func (x *GetGatewayStatusRequest) Reset() {
 	*x = GetGatewayStatusRequest{}
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[15]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1026,7 +2274,7 @@ func (x *GetGatewayStatusRequest) String() string {
 func (*GetGatewayStatusRequest) ProtoMessage() {}
 
 func (x *GetGatewayStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[15]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1039,7 +2287,7 @@ func (x *GetGatewayStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGatewayStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetGatewayStatusRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{15}
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{32}
 }
 
 // Whether gateway UI is shown to this organization (the master switch).
@@ -1052,7 +2300,7 @@ type GetGatewayStatusResponse struct {
 
 func (x *GetGatewayStatusResponse) Reset() {
 	*x = GetGatewayStatusResponse{}
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[16]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1064,7 +2312,7 @@ func (x *GetGatewayStatusResponse) String() string {
 func (*GetGatewayStatusResponse) ProtoMessage() {}
 
 func (x *GetGatewayStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[16]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1077,7 +2325,7 @@ func (x *GetGatewayStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGatewayStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetGatewayStatusResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{16}
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *GetGatewayStatusResponse) GetEnabled() bool {
@@ -1096,7 +2344,7 @@ type GetMyUsageRequest struct {
 
 func (x *GetMyUsageRequest) Reset() {
 	*x = GetMyUsageRequest{}
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[17]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1108,7 +2356,7 @@ func (x *GetMyUsageRequest) String() string {
 func (*GetMyUsageRequest) ProtoMessage() {}
 
 func (x *GetMyUsageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[17]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1121,7 +2369,7 @@ func (x *GetMyUsageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMyUsageRequest.ProtoReflect.Descriptor instead.
 func (*GetMyUsageRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{17}
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *GetMyUsageRequest) GetDays() int32 {
@@ -1146,7 +2394,7 @@ type GetMyUsageResponse struct {
 
 func (x *GetMyUsageResponse) Reset() {
 	*x = GetMyUsageResponse{}
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[18]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1158,7 +2406,7 @@ func (x *GetMyUsageResponse) String() string {
 func (*GetMyUsageResponse) ProtoMessage() {}
 
 func (x *GetMyUsageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[18]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1171,7 +2419,7 @@ func (x *GetMyUsageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMyUsageResponse.ProtoReflect.Descriptor instead.
 func (*GetMyUsageResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{18}
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *GetMyUsageResponse) GetEnabled() bool {
@@ -1244,7 +2492,7 @@ type ModelCall struct {
 
 func (x *ModelCall) Reset() {
 	*x = ModelCall{}
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[19]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1256,7 +2504,7 @@ func (x *ModelCall) String() string {
 func (*ModelCall) ProtoMessage() {}
 
 func (x *ModelCall) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[19]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1269,7 +2517,7 @@ func (x *ModelCall) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModelCall.ProtoReflect.Descriptor instead.
 func (*ModelCall) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{19}
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ModelCall) GetStartedAt() string {
@@ -1375,7 +2623,7 @@ type StageCost struct {
 
 func (x *StageCost) Reset() {
 	*x = StageCost{}
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[20]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1387,7 +2635,7 @@ func (x *StageCost) String() string {
 func (*StageCost) ProtoMessage() {}
 
 func (x *StageCost) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[20]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1400,7 +2648,7 @@ func (x *StageCost) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StageCost.ProtoReflect.Descriptor instead.
 func (*StageCost) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{20}
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *StageCost) GetTaskId() string {
@@ -1440,7 +2688,7 @@ type GetRunCostRequest struct {
 
 func (x *GetRunCostRequest) Reset() {
 	*x = GetRunCostRequest{}
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[21]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1452,7 +2700,7 @@ func (x *GetRunCostRequest) String() string {
 func (*GetRunCostRequest) ProtoMessage() {}
 
 func (x *GetRunCostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[21]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1465,7 +2713,7 @@ func (x *GetRunCostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunCostRequest.ProtoReflect.Descriptor instead.
 func (*GetRunCostRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{21}
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *GetRunCostRequest) GetRunId() string {
@@ -1488,7 +2736,7 @@ type GetRunCostResponse struct {
 
 func (x *GetRunCostResponse) Reset() {
 	*x = GetRunCostResponse{}
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[22]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1500,7 +2748,7 @@ func (x *GetRunCostResponse) String() string {
 func (*GetRunCostResponse) ProtoMessage() {}
 
 func (x *GetRunCostResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[22]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1513,7 +2761,7 @@ func (x *GetRunCostResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunCostResponse.ProtoReflect.Descriptor instead.
 func (*GetRunCostResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{22}
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *GetRunCostResponse) GetEnabled() bool {
@@ -1560,7 +2808,7 @@ type GetProjectDeliveryRequest struct {
 
 func (x *GetProjectDeliveryRequest) Reset() {
 	*x = GetProjectDeliveryRequest{}
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[23]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1572,7 +2820,7 @@ func (x *GetProjectDeliveryRequest) String() string {
 func (*GetProjectDeliveryRequest) ProtoMessage() {}
 
 func (x *GetProjectDeliveryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[23]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1585,7 +2833,7 @@ func (x *GetProjectDeliveryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectDeliveryRequest.ProtoReflect.Descriptor instead.
 func (*GetProjectDeliveryRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{23}
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *GetProjectDeliveryRequest) GetProjectId() string {
@@ -1609,7 +2857,7 @@ type GetProjectDeliveryResponse struct {
 
 func (x *GetProjectDeliveryResponse) Reset() {
 	*x = GetProjectDeliveryResponse{}
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[24]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1621,7 +2869,7 @@ func (x *GetProjectDeliveryResponse) String() string {
 func (*GetProjectDeliveryResponse) ProtoMessage() {}
 
 func (x *GetProjectDeliveryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[24]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1634,7 +2882,7 @@ func (x *GetProjectDeliveryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectDeliveryResponse.ProtoReflect.Descriptor instead.
 func (*GetProjectDeliveryResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{24}
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *GetProjectDeliveryResponse) GetDeliveryMode() string {
@@ -1689,7 +2937,7 @@ type SetProjectDeliveryRequest struct {
 
 func (x *SetProjectDeliveryRequest) Reset() {
 	*x = SetProjectDeliveryRequest{}
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[25]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1701,7 +2949,7 @@ func (x *SetProjectDeliveryRequest) String() string {
 func (*SetProjectDeliveryRequest) ProtoMessage() {}
 
 func (x *SetProjectDeliveryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[25]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1714,7 +2962,7 @@ func (x *SetProjectDeliveryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetProjectDeliveryRequest.ProtoReflect.Descriptor instead.
 func (*SetProjectDeliveryRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{25}
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *SetProjectDeliveryRequest) GetProjectId() string {
@@ -1740,7 +2988,7 @@ type SetProjectDeliveryResponse struct {
 
 func (x *SetProjectDeliveryResponse) Reset() {
 	*x = SetProjectDeliveryResponse{}
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[26]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1752,7 +3000,7 @@ func (x *SetProjectDeliveryResponse) String() string {
 func (*SetProjectDeliveryResponse) ProtoMessage() {}
 
 func (x *SetProjectDeliveryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[26]
+	mi := &file_blaxsmith_api_v1_gateway_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1765,7 +3013,7 @@ func (x *SetProjectDeliveryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetProjectDeliveryResponse.ProtoReflect.Descriptor instead.
 func (*SetProjectDeliveryResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{26}
+	return file_blaxsmith_api_v1_gateway_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *SetProjectDeliveryResponse) GetDelivery() *GetProjectDeliveryResponse {
@@ -1779,12 +3027,16 @@ var File_blaxsmith_api_v1_gateway_proto protoreflect.FileDescriptor
 
 const file_blaxsmith_api_v1_gateway_proto_rawDesc = "" +
 	"\n" +
-	"\x1eblaxsmith/api/v1/gateway.proto\x12\x10blaxsmith.api.v1\"\xc3\x01\n" +
+	"\x1eblaxsmith/api/v1/gateway.proto\x12\x10blaxsmith.api.v1\"\xf9\x02\n" +
 	"\x0fGatewaySettings\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x122\n" +
 	"\x15default_delivery_mode\x18\x02 \x01(\tR\x13defaultDeliveryMode\x120\n" +
 	"\x14allow_project_choice\x18\x03 \x01(\bR\x12allowProjectChoice\x120\n" +
-	"\x14remove_direct_egress\x18\x04 \x01(\bR\x12removeDirectEgress\"\x1b\n" +
+	"\x14remove_direct_egress\x18\x04 \x01(\bR\x12removeDirectEgress\x12#\n" +
+	"\rpools_enabled\x18\x14 \x01(\bR\fpoolsEnabled\x12%\n" +
+	"\x0epacing_enabled\x18\x15 \x01(\bR\rpacingEnabled\x126\n" +
+	"\x17personal_routes_enabled\x18\x16 \x01(\bR\x15personalRoutesEnabled\x120\n" +
+	"\x14event_retention_days\x18\x17 \x01(\x05R\x12eventRetentionDays\"\x1b\n" +
 	"\x19GetGatewaySettingsRequest\"\xfb\x01\n" +
 	"\x1aGetGatewaySettingsResponse\x12=\n" +
 	"\bsettings\x18\x01 \x01(\v2!.blaxsmith.api.v1.GatewaySettingsR\bsettings\x125\n" +
@@ -1855,7 +3107,108 @@ const file_blaxsmith_api_v1_gateway_proto_rawDesc = "" +
 	"\x1cSetModelPriceOverrideRequest\x122\n" +
 	"\x05price\x18\x01 \x01(\v2\x1c.blaxsmith.api.v1.ModelPriceR\x05price\"S\n" +
 	"\x1dSetModelPriceOverrideResponse\x122\n" +
-	"\x05price\x18\x01 \x01(\v2\x1c.blaxsmith.api.v1.ModelPriceR\x05price\"\x19\n" +
+	"\x05price\x18\x01 \x01(\v2\x1c.blaxsmith.api.v1.ModelPriceR\x05price\"w\n" +
+	"\x12GatewayRouteMetric\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x03R\x05limit\x12\x1c\n" +
+	"\tremaining\x18\x03 \x01(\x03R\tremaining\x12\x19\n" +
+	"\breset_at\x18\x04 \x01(\tR\aresetAt\"\xee\x06\n" +
+	"\fGatewayRoute\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\x12#\n" +
+	"\rconnection_id\x18\x04 \x01(\tR\fconnectionId\x12)\n" +
+	"\x10connection_label\x18\x05 \x01(\tR\x0fconnectionLabel\x12\x16\n" +
+	"\x06region\x18\x06 \x01(\tR\x06region\x12#\n" +
+	"\rcloud_project\x18\a \x01(\tR\fcloudProject\x12I\n" +
+	"\tmodel_map\x18\b \x03(\v2,.blaxsmith.api.v1.GatewayRoute.ModelMapEntryR\bmodelMap\x12\x16\n" +
+	"\x06weight\x18\t \x01(\x05R\x06weight\x12\x1a\n" +
+	"\bpriority\x18\n" +
+	" \x01(\x05R\bpriority\x12'\n" +
+	"\x0fconcurrency_cap\x18\v \x01(\x05R\x0econcurrencyCap\x12.\n" +
+	"\x13requests_per_minute\x18\f \x01(\x05R\x11requestsPerMinute\x12*\n" +
+	"\x11tokens_per_minute\x18\r \x01(\x03R\x0ftokensPerMinute\x12\x14\n" +
+	"\x05state\x18\x0e \x01(\tR\x05state\x12\x19\n" +
+	"\bpool_ids\x18\x0f \x03(\tR\apoolIds\x12\x18\n" +
+	"\abreaker\x18\x10 \x01(\tR\abreaker\x12%\n" +
+	"\x0ecooldown_until\x18\x11 \x01(\tR\rcooldownUntil\x12\x1a\n" +
+	"\binflight\x18\x12 \x01(\x05R\binflight\x12>\n" +
+	"\ametrics\x18\x13 \x03(\v2$.blaxsmith.api.v1.GatewayRouteMetricR\ametrics\x12!\n" +
+	"\frequests_15m\x18\x14 \x01(\x05R\vrequests15m\x12\x1d\n" +
+	"\n" +
+	"errors_15m\x18\x15 \x01(\x05R\terrors15m\x12\x1e\n" +
+	"\vlast_429_at\x18\x16 \x01(\tR\tlast429At\x12(\n" +
+	"\x10state_updated_at\x18\x17 \x01(\tR\x0estateUpdatedAt\x1a;\n" +
+	"\rModelMapEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfe\x01\n" +
+	"\vGatewayPool\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
+	"\x06family\x18\x03 \x01(\tR\x06family\x12\x1a\n" +
+	"\bstrategy\x18\x04 \x01(\tR\bstrategy\x12'\n" +
+	"\x0fconcurrency_cap\x18\x05 \x01(\x05R\x0econcurrencyCap\x12\x1a\n" +
+	"\baffinity\x18\x06 \x01(\bR\baffinity\x12\x14\n" +
+	"\x05state\x18\a \x01(\tR\x05state\x12\x1b\n" +
+	"\troute_ids\x18\b \x03(\tR\brouteIds\x12\x1f\n" +
+	"\vproject_ids\x18\t \x03(\tR\n" +
+	"projectIds\"\xd5\x01\n" +
+	"\n" +
+	"PacedStage\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x03 \x01(\tR\tprojectId\x12\x14\n" +
+	"\x05stage\x18\x04 \x01(\tR\x05stage\x12\x17\n" +
+	"\apool_id\x18\x05 \x01(\tR\x06poolId\x12\x16\n" +
+	"\x06reason\x18\x06 \x01(\tR\x06reason\x12\x1b\n" +
+	"\tresets_at\x18\a \x01(\tR\bresetsAt\x12\x14\n" +
+	"\x05since\x18\b \x01(\tR\x05since\"R\n" +
+	"\x12GatewayRouteOption\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12\x16\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail\"\x1a\n" +
+	"\x18ListGatewayRoutesRequest\"\x92\x03\n" +
+	"\x19ListGatewayRoutesResponse\x126\n" +
+	"\x06routes\x18\x01 \x03(\v2\x1e.blaxsmith.api.v1.GatewayRouteR\x06routes\x123\n" +
+	"\x05pools\x18\x02 \x03(\v2\x1d.blaxsmith.api.v1.GatewayPoolR\x05pools\x122\n" +
+	"\x05paced\x18\x03 \x03(\v2\x1c.blaxsmith.api.v1.PacedStageR\x05paced\x12F\n" +
+	"\vconnections\x18\x04 \x03(\v2$.blaxsmith.api.v1.GatewayRouteOptionR\vconnections\x12@\n" +
+	"\bprojects\x18\x05 \x03(\v2$.blaxsmith.api.v1.GatewayRouteOptionR\bprojects\x12#\n" +
+	"\rpools_enabled\x18\x06 \x01(\bR\fpoolsEnabled\x12%\n" +
+	"\x0epacing_enabled\x18\a \x01(\bR\rpacingEnabled\"z\n" +
+	"\x17SaveGatewayRouteRequest\x124\n" +
+	"\x05route\x18\x01 \x01(\v2\x1e.blaxsmith.api.v1.GatewayRouteR\x05route\x12)\n" +
+	"\x10cloud_credential\x18\x02 \x01(\tR\x0fcloudCredential\"P\n" +
+	"\x18SaveGatewayRouteResponse\x124\n" +
+	"\x05route\x18\x01 \x01(\v2\x1e.blaxsmith.api.v1.GatewayRouteR\x05route\"C\n" +
+	"\x1bSetGatewayRouteStateRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05state\x18\x02 \x01(\tR\x05state\"\x1e\n" +
+	"\x1cSetGatewayRouteStateResponse\"K\n" +
+	"\x16SaveGatewayPoolRequest\x121\n" +
+	"\x04pool\x18\x01 \x01(\v2\x1d.blaxsmith.api.v1.GatewayPoolR\x04pool\"L\n" +
+	"\x17SaveGatewayPoolResponse\x121\n" +
+	"\x04pool\x18\x01 \x01(\v2\x1d.blaxsmith.api.v1.GatewayPoolR\x04pool\"\xad\x01\n" +
+	"\x17SubscriptionLimitWindow\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x19\n" +
+	"\bused_pct\x18\x02 \x01(\x01R\ausedPct\x12%\n" +
+	"\x0ewindow_minutes\x18\x03 \x01(\x05R\rwindowMinutes\x12\x1b\n" +
+	"\tresets_at\x18\x04 \x01(\tR\bresetsAt\x12\x1f\n" +
+	"\vobserved_at\x18\x05 \x01(\tR\n" +
+	"observedAt\"\xe7\x01\n" +
+	"\x12SubscriptionLimits\x12#\n" +
+	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12\x1a\n" +
+	"\bprovider\x18\x03 \x01(\tR\bprovider\x12\x1f\n" +
+	"\vauth_method\x18\x04 \x01(\tR\n" +
+	"authMethod\x12\x14\n" +
+	"\x05state\x18\x05 \x01(\tR\x05state\x12C\n" +
+	"\awindows\x18\x06 \x03(\v2).blaxsmith.api.v1.SubscriptionLimitWindowR\awindows\"!\n" +
+	"\x1fListMySubscriptionLimitsRequest\"\xa6\x01\n" +
+	" ListMySubscriptionLimitsResponse\x12J\n" +
+	"\rsubscriptions\x18\x01 \x03(\v2$.blaxsmith.api.v1.SubscriptionLimitsR\rsubscriptions\x126\n" +
+	"\x17personal_routes_enabled\x18\x02 \x01(\bR\x15personalRoutesEnabled\"\x19\n" +
 	"\x17GetGatewayStatusRequest\"4\n" +
 	"\x18GetGatewayStatusResponse\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\"'\n" +
@@ -1919,13 +3272,17 @@ const file_blaxsmith_api_v1_gateway_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12#\n" +
 	"\rdelivery_mode\x18\x02 \x01(\tR\fdeliveryMode\"f\n" +
 	"\x1aSetProjectDeliveryResponse\x12H\n" +
-	"\bdelivery\x18\x01 \x01(\v2,.blaxsmith.api.v1.GetProjectDeliveryResponseR\bdelivery2\xcd\x04\n" +
+	"\bdelivery\x18\x01 \x01(\v2,.blaxsmith.api.v1.GetProjectDeliveryResponseR\bdelivery2\x85\b\n" +
 	"\x13GatewayAdminService\x12o\n" +
 	"\x12GetGatewaySettings\x12+.blaxsmith.api.v1.GetGatewaySettingsRequest\x1a,.blaxsmith.api.v1.GetGatewaySettingsResponse\x12x\n" +
 	"\x15UpdateGatewaySettings\x12..blaxsmith.api.v1.UpdateGatewaySettingsRequest\x1a/.blaxsmith.api.v1.UpdateGatewaySettingsResponse\x12i\n" +
 	"\x10GetUsageOverview\x12).blaxsmith.api.v1.GetUsageOverviewRequest\x1a*.blaxsmith.api.v1.GetUsageOverviewResponse\x12f\n" +
 	"\x0fListModelPrices\x12(.blaxsmith.api.v1.ListModelPricesRequest\x1a).blaxsmith.api.v1.ListModelPricesResponse\x12x\n" +
-	"\x15SetModelPriceOverride\x12..blaxsmith.api.v1.SetModelPriceOverrideRequest\x1a/.blaxsmith.api.v1.SetModelPriceOverrideResponse2\x8d\x04\n" +
+	"\x15SetModelPriceOverride\x12..blaxsmith.api.v1.SetModelPriceOverrideRequest\x1a/.blaxsmith.api.v1.SetModelPriceOverrideResponse\x12l\n" +
+	"\x11ListGatewayRoutes\x12*.blaxsmith.api.v1.ListGatewayRoutesRequest\x1a+.blaxsmith.api.v1.ListGatewayRoutesResponse\x12i\n" +
+	"\x10SaveGatewayRoute\x12).blaxsmith.api.v1.SaveGatewayRouteRequest\x1a*.blaxsmith.api.v1.SaveGatewayRouteResponse\x12u\n" +
+	"\x14SetGatewayRouteState\x12-.blaxsmith.api.v1.SetGatewayRouteStateRequest\x1a..blaxsmith.api.v1.SetGatewayRouteStateResponse\x12f\n" +
+	"\x0fSaveGatewayPool\x12(.blaxsmith.api.v1.SaveGatewayPoolRequest\x1a).blaxsmith.api.v1.SaveGatewayPoolResponse2\x91\x05\n" +
 	"\fUsageService\x12i\n" +
 	"\x10GetGatewayStatus\x12).blaxsmith.api.v1.GetGatewayStatusRequest\x1a*.blaxsmith.api.v1.GetGatewayStatusResponse\x12W\n" +
 	"\n" +
@@ -1933,7 +3290,8 @@ const file_blaxsmith_api_v1_gateway_proto_rawDesc = "" +
 	"\n" +
 	"GetRunCost\x12#.blaxsmith.api.v1.GetRunCostRequest\x1a$.blaxsmith.api.v1.GetRunCostResponse\x12o\n" +
 	"\x12GetProjectDelivery\x12+.blaxsmith.api.v1.GetProjectDeliveryRequest\x1a,.blaxsmith.api.v1.GetProjectDeliveryResponse\x12o\n" +
-	"\x12SetProjectDelivery\x12+.blaxsmith.api.v1.SetProjectDeliveryRequest\x1a,.blaxsmith.api.v1.SetProjectDeliveryResponseB\xc4\x01\n" +
+	"\x12SetProjectDelivery\x12+.blaxsmith.api.v1.SetProjectDeliveryRequest\x1a,.blaxsmith.api.v1.SetProjectDeliveryResponse\x12\x81\x01\n" +
+	"\x18ListMySubscriptionLimits\x121.blaxsmith.api.v1.ListMySubscriptionLimitsRequest\x1a2.blaxsmith.api.v1.ListMySubscriptionLimitsResponseB\xc4\x01\n" +
 	"\x14com.blaxsmith.api.v1B\fGatewayProtoP\x01Z<github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1;apiv1\xa2\x02\x03BAX\xaa\x02\x10Blaxsmith.Api.V1\xca\x02\x10Blaxsmith\\Api\\V1\xe2\x02\x1cBlaxsmith\\Api\\V1\\GPBMetadata\xea\x02\x12Blaxsmith::Api::V1b\x06proto3"
 
 var (
@@ -1948,35 +3306,53 @@ func file_blaxsmith_api_v1_gateway_proto_rawDescGZIP() []byte {
 	return file_blaxsmith_api_v1_gateway_proto_rawDescData
 }
 
-var file_blaxsmith_api_v1_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_blaxsmith_api_v1_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
 var file_blaxsmith_api_v1_gateway_proto_goTypes = []any{
-	(*GatewaySettings)(nil),               // 0: blaxsmith.api.v1.GatewaySettings
-	(*GetGatewaySettingsRequest)(nil),     // 1: blaxsmith.api.v1.GetGatewaySettingsRequest
-	(*GetGatewaySettingsResponse)(nil),    // 2: blaxsmith.api.v1.GetGatewaySettingsResponse
-	(*UpdateGatewaySettingsRequest)(nil),  // 3: blaxsmith.api.v1.UpdateGatewaySettingsRequest
-	(*UpdateGatewaySettingsResponse)(nil), // 4: blaxsmith.api.v1.UpdateGatewaySettingsResponse
-	(*UsageTotals)(nil),                   // 5: blaxsmith.api.v1.UsageTotals
-	(*UsageSlice)(nil),                    // 6: blaxsmith.api.v1.UsageSlice
-	(*UsagePoint)(nil),                    // 7: blaxsmith.api.v1.UsagePoint
-	(*GetUsageOverviewRequest)(nil),       // 8: blaxsmith.api.v1.GetUsageOverviewRequest
-	(*GetUsageOverviewResponse)(nil),      // 9: blaxsmith.api.v1.GetUsageOverviewResponse
-	(*ModelPrice)(nil),                    // 10: blaxsmith.api.v1.ModelPrice
-	(*ListModelPricesRequest)(nil),        // 11: blaxsmith.api.v1.ListModelPricesRequest
-	(*ListModelPricesResponse)(nil),       // 12: blaxsmith.api.v1.ListModelPricesResponse
-	(*SetModelPriceOverrideRequest)(nil),  // 13: blaxsmith.api.v1.SetModelPriceOverrideRequest
-	(*SetModelPriceOverrideResponse)(nil), // 14: blaxsmith.api.v1.SetModelPriceOverrideResponse
-	(*GetGatewayStatusRequest)(nil),       // 15: blaxsmith.api.v1.GetGatewayStatusRequest
-	(*GetGatewayStatusResponse)(nil),      // 16: blaxsmith.api.v1.GetGatewayStatusResponse
-	(*GetMyUsageRequest)(nil),             // 17: blaxsmith.api.v1.GetMyUsageRequest
-	(*GetMyUsageResponse)(nil),            // 18: blaxsmith.api.v1.GetMyUsageResponse
-	(*ModelCall)(nil),                     // 19: blaxsmith.api.v1.ModelCall
-	(*StageCost)(nil),                     // 20: blaxsmith.api.v1.StageCost
-	(*GetRunCostRequest)(nil),             // 21: blaxsmith.api.v1.GetRunCostRequest
-	(*GetRunCostResponse)(nil),            // 22: blaxsmith.api.v1.GetRunCostResponse
-	(*GetProjectDeliveryRequest)(nil),     // 23: blaxsmith.api.v1.GetProjectDeliveryRequest
-	(*GetProjectDeliveryResponse)(nil),    // 24: blaxsmith.api.v1.GetProjectDeliveryResponse
-	(*SetProjectDeliveryRequest)(nil),     // 25: blaxsmith.api.v1.SetProjectDeliveryRequest
-	(*SetProjectDeliveryResponse)(nil),    // 26: blaxsmith.api.v1.SetProjectDeliveryResponse
+	(*GatewaySettings)(nil),                  // 0: blaxsmith.api.v1.GatewaySettings
+	(*GetGatewaySettingsRequest)(nil),        // 1: blaxsmith.api.v1.GetGatewaySettingsRequest
+	(*GetGatewaySettingsResponse)(nil),       // 2: blaxsmith.api.v1.GetGatewaySettingsResponse
+	(*UpdateGatewaySettingsRequest)(nil),     // 3: blaxsmith.api.v1.UpdateGatewaySettingsRequest
+	(*UpdateGatewaySettingsResponse)(nil),    // 4: blaxsmith.api.v1.UpdateGatewaySettingsResponse
+	(*UsageTotals)(nil),                      // 5: blaxsmith.api.v1.UsageTotals
+	(*UsageSlice)(nil),                       // 6: blaxsmith.api.v1.UsageSlice
+	(*UsagePoint)(nil),                       // 7: blaxsmith.api.v1.UsagePoint
+	(*GetUsageOverviewRequest)(nil),          // 8: blaxsmith.api.v1.GetUsageOverviewRequest
+	(*GetUsageOverviewResponse)(nil),         // 9: blaxsmith.api.v1.GetUsageOverviewResponse
+	(*ModelPrice)(nil),                       // 10: blaxsmith.api.v1.ModelPrice
+	(*ListModelPricesRequest)(nil),           // 11: blaxsmith.api.v1.ListModelPricesRequest
+	(*ListModelPricesResponse)(nil),          // 12: blaxsmith.api.v1.ListModelPricesResponse
+	(*SetModelPriceOverrideRequest)(nil),     // 13: blaxsmith.api.v1.SetModelPriceOverrideRequest
+	(*SetModelPriceOverrideResponse)(nil),    // 14: blaxsmith.api.v1.SetModelPriceOverrideResponse
+	(*GatewayRouteMetric)(nil),               // 15: blaxsmith.api.v1.GatewayRouteMetric
+	(*GatewayRoute)(nil),                     // 16: blaxsmith.api.v1.GatewayRoute
+	(*GatewayPool)(nil),                      // 17: blaxsmith.api.v1.GatewayPool
+	(*PacedStage)(nil),                       // 18: blaxsmith.api.v1.PacedStage
+	(*GatewayRouteOption)(nil),               // 19: blaxsmith.api.v1.GatewayRouteOption
+	(*ListGatewayRoutesRequest)(nil),         // 20: blaxsmith.api.v1.ListGatewayRoutesRequest
+	(*ListGatewayRoutesResponse)(nil),        // 21: blaxsmith.api.v1.ListGatewayRoutesResponse
+	(*SaveGatewayRouteRequest)(nil),          // 22: blaxsmith.api.v1.SaveGatewayRouteRequest
+	(*SaveGatewayRouteResponse)(nil),         // 23: blaxsmith.api.v1.SaveGatewayRouteResponse
+	(*SetGatewayRouteStateRequest)(nil),      // 24: blaxsmith.api.v1.SetGatewayRouteStateRequest
+	(*SetGatewayRouteStateResponse)(nil),     // 25: blaxsmith.api.v1.SetGatewayRouteStateResponse
+	(*SaveGatewayPoolRequest)(nil),           // 26: blaxsmith.api.v1.SaveGatewayPoolRequest
+	(*SaveGatewayPoolResponse)(nil),          // 27: blaxsmith.api.v1.SaveGatewayPoolResponse
+	(*SubscriptionLimitWindow)(nil),          // 28: blaxsmith.api.v1.SubscriptionLimitWindow
+	(*SubscriptionLimits)(nil),               // 29: blaxsmith.api.v1.SubscriptionLimits
+	(*ListMySubscriptionLimitsRequest)(nil),  // 30: blaxsmith.api.v1.ListMySubscriptionLimitsRequest
+	(*ListMySubscriptionLimitsResponse)(nil), // 31: blaxsmith.api.v1.ListMySubscriptionLimitsResponse
+	(*GetGatewayStatusRequest)(nil),          // 32: blaxsmith.api.v1.GetGatewayStatusRequest
+	(*GetGatewayStatusResponse)(nil),         // 33: blaxsmith.api.v1.GetGatewayStatusResponse
+	(*GetMyUsageRequest)(nil),                // 34: blaxsmith.api.v1.GetMyUsageRequest
+	(*GetMyUsageResponse)(nil),               // 35: blaxsmith.api.v1.GetMyUsageResponse
+	(*ModelCall)(nil),                        // 36: blaxsmith.api.v1.ModelCall
+	(*StageCost)(nil),                        // 37: blaxsmith.api.v1.StageCost
+	(*GetRunCostRequest)(nil),                // 38: blaxsmith.api.v1.GetRunCostRequest
+	(*GetRunCostResponse)(nil),               // 39: blaxsmith.api.v1.GetRunCostResponse
+	(*GetProjectDeliveryRequest)(nil),        // 40: blaxsmith.api.v1.GetProjectDeliveryRequest
+	(*GetProjectDeliveryResponse)(nil),       // 41: blaxsmith.api.v1.GetProjectDeliveryResponse
+	(*SetProjectDeliveryRequest)(nil),        // 42: blaxsmith.api.v1.SetProjectDeliveryRequest
+	(*SetProjectDeliveryResponse)(nil),       // 43: blaxsmith.api.v1.SetProjectDeliveryResponse
+	nil,                                      // 44: blaxsmith.api.v1.GatewayRoute.ModelMapEntry
 }
 var file_blaxsmith_api_v1_gateway_proto_depIdxs = []int32{
 	0,  // 0: blaxsmith.api.v1.GetGatewaySettingsResponse.settings:type_name -> blaxsmith.api.v1.GatewaySettings
@@ -1992,41 +3368,64 @@ var file_blaxsmith_api_v1_gateway_proto_depIdxs = []int32{
 	10, // 10: blaxsmith.api.v1.ListModelPricesResponse.prices:type_name -> blaxsmith.api.v1.ModelPrice
 	10, // 11: blaxsmith.api.v1.SetModelPriceOverrideRequest.price:type_name -> blaxsmith.api.v1.ModelPrice
 	10, // 12: blaxsmith.api.v1.SetModelPriceOverrideResponse.price:type_name -> blaxsmith.api.v1.ModelPrice
-	5,  // 13: blaxsmith.api.v1.GetMyUsageResponse.totals:type_name -> blaxsmith.api.v1.UsageTotals
-	6,  // 14: blaxsmith.api.v1.GetMyUsageResponse.by_project:type_name -> blaxsmith.api.v1.UsageSlice
-	6,  // 15: blaxsmith.api.v1.GetMyUsageResponse.by_model:type_name -> blaxsmith.api.v1.UsageSlice
-	6,  // 16: blaxsmith.api.v1.GetMyUsageResponse.top_runs:type_name -> blaxsmith.api.v1.UsageSlice
-	5,  // 17: blaxsmith.api.v1.ModelCall.totals:type_name -> blaxsmith.api.v1.UsageTotals
-	5,  // 18: blaxsmith.api.v1.StageCost.totals:type_name -> blaxsmith.api.v1.UsageTotals
-	5,  // 19: blaxsmith.api.v1.GetRunCostResponse.totals:type_name -> blaxsmith.api.v1.UsageTotals
-	20, // 20: blaxsmith.api.v1.GetRunCostResponse.stages:type_name -> blaxsmith.api.v1.StageCost
-	19, // 21: blaxsmith.api.v1.GetRunCostResponse.requests:type_name -> blaxsmith.api.v1.ModelCall
-	24, // 22: blaxsmith.api.v1.SetProjectDeliveryResponse.delivery:type_name -> blaxsmith.api.v1.GetProjectDeliveryResponse
-	1,  // 23: blaxsmith.api.v1.GatewayAdminService.GetGatewaySettings:input_type -> blaxsmith.api.v1.GetGatewaySettingsRequest
-	3,  // 24: blaxsmith.api.v1.GatewayAdminService.UpdateGatewaySettings:input_type -> blaxsmith.api.v1.UpdateGatewaySettingsRequest
-	8,  // 25: blaxsmith.api.v1.GatewayAdminService.GetUsageOverview:input_type -> blaxsmith.api.v1.GetUsageOverviewRequest
-	11, // 26: blaxsmith.api.v1.GatewayAdminService.ListModelPrices:input_type -> blaxsmith.api.v1.ListModelPricesRequest
-	13, // 27: blaxsmith.api.v1.GatewayAdminService.SetModelPriceOverride:input_type -> blaxsmith.api.v1.SetModelPriceOverrideRequest
-	15, // 28: blaxsmith.api.v1.UsageService.GetGatewayStatus:input_type -> blaxsmith.api.v1.GetGatewayStatusRequest
-	17, // 29: blaxsmith.api.v1.UsageService.GetMyUsage:input_type -> blaxsmith.api.v1.GetMyUsageRequest
-	21, // 30: blaxsmith.api.v1.UsageService.GetRunCost:input_type -> blaxsmith.api.v1.GetRunCostRequest
-	23, // 31: blaxsmith.api.v1.UsageService.GetProjectDelivery:input_type -> blaxsmith.api.v1.GetProjectDeliveryRequest
-	25, // 32: blaxsmith.api.v1.UsageService.SetProjectDelivery:input_type -> blaxsmith.api.v1.SetProjectDeliveryRequest
-	2,  // 33: blaxsmith.api.v1.GatewayAdminService.GetGatewaySettings:output_type -> blaxsmith.api.v1.GetGatewaySettingsResponse
-	4,  // 34: blaxsmith.api.v1.GatewayAdminService.UpdateGatewaySettings:output_type -> blaxsmith.api.v1.UpdateGatewaySettingsResponse
-	9,  // 35: blaxsmith.api.v1.GatewayAdminService.GetUsageOverview:output_type -> blaxsmith.api.v1.GetUsageOverviewResponse
-	12, // 36: blaxsmith.api.v1.GatewayAdminService.ListModelPrices:output_type -> blaxsmith.api.v1.ListModelPricesResponse
-	14, // 37: blaxsmith.api.v1.GatewayAdminService.SetModelPriceOverride:output_type -> blaxsmith.api.v1.SetModelPriceOverrideResponse
-	16, // 38: blaxsmith.api.v1.UsageService.GetGatewayStatus:output_type -> blaxsmith.api.v1.GetGatewayStatusResponse
-	18, // 39: blaxsmith.api.v1.UsageService.GetMyUsage:output_type -> blaxsmith.api.v1.GetMyUsageResponse
-	22, // 40: blaxsmith.api.v1.UsageService.GetRunCost:output_type -> blaxsmith.api.v1.GetRunCostResponse
-	24, // 41: blaxsmith.api.v1.UsageService.GetProjectDelivery:output_type -> blaxsmith.api.v1.GetProjectDeliveryResponse
-	26, // 42: blaxsmith.api.v1.UsageService.SetProjectDelivery:output_type -> blaxsmith.api.v1.SetProjectDeliveryResponse
-	33, // [33:43] is the sub-list for method output_type
-	23, // [23:33] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	44, // 13: blaxsmith.api.v1.GatewayRoute.model_map:type_name -> blaxsmith.api.v1.GatewayRoute.ModelMapEntry
+	15, // 14: blaxsmith.api.v1.GatewayRoute.metrics:type_name -> blaxsmith.api.v1.GatewayRouteMetric
+	16, // 15: blaxsmith.api.v1.ListGatewayRoutesResponse.routes:type_name -> blaxsmith.api.v1.GatewayRoute
+	17, // 16: blaxsmith.api.v1.ListGatewayRoutesResponse.pools:type_name -> blaxsmith.api.v1.GatewayPool
+	18, // 17: blaxsmith.api.v1.ListGatewayRoutesResponse.paced:type_name -> blaxsmith.api.v1.PacedStage
+	19, // 18: blaxsmith.api.v1.ListGatewayRoutesResponse.connections:type_name -> blaxsmith.api.v1.GatewayRouteOption
+	19, // 19: blaxsmith.api.v1.ListGatewayRoutesResponse.projects:type_name -> blaxsmith.api.v1.GatewayRouteOption
+	16, // 20: blaxsmith.api.v1.SaveGatewayRouteRequest.route:type_name -> blaxsmith.api.v1.GatewayRoute
+	16, // 21: blaxsmith.api.v1.SaveGatewayRouteResponse.route:type_name -> blaxsmith.api.v1.GatewayRoute
+	17, // 22: blaxsmith.api.v1.SaveGatewayPoolRequest.pool:type_name -> blaxsmith.api.v1.GatewayPool
+	17, // 23: blaxsmith.api.v1.SaveGatewayPoolResponse.pool:type_name -> blaxsmith.api.v1.GatewayPool
+	28, // 24: blaxsmith.api.v1.SubscriptionLimits.windows:type_name -> blaxsmith.api.v1.SubscriptionLimitWindow
+	29, // 25: blaxsmith.api.v1.ListMySubscriptionLimitsResponse.subscriptions:type_name -> blaxsmith.api.v1.SubscriptionLimits
+	5,  // 26: blaxsmith.api.v1.GetMyUsageResponse.totals:type_name -> blaxsmith.api.v1.UsageTotals
+	6,  // 27: blaxsmith.api.v1.GetMyUsageResponse.by_project:type_name -> blaxsmith.api.v1.UsageSlice
+	6,  // 28: blaxsmith.api.v1.GetMyUsageResponse.by_model:type_name -> blaxsmith.api.v1.UsageSlice
+	6,  // 29: blaxsmith.api.v1.GetMyUsageResponse.top_runs:type_name -> blaxsmith.api.v1.UsageSlice
+	5,  // 30: blaxsmith.api.v1.ModelCall.totals:type_name -> blaxsmith.api.v1.UsageTotals
+	5,  // 31: blaxsmith.api.v1.StageCost.totals:type_name -> blaxsmith.api.v1.UsageTotals
+	5,  // 32: blaxsmith.api.v1.GetRunCostResponse.totals:type_name -> blaxsmith.api.v1.UsageTotals
+	37, // 33: blaxsmith.api.v1.GetRunCostResponse.stages:type_name -> blaxsmith.api.v1.StageCost
+	36, // 34: blaxsmith.api.v1.GetRunCostResponse.requests:type_name -> blaxsmith.api.v1.ModelCall
+	41, // 35: blaxsmith.api.v1.SetProjectDeliveryResponse.delivery:type_name -> blaxsmith.api.v1.GetProjectDeliveryResponse
+	1,  // 36: blaxsmith.api.v1.GatewayAdminService.GetGatewaySettings:input_type -> blaxsmith.api.v1.GetGatewaySettingsRequest
+	3,  // 37: blaxsmith.api.v1.GatewayAdminService.UpdateGatewaySettings:input_type -> blaxsmith.api.v1.UpdateGatewaySettingsRequest
+	8,  // 38: blaxsmith.api.v1.GatewayAdminService.GetUsageOverview:input_type -> blaxsmith.api.v1.GetUsageOverviewRequest
+	11, // 39: blaxsmith.api.v1.GatewayAdminService.ListModelPrices:input_type -> blaxsmith.api.v1.ListModelPricesRequest
+	13, // 40: blaxsmith.api.v1.GatewayAdminService.SetModelPriceOverride:input_type -> blaxsmith.api.v1.SetModelPriceOverrideRequest
+	20, // 41: blaxsmith.api.v1.GatewayAdminService.ListGatewayRoutes:input_type -> blaxsmith.api.v1.ListGatewayRoutesRequest
+	22, // 42: blaxsmith.api.v1.GatewayAdminService.SaveGatewayRoute:input_type -> blaxsmith.api.v1.SaveGatewayRouteRequest
+	24, // 43: blaxsmith.api.v1.GatewayAdminService.SetGatewayRouteState:input_type -> blaxsmith.api.v1.SetGatewayRouteStateRequest
+	26, // 44: blaxsmith.api.v1.GatewayAdminService.SaveGatewayPool:input_type -> blaxsmith.api.v1.SaveGatewayPoolRequest
+	32, // 45: blaxsmith.api.v1.UsageService.GetGatewayStatus:input_type -> blaxsmith.api.v1.GetGatewayStatusRequest
+	34, // 46: blaxsmith.api.v1.UsageService.GetMyUsage:input_type -> blaxsmith.api.v1.GetMyUsageRequest
+	38, // 47: blaxsmith.api.v1.UsageService.GetRunCost:input_type -> blaxsmith.api.v1.GetRunCostRequest
+	40, // 48: blaxsmith.api.v1.UsageService.GetProjectDelivery:input_type -> blaxsmith.api.v1.GetProjectDeliveryRequest
+	42, // 49: blaxsmith.api.v1.UsageService.SetProjectDelivery:input_type -> blaxsmith.api.v1.SetProjectDeliveryRequest
+	30, // 50: blaxsmith.api.v1.UsageService.ListMySubscriptionLimits:input_type -> blaxsmith.api.v1.ListMySubscriptionLimitsRequest
+	2,  // 51: blaxsmith.api.v1.GatewayAdminService.GetGatewaySettings:output_type -> blaxsmith.api.v1.GetGatewaySettingsResponse
+	4,  // 52: blaxsmith.api.v1.GatewayAdminService.UpdateGatewaySettings:output_type -> blaxsmith.api.v1.UpdateGatewaySettingsResponse
+	9,  // 53: blaxsmith.api.v1.GatewayAdminService.GetUsageOverview:output_type -> blaxsmith.api.v1.GetUsageOverviewResponse
+	12, // 54: blaxsmith.api.v1.GatewayAdminService.ListModelPrices:output_type -> blaxsmith.api.v1.ListModelPricesResponse
+	14, // 55: blaxsmith.api.v1.GatewayAdminService.SetModelPriceOverride:output_type -> blaxsmith.api.v1.SetModelPriceOverrideResponse
+	21, // 56: blaxsmith.api.v1.GatewayAdminService.ListGatewayRoutes:output_type -> blaxsmith.api.v1.ListGatewayRoutesResponse
+	23, // 57: blaxsmith.api.v1.GatewayAdminService.SaveGatewayRoute:output_type -> blaxsmith.api.v1.SaveGatewayRouteResponse
+	25, // 58: blaxsmith.api.v1.GatewayAdminService.SetGatewayRouteState:output_type -> blaxsmith.api.v1.SetGatewayRouteStateResponse
+	27, // 59: blaxsmith.api.v1.GatewayAdminService.SaveGatewayPool:output_type -> blaxsmith.api.v1.SaveGatewayPoolResponse
+	33, // 60: blaxsmith.api.v1.UsageService.GetGatewayStatus:output_type -> blaxsmith.api.v1.GetGatewayStatusResponse
+	35, // 61: blaxsmith.api.v1.UsageService.GetMyUsage:output_type -> blaxsmith.api.v1.GetMyUsageResponse
+	39, // 62: blaxsmith.api.v1.UsageService.GetRunCost:output_type -> blaxsmith.api.v1.GetRunCostResponse
+	41, // 63: blaxsmith.api.v1.UsageService.GetProjectDelivery:output_type -> blaxsmith.api.v1.GetProjectDeliveryResponse
+	43, // 64: blaxsmith.api.v1.UsageService.SetProjectDelivery:output_type -> blaxsmith.api.v1.SetProjectDeliveryResponse
+	31, // 65: blaxsmith.api.v1.UsageService.ListMySubscriptionLimits:output_type -> blaxsmith.api.v1.ListMySubscriptionLimitsResponse
+	51, // [51:66] is the sub-list for method output_type
+	36, // [36:51] is the sub-list for method input_type
+	36, // [36:36] is the sub-list for extension type_name
+	36, // [36:36] is the sub-list for extension extendee
+	0,  // [0:36] is the sub-list for field type_name
 }
 
 func init() { file_blaxsmith_api_v1_gateway_proto_init() }
@@ -2040,7 +3439,7 @@ func file_blaxsmith_api_v1_gateway_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blaxsmith_api_v1_gateway_proto_rawDesc), len(file_blaxsmith_api_v1_gateway_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   27,
+			NumMessages:   45,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

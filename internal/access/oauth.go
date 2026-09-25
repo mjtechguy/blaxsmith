@@ -21,7 +21,9 @@ const CodexSubscriptionAuth = "codex_chatgpt"
 
 // ClaudeSetupTokenAuth marks a member's own `claude setup-token`: a long-lived
 // Claude subscription token with no refresh material. It is delivered like an
-// API key (native_raw), but only to runs started by its owner, and only while
+// API key (native_raw), or kept on the platform and sent upstream by the
+// model gateway as an OAuth bearer (brokered_gateway), but only for runs
+// started by its owner, and only while
 // the organization allows members' own Claude subscriptions
 // (docs/model-gateway-plan.md §6.1).
 const ClaudeSetupTokenAuth = "claude_setup_token"
@@ -170,6 +172,9 @@ type Delivery struct {
 	SecretVersion int64
 	FileName      string // Relative to the harness HOME.
 	File          []byte
+	// AccountID is the ChatGPT account the model gateway names upstream
+	// when it serves the owner's own run (docs/model-gateway-plan.md §6).
+	AccountID string
 }
 
 func (d *Delivery) Clear() { clear(d.AccessToken); clear(d.File) }
@@ -197,7 +202,7 @@ func (r *OAuthRefresher) Deliver(ctx context.Context, organizationID, connection
 		return Delivery{}, err
 	}
 	return Delivery{AccessToken: []byte(tokens.AccessToken), ExpiresAt: expiresAt, SecretVersion: version,
-		FileName: ".codex/auth.json", File: file}, nil
+		FileName: ".codex/auth.json", File: file, AccountID: tokens.AccountID}, nil
 }
 
 // OAuthLease names one delivered model lease being renewed until Until.

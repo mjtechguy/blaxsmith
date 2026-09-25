@@ -1,7 +1,6 @@
 package gateway
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,7 +8,6 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -57,6 +55,20 @@ type Server struct {
 	TokenBurst, OrgBurst int
 	// Record overrides persisting events (tests).
 	Record func(context.Context, Event) error
+	// Plan picks the routes for a request (LoadPlan); nil serves every
+	// request from its leased connection alone (G1).
+	Plan func(context.Context, Grant) (Plan, error)
+	// RouteKey reads a pooled route's credential; the leased connection's
+	// credential arrives with the grant. The caller clears the bytes.
+	RouteKey func(context.Context, Grant, Route) ([]byte, error)
+	// States holds live route state; nil starts an empty one.
+	States *States
+	// RecordLimits overrides persisting subscription windows (tests).
+	RecordLimits func(context.Context, Grant, []Window) error
+	// VertexTokenURL overrides Google's token endpoint (tests only).
+	VertexTokenURL string
+
+	google googleTokens
 
 	tokens, orgs *limiter
 	inflight     atomic.Int64
@@ -70,6 +82,9 @@ func (s *Server) init() {
 	if s.started.CompareAndSwap(false, true) {
 		s.tokens = newLimiter(s.TokenRate, max(s.TokenBurst, 1))
 		s.orgs = newLimiter(s.OrgRate, max(s.OrgBurst, 1))
+		if s.States == nil {
+			s.States = NewStates()
+		}
 	}
 }
 
@@ -126,108 +141,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.proxy(w, r, family, path, body, grant, requested, streamed, now)
-}
-
-func (s *Server) proxy(w http.ResponseWriter, r *http.Request, family, path string, body []byte, grant Grant,
-	requested string, streamed bool, started time.Time) {
-	s.inflight.Add(1)
-	defer s.inflight.Add(-1)
-	base := upstreamBase(family)
-	if override := s.Upstream[family]; override != "" {
-		base = override
-	}
-	target, err := url.Parse(base + path)
-	if err != nil || base == "" {
-		writeError(w, family, http.StatusBadGateway, "api_error", "No approved upstream for this provider.")
-		return
-	}
-	target.RawQuery = r.URL.RawQuery
-	upstream, err := http.NewRequestWithContext(r.Context(), r.Method, target.String(), bytes.NewReader(body))
-	if err != nil {
-		writeError(w, family, http.StatusBadGateway, "api_error", "Upstream request could not be built.")
-		return
-	}
-	copyRequestHeaders(upstream.Header, r.Header)
-	injectCredential(upstream.Header, family, path, grant.Key)
-	upstream.ContentLength = int64(len(body))
-	client := s.Client
-	if client == nil {
-		client = defaultClient
-	}
-	event := Event{Grant: grant, RouteID: grant.ConnectionID, RouteKind: RouteKind(family), API: apiFor(path),
-		RequestedModel: requested, StartedAt: started, Streamed: streamed}
-	defer func() {
-		event.Duration = time.Since(started)
-		event.Price = s.Prices.Lookup(context.WithoutCancel(r.Context()), grant.OrganizationID, grant.Provider,
-			firstNonEmpty(event.Usage.ServedModel, requested, grant.Model), started)
-		record := s.Record
-		if record == nil {
-			record = func(ctx context.Context, e Event) error { return Record(ctx, s.DB, e) }
-		}
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 10*time.Second)
-		defer cancel()
-		if err := record(ctx, event); err != nil {
-			log.Printf("gateway meter: %v", err) // never the token, key, or body.
-		}
-	}()
-	response, err := client.Do(upstream)
-	if err != nil {
-		event.Status, event.HTTPStatus = "error", http.StatusBadGateway
-		if r.Context().Err() != nil {
-			event.Status = "cancelled"
-		}
-		writeError(w, family, http.StatusBadGateway, "api_error", "The provider could not be reached.")
-		return
-	}
-	defer response.Body.Close()
-	event.HTTPStatus = response.StatusCode
-	event.RequestID = requestID(response.Header)
-	contentType := response.Header.Get("Content-Type")
-	event.Streamed = strings.HasPrefix(contentType, "text/event-stream")
-	copyResponseHeaders(w.Header(), response.Header)
-	w.WriteHeader(response.StatusCode)
-	flusher, _ := w.(http.Flusher)
-	if flusher != nil {
-		flusher.Flush()
-	}
-	meter := newMeter(event.API, event.Streamed)
-	if response.StatusCode >= 300 || !strings.Contains(contentType, "json") && !event.Streamed {
-		meter = newMeter(APIOther, false) // error bodies carry no usage worth parsing.
-	}
-	buffer := make([]byte, 32<<10)
-	status := "ok"
-	for {
-		n, readErr := response.Body.Read(buffer)
-		if n > 0 {
-			if event.TTFT == nil {
-				ttft := time.Since(started)
-				event.TTFT = &ttft
-			}
-			meter.Write(buffer[:n])
-			if _, err := w.Write(buffer[:n]); err != nil {
-				status = "cancelled"
-				break
-			}
-			if flusher != nil {
-				flusher.Flush() // keep SSE framing and keep-alives on the provider's timing.
-			}
-		}
-		if readErr == io.EOF {
-			break
-		}
-		if readErr != nil {
-			status = "error"
-			if r.Context().Err() != nil {
-				status = "cancelled"
-			}
-			break
-		}
-	}
-	event.Usage = meter.Finish()
-	if response.StatusCode >= 400 && status == "ok" {
-		status = "error"
-	}
-	event.Status = status
 }
 
 var defaultClient = &http.Client{Transport: &http.Transport{

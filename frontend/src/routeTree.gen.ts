@@ -17,6 +17,7 @@ import { Route as RunsRouteImport } from './routes/runs'
 import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
+import { Route as AdminRoutesRouteImport } from './routes/admin.routes'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminUsageRouteImport } from './routes/admin.usage'
 import { Route as ExtensionsIndexRouteImport } from './routes/extensions.index'
@@ -126,6 +127,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const AdminAuditRoute = AdminAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRoutesRoute = AdminRoutesRouteImport.update({
+  id: '/routes',
+  path: '/routes',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -519,6 +525,7 @@ export interface FileRoutesByFullPath {
   '/runs': typeof RunsRoute
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/admin/routes': typeof AdminRoutesRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/usage': typeof AdminUsageRoute
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
@@ -598,6 +605,7 @@ export interface FileRoutesByTo {
   '/runs': typeof RunsRoute
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/admin/routes': typeof AdminRoutesRoute
   '/admin/usage': typeof AdminUsageRoute
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
   '/me/email': typeof MeEmailRoute
@@ -675,6 +683,7 @@ export interface FileRoutesById {
   '/runs': typeof RunsRoute
   '/tools': typeof ToolsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/admin/routes': typeof AdminRoutesRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/usage': typeof AdminUsageRoute
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
@@ -757,6 +766,7 @@ export interface FileRouteTypes {
     | '/runs'
     | '/tools'
     | '/admin/audit'
+    | '/admin/routes'
     | '/admin/settings'
     | '/admin/usage'
     | '/extensions/$extensionId'
@@ -836,6 +846,7 @@ export interface FileRouteTypes {
     | '/runs'
     | '/tools'
     | '/admin/audit'
+    | '/admin/routes'
     | '/admin/usage'
     | '/extensions/$extensionId'
     | '/me/email'
@@ -912,6 +923,7 @@ export interface FileRouteTypes {
     | '/runs'
     | '/tools'
     | '/admin/audit'
+    | '/admin/routes'
     | '/admin/settings'
     | '/admin/usage'
     | '/extensions/$extensionId'
@@ -1067,6 +1079,13 @@ declare module '@tanstack/react-router' {
       path: '/audit'
       fullPath: '/admin/audit'
       preLoaderRoute: typeof AdminAuditRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/routes': {
+      id: '/admin/routes'
+      path: '/routes'
+      fullPath: '/admin/routes'
+      preLoaderRoute: typeof AdminRoutesRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/settings': {
@@ -1586,6 +1605,7 @@ const AdminSettingsRouteWithChildren = AdminSettingsRoute._addFileChildren(
 
 interface AdminRouteChildren {
   AdminAuditRoute: typeof AdminAuditRoute
+  AdminRoutesRoute: typeof AdminRoutesRoute
   AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
   AdminUsageRoute: typeof AdminUsageRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -1609,6 +1629,7 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAuditRoute: AdminAuditRoute,
+  AdminRoutesRoute: AdminRoutesRoute,
   AdminSettingsRoute: AdminSettingsRouteWithChildren,
   AdminUsageRoute: AdminUsageRoute,
   AdminIndexRoute: AdminIndexRoute,

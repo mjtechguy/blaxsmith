@@ -8,7 +8,7 @@ Checked on 2026-09-24 against provider docs and source. Items marked
 | Mode | Verdict | Blaxsmith behavior |
 |---|---|---|
 | Codex with a ChatGPT-plan sign-in | Allowed with conditions: the account owner's own use, on trusted private infrastructure, with no concurrent sharing of one `auth.json`. OpenAI still recommends API keys for automation. | Enabled as `oauth_access`, owner-only. |
-| Claude Code with a member's own `claude setup-token` | Anthropic: "developers may not collect, store, or intermediate Claude.ai credentials or session tokens" and may not "route requests through Free, Pro, or Max plan credentials on behalf of their users". Blaxsmith therefore offers this only as a self-hosted, per-member choice: an org owner/admin must opt in after reviewing the terms, and each token is used solely for its owner's own runs (the equivalent of the owner's own CI secret), never pooled or shared. | `claude_setup_token`, `native_raw`, owner-only (`access.deliveryAllowed`), off by default behind Admin → Settings → Connections, rechecked at every release. The worker runs Claude Code non-bare with the probe-verified isolation (`internal/tooladapter/claude_subscription.go`). `/login` sessions are not supported. |
+| Claude Code with a member's own `claude setup-token` | Anthropic: "developers may not collect, store, or intermediate Claude.ai credentials or session tokens" and may not "route requests through Free, Pro, or Max plan credentials on behalf of their users". Blaxsmith therefore offers this only as a self-hosted, per-member choice: an org owner/admin must opt in after reviewing the terms, and each token is used solely for its owner's own runs (the equivalent of the owner's own CI secret), never pooled or shared. | `claude_setup_token`, owner-only (`access.deliveryAllowed`), off by default behind Admin → Settings → Connections, rechecked at every release and on every gateway request. In a `native_raw` project the worker runs Claude Code non-bare with the probe-verified isolation (`internal/tooladapter/claude_subscription.go`). In a `brokered_gateway` project the token never enters the sandbox: the gateway sends it upstream as `Authorization: Bearer` with the `oauth-2025-04-20` beta for the owner's own run, and Claude Code runs `--bare` with the run's gateway token. `/login` sessions are not supported. |
 
 Sources:
 [Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance),
@@ -93,6 +93,25 @@ keeps ownership and mode 0600. Only then does it announce the new expiry.
 - **Worker.** `tooladapter` writes it to `$CODEX_HOME/auth.json` (0600) under the attempt's temporary home and sets `CODEX_HOME`. It never sets `OPENAI_API_KEY` for this mode. The resume pane skips `codex login --with-api-key`. The pane and activity redactors hide the access and id tokens, including renewed ones.
 - **Dispatch.** Runs record `initiator_principal_id` at launch. A personal (user-owned) grant is bound only when the run's initiator owns that connection and is its grantee; otherwise the project's workload selection applies (`TestDispatchBatchPostgres` covers a Codex subscription).
 - **Egress.** Codex with a ChatGPT sign-in talks to `chatgpt.com`, not `api.openai.com`. The `exact` Gateway mode checks only `api.openai.com` for provider `openai`, so subscription runs need `open-dev` egress until `providerHost` accounts for the delivery mode.
+
+## Through the model gateway (personal routes)
+
+Never pooled, rotated, failed over or disguised: each subscription is one
+route used only for its owner's own runs (docs/model-gateway-plan.md §6).
+
+- **Claude setup-token:** in a `brokered_gateway` project the gateway injects
+  the token as an OAuth bearer (above). Its usage windows
+  (`anthropic-ratelimit-unified-*`, unofficial) are recorded for the owner.
+- **Codex sign-in:** with Admin → Settings → Model gateway → *Personal
+  subscription routes* on, a `brokered_gateway` attempt gets a gateway token
+  instead of `auth.json`. The gateway takes a fresh access token from
+  `OAuthRefresher` (still the only caller of the token endpoint) and sends
+  the request to `https://chatgpt.com/backend-api/codex` with the account's
+  `chatgpt-account-id`, exactly where Codex itself would. Lease renewal
+  treats these leases as gateway leases (nothing to push to the guest). The
+  `x-codex-{primary,secondary}-*` headers feed the owner's meters in My
+  usage. With the switch off, a Codex sign-in keeps its native delivery.
+  Not yet tried against the live backend.
 
 ## Not done
 - **Device code.** The connections hub runs the Codex device-code sign-in server-side (`access.CodexDevice`, from `codex-rs/login/src/device_code_auth.rs`): `POST /api/accounts/deviceauth/usercode`, the user approves at `/codex/device`, `POST /api/accounts/deviceauth/token` polls, and `/oauth/token` exchanges the code once. Pasting `auth.json` stays as the Advanced fallback. Pending sign-ins live in app memory (single replica or session affinity). Not yet tried against the live endpoint.

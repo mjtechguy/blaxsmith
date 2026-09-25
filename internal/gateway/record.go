@@ -11,18 +11,20 @@ import (
 // Event is one completed or failed upstream request (§7). It holds counts
 // and metadata only; no prompt or response content.
 type Event struct {
-	Grant                   Grant
-	RouteID, RouteKind, API string
-	RequestedModel          string
-	Status                  string // ok, error, cancelled
-	HTTPStatus              int
-	Streamed                bool
-	RequestID               string
-	StartedAt               time.Time
-	TTFT                    *time.Duration
-	Duration                time.Duration
-	Usage                   Usage
-	Price                   Price
+	Grant           Grant
+	PoolID, RouteID string
+	RouteKind, API  string
+	RetryCount      int // failovers before this request (§4)
+	RequestedModel  string
+	Status          string // ok, error, cancelled
+	HTTPStatus      int
+	Streamed        bool
+	RequestID       string
+	StartedAt       time.Time
+	TTFT            *time.Duration
+	Duration        time.Duration
+	Usage           Usage
+	Price           Price
 }
 
 // Record writes the event and bumps the run's totals in one transaction.
@@ -49,12 +51,14 @@ func Record(ctx context.Context, db *pgxpool.Pool, e Event) error {
 	if _, err := tx.Exec(ctx, `INSERT INTO gateway_usage_events
 		(organization_id,project_id,run_id,attempt_id,task_id,stage_key,principal_id,harness,route_id,route_kind,api,
 		 requested_model,served_model,status,http_status,streamed,usage_reported,request_id,started_at,ttft_ms,duration_ms,
-		 input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,cost_usd_micros,price_version)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)`,
+		 input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,cost_usd_micros,price_version,
+		 pool_id,retry_count)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)`,
 		g.OrganizationID, g.ProjectID, g.RunID, g.AttemptID, g.TaskID, g.StageKey, g.PrincipalID, g.Harness,
 		e.RouteID, e.RouteKind, e.API, e.RequestedModel, e.Usage.ServedModel, e.Status, e.HTTPStatus, e.Streamed,
 		e.Usage.Reported, e.RequestID, e.StartedAt, ttft, e.Duration.Milliseconds(),
-		e.Usage.Input, e.Usage.Output, e.Usage.CacheRead, e.Usage.CacheWrite, e.Usage.Reasoning, cost, e.Price.Version); err != nil {
+		e.Usage.Input, e.Usage.Output, e.Usage.CacheRead, e.Usage.CacheWrite, e.Usage.Reasoning, cost, e.Price.Version,
+		e.PoolID, e.RetryCount); err != nil {
 		return fmt.Errorf("record gateway usage: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO gateway_run_usage AS u
@@ -114,12 +118,17 @@ func EnsurePartitions(ctx context.Context, db *pgxpool.Pool) error {
 	return err
 }
 
-// PruneEvents drops raw events older than the retention period (§7, 90 days
-// by default). Rollups and run totals are kept.
+// PruneEvents drops raw events older than each organization's retention
+// (Admin → Settings → Model gateway, 90 days by default, §7 and §16), or
+// retention for organizations without settings. Rollups and run totals are
+// kept.
 func PruneEvents(ctx context.Context, db *pgxpool.Pool, retention time.Duration) error {
 	if retention < 24*time.Hour {
 		return ErrDenied
 	}
-	_, err := db.Exec(ctx, `DELETE FROM gateway_usage_events WHERE started_at<clock_timestamp()-$1::interval`, retention)
+	_, err := db.Exec(ctx, `DELETE FROM gateway_usage_events e
+		WHERE e.started_at<clock_timestamp()-COALESCE(
+			(SELECT make_interval(days => s.event_retention_days) FROM gateway_org_settings s
+			 WHERE s.organization_id=e.organization_id), $1::interval)`, retention)
 	return err
 }

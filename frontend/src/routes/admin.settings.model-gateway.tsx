@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { AlertTriangle, Waypoints } from "lucide-react";
 import { useOrg } from "../connection-ui";
 import { CollectionTable, useLocalView, type GridColumn } from "../data-table";
@@ -22,6 +22,9 @@ const laterFlags = [
   { id: "personal", label: "Personal subscription routes", phase: "G4", text: "Each member's own subscription connection as a route for their own runs only. Never pooled or shared." },
   { id: "content", label: "Content capture", phase: "a later phase", text: "Store redacted, encrypted request and response bodies for a limited retention. Off: only counts and metadata are recorded." },
 ];
+
+// Later-phase flags that are now real switches in the editor above.
+const shipped = new Set(["pools", "pacing", "personal"]);
 
 function ModelGatewaySettings() {
   const { org } = useOrg();
@@ -48,11 +51,17 @@ function SettingsEditor({ data, org, saved, setSaved }: { data: GetGatewaySettin
   const [error, setError] = useState("");
   const s = data.settings!;
   const form = useForm({
-    defaultValues: { enabled: s.enabled, defaultDeliveryMode: s.defaultDeliveryMode || "native_raw", allowProjectChoice: s.allowProjectChoice, removeDirectEgress: s.removeDirectEgress },
+    defaultValues: { enabled: s.enabled, defaultDeliveryMode: s.defaultDeliveryMode || "native_raw", allowProjectChoice: s.allowProjectChoice, removeDirectEgress: s.removeDirectEgress,
+      poolsEnabled: s.poolsEnabled, pacingEnabled: s.pacingEnabled, personalRoutesEnabled: s.personalRoutesEnabled, eventRetentionDays: String(s.eventRetentionDays || 90) },
     onSubmit: async ({ value }) => {
       setError("");
+      const days = Number(value.eventRetentionDays);
+      if (!Number.isInteger(days) || days < 7 || days > 400) {
+        setError("Keep raw usage events for 7 to 400 days.");
+        return;
+      }
       try {
-        await updateGatewaySettings(value, data.version);
+        await updateGatewaySettings({ ...value, eventRetentionDays: days }, data.version);
         await Promise.all([queryClient.invalidateQueries({ queryKey: gatewaySettingsKey(org) }), queryClient.invalidateQueries({ queryKey: gatewayStatusKey(org) })]);
         setSaved(true);
       } catch (cause) {
@@ -84,6 +93,19 @@ function SettingsEditor({ data, org, saved, setSaved }: { data: GetGatewaySettin
           <p id="gw-egress-help">Gateway-mode sandboxes can reach Git and the gateway, not provider hosts, so a leaked token is the only credential in reach.</p>
           {!v.removeDirectEgress ? <p className="flag-warning"><AlertTriangle size={14} aria-hidden="true" /> Direct egress stays open for gateway runs. Use this only for debugging.</p> : null}
         </Flag>}</form.Field>
+        <form.Field name="poolsEnabled">{(field) => <Flag id="gw-pools" label="Pools & failover" checked={field.state.value} onChange={field.handleChange}>
+          <p id="gw-pools-help">Pools of organization API-key and cloud routes, with health-based selection and failover before the first byte on 429s and errors. Set them up in <Link className="text-link" to="/admin/routes">Routes & pools</Link>. Off: one route per connection. Members' own subscriptions are never pooled.</p>
+        </Flag>}</form.Field>
+        <form.Field name="pacingEnabled">{(field) => <Flag id="gw-pacing" label="Rate-aware pacing" checked={field.state.value} onChange={field.handleChange}>
+          <p id="gw-pacing-help">A stage whose pool has no headroom stays queued with a visible reset countdown instead of failing.</p>
+        </Flag>}</form.Field>
+        <form.Field name="personalRoutesEnabled">{(field) => <Flag id="gw-personal" label="Personal subscription routes" checked={field.state.value} onChange={field.handleChange}>
+          <p id="gw-personal-help">A member's own Codex sign-in is served through the gateway for runs they start, so the sandbox never holds even an access token, and they see their own limit and reset meters in My usage. One account per route, owner-only, never pooled, shared or rotated. Members' own Claude setup-tokens always go through the gateway in gateway-mode projects.</p>
+        </Flag>}</form.Field>
+        <li className="flag-row"><div><label htmlFor="gw-retention">Raw usage event retention (days)</label>
+          <p id="gw-retention-help">How long per-request usage events are kept, 7 to 400 days. Daily rollups and run totals are kept.</p></div>
+          <form.Field name="eventRetentionDays">{(field) => <span className="form-field"><input id="gw-retention" inputMode="numeric" aria-describedby="gw-retention-help"
+            value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} /></span>}</form.Field></li>
       </ul>}</form.Subscribe>
       {data.updatedAt ? <p className="form-hint">Last changed <Timestamp value={data.updatedAt} />{data.updatedByUsername ? ` by @${data.updatedByUsername}` : ""}. Every change is recorded in the audit log.</p> : null}
     </section>
@@ -97,7 +119,7 @@ function LaterPhases() {
   return <>
     <section className="editor-card" aria-labelledby="gateway-later-heading">
       <div className="editor-card-heading"><div><h2 id="gateway-later-heading">Later phases</h2><p>Planned switches, shown so you can see what is coming. None of them can be turned on yet.</p></div></div>
-      <ul className="flag-list">{laterFlags.map((flag) => <li key={flag.id} className="flag-row is-disabled">
+      <ul className="flag-list">{laterFlags.filter((flag) => !shipped.has(flag.id)).map((flag) => <li key={flag.id} className="flag-row is-disabled">
         <div><span className="flag-title" id={`later-${flag.id}`}>{flag.label} <span className="soon-badge">Coming in {flag.phase}</span></span><p>{flag.text}</p></div>
         <input type="checkbox" role="switch" className="switch" checked={false} disabled aria-labelledby={`later-${flag.id}`} readOnly /></li>)}</ul>
     </section>

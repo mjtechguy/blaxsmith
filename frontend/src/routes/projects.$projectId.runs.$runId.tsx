@@ -14,6 +14,7 @@ import { Card, CopyValue, Disclosure, sentence, ShowMore, StatePanel, Timestamp,
 import { Inbox, interactionsKey, StagePanel, useInteractions } from "../run-live";
 import { needsYou, runStatus, stageStatus, type AgentStatus } from "../agent-view";
 import { StatusPill, useAttentionTitle } from "../work-log";
+import { PacedChip } from "../paced-chip";
 import { appendRunEvent, decideReview, eventsAfter, getCurrentReview, getRun, listCommandExits, listRunTasks, liveEventsUrl, parseLiveEvent, recoverRunEventBatch, type RunEventPages } from "../workflow";
 
 export const Route = createFileRoute("/projects/$projectId/runs/$runId")({
@@ -239,7 +240,7 @@ function RunDetail() {
         <Card title="Stages" className="dash-main" description={tasks.data ? `${tasks.data.tasks.length} frozen stages. Attempts count reservations, not verified results.` : "Loading stages…"} actions={tabLink("stages", "Open stages")}>
           {tasks.data ? <ul className="stage-strip card-body">{tasks.data.tasks.map((task) => <li key={task.id}>
             <Link from={Route.fullPath} to={Route.fullPath} search={{ tab: "stages", stage: task.key }} className="stage-chip"><strong>{task.key}</strong>
-              <StatusPill status={statuses.get(task.key) ?? null} /><small>{task.state.replaceAll("_", " ")}</small>{gatewayEnabled ? <StageCostChip stage={task.key} stages={runCost.data?.stages} /> : null}</Link></li>)}</ul> : null}
+              <StatusPill status={statuses.get(task.key) ?? null} /><small>{task.state.replaceAll("_", " ")}</small><PacedChip reason={task.pacedReason} resetsAt={task.pacedResetsAt} />{gatewayEnabled ? <StageCostChip stage={task.key} stages={runCost.data?.stages} /> : null}</Link></li>)}</ul> : null}
           {tasks.isError ? <p className="card-body" role="alert">Stages are unavailable. <button type="button" className="text-action" onClick={() => void tasks.refetch()}>Try again</button></p> : null}
           {stageCounts.size ? <p className="card-note">{[...stageCounts].map(([status, count]) => `${count} ${status.replaceAll("_", " ")}`).join(" · ")}</p> : null}
         </Card>

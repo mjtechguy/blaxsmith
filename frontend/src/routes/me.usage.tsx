@@ -1,9 +1,10 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { currentSession, sessionQueryKey } from "../auth";
-import { compact, getMyUsage, myUsageKey, totalTokens, usd } from "../gateway";
+import { compact, countdown, getMyUsage, listMySubscriptionLimits, mySubscriptionLimitsKey, myUsageKey, totalTokens, usd, useNow, windowLabel } from "../gateway";
+import type { SubscriptionLimits } from "../gen/blaxsmith/api/v1/gateway_pb";
 import { DashboardLayout } from "../layouts";
-import { Card, StatePanel, StatTile } from "../ui";
+import { Card, sentence, StatePanel, StatTile, Timestamp } from "../ui";
 import { GatewayOff, RangeFilter, SliceTable } from "../usage-ui";
 
 type Search = { days?: number };
@@ -44,5 +45,40 @@ function MyUsage() {
     <div className={`dash-wide${fading}`}>
       <Card title="My runs by cost" description="Your runs with metered requests in this period."><SliceTable id="my-usage-runs" label="My runs by cost" kind="run" slices={u.topRuns} empty="None of your runs used the gateway in this period." /></Card>
     </div>
+    <div className="dash-wide"><MySubscriptions scope={scope} /></div>
   </DashboardLayout>;
+}
+
+// My subscriptions (§6, §9.2): each of my own subscription connections with
+// the limit windows its provider reported on my own runs. Only I see these.
+export function MySubscriptions({ scope }: { scope: string }) {
+  const limits = useQuery({ queryKey: mySubscriptionLimitsKey(scope), enabled: Boolean(scope), refetchInterval: 30_000,
+    queryFn: ({ signal }) => listMySubscriptionLimits(signal) });
+  const description = "Usage windows your provider reported on your own runs through the gateway. Only you can see these; they are never pooled or shared.";
+  if (limits.isPending) return <Card title="My subscriptions" description={description}><p className="card-note">Loading…</p></Card>;
+  if (limits.isError) return <Card title="My subscriptions" description={description}><p className="card-note">Your subscriptions are unavailable.</p></Card>;
+  const items = limits.data.subscriptions;
+  return <Card title="My subscriptions" description={description}>
+    {!items.length ? <p className="card-note">You have no subscription connections. Add one in <Link className="text-link" to="/me/connections">My connections</Link>.</p> : null}
+    {items.map((sub) => <SubscriptionMeters key={sub.connectionId} sub={sub} personalRoutes={limits.data.personalRoutesEnabled} />)}
+  </Card>;
+}
+
+function SubscriptionMeters({ sub, personalRoutes }: { sub: SubscriptionLimits; personalRoutes: boolean }) {
+  const now = useNow();
+  const name = sub.label || (sub.authMethod === "codex_chatgpt" ? "Codex (ChatGPT plan)" : "Claude subscription");
+  const off = sub.authMethod === "codex_chatgpt" && !personalRoutes;
+  return <section aria-label={name}>
+    <p className="card-note"><strong>{name}</strong> · {sub.state === "active" ? "Active" : sentence(sub.state)}
+      {off ? " · Codex sign-ins go through the gateway only when an admin turns on personal subscription routes." : ""}</p>
+    {sub.windows.length ? <ul className="meter-list">{sub.windows.map((w) => {
+      const left = countdown(w.resetsAt, now);
+      return <li key={w.name} className="meter-row">
+        <span>{windowLabel(w.name, w.windowMinutes)}</span>
+        <span className="num">{Math.round(w.usedPct)}% used{left ? ` · resets in ${left}` : ""}</span>
+        <meter min={0} max={100} value={Math.min(w.usedPct, 100)} high={80} optimum={0} aria-label={`${windowLabel(w.name, w.windowMinutes)}: ${Math.round(w.usedPct)}% used`} />
+        <small>Reported <Timestamp value={w.observedAt} /></small>
+      </li>;
+    })}</ul> : <p className="card-note">Not reported by provider yet.</p>}
+  </section>;
 }

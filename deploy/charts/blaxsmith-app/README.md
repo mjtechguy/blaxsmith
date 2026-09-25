@@ -245,3 +245,9 @@ front of the Service and narrow `gateway.networkPolicy.ingressFrom` to it. Set
 plain HTTP for a TLS-terminating proxy. The app runs migrations; gateway pods
 only verify them. On shutdown in-flight streams get `drainTimeoutSeconds`.
 With the value off, no gateway exists and organizations cannot enable it.
+Pools and personal routes (G2/G4) use the same public HTTPS egress: Bedrock
+(`bedrock-runtime.<region>.amazonaws.com`), Vertex (`<region>-aiplatform.googleapis.com`
+and `oauth2.googleapis.com`) and, for members' Codex sign-ins, `chatgpt.com`.
+`gateway.eventRetention` is only the fallback for organizations that have not
+saved gateway settings; each organization sets its own raw event retention
+in Admin → Settings → Model gateway.

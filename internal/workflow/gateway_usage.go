@@ -24,6 +24,11 @@ type GatewaySettings struct {
 	DefaultDeliveryMode string
 	AllowProjectChoice  bool
 	RemoveDirectEgress  bool
+	// G2/G4 switches (§15.1) and raw usage event retention (§7, §16).
+	PoolsEnabled          bool
+	PacingEnabled         bool
+	PersonalRoutesEnabled bool
+	EventRetentionDays    int
 }
 
 type GatewaySettingsView struct {
@@ -33,21 +38,23 @@ type GatewaySettingsView struct {
 	UpdatedByUsername string
 }
 
-var defaultGatewaySettings = GatewaySettings{DefaultDeliveryMode: "native_raw", AllowProjectChoice: true, RemoveDirectEgress: true}
+var defaultGatewaySettings = GatewaySettings{DefaultDeliveryMode: "native_raw", AllowProjectChoice: true, RemoveDirectEgress: true,
+	EventRetentionDays: 90}
 
 func validDeliveryMode(mode string) bool { return mode == "native_raw" || mode == "brokered_gateway" }
 
 func (s *Store) readGatewaySettings(ctx context.Context, q pgx.Tx, orgID string, lock bool) (GatewaySettingsView, error) {
 	view := GatewaySettingsView{Settings: defaultGatewaySettings}
 	query := `SELECT g.enabled,g.default_delivery_mode,g.allow_project_choice,g.remove_direct_egress,g.version,g.updated_at,
-		COALESCE(p.username,'') FROM gateway_org_settings g LEFT JOIN identity_principals p ON p.id=g.updated_by
+		COALESCE(p.username,''),g.pools_enabled,g.pacing_enabled,g.personal_routes_enabled,g.event_retention_days FROM gateway_org_settings g LEFT JOIN identity_principals p ON p.id=g.updated_by
 		WHERE g.organization_id=$1`
 	if lock {
 		query += ` FOR UPDATE OF g`
 	}
 	var at time.Time
 	err := q.QueryRow(ctx, query, orgID).Scan(&view.Settings.Enabled, &view.Settings.DefaultDeliveryMode,
-		&view.Settings.AllowProjectChoice, &view.Settings.RemoveDirectEgress, &view.Version, &at, &view.UpdatedByUsername)
+		&view.Settings.AllowProjectChoice, &view.Settings.RemoveDirectEgress, &view.Version, &at, &view.UpdatedByUsername,
+		&view.Settings.PoolsEnabled, &view.Settings.PacingEnabled, &view.Settings.PersonalRoutesEnabled, &view.Settings.EventRetentionDays)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return view, nil
 	}
@@ -71,7 +78,10 @@ func (s *Store) GatewaySettingsAs(ctx context.Context, caller identity.Caller) (
 // in-flight streams finish; the next request is rejected (gateway authz).
 func (s *Store) UpdateGatewaySettingsAs(ctx context.Context, caller identity.Caller, next GatewaySettings,
 	expectedVersion int64, installed bool) (GatewaySettingsView, error) {
-	if !validDeliveryMode(next.DefaultDeliveryMode) || expectedVersion < 0 {
+	if next.EventRetentionDays == 0 {
+		next.EventRetentionDays = defaultGatewaySettings.EventRetentionDays
+	}
+	if !validDeliveryMode(next.DefaultDeliveryMode) || expectedVersion < 0 || next.EventRetentionDays < 7 || next.EventRetentionDays > 400 {
 		return GatewaySettingsView{}, ErrInvalid
 	}
 	tx, err := s.beginScoped(ctx, caller, ScopeOrganization, "")
@@ -95,14 +105,18 @@ func (s *Store) UpdateGatewaySettingsAs(ctx context.Context, caller identity.Cal
 	var version int64
 	var at time.Time
 	if err := tx.QueryRow(ctx, `INSERT INTO gateway_org_settings
-		(organization_id,enabled,default_delivery_mode,allow_project_choice,remove_direct_egress,version,updated_by,updated_at)
-		VALUES ($1,$2,$3,$4,$5,1,$6,clock_timestamp())
+		(organization_id,enabled,default_delivery_mode,allow_project_choice,remove_direct_egress,version,updated_by,updated_at,
+		 pools_enabled,pacing_enabled,personal_routes_enabled,event_retention_days)
+		VALUES ($1,$2,$3,$4,$5,1,$6,clock_timestamp(),$7,$8,$9,$10)
 		ON CONFLICT (organization_id) DO UPDATE SET enabled=EXCLUDED.enabled,
 		default_delivery_mode=EXCLUDED.default_delivery_mode, allow_project_choice=EXCLUDED.allow_project_choice,
 		remove_direct_egress=EXCLUDED.remove_direct_egress, version=gateway_org_settings.version+1,
-		updated_by=EXCLUDED.updated_by, updated_at=EXCLUDED.updated_at
+		updated_by=EXCLUDED.updated_by, updated_at=EXCLUDED.updated_at, pools_enabled=EXCLUDED.pools_enabled,
+		pacing_enabled=EXCLUDED.pacing_enabled, personal_routes_enabled=EXCLUDED.personal_routes_enabled,
+		event_retention_days=EXCLUDED.event_retention_days
 		RETURNING version,updated_at`, caller.OrganizationID, next.Enabled, next.DefaultDeliveryMode,
-		next.AllowProjectChoice, next.RemoveDirectEgress, caller.PrincipalID).Scan(&version, &at); err != nil {
+		next.AllowProjectChoice, next.RemoveDirectEgress, caller.PrincipalID, next.PoolsEnabled, next.PacingEnabled,
+		next.PersonalRoutesEnabled, next.EventRetentionDays).Scan(&version, &at); err != nil {
 		return GatewaySettingsView{}, err
 	}
 	detail, _ := json.Marshal(map[string]any{"old": settingsJSON(current.Settings), "new": settingsJSON(next)})
@@ -118,7 +132,9 @@ func (s *Store) UpdateGatewaySettingsAs(ctx context.Context, caller identity.Cal
 
 func settingsJSON(s GatewaySettings) map[string]any {
 	return map[string]any{"enabled": s.Enabled, "default_delivery_mode": s.DefaultDeliveryMode,
-		"allow_project_choice": s.AllowProjectChoice, "remove_direct_egress": s.RemoveDirectEgress}
+		"allow_project_choice": s.AllowProjectChoice, "remove_direct_egress": s.RemoveDirectEgress,
+		"pools_enabled": s.PoolsEnabled, "pacing_enabled": s.PacingEnabled, "personal_routes_enabled": s.PersonalRoutesEnabled,
+		"event_retention_days": s.EventRetentionDays}
 }
 
 func adminScopeError(err error) error {

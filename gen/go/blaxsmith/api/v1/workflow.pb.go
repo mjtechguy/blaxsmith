@@ -2533,8 +2533,12 @@ type RunTask struct {
 	LoopWith         string                 `protobuf:"bytes,14,opt,name=loop_with,json=loopWith,proto3" json:"loop_with,omitempty"`        // Correction target when this stage owns a loop.
 	MaxCycles        int32                  `protobuf:"varint,15,opt,name=max_cycles,json=maxCycles,proto3" json:"max_cycles,omitempty"`    // Loop cap before escalation, including granted raises.
 	LoopCycles       int32                  `protobuf:"varint,16,opt,name=loop_cycles,json=loopCycles,proto3" json:"loop_cycles,omitempty"` // Corrections this loop has requested so far.
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Model gateway pacing (docs/model-gateway-plan.md §5): the stage is
+	// queued until its pool has headroom. Empty when not paced.
+	PacedReason   string `protobuf:"bytes,30,opt,name=paced_reason,json=pacedReason,proto3" json:"paced_reason,omitempty"`
+	PacedResetsAt string `protobuf:"bytes,31,opt,name=paced_resets_at,json=pacedResetsAt,proto3" json:"paced_resets_at,omitempty"` // RFC 3339; empty when unknown
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RunTask) Reset() {
@@ -2677,6 +2681,20 @@ func (x *RunTask) GetLoopCycles() int32 {
 		return x.LoopCycles
 	}
 	return 0
+}
+
+func (x *RunTask) GetPacedReason() string {
+	if x != nil {
+		return x.PacedReason
+	}
+	return ""
+}
+
+func (x *RunTask) GetPacedResetsAt() string {
+	if x != nil {
+		return x.PacedResetsAt
+	}
+	return ""
 }
 
 type FrozenInputFile struct {
@@ -4976,7 +4994,7 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\"Q\n" +
 	"\x1dGetLaunchAvailabilityResponse\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\"\x9c\x04\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xe7\x04\n" +
 	"\aRunTask\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
@@ -5000,7 +5018,9 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\n" +
 	"max_cycles\x18\x0f \x01(\x05R\tmaxCycles\x12\x1f\n" +
 	"\vloop_cycles\x18\x10 \x01(\x05R\n" +
-	"loopCycles\"=\n" +
+	"loopCycles\x12!\n" +
+	"\fpaced_reason\x18\x1e \x01(\tR\vpacedReason\x12&\n" +
+	"\x0fpaced_resets_at\x18\x1f \x01(\tR\rpacedResetsAt\"=\n" +
 	"\x0fFrozenInputFile\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
 	"\x06sha256\x18\x02 \x01(\tR\x06sha256\",\n" +

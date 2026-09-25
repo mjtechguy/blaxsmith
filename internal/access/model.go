@@ -133,10 +133,13 @@ func deliveryAllowed(mode, authMethod, provider, ownerKind, ownerID, granteeKind
 	case "brokered_gateway":
 		// The same credential shapes as native_raw, but the key stays on the
 		// platform and the gateway injects it (docs/model-gateway-plan.md §3).
-		// Personal subscription routes are a later phase (§6).
-		// ponytail: a Claude setup-token needs Bearer + the OAuth beta header,
-		// not x-api-key, so it stays native_raw until the gateway injects that.
-		return authMethod != CodexSubscriptionAuth && authMethod != ClaudeSetupTokenAuth
+		// A member's Claude setup-token is sent upstream as an OAuth bearer,
+		// for the owner's own runs only (§6.1). A Codex sign-in's grant is
+		// always oauth_access; the gateway serves it as a personal route.
+		if authMethod == ClaudeSetupTokenAuth {
+			return ownerOnly(provider, "anthropic", ownerKind, ownerID, granteeKind, granteeID)
+		}
+		return authMethod != CodexSubscriptionAuth
 	case "oauth_access":
 		return authMethod == CodexSubscriptionAuth && ownerOnly(provider, "openai", ownerKind, ownerID, granteeKind, granteeID)
 	}

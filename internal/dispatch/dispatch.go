@@ -250,6 +250,13 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		outcome.Err = err
 		return outcome
 	}
+	if err := d.pace(ctx, candidate, delivery, provider, authority.Decision.ConnectionID); err != nil {
+		outcome.Err = err
+		if errors.Is(err, gateway.ErrPaced) {
+			outcome.State = "paced" // stays queued with a visible reason and reset time.
+		}
+		return outcome
+	}
 	var bindingID string
 	attempt, err := d.Workflow.ReserveAttemptWithBinding(ctx, candidate.OrganizationID, candidate.RunID, candidate.TaskID,
 		func(ctx context.Context, tx pgx.Tx, attempt workflow.Attempt) error {

@@ -17,6 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
+	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/gateway"
 )
 
@@ -53,7 +54,7 @@ func serveGateway(args []string) error {
 	localDB := flags.Bool("allow-insecure-local-database", false, "allow plaintext PostgreSQL over loopback")
 	tokenRate := flags.Float64("token-rps", 10, "per-token request rate")
 	orgRate := flags.Float64("org-rps", 100, "per-organization request rate")
-	retention := flags.Duration("event-retention", 90*24*time.Hour, "raw usage event retention")
+	retention := flags.Duration("event-retention", 90*24*time.Hour, "raw usage event retention for organizations without a gateway setting")
 	drain := flags.Duration("drain-timeout", 15*time.Minute, "how long in-flight streams may finish on shutdown")
 	upstreams := upstreamFlags{}
 	flags.Var(upstreams, "dev-upstream", "family=http://127.0.0.1:port mock upstream (repeatable; probes only)")
@@ -97,10 +98,17 @@ func serveGateway(args []string) error {
 	if secrets == nil {
 		return errors.New("gateway requires BLAXSMITH_ACCESS_KEY_FILE to inject route credentials")
 	}
-	authorizer := &gateway.Authorizer{DB: pool, Secrets: secrets}
+	// The OAuth refresher is the only caller of the Codex token endpoint; the
+	// gateway uses it for an owner's own run when the organization serves
+	// personal subscription routes (docs/model-gateway-plan.md §6).
+	authorizer := &gateway.Authorizer{DB: pool, Secrets: secrets, OAuth: &access.OAuthRefresher{DB: pool, Secrets: secrets}}
+	states := gateway.NewStates()
 	proxy := &gateway.Server{DB: pool, Authorize: authorizer.Authorize, Prices: &gateway.PriceBook{DB: pool},
 		Upstream: upstreams, TokenRate: *tokenRate, TokenBurst: int(*tokenRate * 2),
-		OrgRate: *orgRate, OrgBurst: int(*orgRate * 2)}
+		OrgRate: *orgRate, OrgBurst: int(*orgRate * 2), States: states, RouteKey: authorizer.RouteKey,
+		Plan: func(ctx context.Context, g gateway.Grant) (gateway.Plan, error) {
+			return gateway.LoadPlan(ctx, pool, g)
+		}}
 	mux := http.NewServeMux()
 	for _, family := range gateway.Families {
 		mux.Handle("/"+family+"/", proxy)
@@ -132,6 +140,7 @@ func serveGateway(args []string) error {
 		server.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}}
 	}
 	go gatewayMaintenance(ctx, pool, *retention)
+	go states.Persist(ctx, pool, 5*time.Second)
 	done := make(chan error, 1)
 	go func() {
 		<-ctx.Done()

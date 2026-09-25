@@ -1,6 +1,6 @@
 # Blaxsmith model gateway: plan
 
-**Status:** proposed · **Date:** 2026-09-24 · **Owners:** platform, access, web
+**Status:** G1, G2 and G4 built (see §17); G3 in progress · **Date:** 2026-09-24 · **Owners:** platform, access, web
 
 Related: [`extensions-and-runtimes.md`](extensions-and-runtimes.md),
 [`interactive-sessions.md`](interactive-sessions.md), and plan §10.4
@@ -31,8 +31,9 @@ Related: [`extensions-and-runtimes.md`](extensions-and-runtimes.md),
   identity obfuscation, or any anti-detection behaviour. Every upstream
   request is sent as itself, under the account that actually serves it.
 - Pooling or rotating OAuth subscription accounts (one user's or several
-  users') to combine or exceed per-account limits. Headroom comes only from
-  API-key and cloud routes (§4) and pacing (§5).
+  users') to combine or exceed per-account limits, or failing over from one
+  person's subscription to another's. Headroom comes only from API-key and
+  cloud routes the organization owns (§4) and pacing (§5).
 - Storing prompt or response content **by default**. Metering records counts
   and metadata only. Content capture is available as an opt-in admin setting
   (§15.2).
@@ -100,9 +101,10 @@ sandbox (AX task)                      Blaxsmith platform
    Credentials are decrypted in memory for each route, with a short in-memory
    cache that is cleared on rotation or revocation.
 
-Delivery mode: a new `brokered_gateway` mode next to `native_raw`. Projects
-choose per connection. The default for new projects is `brokered_gateway`
-once the gateway is GA.
+Delivery mode: a new `brokered_gateway` mode next to `native_raw`. It is
+opt-in per project (Project → Settings → Model access) until an admin flips
+the organization default (§15.1, decided in §16); there is no automatic
+switch at GA.
 
 ## 4. Routes and pools
 
@@ -117,8 +119,22 @@ once the gateway is GA.
   - state: enabled, draining or disabled.
 - **Pool:** a named set of routes serving one model family, e.g. "Claude
   production" = Anthropic key A, Anthropic key B, Bedrock us-east-1 and Vertex
-  us-east5. Pools are org-owned and granted to projects like connections,
-  through `access.CanUse`.
+  us-east5. Pools are org-owned and granted to projects through
+  `access_resource_grants` (resource kind `gateway_pool`, project grantees).
+  A pool serves a request when the org's Pools & failover switch is on, the
+  pool is enabled, serves the token's family, is granted to the run's
+  project, and contains the route for the run's leased connection. The
+  leased connection's own grant stays the entry authority; the pool adds the
+  admin's other org-owned routes behind it.
+- **Route credentials:** an API-key route uses an existing organization
+  API-key connection. A Bedrock route stores an AWS access key and a Vertex
+  route a service-account key as a new organization connection
+  (`auth_method` `aws_sigv4` or `gcp_service_account`) that can only serve as
+  a pool route and is never granted to a project directly.
+- **Only organization-owned API-key and cloud connections can be routes.**
+  The database refuses a route over a user-owned connection or any personal
+  subscription (`gateway_route_connection_check`), and a pool member must
+  serve the pool's family (`gateway_pool_route_check`).
 - **Selection:** filter out unhealthy, cooling-down, over-cap and
   model-unsupported routes, then apply the strategy:
   - `priority-then-headroom` (default): lowest priority number first; among
@@ -134,6 +150,11 @@ once the gateway is GA.
   the provider's error. Harnesses retry themselves.
 - **Circuit breaker for each route:** an error-rate window, open or half-open
   states, and automatic cooldown. The breaker state is visible in the UI.
+  Built as: open after 5 consecutive failures (5xx, 408, connect errors) or
+  when at least half of 10+ results in the last minute failed; 30 s
+  cooldown, then one half-open probe; a success closes it. A 429 cools the
+  route for its retry-after (5 s if absent, at most 5 min) but never trips
+  the breaker.
 
 ## 5. Rate-limit awareness and pacing
 
@@ -145,12 +166,19 @@ once the gateway is GA.
     since they don't send remaining-quota headers.
 - **Route state:** the latest limit, remaining and reset for each metric, kept
   in memory and persisted to `gateway_route_state` about every 5 seconds for
-  the UI and for other replicas.
+  the UI and for other replicas. Bedrock and Vertex routes may carry a
+  configured requests/min and tokens/min quota, counted per replica.
+  With no route able to take a request, the gateway answers 429 with the
+  earliest reset as `Retry-After` instead of calling a provider.
 - **Back-pressure to the dispatcher:** before reserving a stage, the
   dispatcher asks the gateway whether the stage's pool has headroom
   (`HeadroomFor(pool, estimated tokens)`). If not, the stage stays queued with
   a visible reason ("waiting for Claude headroom, resets in 42 s") instead of
-  failing. The existing idle-timeout logic treats a paced wait as progress.
+  failing. Built as `gateway.Pace`: it records the reason and reset in
+  `gateway_paced_tasks`, dispatch skips the stage until its retry time (at
+  most 30 s, at least 2 s), and the stage chip and Admin → Routes & pools
+  show the countdown. A queued stage holds no attempt, so no idle timeout
+  applies to it.
 - **Concurrency caps** per route and per pool stop bursts from hitting a
   cliff.
 
@@ -160,9 +188,10 @@ once the gateway is GA.
   subscription mode allowed by policy, becomes a `personal_subscription`
   route owned by that user. The gateway uses it **only** for runs whose
   initiator owns it, which is the owner-only rule already in place.
-  - No pool may contain personal subscription routes.
-  - A user cannot attach more than one active subscription per provider to
-    the same pool or run.
+  - No pool may contain personal subscription routes, and nothing fails
+    over to or from one: a personal route is always the request's only route.
+  - A run is bound to exactly one connection, so it never uses more than one
+    subscription.
 - **Refresh:** the refresh token stays in the existing central custody
   (`access.OAuthRefresher`). The gateway calls the upstream with a fresh
   access token. Sandboxes no longer receive even the access token.
@@ -170,18 +199,25 @@ once the gateway is GA.
   verifying for the pinned versions):
   - **Codex / ChatGPT:** rate-limit windows (primary and secondary: used
     percent, window minutes, resets at) are reported in the Responses stream
-    and by `codex app-server` `account/rateLimits`. Parse them from gateway
-    responses.
-  - **Claude subscription:** a per-user, owner-only option (§6.1).
+    and by `codex app-server` `account/rateLimits`. Built: the gateway parses
+    the `x-codex-{primary,secondary}-*` response headers (as codex-rs does)
+    into `gateway_subscription_limits`. The in-stream `codex.rate_limits`
+    event is not parsed.
+  - **Claude subscription:** a per-user, owner-only option (§6.1). Its
+    `anthropic-ratelimit-unified-<window>-utilization` / `-reset` headers
+    (unofficial, observed) are recorded the same way.
   - **Others:** show "Not reported by provider" rather than guessing.
 - Shown to the owner in **My usage** (§9.2). Admins see only aggregate usage
   counts for personal routes, never the account identity or tokens.
 
 ### 6.1 Claude subscription for its owner
 
-**Status:** built (branch `claude-sub`), native_raw delivery. Gateway delivery
-for this auth method is a follow-up: the gateway would have to inject
-`Authorization: Bearer` plus the OAuth beta header instead of `x-api-key`.
+**Status:** built. `native_raw` delivery for native-mode projects; in a
+`brokered_gateway` project the token stays on the platform and the gateway
+sends it as `Authorization: Bearer` plus the `oauth-2025-04-20` beta
+(appended to the client's own betas) instead of `x-api-key`, for the
+owner's own run only. The sandbox holds only the run's gateway token, so
+Claude Code runs `--bare` there as for API keys.
 
 **Scope: per user, owner-only.** It's the self-hosted equivalent of putting
 your own `claude setup-token` in your own CI secrets. It's not a platform-level
@@ -255,8 +291,9 @@ Claude account, and never a pool.
 - **Rollups:** a background job maintains `gateway_usage_daily` by (org,
   project, principal, pool, route, model, day), plus per-run totals on the run
   row, so the UI reads quickly without scanning raw events.
-- **Retention:** raw events 90 days (configurable), rollups kept, following
-  plan §11.
+- **Retention:** raw events 90 days by default, configurable per
+  organization in Admin → Settings → Model gateway (7 to 400 days); rollups
+  and run totals are kept, following plan §11.
 
 ## 8. Budgets and soft alerts (v1)
 
@@ -451,7 +488,8 @@ exactly as today (`native_raw` delivery) when it's disabled.
 | **Pools & failover** | off | Enables §4 pools and selection. When off, one route per connection |
 | **Rate-aware pacing** | off | Enables §5 dispatcher back-pressure |
 | **Budgets & alerts** | off | Enables §8 |
-| **Personal subscription routes** | off | Enables §6 for this org, still owner-only |
+| **Personal subscription routes** | off | Enables §6 for this org, still owner-only: a member's Codex sign-in is served through the gateway (not even the access token reaches the sandbox) with limit meters for the owner. A member's Claude setup-token in a gateway-mode project always goes through the gateway, since G1 would otherwise send it as an API key |
+| **Raw usage event retention** | 90 days | §7; 7 to 400 days |
 | **Allow members' own Claude subscriptions** | off | Enables §6.1: each member may use their own `claude setup-token`, only for runs they start. Lives in Admin → Settings → Connections; it is independent of the gateway master switch |
 | **Content capture** | off | §15.2 |
 
@@ -486,15 +524,57 @@ exactly as today (`native_raw` delivery) when it's disabled.
 - Client impersonation, "cloaking", header or identity rewriting,
   fingerprint randomisation, or any detection-evasion behaviour.
 
-## 16. Open questions
+## 16. Open questions and decisions
+
+Decided (2026-09-24 defaults, recorded here):
+
+- **Retention:** raw usage events 90 days, configurable per organization in
+  gateway settings (§7, §15.1).
+- **Budget currency:** USD estimates only. No token budgets per team yet.
+- **Default delivery mode:** the gateway stays opt-in per project (admin
+  setting) until an admin flips the organization default; nothing switches
+  automatically after G1 or G2.
+- **Cost-centre reporting:** no cost-centre or team tags yet.
+- **Subscriptions:** no pooling, rotation or failover across subscription
+  accounts, and no identity cloaking or rewriting. Personal subscriptions
+  are owner-only, one account per route (§1, §6, §15.3).
+
+Still open:
 
 1. Which cloud routes can we actually use? Do we have Bedrock or Vertex
-   accounts for Claude, and Azure OpenAI? These are the biggest legitimate
-   headroom win.
-2. Is the budget currency USD estimates only, or do we also need token
-   budgets per team?
-3. Retention for raw usage events: is 90 days acceptable?
-4. Does any org need usage reports by cost centre or team (a tags model on
-   projects)?
-5. Should the gateway be the default delivery mode immediately after G1, or
-   opt-in per project until G2?
+   accounts for Claude, and Azure OpenAI? The Bedrock and Vertex adapters are
+   built and tested against local mocks only; Azure OpenAI is not built.
+
+## 17. Built (G2 and G4)
+
+- **Migration** `0160_gateway_routes.sql`: `gateway_routes`, `gateway_pools`,
+  `gateway_pool_routes` (with the policy triggers in §4),
+  `gateway_route_state`, `gateway_paced_tasks`, `gateway_subscription_limits`,
+  the `gateway_pool` resource-grant kind, and the G2/G4 switches plus
+  `event_retention_days` on `gateway_org_settings`.
+- **Gateway** (`internal/gateway`): `LoadPlan` (the routes a request may
+  use), `States` (breaker, cooldown, rate-limit metrics, concurrency,
+  prompt-cache affinity; persisted every 5 s), failover before the first
+  byte (`failover.go`; every upstream attempt is metered with its pool and
+  retry count), header parsing (`limits.go`), Bedrock (SigV4 with an org
+  AWS key, event-stream to SSE re-framing, `anthropic_beta` in the body),
+  Vertex (service-account JWT exchanged for a cached access token,
+  `rawPredict` / `streamRawPredict`), `HeadroomFor` and `Pace` for the
+  dispatcher, and personal routes for a member's Claude setup-token (OAuth
+  bearer) and Codex sign-in (fresh access token from
+  `access.OAuthRefresher`, served at the Codex backend with its ChatGPT
+  account id).
+- **UI:** Admin → Routes & pools (routes with health, requests and tokens
+  remaining with reset countdowns, concurrency, 15-minute errors, drain /
+  disable / re-enable, per-metric detail and last 429; pools with members
+  and project grants; stages queued for headroom; add a route, including
+  Bedrock and Vertex credentials), the new switches and retention in
+  Settings → Model gateway, My usage → My subscriptions (owner-only
+  meters), and a paced chip on run stages.
+- **Not built / limits:** Azure OpenAI routes; separate pool detail tabs
+  (Traffic, Failovers); Bedrock `count_tokens` (Bedrock and Vertex routes
+  serve `/v1/messages` only); route state, breakers and configured quotas
+  are per gateway replica (last writer wins in `gateway_route_state`);
+  nothing has been run against live AWS, Google, Anthropic OAuth or ChatGPT
+  endpoints. The gateway Deployment needs egress to `chatgpt.com` for Codex
+  personal routes and to the Bedrock/Vertex regional hosts for cloud routes.

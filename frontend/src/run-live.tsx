@@ -11,6 +11,7 @@ import {
 import { AttemptTerminal, type TerminalLink } from "./terminal";
 import { approvalChoices, cardKey, workLog, type AgentStatus, type Progress } from "./agent-view";
 import { StatusPill, TasksBadge, WorkLog } from "./work-log";
+import { PacedChip } from "./paced-chip";
 
 type StageTab = "work" | "terminal";
 
@@ -270,7 +271,8 @@ export function StagePanel({ task, principalId, mayControl, interactions, events
   return <>
     <section className="table-section" aria-labelledby="stage-heading">
       <div className="table-heading"><div><h2 id="stage-heading"><TerminalSquare size={15} aria-hidden="true" /> {task.key} <StatusPill status={status} /></h2>
-        <p>{task.kind === "human_review" ? "Human review" : [task.kind.replaceAll("_", " "), task.harness, task.model, task.effort].filter(Boolean).join(" · ")} · {task.state.replaceAll("_", " ")}{logAttempt ? ` · Attempt ${logAttempt.slice(0, 8)}` : ""}</p></div>
+        <p>{task.kind === "human_review" ? "Human review" : [task.kind.replaceAll("_", " "), task.harness, task.model, task.effort].filter(Boolean).join(" · ")} · {task.state.replaceAll("_", " ")}{logAttempt ? ` · Attempt ${logAttempt.slice(0, 8)}` : ""}
+          {task.pacedReason ? <> <PacedChip reason={task.pacedReason} resetsAt={task.pacedResetsAt} /></> : null}</p></div>
         {attemptId ? <div className="control-bar">
           <span className={`control-pill ${tone}`} role="status" aria-live="polite">{controlLabel}</span>
           {inControl ? <button type="button" className="secondary-button" onClick={() => { control.reset(); setConfirm("hand"); }}>Hand back</button>

@@ -17,14 +17,19 @@ import (
 // brokered_gateway mode and returns the credential the sandbox received.
 func gatewayRelease(t *testing.T, enabled bool) (*pgxpool.Pool, *access.SecretStore, ModelAttempt, string, error) {
 	t.Helper()
-	pool, ledger, secrets, model, runtime, _ := modelAttemptFixture(t)
+	return gatewayReleaseWith(t, enabled, modelFixtureSpec{}, "codex")
+}
+
+func gatewayReleaseWith(t *testing.T, enabled bool, spec modelFixtureSpec, harness string) (*pgxpool.Pool, *access.SecretStore, ModelAttempt, string, error) {
+	t.Helper()
+	pool, ledger, secrets, model, runtime, _ := modelAttemptFixtureWith(t, spec)
 	ctx := t.Context()
 	if _, err := pool.Exec(ctx, `INSERT INTO gateway_org_settings (organization_id,enabled) VALUES ($1,$2)`,
 		model.Invoke.OrganizationID, enabled); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO gateway_attempt_delivery (organization_id,attempt_id,delivery_mode,base_url,harness)
-		VALUES ($1,$2,'brokered_gateway','https://gw.example','codex')`, model.Invoke.OrganizationID, model.Attempt.ID); err != nil {
+		VALUES ($1,$2,'brokered_gateway','https://gw.example',$3)`, model.Invoke.OrganizationID, model.Attempt.ID, harness); err != nil {
 		t.Fatal(err)
 	}
 	model.Gateway = func(ctx context.Context, tx pgx.Tx, leaseID string) ([]byte, bool, error) {

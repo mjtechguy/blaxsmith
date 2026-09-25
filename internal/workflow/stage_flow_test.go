@@ -197,6 +197,18 @@ func TestStageFlowPostgres(t *testing.T) {
 			t.Fatalf("after loop failure %s=%s, want %s", key, got, want)
 		}
 	}
+	// A stage paced for model-gateway headroom waits until its retry time.
+	if _, err := pool.Exec(ctx, `INSERT INTO gateway_paced_tasks (organization_id,task_id,run_id,pool_id,reason,retry_at)
+		VALUES ($1,$2,$3,gen_random_uuid(),'Waiting for Claude production headroom',clock_timestamp()+interval '1 minute')`,
+		org, taskID("implement"), run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if ready, err := store.ListReadyTasks(ctx, org, 10); err != nil || len(ready) != 0 {
+		t.Fatalf("paced stage dispatchable before its retry time: %+v, %v", ready, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE gateway_paced_tasks SET retry_at=clock_timestamp() WHERE organization_id=$1`, org); err != nil {
+		t.Fatal(err)
+	}
 	if ready, err := store.ListReadyTasks(ctx, org, 10); err != nil || len(ready) != 1 || ready[0].Key != "implement" {
 		t.Fatalf("correction was not dispatchable: %+v, %v", ready, err)
 	}
