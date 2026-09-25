@@ -77,8 +77,7 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.databaseSecretName | quote }}
                   key: url
-            - name: BLAXSMITH_ACCESS_KEY_FILE
-              value: /run/blaxsmith/access-key/key
+            {{- include "blaxsmith.accessKeyEnv" .Values | nindent 12 }}
           ports:
             - name: gateway
               containerPort: 8443
@@ -102,9 +101,7 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
-            - name: access-key
-              mountPath: /run/blaxsmith/access-key
-              readOnly: true
+            {{- include "blaxsmith.accessKeyMounts" .Values | nindent 12 }}
             {{- if $g.tlsSecretName }}
             - name: gateway-tls
               mountPath: /run/blaxsmith/gateway-tls
@@ -116,13 +113,7 @@ spec:
               readOnly: true
             {{- end }}
       volumes:
-        - name: access-key
-          secret:
-            secretName: {{ .Values.accessKeySecretName | quote }}
-            items:
-              - key: key
-                path: key
-            defaultMode: 288
+        {{- include "blaxsmith.accessKeyVolumes" .Values | nindent 8 }}
         {{- if $g.tlsSecretName }}
         - name: gateway-tls
           secret:

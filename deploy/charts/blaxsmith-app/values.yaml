@@ -13,6 +13,8 @@ previousSignerPublicSecretName: "" # Optional Secret with a 32-byte public key u
 databaseSecretName: "" # Existing Secret with PostgreSQL URL under key url; verified TLS required.
 databaseCASecretName: "" # Optional existing Secret with ca.crt; set for a private PostgreSQL CA.
 accessKeySecretName: "" # Optional existing Secret with a 32-byte raw encryption key under key key.
+accessKeyID: "" # Optional ID of the key in accessKeySecretName; empty means "primary". Give each new key a new ID.
+previousAccessKeys: [] # Optional older keys kept during rotation, e.g. [{id: primary, secretName: old-access-key}], 32 bytes under key key.
 dispatch:
   enabled: false # Requires the packaged AX/Substrate CLIs and a pod-local AX tunnel.
   egressMode: exact # exact is default; open-dev requires dev.allowOpenEgress=true.

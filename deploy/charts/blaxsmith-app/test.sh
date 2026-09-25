@@ -196,4 +196,28 @@ for invalid in '--set-string gateway.publicURL=' '--set-string gateway.publicURL
     exit 1
   fi
 done
+helm template app "$chart" "$@" --set-string accessKeySecretName=app-access-key > "$rendered"
+if grep -F -q 'BLAXSMITH_ACCESS_KEY_ID' "$rendered" || grep -F -q 'previous-access-key' "$rendered"; then
+  echo 'access key rotation settings rendered while unset' >&2
+  exit 1
+fi
+rotation_args='--set-string accessKeySecretName=app-access-key
+--set-string accessKeyID=key-2
+--set previousAccessKeys[0].id=primary
+--set-string previousAccessKeys[0].secretName=old-access-key'
+# Intentional splitting: fixed chart fixture arguments.
+helm lint "$chart" "$@" $rotation_args $gateway_args
+helm template app "$chart" "$@" $rotation_args $gateway_args > "$rendered"
+[ "$(grep -F -c 'value: "key-2"' "$rendered")" -eq 2 ]
+[ "$(grep -F -c 'value: "primary=/run/blaxsmith/previous-access-keys/primary/key"' "$rendered")" -eq 2 ]
+[ "$(grep -F -c 'mountPath: /run/blaxsmith/previous-access-keys/primary' "$rendered")" -eq 2 ]
+[ "$(grep -F -c 'secretName: "old-access-key"' "$rendered")" -eq 2 ]
+for invalid in '--set-string accessKeySecretName=' '--set previousAccessKeys[1].id=primary --set previousAccessKeys[1].secretName=x' \
+  '--set previousAccessKeys[1].id=key-2 --set previousAccessKeys[1].secretName=x' '--set previousAccessKeys[0].id=bad/id' \
+  '--set-string previousAccessKeys[0].secretName=' '--set-string accessKeyID=bad/id'; do
+  if helm template app "$chart" "$@" $rotation_args $invalid >/dev/null 2>&1; then
+    echo "invalid access key rotation values unexpectedly accepted: $invalid" >&2
+    exit 1
+  fi
+done
 echo 'application chart checks passed'

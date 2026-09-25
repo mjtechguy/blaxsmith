@@ -92,6 +92,11 @@ The same namespace must contain the configured access-key Secret with raw
 32-byte value under `key`. None of these values belongs in Helm values or
 command-line `--set` arguments.
 
+To rotate the access master key, set `accessKeyID` to the new key's ID and
+list older keys as `previousAccessKeys: [{id: primary, secretName: <old
+Secret>}]`; each is mounted read-only and passed to the app and gateway. See
+"Rotating the master key" in `docs/access-authority.md`.
+
 The dispatch pod runs `socat` from the same tools image. It listens on the
 configured loopback port (18443 by default) in the shared pod network namespace
 and forwards to the configured AX service, defaulting to

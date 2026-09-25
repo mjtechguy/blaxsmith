@@ -23,7 +23,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
-	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/interact"
 	"github.com/mjtechguy/blaxsmith/internal/terminal"
@@ -418,24 +417,4 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 		})
 	}
 	return mux, product, nil
-}
-
-func appSecretStore(pool *pgxpool.Pool) (*access.SecretStore, error) {
-	path := os.Getenv("BLAXSMITH_ACCESS_KEY_FILE")
-	if path == "" {
-		return nil, nil
-	}
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o027 != 0 {
-		return nil, errors.New("access encryption key must be a private regular file")
-	}
-	key, err := os.ReadFile(path)
-	if err != nil {
-		return nil, errors.New("access encryption key unavailable")
-	}
-	defer clear(key)
-	if len(key) != 32 {
-		return nil, errors.New("access encryption key must be 32 bytes")
-	}
-	return access.NewSecretStore(pool, "primary", map[string][]byte{"primary": key})
 }

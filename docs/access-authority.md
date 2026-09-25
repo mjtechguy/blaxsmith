@@ -19,6 +19,41 @@ returns a byte slice the caller must clear. Missing old keys or tampered
 ciphertext fail closed. Old keys must remain recoverable while retained rows
 or backups require them.
 
+`0150_organization_data_keys.sql` adds envelope encryption. Each organization
+gets its own random 256-bit data key, stored only wrapped by a master key with
+associated data that binds organization, data-key version, and master key ID.
+Secrets are sealed by their organization's data key, so a data key opens no
+other organization's secrets. Rows sealed directly by a master key before 0150
+(`data_key_version IS NULL`) stay readable. They are re-encrypted on the next
+write for their connection, and `serve-app` upgrades the rest in batches at
+startup. `blaxsmith admin upgrade-secrets` runs the same idempotent pass and
+reports what remains.
+
+### Rotating the master key
+
+Master keys come from `BLAXSMITH_ACCESS_KEY_FILE` (the current 32-byte key),
+`BLAXSMITH_ACCESS_KEY_ID` (its ID, default `primary`), and
+`BLAXSMITH_ACCESS_PREVIOUS_KEY_FILES` (optional `id=path,id=path` older keys
+kept for decryption). Any malformed entry, duplicate ID, missing or
+group/world-readable file, or wrong key length stops startup. In the Helm chart
+these are `accessKeySecretName`, `accessKeyID`, and `previousAccessKeys`
+(`[{id, secretName}]`, each Secret holding the raw key under `key`).
+
+1. Create a new 32-byte key in a new Secret and pre-stage it: add it to
+   `previousAccessKeys` under a new ID (for example `key-2`) and roll out, so
+   every app and gateway pod can unwrap with either key before any data key
+   moves.
+2. Swap: point `accessKeySecretName` at the new Secret with `accessKeyID: key-2`,
+   and list the old key under its old ID in `previousAccessKeys` (the first
+   key's ID is `primary`). Roll out. New data keys and writes use the new
+   key; each write re-wraps its organization's data key, and `serve-app`
+   re-wraps all of them at startup. Only data keys are re-wrapped; secret
+   ciphertext is not re-encrypted.
+3. Run `blaxsmith admin upgrade-secrets` with the same environment. It must
+   report `0 data keys under a non-current master key, 0 legacy rows remaining`.
+4. Remove the old key from `previousAccessKeys` and roll out. Keep the old key
+   offline for as long as backups taken before step 3 must stay restorable.
+
 `0006_access_leases.sql` records an attempt, actor UID, owner generation,
 binding, connection, audience, resource, secret version, expiry, and delivery
 state. `0025_multi_capability_leases.sql` permits one lease per capability on a
