@@ -52,10 +52,11 @@ var (
 //
 // Guest calls need AX Task spec.debug=true, which exposes the whole guest
 // ProcessService/FileSystemService. The router admits them only over its HTTPS
-// listener with the connector's bearer token, which it strips before the guest
+// listener with the app's bearer token (a kubelet-rotated projected token for
+// its own ServiceAccount, or the connector's), which it strips before the guest
 // (integrations/substrate/guest-router-auth.patch, --guest-client-auth); a
-// NetworkPolicy keeps other pods off its ports. The connector identity spans
-// every guest: which attempt a caller may reach is the app's authorization.
+// NetworkPolicy keeps other pods off its ports. That identity spans every
+// guest: which attempt a caller may reach is the app's authorization.
 type Router struct {
 	conn    *grpc.ClientConn
 	process ateenv.ProcessServiceClient

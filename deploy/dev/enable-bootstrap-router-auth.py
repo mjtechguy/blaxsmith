@@ -24,7 +24,9 @@ if "@sha256:" not in image:
 diff_only = os.environ.get("ROUTER_AUTH_DIFF") == "1"
 dry_run = ["--dry-run=server"] if diff_only else []
 manifest = pathlib.Path(__file__).with_name("bootstrap-router-auth.yaml")
-subprocess.run(["kubectl", "apply", "-f", str(manifest), *dry_run], check=True)
+# In diff mode stdout carries only the Deployment diff (empty: nothing to do).
+subprocess.run(["kubectl", "apply", "-f", str(manifest), *dry_run], check=True,
+               stdout=sys.stderr if diff_only else None)
 deployment = json.loads(subprocess.check_output([
     "kubectl", "-n", "ate-system", "get", "deployment", "atenet-router", "-o", "json",
 ]))
@@ -37,14 +39,21 @@ guest_patch = record.get("guest_router_auth_patch_sha256")
 if "--guest-client-auth" in router["args"] and not guest_patch:
     sys.exit("refusing to deploy a router build without guest-router-auth.patch over --guest-client-auth")
 args = [arg for arg in router["args"] if not arg.startswith((
-    "--bootstrap-audience=", "--bootstrap-client-username=", "--guest-client-auth",
+    "--bootstrap-audience=", "--bootstrap-client-username=", "--guest-client-auth", "--guest-client-username=",
 ))]
 args += ["--bootstrap-audience=blaxsmith-bootstrap",
          "--bootstrap-client-username=system:serviceaccount:ate-system:blaxsmith-connector"]
 annotations = {"blaxsmith.dev/router-auth-patch-sha256": record["router_auth_patch_sha256"],
                "blaxsmith.dev/actor-fence-patch-sha256": record["actor_fence_patch_sha256"]}
+# GUEST_CLIENT_USERNAME: the app's own ServiceAccount (projected, kubelet-rotated
+# token); unset, guest routes accept the bootstrap connector identity.
+guest_username = os.environ.get("GUEST_CLIENT_USERNAME", "")
+if guest_username and not guest_patch:
+    sys.exit("GUEST_CLIENT_USERNAME needs a build with guest-router-auth.patch")
 if guest_patch:
     args.append("--guest-client-auth")
+    if guest_username:
+        args.append("--guest-client-username=" + guest_username)
     annotations["blaxsmith.dev/guest-router-auth-patch-sha256"] = guest_patch
 patch = {"spec": {"template": {
     "metadata": {"annotations": annotations},
