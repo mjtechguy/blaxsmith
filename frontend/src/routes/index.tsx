@@ -36,7 +36,7 @@ function Home() {
   return <DashboardLayout title="Home" description="What needs you, what is running, and what finished recently across your organization's projects."
     actions={isMember ? <Link className="primary-button" to="/projects/new"><Plus size={15} aria-hidden="true" /> New project</Link> : undefined}
     tiles={data ? <>
-      <StatTile label="Waiting on you" value={data.waitingOnYou} tone={data.waitingOnYou ? "attention" : undefined} href="/inbox" meta={`${data.openItems} open in total`} />
+      <StatTile label="Waiting on you" value={data.waitingOnYou} tone={data.waitingOnYou ? "attention" : undefined} href="/inbox" meta={data.openItems > data.waitingOnYou ? `${data.openItems} open in total` : "Open the inbox"} />
       <StatTile label="Running agents" value={data.runningAgents} meta="Attempts in flight" href="/runs?f_state=active" />
       <StatTile label="Active runs" value={data.activeRuns} meta="Queued or running" href="/runs?f_state=queued,active,cancel_requested" />
       <StatTile label="Runs in 24 hours" value={data.runsLast24h} meta="Started" />
