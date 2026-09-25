@@ -152,6 +152,8 @@ grep -F -q 'value: /opt/blaxsmith/dispatch-tools/kubectl-ate' "$rendered"
 grep -F -q 'name: BLAXSMITH_DISPATCH_AX_SERVER' "$rendered"
 grep -F -q 'value: "http://127.0.0.1:18443"' "$rendered"
 grep -F -q 'name: ax-tunnel' "$rendered"
+# ax-tunnel is a native sidecar (outlives the app's drain), not a peer container.
+grep -F -A8 'name: ax-tunnel' "$rendered" | grep -F -q 'restartPolicy: Always'
 grep -F -q 'TCP-LISTEN:18443,bind=127.0.0.1,reuseaddr,fork' "$rendered"
 grep -F -q 'TCP:ax-server.ax-system.svc.cluster.local:8080' "$rendered"
 grep -F -q 'automountServiceAccountToken: false' "$rendered"

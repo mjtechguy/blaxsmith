@@ -137,6 +137,37 @@ spec:
           volumeMounts:
             - name: dispatch-tools
               mountPath: /dispatch-tools
+        - name: ax-tunnel
+          image: {{ .Values.dispatch.tools.image | quote }}
+          imagePullPolicy: IfNotPresent
+          # Native sidecar: started before the app and stopped only after it
+          # exits, so AX calls made while the app drains still have a tunnel.
+          restartPolicy: Always
+          command: ["socat"]
+          args:
+            - {{ printf "TCP-LISTEN:%v,bind=127.0.0.1,reuseaddr,fork" .Values.dispatch.tunnel.localPort | quote }}
+            - {{ printf "TCP:%s:%v" .Values.dispatch.tunnel.targetHost .Values.dispatch.tunnel.targetPort | quote }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # Probe from inside: the tunnel binds loopback only, which a
+          # kubelet tcpSocket probe (pod IP) cannot reach.
+          startupProbe:
+            exec:
+              command: ["nc", "-z", "127.0.0.1", {{ .Values.dispatch.tunnel.localPort | toString | quote }}]
+            periodSeconds: 1
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
       {{- end }}
       securityContext:
         runAsNonRoot: true
@@ -332,29 +363,6 @@ spec:
               mountPath: /run/blaxsmith/guest-router
               readOnly: true
             {{- end }}
-        {{- if .Values.dispatch.enabled }}
-        - name: ax-tunnel
-          image: {{ .Values.dispatch.tools.image | quote }}
-          imagePullPolicy: IfNotPresent
-          command: ["socat"]
-          args:
-            - {{ printf "TCP-LISTEN:%v,bind=127.0.0.1,reuseaddr,fork" .Values.dispatch.tunnel.localPort | quote }}
-            - {{ printf "TCP:%s:%v" .Values.dispatch.tunnel.targetHost .Values.dispatch.tunnel.targetPort | quote }}
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 65532
-            runAsGroup: 65532
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          resources:
-            requests:
-              cpu: 10m
-              memory: 16Mi
-            limits:
-              memory: 64Mi
-        {{- end }}
       volumes:
         - name: scratch
           emptyDir:
