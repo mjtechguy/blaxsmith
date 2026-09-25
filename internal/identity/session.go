@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -23,7 +24,34 @@ import (
 )
 
 const accessLifetime = 10 * time.Minute
-const sessionLifetime = 7 * 24 * time.Hour
+
+// refreshGrace is how long a rotated-out refresh token still answers with its
+// successor instead of tripping reuse detection: two tabs refreshing at once,
+// or a client that lost the response when the server restarted mid-refresh.
+const refreshGrace = time.Minute
+
+// AccessLifetime and RefreshGrace are reported to administrators.
+const AccessLifetime, RefreshGrace = accessLifetime, refreshGrace
+
+// SessionPolicy bounds a browser session. Each refresh slides expiry to
+// Idle from now, but never past Absolute from sign-in.
+type SessionPolicy struct {
+	Idle     time.Duration
+	Absolute time.Duration
+}
+
+// DefaultSessionPolicy is 7 days idle, 30 days absolute.
+var DefaultSessionPolicy = SessionPolicy{Idle: 7 * 24 * time.Hour, Absolute: 30 * 24 * time.Hour}
+
+// Validate requires an idle timeout that outlives several access tokens and
+// an absolute lifetime of at least the idle timeout and at most a year.
+func (p SessionPolicy) Validate() error {
+	if p.Idle < 15*time.Minute || p.Absolute < p.Idle || p.Absolute > 366*24*time.Hour {
+		return fmt.Errorf("%w: session idle timeout must be at least 15m and absolute lifetime between it and 366d",
+			ErrSessionConfiguration)
+	}
+	return nil
+}
 
 var ErrUnauthenticated = errors.New("authentication failed")
 var ErrRefreshReuse = errors.New("refresh token reused; session revoked")
@@ -37,17 +65,23 @@ type SessionManager struct {
 	keys          map[string]ed25519.PublicKey
 	limits        *LoginLimit
 	passwordSlots chan struct{}
+	policy        SessionPolicy
+	// successorKey derives each rotated refresh token from its predecessor, so
+	// a replay inside refreshGrace can be answered with the same successor
+	// without storing any refresh token in plaintext.
+	successorKey []byte
 }
 
 type Tokens struct {
-	Access        string
-	Refresh       string
-	AccessExpires time.Time
-	SessionID     string
-	Organization  string
-	Principal     string
-	Role          string
-	EmailRequired bool
+	Access         string
+	Refresh        string
+	AccessExpires  time.Time
+	SessionExpires time.Time
+	SessionID      string
+	Organization   string
+	Principal      string
+	Role           string
+	EmailRequired  bool
 }
 
 type Caller struct {
@@ -77,6 +111,9 @@ func NewSessionManager(db *pgxpool.Pool, issuer string, signer ed25519.PrivateKe
 	copyKey := append(ed25519.PrivateKey(nil), signer...)
 	seed := copyKey.Seed()
 	valid := subtle.ConstantTimeCompare(copyKey, ed25519.NewKeyFromSeed(seed)) == 1
+	derive := hmac.New(sha256.New, seed)
+	derive.Write([]byte("blaxsmith refresh successor v1"))
+	successorKey := derive.Sum(nil)
 	clear(seed)
 	if !valid {
 		clear(copyKey)
@@ -97,8 +134,20 @@ func NewSessionManager(db *pgxpool.Pool, issuer string, signer ed25519.PrivateKe
 		return nil, err
 	}
 	return &SessionManager{db: db, issuer: issuer, signer: copyKey, keyID: signingKeyID(active), keys: keys,
-		limits: limits, passwordSlots: make(chan struct{}, 2)}, nil
+		limits: limits, passwordSlots: make(chan struct{}, 2), policy: DefaultSessionPolicy, successorKey: successorKey}, nil
 }
+
+// SetPolicy replaces the session lifetime policy. Call it before serving.
+func (m *SessionManager) SetPolicy(policy SessionPolicy) error {
+	if err := policy.Validate(); err != nil {
+		return err
+	}
+	m.policy = policy
+	return nil
+}
+
+// Policy reports the session lifetime policy in force.
+func (m *SessionManager) Policy() SessionPolicy { return m.policy }
 
 func signingKeyID(public ed25519.PublicKey) string {
 	digest := sha256.Sum256(public)
@@ -259,7 +308,7 @@ func (m *SessionManager) LoginLocal(ctx context.Context, slug, login string, pas
 	now := time.Now().UTC()
 	if _, err := tx.Exec(ctx, `INSERT INTO identity_sessions
 		(organization_id,id,principal_id,auth_method,mfa_level,expires_at,email_required,source_address,user_agent,last_seen_at)
-		VALUES ($1,$2,$3,'local','none',$4,$5,$6,$7,clock_timestamp())`, orgID, sessionID, principalID, now.Add(sessionLifetime),
+		VALUES ($1,$2,$3,'local','none',$4,$5,$6,$7,clock_timestamp())`, orgID, sessionID, principalID, now.Add(m.policy.Idle),
 		legacy, source.Unmap().String(), sessionUserAgent(userAgent)); err != nil {
 		return Tokens{}, fmt.Errorf("create session: %w", err)
 	}
@@ -283,8 +332,8 @@ func (m *SessionManager) LoginLocal(ctx context.Context, slug, login string, pas
 	if err := tx.Commit(ctx); err != nil {
 		return Tokens{}, fmt.Errorf("commit session: %w", err)
 	}
-	return Tokens{Access: access, Refresh: refresh, AccessExpires: expires, SessionID: sessionID, Organization: orgID,
-		Principal: principalID, Role: role, EmailRequired: legacy}, nil
+	return Tokens{Access: access, Refresh: refresh, AccessExpires: expires, SessionExpires: now.Add(m.policy.Idle),
+		SessionID: sessionID, Organization: orgID, Principal: principalID, Role: role, EmailRequired: legacy}, nil
 }
 
 // sessionUserAgent keeps a printable, bounded User-Agent for the session list.
@@ -324,10 +373,26 @@ func (m *SessionManager) ValidateAccess(ctx context.Context, raw string) (Caller
 		claims.IssuedAt == nil || claims.ExpiresAt == nil || claims.ExpiresAt.Sub(claims.IssuedAt.Time) > accessLifetime {
 		return Caller{}, ErrUnauthenticated
 	}
-	ctx = tenant.Org(ctx, claims.OrganizationID)
+	return m.liveSession(ctx, Caller{OrganizationID: claims.OrganizationID, PrincipalID: claims.Subject,
+		SessionID: claims.SessionID, Role: claims.Role, AccessExpires: claims.ExpiresAt.Time})
+}
+
+// CheckSession revalidates a caller that was authenticated once by its access
+// token (a long-lived stream or terminal socket): the session must still be
+// live and the membership role unchanged. The access token's own expiry is
+// not rechecked, so a stream outlives it while its session stays valid.
+func (m *SessionManager) CheckSession(ctx context.Context, caller Caller) (Caller, error) {
+	if m == nil || caller.OrganizationID == "" || caller.PrincipalID == "" || caller.SessionID == "" {
+		return Caller{}, ErrUnauthenticated
+	}
+	return m.liveSession(ctx, caller)
+}
+
+func (m *SessionManager) liveSession(ctx context.Context, caller Caller) (Caller, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	var role string
 	var emailRequired bool
-	err = m.db.QueryRow(ctx, `SELECT m.role,s.email_required FROM identity_sessions s
+	err := m.db.QueryRow(ctx, `SELECT m.role,s.email_required FROM identity_sessions s
 		JOIN identity_memberships m ON m.organization_id=s.organization_id AND m.principal_id=s.principal_id
 		JOIN identity_principals p ON p.id=s.principal_id
 		JOIN identity_organizations o ON o.id=s.organization_id
@@ -336,17 +401,23 @@ func (m *SessionManager) ValidateAccess(ctx context.Context, raw string) (Caller
 		AND m.state='active' AND p.state='active'
 		AND (s.auth_method<>'local' OR o.login_policy IN ('local','mixed'))
 		AND (o.mfa_policy<>'required' OR s.mfa_level='totp')`,
-		claims.OrganizationID, claims.SessionID, claims.Subject).Scan(&role, &emailRequired)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && role != claims.Role) {
+		caller.OrganizationID, caller.SessionID, caller.PrincipalID).Scan(&role, &emailRequired)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && role != caller.Role) {
 		return Caller{}, ErrUnauthenticated
 	}
 	if err != nil {
 		return Caller{}, fmt.Errorf("validate session: %w", err)
 	}
-	return Caller{OrganizationID: claims.OrganizationID, PrincipalID: claims.Subject,
-		SessionID: claims.SessionID, Role: role, AccessExpires: claims.ExpiresAt.Time, EmailRequired: emailRequired}, nil
+	caller.Role, caller.EmailRequired = role, emailRequired
+	return caller, nil
 }
 
+// Refresh rotates a refresh token. The rotated-out token stays answerable for
+// refreshGrace: replaying it then returns the same successor (derived, not
+// stored) and a fresh access token, provided that successor is still unused.
+// Any other replay of a consumed token is theft-shaped and revokes the whole
+// session. Each refresh slides the session's expiry to the idle timeout,
+// capped at the absolute lifetime from sign-in.
 func (m *SessionManager) Refresh(ctx context.Context, raw string) (Tokens, error) {
 	ctx = tenant.System(ctx) // no organization is known until the credential is matched
 	if m == nil {
@@ -356,6 +427,7 @@ func (m *SessionManager) Refresh(ctx context.Context, raw string) (Tokens, error
 	if err != nil {
 		return Tokens{}, err
 	}
+	next, nextHash := m.successor(raw)
 	tx, err := m.db.Begin(ctx)
 	if err != nil {
 		return Tokens{}, err
@@ -370,13 +442,14 @@ func (m *SessionManager) Refresh(ctx context.Context, raw string) (Tokens, error
 	if err != nil {
 		return Tokens{}, fmt.Errorf("find refresh token: %w", err)
 	}
+	// The session row lock serializes concurrent refreshes of one session.
 	var principalID, authMethod, mfaLevel string
 	var revoked *time.Time
-	var expires time.Time
+	var created, expires time.Time
 	var emailRequired bool
-	err = tx.QueryRow(ctx, `SELECT principal_id,auth_method,mfa_level,expires_at,revoked_at,email_required
+	err = tx.QueryRow(ctx, `SELECT principal_id,auth_method,mfa_level,created_at,expires_at,revoked_at,email_required
 		FROM identity_sessions WHERE organization_id=$1 AND id=$2 FOR UPDATE`, orgID, sessionID).
-		Scan(&principalID, &authMethod, &mfaLevel, &expires, &revoked, &emailRequired)
+		Scan(&principalID, &authMethod, &mfaLevel, &created, &expires, &revoked, &emailRequired)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Tokens{}, ErrUnauthenticated
 	}
@@ -384,26 +457,41 @@ func (m *SessionManager) Refresh(ctx context.Context, raw string) (Tokens, error
 		return Tokens{}, fmt.Errorf("lock session: %w", err)
 	}
 	var consumed *time.Time
-	if err := tx.QueryRow(ctx, `SELECT consumed_at FROM identity_refresh_tokens
-		WHERE token_hash=$1 FOR UPDATE`, hash[:]).Scan(&consumed); err != nil {
+	var successorHash []byte
+	var now time.Time
+	if err := tx.QueryRow(ctx, `SELECT consumed_at,successor_hash,clock_timestamp() FROM identity_refresh_tokens
+		WHERE token_hash=$1 FOR UPDATE`, hash[:]).Scan(&consumed, &successorHash, &now); err != nil {
 		return Tokens{}, fmt.Errorf("lock refresh token: %w", err)
 	}
+	grace := false
 	if consumed != nil {
-		if _, err := tx.Exec(ctx, `UPDATE identity_sessions SET revoked_at=clock_timestamp()
-			WHERE organization_id=$1 AND id=$2 AND revoked_at IS NULL`, orgID, sessionID); err != nil {
-			return Tokens{}, err
+		if now.Sub(*consumed) > refreshGrace || len(successorHash) != len(nextHash) {
+			return Tokens{}, m.refreshReuse(ctx, tx, orgID, sessionID)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO identity_audit_events
-			(organization_id,actor_kind,actor_id,action,subject_id)
-			VALUES ($1,'system',NULL,'identity.refresh_reuse',$2)`, orgID, sessionID); err != nil {
-			return Tokens{}, fmt.Errorf("audit refresh reuse: %w", err)
+		var unused bool
+		err := tx.QueryRow(ctx, `SELECT consumed_at IS NULL FROM identity_refresh_tokens
+			WHERE token_hash=$1 FOR UPDATE`, successorHash).Scan(&unused)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return Tokens{}, fmt.Errorf("lock refresh successor: %w", err)
 		}
-		if err := tx.Commit(ctx); err != nil {
-			return Tokens{}, err
+		if !unused {
+			return Tokens{}, m.refreshReuse(ctx, tx, orgID, sessionID)
 		}
-		return Tokens{}, ErrRefreshReuse
+		if subtle.ConstantTimeCompare(successorHash, nextHash[:]) != 1 {
+			// Only a signer change inside the grace window derives differently;
+			// the client signs in again and the session is not revoked.
+			return Tokens{}, ErrUnauthenticated
+		}
+		grace = true
 	}
-	if revoked != nil || !expires.After(time.Now()) {
+	if revoked != nil || !expires.After(now) {
+		return Tokens{}, ErrUnauthenticated
+	}
+	slid := now.Add(m.policy.Idle)
+	if limit := created.Add(m.policy.Absolute); limit.Before(slid) {
+		slid = limit
+	}
+	if !slid.After(now) {
 		return Tokens{}, ErrUnauthenticated
 	}
 	var role string
@@ -421,37 +509,67 @@ func (m *SessionManager) Refresh(ctx context.Context, raw string) (Tokens, error
 	if err != nil {
 		return Tokens{}, fmt.Errorf("read current membership: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `UPDATE identity_refresh_tokens SET consumed_at=clock_timestamp()
-		WHERE token_hash=$1 AND consumed_at IS NULL`, hash[:]); err != nil {
-		return Tokens{}, fmt.Errorf("consume refresh token: %w", err)
+	action := "identity.refresh_grace"
+	if !grace {
+		action = "identity.refresh"
+		if _, err := tx.Exec(ctx, `UPDATE identity_refresh_tokens SET consumed_at=clock_timestamp(),successor_hash=$2
+			WHERE token_hash=$1 AND consumed_at IS NULL`, hash[:], nextHash[:]); err != nil {
+			return Tokens{}, fmt.Errorf("consume refresh token: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO identity_refresh_tokens (token_hash,organization_id,session_id)
+			VALUES ($1,$2,$3)`, nextHash[:], orgID, sessionID); err != nil {
+			return Tokens{}, fmt.Errorf("rotate refresh token: %w", err)
+		}
 	}
-	next, nextHash, err := newRefresh()
-	if err != nil {
-		return Tokens{}, err
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO identity_refresh_tokens (token_hash,organization_id,session_id)
-		VALUES ($1,$2,$3)`, nextHash[:], orgID, sessionID); err != nil {
-		return Tokens{}, fmt.Errorf("rotate refresh token: %w", err)
-	}
-	if _, err := tx.Exec(ctx, `UPDATE identity_sessions SET last_seen_at=clock_timestamp()
-		WHERE organization_id=$1 AND id=$2`, orgID, sessionID); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE identity_sessions SET last_seen_at=clock_timestamp(),expires_at=$3
+		WHERE organization_id=$1 AND id=$2`, orgID, sessionID, slid); err != nil {
 		return Tokens{}, fmt.Errorf("touch session: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO identity_audit_events
 		(organization_id,actor_kind,actor_id,action,subject_id)
-		VALUES ($1,'principal',$2,'identity.refresh',$3)`, orgID, principalID, sessionID); err != nil {
+		VALUES ($1,'principal',$2,$3,$4)`, orgID, principalID, action, sessionID); err != nil {
 		return Tokens{}, fmt.Errorf("audit refresh: %w", err)
 	}
-	now := time.Now().UTC()
-	access, accessExpires, err := m.sign(now, orgID, principalID, sessionID, role)
+	access, accessExpires, err := m.sign(time.Now().UTC(), orgID, principalID, sessionID, role)
 	if err != nil {
 		return Tokens{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Tokens{}, fmt.Errorf("commit refresh: %w", err)
 	}
-	return Tokens{Access: access, Refresh: next, AccessExpires: accessExpires, SessionID: sessionID, Organization: orgID,
-		Principal: principalID, Role: role, EmailRequired: emailRequired}, nil
+	return Tokens{Access: access, Refresh: next, AccessExpires: accessExpires, SessionExpires: slid, SessionID: sessionID,
+		Organization: orgID, Principal: principalID, Role: role, EmailRequired: emailRequired}, nil
+}
+
+// refreshReuse revokes a session whose consumed refresh token was replayed.
+func (m *SessionManager) refreshReuse(ctx context.Context, tx pgx.Tx, orgID, sessionID string) error {
+	if _, err := tx.Exec(ctx, `UPDATE identity_sessions SET revoked_at=clock_timestamp()
+		WHERE organization_id=$1 AND id=$2 AND revoked_at IS NULL`, orgID, sessionID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO identity_audit_events
+		(organization_id,actor_kind,actor_id,action,subject_id)
+		VALUES ($1,'system',NULL,'identity.refresh_reuse',$2)`, orgID, sessionID); err != nil {
+		return fmt.Errorf("audit refresh reuse: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	return ErrRefreshReuse
+}
+
+// successor derives the refresh token that replaces raw, which hashRefresh
+// has already validated.
+func (m *SessionManager) successor(raw string) (string, [32]byte) {
+	secret, _ := base64.RawURLEncoding.DecodeString(raw)
+	mac := hmac.New(sha256.New, m.successorKey)
+	mac.Write(secret)
+	clear(secret)
+	next := mac.Sum(nil)
+	text := base64.RawURLEncoding.EncodeToString(next)
+	hash := sha256.Sum256(next)
+	clear(next)
+	return text, hash
 }
 
 func (m *SessionManager) Revoke(ctx context.Context, caller Caller) error {

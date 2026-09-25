@@ -60,10 +60,12 @@ test("concurrent tabs recheck the access cookie before rotating refresh", async 
     assert.equal(first.principalId, "user");
     assert.equal(second.principalId, "user");
     assert.equal(refreshCalls, 1);
+    // Without Web Locks the tab still serializes its own refreshes; the
+    // server's refresh grace window absorbs a race with another tab.
     accessValid = false;
     globalThis.navigator.locks = undefined;
-    await assert.rejects(currentSession(), /Secure session coordination is unavailable/);
-    assert.equal(refreshCalls, 1);
+    assert.equal(await currentSession(), null);
+    assert.equal(refreshCalls, 2);
   } finally {
     await server.close();
     globalThis.window = previousWindow;

@@ -1,5 +1,9 @@
 // Dev-only mock of the Blaxsmith API for exercising the run page (not bundled).
 //   npm run dev:mock   → mock API on :8001 + Vite on :3000, then open the printed URL.
+//   MOCK_SERVE=api | web runs only one half, so the API can be stopped and
+//   restarted under a live page (the web proxy answers 502 meanwhile, as an
+//   ingress would). MOCK_ACCESS_SECONDS shortens the access token so silent
+//   refresh can be watched.
 // Serves just enough Connect JSON, the run SSE stream, and the terminal WebSocket from
 // docs/interactive-sessions.md. The scenario: a Forge-style interview and an approval gate on
 // `plan`, plus a 3-cycle verify loop that hits its cap and escalates. Answering the
@@ -510,7 +514,8 @@ const members = [
 ].map(([username, displayName, role, status, sessions, minutes], i) => ({ principalId: i === 0 ? principalId : `p-${username}`, username, displayName, role, status, activeSessions: sessions, lastLoginAt: status === "invited" ? "" : minutesAgo(minutes), createdAt: minutesAgo(60 * 24 * (30 - i)) }));
 const roleOrder = ["owner", "admin", "member", "viewer"];
 Object.assign(rpc, {
-  CurrentSession: () => ({ session: { organizationId: "org-demo", principalId, role: mockRole, accessExpiresAt: new Date(Date.now() + 3_600_000).toISOString() } }),
+  CurrentSession: () => Date.now() < accessUntil ? { session: { organizationId: "org-demo", principalId, role: mockRole, accessExpiresAt: new Date(accessUntil).toISOString() } } : unauthenticated(),
+  GetSessionPolicy: () => ({ idleTimeoutSeconds: "604800", absoluteLifetimeSeconds: "2592000", accessTokenSeconds: String(accessSeconds), refreshGraceSeconds: "60" }),
   GetProject: ({ projectId: pid = projectId }) => { const p = projects.find((x) => x.id === pid); return p ? { project: p, canAdminister: administers(pid), canLaunch: mayAnswer() } : connectError(404, "not_found", "workflow resource not found"); },
   // New projects start with no source or checks, so the setup flow's repository prefill shows.
   CreateProject: ({ slug, name }) => {
@@ -604,6 +609,10 @@ let emailRequired = process.env.MOCK_EMAIL_REQUIRED === "1";
 let legacyUsed = emailRequired;
 let myPassword = mockPassword;
 const unauthenticated = () => connectError(401, "unauthenticated", "authentication required");
+// The access "cookie": RPCs fail Unauthenticated after it lapses until a refresh.
+const accessSeconds = Number(process.env.MOCK_ACCESS_SECONDS || 3600);
+let accessUntil = Date.now() + accessSeconds * 1000;
+let refreshes = 0;
 const mySessions = [
   { id: "s-current", current: true, organizationSlug: "acme", createdAt: minutesAgo(90), lastSeenAt: minutesAgo(2), expiresAt: new Date(Date.now() + 6 * 86_400_000).toISOString(), sourceAddress: "127.0.0.1", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15" },
   { id: "s-laptop", current: false, organizationSlug: "acme", createdAt: minutesAgo(60 * 26), lastSeenAt: minutesAgo(60 * 3), expiresAt: new Date(Date.now() + 5 * 86_400_000).toISOString(), sourceAddress: "203.0.113.24", userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36" },
@@ -616,11 +625,16 @@ const baseSession = rpc.CurrentSession;
 // email_required session reaches only the account-setup calls, as on the server.
 const publicMethods = new Set(["GetCsrf", "CurrentSession", "RefreshSession", "LoginLocal", "Logout", "GetAccountLink", "CompleteAccountLink", "ListTools"]);
 const setupMethods = new Set(["GetMyProfile", "UpdateMyProfile"]);
-const refuse = (method) => publicMethods.has(method) ? null : !signedIn ? unauthenticated()
+const refuse = (method) => publicMethods.has(method) ? null : !signedIn || Date.now() >= accessUntil ? unauthenticated()
   : emailRequired && !setupMethods.has(method) ? connectError(400, "failed_precondition", "set your email to continue") : null;
 Object.assign(rpc, {
-  CurrentSession: () => signedIn ? { session: { ...baseSession().session, emailRequired } } : unauthenticated(),
-  RefreshSession: () => rpc.CurrentSession(),
+  CurrentSession: () => signedIn && Date.now() < accessUntil ? { session: { ...baseSession().session, emailRequired } } : unauthenticated(),
+  RefreshSession: () => {
+    if (!signedIn) return unauthenticated();
+    accessUntil = Date.now() + accessSeconds * 1000;
+    console.log(`[mock] refresh #${++refreshes}`);
+    return rpc.CurrentSession();
+  },
   LoginLocal: ({ email = "", username = "", password = "" }) => {
     const login = (email || username).trim().toLowerCase();
     const legacy = !login.includes("@");
@@ -628,6 +642,7 @@ Object.assign(rpc, {
     if (password !== myPassword || !known) return unauthenticated();
     if (legacy) { legacyUsed = true; emailRequired = true; }
     signedIn = true;
+    accessUntil = Date.now() + accessSeconds * 1000;
     return rpc.CurrentSession();
   },
   Logout: () => { signedIn = false; return {}; },
@@ -858,6 +873,7 @@ const server = createHttp(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   if (req.method === "GET" && url.pathname === `/api/runs/${runId}/events`) {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+    res.flushHeaders(); // EventSource opens now, not at the first event
     const after = Number(req.headers["last-event-id"] ?? url.searchParams.get("after") ?? 0);
     for (const e of events.filter((e) => Number(e.id) > after)) res.write(`id: ${e.id}\ndata: ${JSON.stringify(e)}\n\n`);
     streams.add(res);
@@ -904,9 +920,21 @@ server.on("upgrade", (req, socket, head) => {
 // MOCK_API_PORT / MOCK_WEB_PORT let parallel checkouts run their own mock.
 const apiPort = Number(process.env.MOCK_API_PORT || 8001);
 const webPort = Number(process.env.MOCK_WEB_PORT || 3000);
-server.listen(apiPort, "127.0.0.1", async () => {
+const serve = process.env.MOCK_SERVE || "both";
+// While the API is down the proxy answers 502, as an ingress in front of a
+// restarting pod would, instead of Vite's default 500.
+const badGateway = (proxy) => proxy.on("error", (_error, _req, res) => {
+  if (res && "writeHead" in res && !res.headersSent) { res.writeHead(502, { "content-type": "text/plain" }); res.end("bad gateway"); }
+  else res?.destroy?.();
+});
+const startWeb = async () => {
   const vite = await createVite({ root: new URL("..", import.meta.url).pathname,
-    server: { port: webPort, strictPort: true, proxy: { "/api": { target: `http://127.0.0.1:${apiPort}`, ws: true } } } });
+    server: { port: webPort, strictPort: true, proxy: { "/api": { target: `http://127.0.0.1:${apiPort}`, ws: true, configure: badGateway } } } });
   await vite.listen();
-  console.log(`[mock] API on http://127.0.0.1:${apiPort} · open http://127.0.0.1:${webPort}/projects/${projectId}/runs/${runId} or /admin (role ${process.env.MOCK_ROLE || "owner"})`);
+  console.log(`[mock] web on http://127.0.0.1:${webPort} · open /projects/${projectId}/runs/${runId} or /admin (role ${process.env.MOCK_ROLE || "owner"})`);
+};
+if (serve === "web") await startWeb();
+else server.listen(apiPort, "127.0.0.1", async () => {
+  console.log(`[mock] API on http://127.0.0.1:${apiPort}`);
+  if (serve !== "api") await startWeb();
 });

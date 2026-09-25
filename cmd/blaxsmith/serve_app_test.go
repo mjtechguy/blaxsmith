@@ -67,6 +67,20 @@ func TestServeAppConfig(t *testing.T) {
 	if _, err := parseAppConfig(append(args, "--migrations", "ignore")); err == nil {
 		t.Fatal("invalid migration mode accepted")
 	}
+	if config, err := parseAppConfig(args); err != nil || config.sessionPolicy != identity.DefaultSessionPolicy || config.shutdownTimeout != 20*time.Second {
+		t.Fatalf("session and shutdown defaults: %+v, %v", config, err)
+	}
+	if config, err := parseAppConfig(append(args, "--session-idle-timeout", "8h", "--session-absolute-lifetime", "72h",
+		"--shutdown-timeout", "45s")); err != nil || config.sessionPolicy.Idle != 8*time.Hour ||
+		config.sessionPolicy.Absolute != 72*time.Hour || config.shutdownTimeout != 45*time.Second {
+		t.Fatalf("session policy flags: %+v, %v", config, err)
+	}
+	for _, bad := range [][]string{{"--session-idle-timeout", "1m"}, {"--session-idle-timeout", "48h", "--session-absolute-lifetime", "24h"},
+		{"--session-absolute-lifetime", "9000h"}, {"--shutdown-timeout", "0s"}} {
+		if _, err := parseAppConfig(append(append([]string(nil), args...), bad...)); err == nil {
+			t.Fatalf("invalid lifetime flags accepted: %v", bad)
+		}
+	}
 	for _, test := range []struct {
 		dsn, allowLocal string
 		want            bool
@@ -387,23 +401,42 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, product, err := newAppHandler(ctx, pool, manager, origin, staticDir, nil, dispatchConfig{}, nil, nil)
+	drain := newDrainer()
+	handler, product, err := newAppHandler(ctx, pool, manager, origin, staticDir, nil, dispatchConfig{}, nil, nil, drain)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if product != nil {
 		product.Close()
 	}
+	ready := httptest.NewRecorder()
+	handler.ServeHTTP(ready, httptest.NewRequest(http.MethodGet, origin+"/healthz", nil))
+	if ready.Code != http.StatusOK {
+		t.Fatalf("readiness before drain: %d", ready.Code)
+	}
 	pool.Close()
 	unavailable := httptest.NewRecorder()
 	handler.ServeHTTP(unavailable, httptest.NewRequest(http.MethodGet, origin+"/healthz", nil))
-	if unavailable.Code != http.StatusServiceUnavailable {
+	if unavailable.Code != http.StatusServiceUnavailable || !strings.Contains(unavailable.Body.String(), "database") {
 		t.Fatalf("health check ignored database outage: %d", unavailable.Code)
 	}
 	live := httptest.NewRecorder()
 	handler.ServeHTTP(live, httptest.NewRequest(http.MethodGet, origin+"/livez", nil))
 	if live.Code != http.StatusOK {
 		t.Fatalf("liveness incorrectly depends on database: %d", live.Code)
+	}
+	// SIGTERM: readiness fails at once so traffic moves away; liveness holds
+	// so the kubelet does not kill the pod mid-drain.
+	drain.begin()
+	draining := httptest.NewRecorder()
+	handler.ServeHTTP(draining, httptest.NewRequest(http.MethodGet, origin+"/healthz", nil))
+	if draining.Code != http.StatusServiceUnavailable || !strings.Contains(draining.Body.String(), "shutting down") {
+		t.Fatalf("readiness passed while draining: %d", draining.Code)
+	}
+	live = httptest.NewRecorder()
+	handler.ServeHTTP(live, httptest.NewRequest(http.MethodGet, origin+"/livez", nil))
+	if live.Code != http.StatusOK {
+		t.Fatalf("liveness failed while draining: %d", live.Code)
 	}
 }
 
@@ -980,6 +1013,31 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	(&runActivityHandler{guard: guard, store: store, hub: newActivityHub(pool)}).ServeHTTP(writer, replayRequest)
 	if revokeErr != nil || writer.count != 100 {
 		t.Fatalf("replay continued after revocation: events=%d revoke=%v", writer.count, revokeErr)
+	}
+
+	// Draining: a caught-up stream ends at once with a short retry hint so
+	// EventSource reconnects promptly to a replica that is still serving.
+	draining, err := manager.LoginLocal(ctx, "engineering", "alice@example.com", password, netip.MustParseAddr("192.0.2.89"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err = store.EventHead(ctx, owner.OrganizationID, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drain := newDrainer()
+	drain.begin()
+	drainCtx, cancelDrain := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelDrain()
+	drainRequest := httptest.NewRequestWithContext(drainCtx, http.MethodGet,
+		origin+"/api/runs/"+run.ID+"/events?after="+strconv.FormatInt(head, 10), nil)
+	drainRequest.SetPathValue("runID", run.ID)
+	drainRequest.Header.Set("Origin", origin)
+	drainRequest.Header.Set("Cookie", "__Host-blaxsmith_access="+draining.Access)
+	drained := &revokingActivityWriter{ResponseRecorder: httptest.NewRecorder()}
+	(&runActivityHandler{guard: guard, store: store, hub: newActivityHub(pool), closing: drain.done()}).ServeHTTP(drained, drainRequest)
+	if drainCtx.Err() != nil || drained.Code != http.StatusOK || !strings.HasSuffix(drained.Body.String(), "retry: 1000\n: server restarting\n\n") {
+		t.Fatalf("draining stream did not end with a retry hint: %d %q %v", drained.Code, drained.Body.String(), drainCtx.Err())
 	}
 }
 

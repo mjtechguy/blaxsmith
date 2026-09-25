@@ -15,6 +15,19 @@
 {{- if and .Values.ha.enabled (not (semverCompare ">=1.30.0-0" .Capabilities.KubeVersion.Version)) -}}
 {{- fail "ha.enabled requires Kubernetes 1.30+ for topologySpreadConstraints.minDomains" -}}
 {{- end -}}
+{{- if not (regexMatch "^[0-9]+(h|m)$" .Values.session.idleTimeout) -}}
+{{- fail "session.idleTimeout must be a whole number of hours or minutes, e.g. 168h" -}}
+{{- end -}}
+{{- if not (regexMatch "^[0-9]+(h|m)$" .Values.session.absoluteLifetime) -}}
+{{- fail "session.absoluteLifetime must be a whole number of hours or minutes, e.g. 720h" -}}
+{{- end -}}
+{{- $shutdown := .Values.shutdown -}}
+{{- if or (lt (int $shutdown.preStopSleepSeconds) 0) (lt (int $shutdown.drainTimeoutSeconds) 1) (gt (int $shutdown.drainTimeoutSeconds) 600) -}}
+{{- fail "shutdown.preStopSleepSeconds must be >= 0 and shutdown.drainTimeoutSeconds between 1 and 600" -}}
+{{- end -}}
+{{- if and (ne .Values.updateStrategy "RollingUpdate") (ne .Values.updateStrategy "Recreate") -}}
+{{- fail "updateStrategy must be RollingUpdate or Recreate" -}}
+{{- end -}}
 {{- if and .Values.dispatch.guestRouter (not .Values.dispatch.enabled) -}}
 {{- fail "dispatch.guestRouter requires dispatch.enabled (its router CA and connector token come from dispatch.credentialsSecretName)" -}}
 {{- end -}}
@@ -64,7 +77,15 @@ metadata:
 spec:
   replicas: {{ .Values.replicaCount }}
   strategy:
+    {{- if eq .Values.updateStrategy "Recreate" }}
     type: Recreate
+    {{- else }}
+    # Surge one new pod and keep every old pod serving until it is ready.
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    {{- end }}
   {{- if .Values.ha.enabled }}
   minReadySeconds: 5
   {{- end }}
@@ -124,7 +145,9 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
-      terminationGracePeriodSeconds: 30
+      # preStop sleep, then SIGTERM: readiness fails, streams are sent away,
+      # in-flight RPCs drain; the extra 5s covers process exit.
+      terminationGracePeriodSeconds: {{ add (int $shutdown.preStopSleepSeconds) (int $shutdown.drainTimeoutSeconds) 5 }}
       containers:
         - name: app
           image: {{ .Values.image | quote }}
@@ -157,6 +180,12 @@ spec:
             {{- end }}
             - --static-dir
             - /srv
+            - --session-idle-timeout
+            - {{ .Values.session.idleTimeout | quote }}
+            - --session-absolute-lifetime
+            - {{ .Values.session.absoluteLifetime | quote }}
+            - --shutdown-timeout
+            - {{ printf "%ds" (int $shutdown.drainTimeoutSeconds) | quote }}
           env:
             - name: BLAXSMITH_DATABASE_URL
               valueFrom:
@@ -229,6 +258,17 @@ spec:
           ports:
             - name: https
               containerPort: 8443
+          {{- if gt (int $shutdown.preStopSleepSeconds) 0 }}
+          # Keep serving while endpoint removal propagates to Services and
+          # ingress, so no new request lands on a pod that is about to stop.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", {{ $shutdown.preStopSleepSeconds | toString | quote }}]
+          {{- end }}
+          # Readiness (/healthz) checks PostgreSQL and fails while draining;
+          # liveness (/livez) depends on neither, so an outage or a drain never
+          # gets the pod killed.
           startupProbe:
             httpGet:
               path: /healthz
@@ -242,12 +282,14 @@ spec:
               port: https
               scheme: HTTPS
             periodSeconds: 5
+            failureThreshold: 2
           livenessProbe:
             httpGet:
               path: /livez
               port: https
               scheme: HTTPS
             periodSeconds: 10
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:

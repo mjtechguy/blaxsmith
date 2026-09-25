@@ -195,9 +195,26 @@ replicas. It spreads pods across hostnames with `maxSkew: 1` and
 `minDomains: 2`; a second replica stays pending on a one-node cluster. A
 disruption budget allows one voluntary eviction at a time. The
 Deployment waits five seconds after readiness. Pod/node replacements preserve
-replicas when capacity permits. A template change uses `Recreate`, stopping all
-old app pods before starting a new version. Readiness checks PostgreSQL; liveness is independent of
-it. A node failure can still reduce capacity, and a disruption budget only
+replicas when capacity permits. Readiness checks PostgreSQL; liveness is independent of
+it.
+
+Rollouts default to `updateStrategy: RollingUpdate` with `maxSurge: 1` and
+`maxUnavailable: 0`, in single-replica and HA mode alike: a new pod must be
+ready before an old one stops. Set `updateStrategy: Recreate` for a release
+whose schema migration the old binary cannot run against. On termination the
+pod keeps serving for `shutdown.preStopSleepSeconds` (default 5) while it
+leaves the Service endpoints; then SIGTERM fails readiness, closes run activity
+streams (with a 1 s retry hint) and terminal sockets (1001 Going Away) so
+browsers reconnect to a ready pod, stops accepting connections, and drains
+in-flight requests for up to `shutdown.drainTimeoutSeconds` (default 20).
+`terminationGracePeriodSeconds` is their sum plus 5.
+
+Browser sessions survive restarts: access tokens are Ed25519 JWTs from the
+mounted signer Secret, refresh tokens live in PostgreSQL, and the browser
+renews silently. `session.idleTimeout` (default `168h`) is the sliding expiry
+extended by each refresh; `session.absoluteLifetime` (default `720h`) caps a
+session from sign-in. Both render as serve-app flags and appear read-only in
+Admin → Settings → Sessions. A node failure can still reduce capacity, and a disruption budget only
 governs voluntary evictions ([Kubernetes PDB semantics](https://kubernetes.io/docs/tasks/run-application/configure-pdb/)).
 
 For an HA-mode schema upgrade, use a maintenance window and a values file for

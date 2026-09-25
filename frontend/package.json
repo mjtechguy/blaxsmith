@@ -11,7 +11,7 @@
     "dev:mock": "node dev/mock-server.mjs",
     "build": "vite build && tsc --noEmit",
     "check:ui": "node scripts/check-ui-conventions.mjs",
-    "test:auth": "node --test tests/auth.test.mjs",
+    "test:auth": "node --test tests/auth.test.mjs tests/session-resilience.test.mjs",
     "test:workflow": "node --test tests/markdown.test.mjs tests/workflow.test.mjs tests/admin.test.mjs tests/users.test.mjs tests/connections.test.mjs tests/recipes.test.mjs tests/extensions.test.mjs tests/agent-view.test.mjs tests/admin-guard.test.mjs tests/nav.test.mjs tests/table-state.test.mjs tests/shell-routes.test.mjs tests/sign-in.test.mjs tests/palette.test.mjs tests/model-picker.test.mjs tests/gateway.test.mjs tests/budgets.test.mjs tests/account.test.mjs tests/gateway-routes.test.mjs tests/gateway-pools.test.mjs",
     "preview": "vite preview"
   },

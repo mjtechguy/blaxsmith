@@ -126,6 +126,7 @@ func TestBrowserSessionPostgres(t *testing.T) {
 		t.Fatalf("refresh did not rotate or update role: %+v, %v", rotated, err)
 	}
 	noJar := apiv1connect.NewAuthServiceClient(server.Client(), server.URL+"/api")
+	expireGrace(t, pool)
 	replay := connect.NewRequest(&api.RefreshSessionRequest{})
 	replay.Header().Set("Origin", origin)
 	replay.Header().Set("X-Blaxsmith-CSRF", csrf.Msg.Token)
@@ -178,8 +179,12 @@ func assertSecureCookies(t *testing.T, header http.Header, names ...string) {
 		found := false
 		for _, value := range header.Values("Set-Cookie") {
 			if strings.HasPrefix(value, name+"=") {
+				site := "SameSite=Lax"
+				if name == refreshCookie {
+					site = "SameSite=Strict"
+				}
 				found = strings.Contains(value, "Secure") && strings.Contains(value, "HttpOnly") &&
-					strings.Contains(value, "SameSite=Lax") && strings.Contains(value, "Path=/")
+					strings.Contains(value, site) && strings.Contains(value, "Path=/") && !strings.Contains(value, "Domain=")
 			}
 		}
 		if !found {
