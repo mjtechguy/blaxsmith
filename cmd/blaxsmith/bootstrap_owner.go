@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
+	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"golang.org/x/term"
 )
@@ -80,8 +81,12 @@ func bootstrapOwner(args []string) error {
 // adminCommand holds restricted operator repairs that act directly on the
 // database (BLAXSMITH_DATABASE_URL), outside any browser session.
 func adminCommand(args []string) error {
+	if len(args) == 1 && args[0] == "upgrade-secrets" {
+		return adminUpgradeSecrets()
+	}
 	if len(args) == 0 || args[0] != "set-email" {
-		return errors.New("usage: blaxsmith admin set-email --login <current email or handle> --email <new email>")
+		return errors.New("usage: blaxsmith admin set-email --login <current email or handle> --email <new email>\n" +
+			"       blaxsmith admin upgrade-secrets")
 	}
 	flags := flag.NewFlagSet("admin set-email", flag.ContinueOnError)
 	login := flags.String("login", "", "the account's current email or internal handle")
@@ -114,4 +119,51 @@ func adminCommand(args []string) error {
 	}
 	fmt.Printf("Set the email of %s; its sessions were signed out\n", principal)
 	return nil
+}
+
+// adminUpgradeSecrets moves access secrets onto per-organization data keys:
+// it re-wraps data keys still under an older master key and re-encrypts
+// legacy master-key rows. Idempotent; serve-app also runs it at startup.
+func adminUpgradeSecrets() error {
+	dsn := os.Getenv("BLAXSMITH_DATABASE_URL")
+	if dsn == "" {
+		return errors.New("set BLAXSMITH_DATABASE_URL")
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		return fmt.Errorf("configure database: %w", err)
+	}
+	defer pool.Close()
+	if err := db.Verify(ctx, pool); err != nil {
+		return fmt.Errorf("verify database migrations: %w", err)
+	}
+	secrets, err := appSecretStore(pool)
+	if err != nil {
+		return err
+	}
+	if secrets == nil {
+		return errors.New("set BLAXSMITH_ACCESS_KEY_FILE")
+	}
+	summary, err := upgradeSecrets(ctx, secrets)
+	if err != nil {
+		return err
+	}
+	fmt.Println(summary)
+	return nil
+}
+
+func upgradeSecrets(ctx context.Context, secrets *access.SecretStore) (string, error) {
+	keys, err := secrets.RewrapKeys(ctx)
+	if err != nil {
+		return "", err
+	}
+	rows, err := secrets.UpgradeLegacy(ctx, 100)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Access secrets upgraded: %d data keys under a non-current master key, %d legacy rows remaining", keys, rows), nil
 }

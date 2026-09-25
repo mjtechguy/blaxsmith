@@ -104,7 +104,7 @@ func TestSecretStorePostgres(t *testing.T) {
 		t.Fatalf("old key read new secret: %v", err)
 	}
 	current, err := read(store2, "org-a")
-	if err != nil || current.Version != 2 || current.KeyID != "key-2" || string(current.Bytes) != "second-synthetic-secret" {
+	if err != nil || current.Version != 2 || current.KeyID != "org-dek-1" || string(current.Bytes) != "second-synthetic-secret" {
 		t.Fatalf("new key/current version: %+v, %v", current, err)
 	}
 	current.Clear()

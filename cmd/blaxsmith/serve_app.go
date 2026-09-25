@@ -185,6 +185,22 @@ func serveAppContext(ctx context.Context, args []string) error {
 	} else {
 		close(dispatchDone)
 	}
+	// Moves legacy master-key secrets onto per-organization data keys.
+	// Idempotent and batched, so every replica may run it.
+	secretsDone := make(chan struct{})
+	go func() {
+		defer close(secretsDone)
+		secrets, err := appSecretStore(pool)
+		if err != nil || secrets == nil {
+			return
+		}
+		summary, err := upgradeSecrets(serveCtx, secrets)
+		if err != nil {
+			log.Printf("upgrade access secrets: %v", err)
+			return
+		}
+		log.Print(summary)
+	}()
 	interactionDone := make(chan struct{})
 	go func() {
 		defer close(interactionDone)
@@ -197,6 +213,7 @@ func serveAppContext(ctx context.Context, args []string) error {
 	<-pruneDone
 	<-dispatchDone
 	<-interactionDone
+	<-secretsDone
 	if errors.Is(err, http.ErrServerClosed) {
 		return shutdownErr
 	}
