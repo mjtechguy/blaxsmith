@@ -149,7 +149,9 @@ func (v SharedView) availableAt(now time.Time) time.Time {
 
 // needsProbe reports whether the route may only be used as the breaker's
 // single half-open probe.
-func (v SharedView) needsProbe() bool { return v.Breaker == BreakerOpen || v.Breaker == BreakerHalfOpen }
+func (v SharedView) needsProbe() bool {
+	return v.Breaker == BreakerOpen || v.Breaker == BreakerHalfOpen
+}
 
 // ClaimProbe lets exactly one replica send the half-open probe of a route
 // whose breaker cooled down.

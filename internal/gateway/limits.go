@@ -22,6 +22,15 @@ func (m Metric) exhausted(estimate int64, now time.Time) bool {
 	return m.Limit > 0 && m.Remaining < max(estimate, 1) && m.ResetAt.After(now)
 }
 
+// metricNeed is what one request needs of a metric: its token estimate for
+// token metrics, one for the requests metric.
+func metricNeed(name string, estimate int64) int64 {
+	if strings.Contains(name, "tokens") {
+		return estimate
+	}
+	return 1
+}
+
 // rateHeaders parses Anthropic's anthropic-ratelimit-* and OpenAI's (and
 // OpenAI-compatible providers') x-ratelimit-* headers, plus retry-after.
 // Bedrock and Vertex send none; their quota comes from route configuration.

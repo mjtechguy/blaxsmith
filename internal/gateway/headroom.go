@@ -93,8 +93,8 @@ func HeadroomFor(ctx context.Context, db *pgxpool.Pool, orgID, poolID string, es
 		}
 		// The shared view decides, as the gateway's admission does.
 		later((SharedView{Breaker: breaker, OpenedAt: timeOf(opened), CooldownUntil: timeOf(cooldown)}).availableAt(now))
-		for _, m := range metrics {
-			if m.exhausted(estimate, now) {
+		for name, m := range metrics {
+			if m.exhausted(metricNeed(name, estimate), now) {
 				later(m.ResetAt)
 			}
 		}
@@ -138,8 +138,35 @@ func (e *PacedError) Is(target error) bool { return target == ErrPaced }
 // PaceRequest names one ready stage about to be dispatched in gateway mode.
 type PaceRequest struct {
 	OrganizationID, ProjectID, RunID, TaskID string
-	Family, ConnectionID                     string
-	EstimateTokens                           int64
+	StageKey, Family, ConnectionID           string
+	EstimateTokens                           int64 // 0: EstimateTokens decides
+}
+
+// defaultRequestTokens is a conservative first-request estimate per model
+// family, used until a stage has its own history: an agent's first model
+// call already carries its system prompt, tools and the repository context.
+var defaultRequestTokens = map[string]int64{"anthropic": 48_000, "openai": 48_000, "opencode": 32_000, "opencode-go": 32_000}
+
+// EstimateTokens is the tokens one model request of this stage is likely to
+// use: the average of the same stage's recent successful requests in the
+// project (at least 3 in the last 7 days), else the family default.
+func EstimateTokens(ctx context.Context, db *pgxpool.Pool, orgID, projectID, stageKey, family string) (int64, error) {
+	ctx = tenant.Org(ctx, orgID)
+	var average, samples int64
+	if err := db.QueryRow(ctx, `SELECT COALESCE(avg(total),0)::bigint,count(*) FROM (
+		SELECT input_tokens+output_tokens+cache_read_tokens+cache_write_tokens AS total FROM gateway_usage_events
+		WHERE organization_id=$1 AND project_id=$2 AND stage_key=$3 AND status='ok' AND usage_reported
+		AND started_at>clock_timestamp()-interval '7 days' ORDER BY started_at DESC LIMIT 200) recent`,
+		orgID, projectID, stageKey).Scan(&average, &samples); err != nil {
+		return 0, fmt.Errorf("estimate stage tokens: %w", err)
+	}
+	if samples >= 3 && average > 0 {
+		return average, nil
+	}
+	if d, ok := defaultRequestTokens[family]; ok {
+		return d, nil
+	}
+	return 32_000, nil
 }
 
 // Pace is the dispatcher's back-pressure check (§5). With Rate-aware
@@ -160,7 +187,13 @@ func Pace(ctx context.Context, db *pgxpool.Pool, request PaceRequest) error {
 	if err != nil {
 		return fmt.Errorf("gateway pacing pool: %w", err)
 	}
-	headroom, err := HeadroomFor(ctx, db, request.OrganizationID, poolID, max(request.EstimateTokens, 1))
+	estimate := request.EstimateTokens
+	if estimate <= 0 {
+		if estimate, err = EstimateTokens(ctx, db, request.OrganizationID, request.ProjectID, request.StageKey, request.Family); err != nil {
+			return err
+		}
+	}
+	headroom, err := HeadroomFor(ctx, db, request.OrganizationID, poolID, estimate)
 	if err != nil {
 		return err
 	}

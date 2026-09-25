@@ -25,7 +25,7 @@ func (d *Dispatcher) pace(ctx context.Context, task workflow.ReadyTask, delivery
 		return nil
 	}
 	return gateway.Pace(ctx, d.DB, gateway.PaceRequest{OrganizationID: task.OrganizationID, ProjectID: task.ProjectID,
-		RunID: task.RunID, TaskID: task.TaskID, Family: provider, ConnectionID: connectionID})
+		RunID: task.RunID, TaskID: task.TaskID, StageKey: task.Key, Family: provider, ConnectionID: connectionID})
 }
 
 func gatewayRequest(delivery gateway.Delivery) *tooladapter.Gateway {
