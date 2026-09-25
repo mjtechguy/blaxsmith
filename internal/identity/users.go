@@ -294,7 +294,7 @@ func (u *UserAdmin) Invite(ctx context.Context, caller Caller, email, displayNam
 	if used, err := emailInUse(ctx, tx, email, ""); err != nil {
 		return AccountLink{}, err
 	} else if used {
-		return AccountLink{}, ErrEmailTaken
+		return AccountLink{}, emailTakenIn(ctx, tx, caller.OrganizationID, email)
 	}
 	username, err := freeHandle(ctx, tx, email)
 	if err != nil {
@@ -304,7 +304,7 @@ func (u *UserAdmin) Invite(ctx context.Context, caller Caller, email, displayNam
 	if err := tx.QueryRow(ctx, `INSERT INTO identity_principals (id,username,email,display_name)
 		VALUES (gen_random_uuid(),$1,$2,$3) RETURNING id`, username, email, displayName).
 		Scan(&principalID); err != nil {
-		return AccountLink{}, emailWriteError(err)
+		return AccountLink{}, hideTaken(emailWriteError(err))
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO identity_memberships (organization_id,principal_id,role) VALUES ($1,$2,$3)`,
 		caller.OrganizationID, principalID, role); err != nil {
@@ -562,6 +562,16 @@ const openLink = `SELECT l.purpose,p.username,p.display_name,COALESCE(p.email,''
 	WHERE l.token_hash=$1 AND l.consumed_at IS NULL AND l.revoked_at IS NULL AND l.expires_at>clock_timestamp()
 	AND m.state='active' AND p.state='active'`
 
+// AllowLink spends the shared link budget for one public link request from
+// peer, the connection's real client address (never a client header).
+func (u *UserAdmin) AllowLink(ctx context.Context, token, peer string) error {
+	source, err := peerAddress(peer)
+	if err != nil {
+		return err
+	}
+	return (&LoginLimit{db: u.db}).AllowLink(ctx, token, source)
+}
+
 // InspectLink is public: it returns who the link is for, or ErrLinkInvalid.
 func (u *UserAdmin) InspectLink(ctx context.Context, token string) (LinkInfo, error) {
 	hash, err := hashLink(token)
@@ -624,10 +634,10 @@ func (u *UserAdmin) CompleteLink(ctx context.Context, token string, password []b
 		if used, err := emailInUse(ctx, tx, email, principal); err != nil {
 			return LinkInfo{}, err
 		} else if used {
-			return LinkInfo{}, ErrEmailTaken
+			return LinkInfo{}, ErrEmailInvalid // Public path: a taken address reads as invalid (see UpdateProfile).
 		}
 		if _, err := tx.Exec(ctx, `UPDATE identity_principals SET email=$2,email_verified=false WHERE id=$1`, principal, email); err != nil {
-			return LinkInfo{}, emailWriteError(err)
+			return LinkInfo{}, hideTaken(emailWriteError(err))
 		}
 		info.Email = email
 	}
@@ -683,9 +693,14 @@ func (u *UserAdmin) SetEmail(ctx context.Context, caller Caller, principalID, em
 	if current != nil && *current == email {
 		return nil
 	}
+	if used, err := emailInUse(ctx, tx, email, principalID); err != nil {
+		return err
+	} else if used {
+		return emailTakenIn(ctx, tx, caller.OrganizationID, email)
+	}
 	count, err := setEmail(ctx, tx, principalID, email)
 	if err != nil {
-		return err
+		return hideTaken(err)
 	}
 	if err := audit(ctx, tx, caller, "identity.user.email_changed", principalID, emailChange(current, email, count)); err != nil {
 		return err

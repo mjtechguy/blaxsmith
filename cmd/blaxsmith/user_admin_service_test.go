@@ -23,6 +23,7 @@ func TestUserAdminErrorCodes(t *testing.T) {
 		identity.ErrLinkInvalid:     connect.CodeNotFound,
 		identity.ErrPassword:        connect.CodeInvalidArgument,
 		identity.ErrUnauthenticated: connect.CodeUnauthenticated,
+		identity.ErrRateLimited:     connect.CodeResourceExhausted,
 	} {
 		if got := connect.CodeOf(userAdminError(err)); got != want {
 			t.Fatalf("%v mapped to %v, want %v", err, got, want)

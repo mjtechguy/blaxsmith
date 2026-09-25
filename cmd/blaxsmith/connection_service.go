@@ -4,12 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -31,33 +31,39 @@ type connectionService struct {
 	device  access.CodexDevice
 	git     access.GitAPI
 	tools   *catalogService // Cached tool versions for the health line; may be nil.
-
-	mu      sync.Mutex
-	logins  map[string]*deviceLogin
-	githubs map[string]githubState
 }
 
-// ponytail: pending sign-ins live in this process's memory, so a multi-replica
-// app needs session affinity for the few minutes a sign-in takes.
-type deviceLogin struct {
-	caller  identity.Caller
-	code    access.CodexDeviceCode
-	expires time.Time
-	polling bool
-}
+// Pending sign-ins are encrypted rows in access_pending_sign_ins (see
+// access.SecretStore.SavePending), so any replica can finish a flow.
+const (
+	pendingDevice = "codex_device"
+	pendingGitHub = "github_oauth"
+	// devicePollHold outlasts one Poll (two provider calls, 30s each).
+	devicePollHold = 90 * time.Second
+)
 
 type githubState struct {
-	caller                     identity.Caller
-	verifier, scope, projectID string
-	returnTo                   string
-	expires                    time.Time
+	Verifier  string `json:"verifier"`
+	Scope     string `json:"scope"`
+	ProjectID string `json:"project_id"`
+	ReturnTo  string `json:"return_to"`
 }
 
 const githubCallbackPath = "/oauth/github/callback"
 
 func newConnectionService(guard *identity.BrowserGuard, store *workflow.Store, secrets *access.SecretStore, origin string) *connectionService {
-	return &connectionService{guard: guard, store: store, secrets: secrets, origin: origin,
-		logins: map[string]*deviceLogin{}, githubs: map[string]githubState{}}
+	return &connectionService{guard: guard, store: store, secrets: secrets, origin: origin}
+}
+
+func pendingOwner(caller identity.Caller) access.PendingOwner {
+	return access.PendingOwner{OrganizationID: caller.OrganizationID, PrincipalID: caller.PrincipalID, SessionID: caller.SessionID}
+}
+
+func pendingError(err error) error {
+	if errors.Is(err, access.ErrTooManyPending) {
+		return connect.NewError(connect.CodeResourceExhausted, err)
+	}
+	return connect.NewError(connect.CodeInternal, errors.New("sign-in state unavailable"))
 }
 
 func connectionError(err error) error {
@@ -249,19 +255,6 @@ func randomID() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(raw[:]), nil
 }
 
-func (s *connectionService) sweep(now time.Time) {
-	for id, login := range s.logins {
-		if now.After(login.expires) {
-			delete(s.logins, id)
-		}
-	}
-	for id, state := range s.githubs {
-		if now.After(state.expires) {
-			delete(s.githubs, id)
-		}
-	}
-}
-
 func (s *connectionService) StartCodexDeviceLogin(ctx context.Context, req *connect.Request[api.StartCodexDeviceLoginRequest]) (*connect.Response[api.StartCodexDeviceLoginResponse], error) {
 	caller, err := s.guard.Caller(ctx, req.Header(), true)
 	if err != nil {
@@ -276,14 +269,15 @@ func (s *connectionService) StartCodexDeviceLogin(ctx context.Context, req *conn
 		return nil, err
 	}
 	expires := time.Now().Add(15 * time.Minute)
-	s.mu.Lock()
-	s.sweep(time.Now())
-	if len(s.logins) > 1000 {
-		s.mu.Unlock()
-		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("too many pending sign-ins"))
+	payload, err := json.Marshal(code)
+	if err != nil {
+		return nil, err
 	}
-	s.logins[id] = &deviceLogin{caller: caller, code: code, expires: expires}
-	s.mu.Unlock()
+	err = s.secrets.SavePending(ctx, pendingDevice, id, pendingOwner(caller), payload, expires)
+	clear(payload)
+	if err != nil {
+		return nil, pendingError(err)
+	}
 	return connect.NewResponse(&api.StartCodexDeviceLoginResponse{LoginId: id, VerificationUrl: code.VerificationURL,
 		UserCode: code.UserCode, IntervalSeconds: int32(code.Interval / time.Second), ExpiresAt: adminTime(expires)}), nil
 }
@@ -293,31 +287,31 @@ func (s *connectionService) PollCodexDeviceLogin(ctx context.Context, req *conne
 	if err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
-	login := s.logins[req.Msg.LoginId]
-	if login == nil || login.caller.SessionID != caller.SessionID || login.caller.PrincipalID != caller.PrincipalID {
-		s.mu.Unlock()
-		return connect.NewResponse(&api.PollCodexDeviceLoginResponse{State: "expired"}), nil
-	}
-	if time.Now().After(login.expires) {
-		delete(s.logins, req.Msg.LoginId)
-		s.mu.Unlock()
-		return connect.NewResponse(&api.PollCodexDeviceLoginResponse{State: "expired"}), nil
-	}
-	if login.polling {
-		s.mu.Unlock()
+	payload, err := s.secrets.ClaimPending(ctx, pendingDevice, req.Msg.LoginId, pendingOwner(caller), devicePollHold)
+	if errors.Is(err, access.ErrPendingBusy) {
 		return connect.NewResponse(&api.PollCodexDeviceLoginResponse{State: "pending"}), nil
 	}
-	login.polling = true
-	code := login.code
-	s.mu.Unlock()
-	credential, err := s.device.Poll(ctx, code)
-	s.mu.Lock()
-	login.polling = false
-	if !errors.Is(err, access.ErrDevicePending) {
-		delete(s.logins, req.Msg.LoginId) // Approved or failed: the code is spent either way.
+	if errors.Is(err, access.ErrDenied) {
+		return connect.NewResponse(&api.PollCodexDeviceLoginResponse{State: "expired"}), nil
 	}
-	s.mu.Unlock()
+	if err != nil {
+		return nil, pendingError(err)
+	}
+	var code access.CodexDeviceCode
+	err = json.Unmarshal(payload, &code)
+	clear(payload)
+	if err != nil {
+		return nil, pendingError(err)
+	}
+	credential, err := s.device.Poll(ctx, code)
+	// Approved or failed: the code is spent either way. A detached context
+	// lets a cancelled poll still release or delete its claim.
+	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	if finishErr := s.secrets.FinishPending(finishCtx, pendingDevice, req.Msg.LoginId,
+		!errors.Is(err, access.ErrDevicePending)); finishErr != nil {
+		slog.Warn("finish pending device sign-in failed", "error", finishErr)
+	}
+	cancel()
 	if errors.Is(err, access.ErrDevicePending) {
 		return connect.NewResponse(&api.PollCodexDeviceLoginResponse{State: "pending"}), nil
 	}
@@ -583,11 +577,13 @@ func (s *connectionService) StartGitHubConnect(ctx context.Context, req *connect
 	if err != nil {
 		return nil, err
 	}
-	if req.Msg.Scope == workflow.ScopeOrganization && caller.Role != "owner" && caller.Role != "admin" {
-		return nil, connectionError(workflow.ErrConnectionDenied)
-	}
 	if req.Msg.Scope != workflow.ScopeOrganization && req.Msg.Scope != workflow.ScopeProject {
 		return nil, connectionError(workflow.ErrInvalid)
+	}
+	// The callback creates the connection under the same rule; refuse before
+	// the OAuth dance rather than after the user has approved on GitHub.
+	if err := s.store.CheckConnectionScopeAs(ctx, caller, req.Msg.Scope, req.Msg.ProjectId); err != nil {
+		return nil, connectionError(err)
 	}
 	app, err := s.store.GetGitHubApp(ctx, caller.OrganizationID)
 	if err != nil {
@@ -604,15 +600,16 @@ func (s *connectionService) StartGitHubConnect(ctx context.Context, req *connect
 	if err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
-	s.sweep(time.Now())
-	if len(s.githubs) > 1000 {
-		s.mu.Unlock()
-		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("too many pending sign-ins"))
+	payload, err := json.Marshal(githubState{Verifier: verifier, Scope: req.Msg.Scope, ProjectID: req.Msg.ProjectId,
+		ReturnTo: safeReturn(req.Msg.ReturnTo)})
+	if err != nil {
+		return nil, err
 	}
-	s.githubs[state] = githubState{caller: caller, verifier: verifier, scope: req.Msg.Scope, projectID: req.Msg.ProjectId,
-		returnTo: safeReturn(req.Msg.ReturnTo), expires: time.Now().Add(10 * time.Minute)}
-	s.mu.Unlock()
+	err = s.secrets.SavePending(ctx, pendingGitHub, state, pendingOwner(caller), payload, time.Now().Add(10*time.Minute))
+	clear(payload)
+	if err != nil {
+		return nil, pendingError(err)
+	}
 	return connect.NewResponse(&api.StartGitHubConnectResponse{
 		AuthorizeUrl: s.git.GitHubAuthorizeURL(app.ClientID, s.origin+githubCallbackPath, state, challenge)}), nil
 }
@@ -626,10 +623,10 @@ func (s *connectionService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := r.URL.Query()
-	s.mu.Lock()
-	state, ok := s.githubs[query.Get("state")]
-	delete(s.githubs, query.Get("state"))
-	s.mu.Unlock()
+	var state githubState
+	owner, payload, err := s.secrets.TakePending(r.Context(), pendingGitHub, query.Get("state"))
+	ok := err == nil && json.Unmarshal(payload, &state) == nil
+	clear(payload)
 	redirect := func(path, key, value string) {
 		q := url.Values{"github": {"error"}, "message": {value}}
 		if key == "connected" {
@@ -637,36 +634,36 @@ func (s *connectionService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Redirect(w, r, path+"?"+q.Encode(), http.StatusSeeOther)
 	}
-	if !ok || time.Now().After(state.expires) {
+	if !ok {
 		redirect("/admin/connections", "github_error", "This GitHub sign-in expired; start again.")
 		return
 	}
 	caller, err := s.guard.CallbackCaller(r.Context(), r.Header)
-	if err != nil || caller.SessionID != state.caller.SessionID || caller.PrincipalID != state.caller.PrincipalID {
-		redirect(state.returnTo, "github_error", "Your session changed during GitHub sign-in; start again.")
+	if err != nil || pendingOwner(caller) != owner {
+		redirect(state.ReturnTo, "github_error", "Your session changed during GitHub sign-in; start again.")
 		return
 	}
 	if e := query.Get("error"); e != "" || query.Get("code") == "" {
-		redirect(state.returnTo, "github_error", "GitHub sign-in was cancelled.")
+		redirect(state.ReturnTo, "github_error", "GitHub sign-in was cancelled.")
 		return
 	}
 	clientID, secret, err := s.store.GitHubAppSecret(r.Context(), caller.OrganizationID, s.secrets)
 	if err != nil {
-		redirect(state.returnTo, "github_error", "The GitHub OAuth App is not configured.")
+		redirect(state.ReturnTo, "github_error", "The GitHub OAuth App is not configured.")
 		return
 	}
-	token, login, err := s.git.GitHubExchange(r.Context(), clientID, secret.Bytes, query.Get("code"), s.origin+githubCallbackPath, state.verifier)
+	token, login, err := s.git.GitHubExchange(r.Context(), clientID, secret.Bytes, query.Get("code"), s.origin+githubCallbackPath, state.Verifier)
 	secret.Clear()
 	if err != nil {
-		redirect(state.returnTo, "github_error", err.Error())
+		redirect(state.ReturnTo, "github_error", err.Error())
 		return
 	}
 	defer clear(token)
-	c, err := s.store.CreateGitTokenConnectionAs(r.Context(), caller, state.scope, state.projectID, "github.com", login,
+	c, err := s.store.CreateGitTokenConnectionAs(r.Context(), caller, state.Scope, state.ProjectID, "github.com", login,
 		"oauth_token", token, s.secrets)
 	if err != nil {
-		redirect(state.returnTo, "github_error", connectionError(err).Error())
+		redirect(state.ReturnTo, "github_error", connectionError(err).Error())
 		return
 	}
-	redirect(state.returnTo, "connected", c.ID)
+	redirect(state.ReturnTo, "connected", c.ID)
 }

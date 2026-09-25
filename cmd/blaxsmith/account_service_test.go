@@ -226,7 +226,7 @@ func testAccountBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 		t.Fatalf("weak new password: %v", err)
 	}
 	if _, err := carol.account.UpdateMyProfile(ctx, write(carol, &api.UpdateMyProfileRequest{Email: strptr("legacy@example.com"),
-		CurrentPassword: "carol password 123"})); code(err) != connect.CodeAlreadyExists {
+		CurrentPassword: "carol password 123"})); code(err) != connect.CodeInvalidArgument {
 		t.Fatalf("email change to a used email: %v", err)
 	}
 	changed, err := carol.account.UpdateMyProfile(ctx, write(carol, &api.UpdateMyProfileRequest{Email: strptr("carol@example.org"),

@@ -101,3 +101,28 @@ func emailWriteError(err error) error {
 	}
 	return err
 }
+
+// hideTaken makes an address held by another account read like any invalid
+// one, so a path open to non-admins is no account-existence oracle.
+func hideTaken(err error) error {
+	if errors.Is(err, ErrEmailTaken) {
+		return ErrEmailInvalid
+	}
+	return err
+}
+
+// emailTakenIn is the admin answer for a used address: ErrEmailTaken only
+// when a member of organizationID holds it; held only elsewhere, it reads as
+// invalid so admins learn nothing about other organizations' members.
+func emailTakenIn(ctx context.Context, tx pgx.Tx, organizationID, email string) error {
+	var member bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM identity_principals p
+		JOIN identity_memberships m ON m.principal_id=p.id
+		WHERE lower(p.email)=lower($1) AND m.organization_id=$2)`, email, organizationID).Scan(&member); err != nil {
+		return err
+	}
+	if member {
+		return ErrEmailTaken
+	}
+	return ErrEmailInvalid
+}

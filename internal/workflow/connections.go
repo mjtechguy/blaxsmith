@@ -135,6 +135,16 @@ func (s *Store) beginScoped(ctx context.Context, caller identity.Caller, scope, 
 	return tx, nil
 }
 
+// CheckConnectionScopeAs applies beginScoped's rule without writing, so a
+// flow that ends in a connection (GitHub OAuth) can refuse before it starts.
+func (s *Store) CheckConnectionScopeAs(ctx context.Context, caller identity.Caller, scope, projectID string) error {
+	tx, err := s.beginScoped(ctx, caller, scope, projectID)
+	if err != nil {
+		return err
+	}
+	return tx.Rollback(ctx)
+}
+
 func (s *Store) requireProjectAdmin(ctx context.Context, tx pgx.Tx, caller identity.Caller, projectID string) error {
 	var exists bool
 	err := tx.QueryRow(ctx, `SELECT true FROM workflow_projects WHERE organization_id=$1 AND id=$2 FOR SHARE`,

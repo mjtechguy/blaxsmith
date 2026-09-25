@@ -41,25 +41,46 @@ func (l *LoginLimit) Allow(ctx context.Context, login string, source netip.Addr)
 		{"account_source", login + "\x00" + address, 10},
 		{"account", login, 30},
 	} {
-		hash := sha256.Sum256([]byte(item.scope + "\x00" + item.key))
-		var allowed bool
-		err := l.db.QueryRow(ctx, `INSERT INTO identity_login_limits
-			(scope,key_hash,window_start,attempts)
-			VALUES ($1,$2,clock_timestamp(),1)
-			ON CONFLICT (scope,key_hash) DO UPDATE SET
-			window_start=CASE WHEN identity_login_limits.window_start <= EXCLUDED.window_start - interval '1 minute'
-				THEN EXCLUDED.window_start ELSE identity_login_limits.window_start END,
-			attempts=CASE WHEN identity_login_limits.window_start <= EXCLUDED.window_start - interval '1 minute'
-				THEN 1 ELSE LEAST(identity_login_limits.attempts + 1,$3 + 1) END
-			RETURNING attempts <= $3`, item.scope, hash[:], item.max).Scan(&allowed)
-		if err != nil {
-			return fmt.Errorf("check login limit: %w", err)
-		}
-		if !allowed {
-			return ErrRateLimited
+		if err := l.spend(ctx, item.scope, item.key, item.max); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// spend counts one attempt against scope/key in a one-minute window.
+func (l *LoginLimit) spend(ctx context.Context, scope, key string, max int) error {
+	hash := sha256.Sum256([]byte(scope + "\x00" + key))
+	var allowed bool
+	err := l.db.QueryRow(ctx, `INSERT INTO identity_login_limits
+		(scope,key_hash,window_start,attempts)
+		VALUES ($1,$2,clock_timestamp(),1)
+		ON CONFLICT (scope,key_hash) DO UPDATE SET
+		window_start=CASE WHEN identity_login_limits.window_start <= EXCLUDED.window_start - interval '1 minute'
+			THEN EXCLUDED.window_start ELSE identity_login_limits.window_start END,
+		attempts=CASE WHEN identity_login_limits.window_start <= EXCLUDED.window_start - interval '1 minute'
+			THEN 1 ELSE LEAST(identity_login_limits.attempts + 1,$3 + 1) END
+		RETURNING attempts <= $3`, scope, hash[:], max).Scan(&allowed)
+	if err != nil {
+		return fmt.Errorf("check login limit: %w", err)
+	}
+	if !allowed {
+		return ErrRateLimited
+	}
+	return nil
+}
+
+// AllowLink budgets the public account-link endpoints (inspect and complete)
+// per source address, against guessing, and per link, against hammering one
+// known link from many addresses.
+func (l *LoginLimit) AllowLink(ctx context.Context, token string, source netip.Addr) error {
+	if l == nil || !source.IsValid() || len(token) > 256 {
+		return ErrLinkInvalid
+	}
+	if err := l.spend(ctx, "link_source", source.Unmap().String(), 30); err != nil {
+		return err
+	}
+	return l.spend(ctx, "link", token, 10)
 }
 
 // AllowReauth budgets current-password checks on account changes per

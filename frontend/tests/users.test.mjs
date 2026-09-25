@@ -55,8 +55,8 @@ test("user admin mutations send CSRF, reads do not, and role gating mirrors the 
     assert.match(users.userAdminError(new ConnectError("the organization must keep an active owner", Code.FailedPrecondition)), /at least one active owner/);
     assert.match(users.userAdminError(new ConnectError("only an owner can grant or change owner access", Code.PermissionDenied)), /Only an owner/);
     assert.match(users.userAdminError(new ConnectError("you cannot disable your own account", Code.FailedPrecondition)), /your own account/);
-    assert.match(users.userAdminError(new ConnectError("that email is already in use", Code.AlreadyExists)), /email is already used/);
-    assert.match(users.userAdminError(new ConnectError("enter a valid email address", Code.InvalidArgument)), /valid email/);
+    assert.match(users.userAdminError(new ConnectError("that email is already in use", Code.AlreadyExists)), /already a member of this organization/);
+    assert.match(users.userAdminError(new ConnectError("enter a valid email address", Code.InvalidArgument)), /email address can.t be used/);
   } finally {
     await server.close();
     globalThis.window = previousWindow;

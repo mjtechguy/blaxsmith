@@ -289,6 +289,18 @@ func TestUserAdministrationPostgres(t *testing.T) {
 	if err := users.SetEnabled(ctx, outsider, owner.PrincipalID, false); !errors.Is(err, ErrUserNotFound) {
 		t.Fatalf("cross-org disable: %v", err)
 	}
+	// Inviting an address held only in another organization reveals nothing
+	// beyond an invalid address; one held by an own member says so.
+	if _, err := users.Invite(ctx, outsider, "bob@example.com", "", "member"); !errors.Is(err, ErrEmailInvalid) {
+		t.Fatalf("cross-org email revealed: %v", err)
+	}
+	var sharedEmail string
+	if err := pool.QueryRow(ctx, `SELECT email FROM identity_principals WHERE id=$1`, member.PrincipalID).Scan(&sharedEmail); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := users.Invite(ctx, outsider, sharedEmail, "", "member"); !errors.Is(err, ErrEmailTaken) {
+		t.Fatalf("own member's email: %v", err)
+	}
 
 	members, err := users.ListMembers(ctx, owner)
 	if err != nil {
