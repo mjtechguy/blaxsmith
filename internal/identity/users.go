@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var (
@@ -147,6 +148,7 @@ func validUUID(value string) bool {
 // first. ponytail: unpaged, capped at 1000; page on the server when an
 // organization outgrows it.
 func (u *UserAdmin) ListMembers(ctx context.Context, caller Caller) ([]Member, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := userAdminRole(caller); err != nil {
 		return nil, err
 	}
@@ -193,6 +195,7 @@ var memberSorts = map[string]string{
 // ListMembersPage is the paged, filtered form of ListMembers with the same
 // status, session, and last-login semantics, plus the filtered total.
 func (u *UserAdmin) ListMembersPage(ctx context.Context, caller Caller, f MemberFilter) ([]Member, int32, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := userAdminRole(caller); err != nil {
 		return nil, 0, err
 	}
@@ -272,6 +275,7 @@ func validDisplayName(name string) bool {
 // membership, and a single-use setup link. Only an owner can invite an owner.
 // The internal handle is derived from the email.
 func (u *UserAdmin) Invite(ctx context.Context, caller Caller, email, displayName, role string) (AccountLink, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	email, err := NormalizeEmail(email)
 	if err != nil {
 		return AccountLink{}, err
@@ -294,7 +298,7 @@ func (u *UserAdmin) Invite(ctx context.Context, caller Caller, email, displayNam
 	if used, err := emailInUse(ctx, tx, email, ""); err != nil {
 		return AccountLink{}, err
 	} else if used {
-		return AccountLink{}, ErrEmailTaken
+		return AccountLink{}, emailTakenIn(ctx, tx, caller.OrganizationID, email)
 	}
 	username, err := freeHandle(ctx, tx, email)
 	if err != nil {
@@ -304,7 +308,7 @@ func (u *UserAdmin) Invite(ctx context.Context, caller Caller, email, displayNam
 	if err := tx.QueryRow(ctx, `INSERT INTO identity_principals (id,username,email,display_name)
 		VALUES (gen_random_uuid(),$1,$2,$3) RETURNING id`, username, email, displayName).
 		Scan(&principalID); err != nil {
-		return AccountLink{}, emailWriteError(err)
+		return AccountLink{}, hideTaken(emailWriteError(err))
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO identity_memberships (organization_id,principal_id,role) VALUES ($1,$2,$3)`,
 		caller.OrganizationID, principalID, role); err != nil {
@@ -392,6 +396,7 @@ func revokeSessions(ctx context.Context, tx pgx.Tx, org, principalID string) (in
 // SetRole changes a member's role and revokes their sessions so the new role
 // applies at once. Owner is granted, and owners are changed, only by owners.
 func (u *UserAdmin) SetRole(ctx context.Context, caller Caller, principalID, role string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !memberRoles[role] {
 		return ErrUserInvalid
 	}
@@ -434,6 +439,7 @@ func (u *UserAdmin) SetRole(ctx context.Context, caller Caller, principalID, rol
 // SetEnabled disables or re-enables a membership. Disabling revokes the
 // member's sessions and any open setup/reset link.
 func (u *UserAdmin) SetEnabled(ctx context.Context, caller Caller, principalID string, enabled bool) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := u.db.Begin(ctx)
 	if err != nil {
 		return err
@@ -485,6 +491,7 @@ func (u *UserAdmin) SetEnabled(ctx context.Context, caller Caller, principalID s
 // setup for a member who never set one). Passwords are installation-wide, so
 // an admin cannot reset an account that also belongs to another organization.
 func (u *UserAdmin) IssueReset(ctx context.Context, caller Caller, principalID string) (AccountLink, error) {
+	ctx = tenant.System(ctx) // refuses a principal shared with another organization, so it must see them
 	tx, err := u.db.Begin(ctx)
 	if err != nil {
 		return AccountLink{}, err
@@ -525,6 +532,7 @@ func (u *UserAdmin) IssueReset(ctx context.Context, caller Caller, principalID s
 
 // RevokeSessions signs a member out of every session in this organization.
 func (u *UserAdmin) RevokeSessions(ctx context.Context, caller Caller, principalID string) (int64, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := u.db.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -562,8 +570,19 @@ const openLink = `SELECT l.purpose,p.username,p.display_name,COALESCE(p.email,''
 	WHERE l.token_hash=$1 AND l.consumed_at IS NULL AND l.revoked_at IS NULL AND l.expires_at>clock_timestamp()
 	AND m.state='active' AND p.state='active'`
 
+// AllowLink spends the shared link budget for one public link request from
+// peer, the connection's real client address (never a client header).
+func (u *UserAdmin) AllowLink(ctx context.Context, token, peer string) error {
+	source, err := peerAddress(peer)
+	if err != nil {
+		return err
+	}
+	return (&LoginLimit{db: u.db}).AllowLink(ctx, token, source)
+}
+
 // InspectLink is public: it returns who the link is for, or ErrLinkInvalid.
 func (u *UserAdmin) InspectLink(ctx context.Context, token string) (LinkInfo, error) {
+	ctx = tenant.System(ctx) // the link token is the only credential; its row names the organization
 	hash, err := hashLink(token)
 	if err != nil {
 		return LinkInfo{}, err
@@ -584,6 +603,7 @@ func (u *UserAdmin) InspectLink(ctx context.Context, token string) (LinkInfo, er
 // non-empty displayName replaces the current one; email is used only when the
 // account has none yet (an account created before emails were required).
 func (u *UserAdmin) CompleteLink(ctx context.Context, token string, password []byte, displayName, email string) (LinkInfo, error) {
+	ctx = tenant.System(ctx) // the link token is the only credential; its row names the organization
 	opened, err := u.InspectLink(ctx, token)
 	if err != nil {
 		return LinkInfo{}, err
@@ -624,10 +644,10 @@ func (u *UserAdmin) CompleteLink(ctx context.Context, token string, password []b
 		if used, err := emailInUse(ctx, tx, email, principal); err != nil {
 			return LinkInfo{}, err
 		} else if used {
-			return LinkInfo{}, ErrEmailTaken
+			return LinkInfo{}, ErrEmailInvalid // Public path: a taken address reads as invalid (see UpdateProfile).
 		}
 		if _, err := tx.Exec(ctx, `UPDATE identity_principals SET email=$2,email_verified=false WHERE id=$1`, principal, email); err != nil {
-			return LinkInfo{}, emailWriteError(err)
+			return LinkInfo{}, hideTaken(emailWriteError(err))
 		}
 		info.Email = email
 	}
@@ -656,6 +676,7 @@ func (u *UserAdmin) CompleteLink(ctx context.Context, token string, password []b
 // with another organization is refused), stores the email unverified, and
 // revokes the member's sessions.
 func (u *UserAdmin) SetEmail(ctx context.Context, caller Caller, principalID, email string) error {
+	ctx = tenant.System(ctx) // refuses a principal shared with another organization, so it must see them
 	email, err := NormalizeEmail(email)
 	if err != nil {
 		return err
@@ -683,9 +704,14 @@ func (u *UserAdmin) SetEmail(ctx context.Context, caller Caller, principalID, em
 	if current != nil && *current == email {
 		return nil
 	}
+	if used, err := emailInUse(ctx, tx, email, principalID); err != nil {
+		return err
+	} else if used {
+		return emailTakenIn(ctx, tx, caller.OrganizationID, email)
+	}
 	count, err := setEmail(ctx, tx, principalID, email)
 	if err != nil {
-		return err
+		return hideTaken(err)
 	}
 	if err := audit(ctx, tx, caller, "identity.user.email_changed", principalID, emailChange(current, email, count)); err != nil {
 		return err
@@ -722,6 +748,7 @@ func setEmail(ctx context.Context, tx pgx.Tx, principalID, email string) (int64,
 // email as SetEmail does, revokes its sessions, and audits the change as the
 // operator in every organization the principal belongs to.
 func OperatorSetEmail(ctx context.Context, pool *pgxpool.Pool, login, email string) (string, error) {
+	ctx = tenant.System(ctx)
 	email, err := NormalizeEmail(email)
 	if err != nil {
 		return "", err

@@ -421,9 +421,14 @@ func (x *GetProjectRequest) GetProjectId() string {
 	return ""
 }
 
+// The caller's effective permissions on this project, from the same server
+// rules that enforce them: can_administer gates project connections, model
+// uses, and delivery; can_launch gates new runs.
 type GetProjectResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Project       *Project               `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	CanAdminister bool                   `protobuf:"varint,2,opt,name=can_administer,json=canAdminister,proto3" json:"can_administer,omitempty"`
+	CanLaunch     bool                   `protobuf:"varint,3,opt,name=can_launch,json=canLaunch,proto3" json:"can_launch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -463,6 +468,20 @@ func (x *GetProjectResponse) GetProject() *Project {
 		return x.Project
 	}
 	return nil
+}
+
+func (x *GetProjectResponse) GetCanAdminister() bool {
+	if x != nil {
+		return x.CanAdminister
+	}
+	return false
+}
+
+func (x *GetProjectResponse) GetCanLaunch() bool {
+	if x != nil {
+		return x.CanLaunch
+	}
+	return false
 }
 
 type ProjectSource struct {
@@ -4841,9 +4860,12 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\aproject\x18\x01 \x01(\v2\x19.blaxsmith.api.v1.ProjectR\aproject\"2\n" +
 	"\x11GetProjectRequest\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\"I\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\"\x8f\x01\n" +
 	"\x12GetProjectResponse\x123\n" +
-	"\aproject\x18\x01 \x01(\v2\x19.blaxsmith.api.v1.ProjectR\aproject\"\xb2\x01\n" +
+	"\aproject\x18\x01 \x01(\v2\x19.blaxsmith.api.v1.ProjectR\aproject\x12%\n" +
+	"\x0ecan_administer\x18\x02 \x01(\bR\rcanAdminister\x12\x1d\n" +
+	"\n" +
+	"can_launch\x18\x03 \x01(\bR\tcanLaunch\"\xb2\x01\n" +
 	"\rProjectSource\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12%\n" +

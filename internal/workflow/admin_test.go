@@ -3,16 +3,18 @@ package workflow
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestAdminDashboardIsScopedDeniesNonAdminsAndHidesSecrets(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)
@@ -101,6 +103,9 @@ func TestAdminDashboardIsScopedDeniesNonAdminsAndHidesSecrets(t *testing.T) {
 		if _, err := store.ListAuditEvents(ctx, caller, AuditFilter{Limit: 10}); !errors.Is(err, ErrAdminDenied) {
 			t.Fatalf("%s read audit: %v", caller.Role, err)
 		}
+		if _, err := store.ListAuditActions(ctx, caller); !errors.Is(err, ErrAdminDenied) {
+			t.Fatalf("%s read audit actions: %v", caller.Role, err)
+		}
 		if _, err := store.HaltRunAs(ctx, caller, run.ID); !errors.Is(err, ErrAdminDenied) {
 			t.Fatalf("%s halted run: %v", caller.Role, err)
 		}
@@ -184,6 +189,9 @@ func TestAdminDashboardIsScopedDeniesNonAdminsAndHidesSecrets(t *testing.T) {
 	if events, err := store.ListAuditEvents(ctx, outsider, AuditFilter{Limit: 50}); err != nil || len(events) != 0 {
 		t.Fatalf("other organization audit: %+v, %v", events, err)
 	}
+	if actions, err := store.ListAuditActions(ctx, outsider); err != nil || len(actions) != 0 {
+		t.Fatalf("other organization audit actions: %v, %v", actions, err)
+	}
 	if _, err := store.HaltRunAs(ctx, outsider, run.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("other organization halted run: %v", err)
 	}
@@ -266,6 +274,16 @@ func TestAdminDashboardIsScopedDeniesNonAdminsAndHidesSecrets(t *testing.T) {
 	}
 	if count["workflow.run.halted"] != 1 || count["access.grant.revoked"] != 1 || count["access.project_model.revoked"] != 1 {
 		t.Fatalf("audit actions: %v", count)
+	}
+	// The event filter offers exactly the distinct recorded actions, sorted.
+	actions, err := store.ListAuditActions(ctx, owner)
+	if err != nil || !slices.IsSorted(actions) || len(actions) != len(count) {
+		t.Fatalf("audit action list %v for %v: %v", actions, count, err)
+	}
+	for _, action := range actions {
+		if count[action] == 0 {
+			t.Fatalf("listed action %q was never recorded", action)
+		}
 	}
 	byProject, err := store.ListAuditEvents(ctx, owner, AuditFilter{ProjectID: project, Limit: 100})
 	if err != nil || len(byProject) != len(all)-1 {

@@ -7,7 +7,7 @@ REPO=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 KEY=${KEY:-~/.ssh/mj_hetzner_091123} NODE=${NODE:-root@135.181.34.21}
 REF=${BUNDLE_REF:-refs/heads/main}
 GUEST_KEY=${GUEST_KEY:-guestRouter}   # match the B2 chart value name
-GUEST=atenet-router.ate-system.svc.cluster.local:80
+GUEST=atenet-router.ate-system.svc:443   # router HTTPS; host = its cert SAN. Run 12 first.
 VALUES=$REPO/deploy/dev/preview-app-values.yaml
 APP=${APP:-$(ssh -i "$KEY" "$NODE" cat /opt/blaxsmith-dev/mvp-state-$S/app.image)}
 WORKER=${WORKER:-$(ssh -i "$KEY" "$NODE" cat /opt/blaxsmith-dev/mvp-state-$S/worker.image)}
@@ -35,6 +35,9 @@ git -C "$REPO" archive "$REF" deploy/charts/blaxsmith-app | tar -x -C "$chart"
 helm lint "$chart/deploy/charts/blaxsmith-app" -f "$VALUES"
 helm template preview "$chart/deploy/charts/blaxsmith-app" --namespace blaxsmith-preview -f "$VALUES" > "/tmp/preview-$S.yaml"
 grep -A1 'name: BLAXSMITH_GUEST_ROUTER' "/tmp/preview-$S.yaml" | grep -qF "$GUEST"
+# Self-renewing guest identity (router: --guest-client-username=...:preview-app, step 12).
+grep -A1 'name: BLAXSMITH_GUEST_ROUTER_TOKEN_FILE' "/tmp/preview-$S.yaml" | grep -qF /run/blaxsmith/guest-router/token
+grep -qF 'serviceAccountName: preview-app' "/tmp/preview-$S.yaml"
 grep -qF "$APP" "/tmp/preview-$S.yaml" && grep -qF "$WORKER" "/tmp/preview-$S.yaml"
 remote="KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl -n blaxsmith-preview"
 ssh -i "$KEY" "$NODE" "$remote diff -f -" < "/tmp/preview-$S.yaml" || true

@@ -1,6 +1,9 @@
 # Only the Blaxsmith preview app and the AX controller may call atenet-router's
-# data ports. Guest gRPC (AX Task spec.debug=true) is plaintext on :80 -> 8080
-# with no per-caller auth, so this policy is the MVP's access boundary.
+# data ports, each on the one port it uses. The app calls bootstrap,
+# command-exit and guest gRPC over HTTPS (svc :443 -> 8443) with the connector
+# token; with --guest-client-auth the router refuses guest gRPC without it on
+# every port (12-guest-router-auth.sh). ax-controller only polls /readyz over
+# plaintext (svc :80 -> 8080). No pod may open CONNECT tunnels (8081/8444).
 # Host-originated traffic (kubelet probes, node-local probe scripts,
 # kubectl port-forward) is unaffected: kube-router accepts src-type LOCAL.
 apiVersion: networking.k8s.io/v1
@@ -22,6 +25,9 @@ spec:
             matchLabels:
               app.kubernetes.io/name: blaxsmith-app
               app.kubernetes.io/instance: preview
+      ports:
+        - {protocol: TCP, port: 8443} # svc :443 https: bootstrap, command-exit, guest gRPC
+    - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: ax-system
@@ -29,10 +35,7 @@ spec:
             matchLabels:
               app.kubernetes.io/name: ax-controller
       ports:
-        - {protocol: TCP, port: 8080} # svc :80 http/h2c: guest gRPC, ax-controller ATENET_ROUTER_ADDR
-        - {protocol: TCP, port: 8443} # svc :443 https: bootstrap + command-exit (connector)
-        - {protocol: TCP, port: 8081} # svc :8081 connect
-        - {protocol: TCP, port: 8444} # svc :8444 connect-tls
+        - {protocol: TCP, port: 8080} # svc :80 http: ATENET_ROUTER_ADDR /readyz poll
     - ports: # metrics/health and status stay cluster-open, as today
         - {protocol: TCP, port: 9090}
         - {protocol: TCP, port: 4040}

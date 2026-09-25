@@ -15,6 +15,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
 	"github.com/mjtechguy/blaxsmith/internal/gateway"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/tooladapter"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
@@ -360,6 +361,7 @@ func (d *Dispatcher) markActivationUnknown(ctx context.Context, attempt workflow
 }
 
 func (d *Dispatcher) preflightAuthority(ctx context.Context, grant access.ModelGrant) (access.ModelApproval, error) {
+	ctx = tenant.Org(ctx, grant.OrganizationID)
 	tx, err := d.DB.Begin(ctx)
 	if err != nil {
 		return access.ModelApproval{}, err

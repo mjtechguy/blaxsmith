@@ -122,6 +122,18 @@ func (s *adminService) ListAuditEvents(ctx context.Context, req *connect.Request
 	return connect.NewResponse(response), nil
 }
 
+func (s *adminService) ListAuditActions(ctx context.Context, req *connect.Request[api.ListAuditActionsRequest]) (*connect.Response[api.ListAuditActionsResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	actions, err := s.store.ListAuditActions(ctx, caller)
+	if err != nil {
+		return nil, adminError(err)
+	}
+	return connect.NewResponse(&api.ListAuditActionsResponse{Actions: actions}), nil
+}
+
 func (s *adminService) HaltRun(ctx context.Context, req *connect.Request[api.HaltRunRequest]) (*connect.Response[api.HaltRunResponse], error) {
 	caller, err := s.guard.Caller(ctx, req.Header(), true)
 	if err != nil {

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestGatewaySettingsAndProjectDelivery(t *testing.T) {
@@ -13,7 +15,7 @@ func TestGatewaySettingsAndProjectDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org := organization(t, pool, "gw-settings")
 	owner := reviewer(t, pool, org, "owner", "gw-owner")
 	member := reviewer(t, pool, org, "member", "gw-member")
@@ -94,7 +96,7 @@ func TestGatewayUsageReads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org := organization(t, pool, "gw-usage")
 	owner := reviewer(t, pool, org, "owner", "gwu-owner")
 	alice := reviewer(t, pool, org, "member", "gwu-alice")

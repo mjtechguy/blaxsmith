@@ -3,6 +3,8 @@ package workflow
 import (
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestDeriveConnectionHealth(t *testing.T) {
@@ -71,18 +73,18 @@ func TestConnectionHealthInputsFromStore(t *testing.T) {
 	owner := reviewer(t, pool, org, "owner", "health-owner")
 	secrets := connectionSecrets(t, store)
 	for _, version := range []string{"2.1.9", "2.1.10", "2.0.99"} {
-		if _, err := pool.Exec(t.Context(), `INSERT INTO workflow_tool_runtime_approvals
+		if _, err := pool.Exec(tenant.System(t.Context()), `INSERT INTO workflow_tool_runtime_approvals
 			(organization_id,harness,model,effort,image,binary_path,binary_sha256,version,worker_pool,max_timeout_seconds,max_output_bytes,approved_by)
 			VALUES ($1,'claude-code','claude-opus-5-'||$2,'high','img@sha256:'||repeat('a',64),'/bin/claude',repeat('b',64),$2,'pool',60,1024,'test')`,
 			org, version); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := store.CreateAPIKeyConnectionAs(t.Context(), owner, ScopeOrganization, "", "anthropic", "Prod", []byte("sk-health"), nil,
+	if _, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopeOrganization, "", "anthropic", "Prod", []byte("sk-health"), nil,
 		"the provider rejected this API key", secrets); err != nil {
 		t.Fatal(err)
 	}
-	list, err := store.ListConnectionsAs(t.Context(), owner, ScopeOrganization, "")
+	list, err := store.ListConnectionsAs(tenant.System(t.Context()), owner, ScopeOrganization, "")
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list %v %v", list, err)
 	}

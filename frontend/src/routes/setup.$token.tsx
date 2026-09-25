@@ -44,7 +44,7 @@ function AccountSetup() {
         const code = ConnectError.from(cause).code;
         setError(code === Code.NotFound ? "This link has already been used, was replaced, or has expired. Ask your administrator for a new one."
           : code === Code.AlreadyExists ? "That email is already used by another account."
-          : code === Code.InvalidArgument ? ConnectError.from(cause).rawMessage.includes("email") ? "Enter a valid email address." : "Use a password of 12–1024 characters."
+          : code === Code.InvalidArgument ? ConnectError.from(cause).rawMessage.includes("email") ? "This email address can't be used. Check it or try a different one." : "Use a password of 12–1024 characters."
             : code === Code.PermissionDenied ? "This page's security check failed. Reload the page and try again."
               : "Your password could not be saved. Please try again.");
       }

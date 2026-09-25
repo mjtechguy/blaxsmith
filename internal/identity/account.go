@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var (
@@ -71,6 +72,7 @@ func lockSelf(ctx context.Context, tx pgx.Tx, caller Caller) (email *string, has
 
 // Profile reads the caller's own account.
 func (m *SessionManager) Profile(ctx context.Context, caller Caller) (Profile, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if err := selfCaller(caller); err != nil {
 		return Profile{}, err
 	}
@@ -126,6 +128,7 @@ func revokeOtherSessions(ctx context.Context, tx pgx.Tx, caller Caller) (int64, 
 // clears this session's email_required flag, and revokes every other session.
 // A session that must set an email can change nothing else first.
 func (m *SessionManager) UpdateProfile(ctx context.Context, caller Caller, change ProfileChange) (Profile, int64, error) {
+	ctx = tenant.System(ctx) // the account and its sessions span organizations; queries filter by principal
 	var displayName, email string
 	if change.DisplayName != nil {
 		displayName = strings.TrimSpace(*change.DisplayName)
@@ -159,11 +162,12 @@ func (m *SessionManager) UpdateProfile(ctx context.Context, caller Caller, chang
 		if used, err := emailInUse(ctx, tx, email, caller.PrincipalID); err != nil {
 			return Profile{}, 0, err
 		} else if used {
-			return Profile{}, 0, ErrEmailTaken
+			// No mail verification exists to answer "pending", so a taken address gets the invalid-address error.
+			return Profile{}, 0, ErrEmailInvalid
 		}
 		if _, err := tx.Exec(ctx, `UPDATE identity_principals SET email=$2,email_verified=false WHERE id=$1`,
 			caller.PrincipalID, email); err != nil {
-			return Profile{}, 0, emailWriteError(err)
+			return Profile{}, 0, hideTaken(emailWriteError(err))
 		}
 		if _, err := tx.Exec(ctx, `UPDATE identity_sessions SET email_required=false
 			WHERE organization_id=$1 AND id=$2`, caller.OrganizationID, caller.SessionID); err != nil {
@@ -204,6 +208,7 @@ func (m *SessionManager) UpdateProfile(ctx context.Context, caller Caller, chang
 // ChangePassword sets a new password after checking the current one and signs
 // out every other session. The new password follows the setup rules.
 func (m *SessionManager) ChangePassword(ctx context.Context, caller Caller, currentPassword, newPassword []byte) (int64, error) {
+	ctx = tenant.System(ctx) // the account and its sessions span organizations; queries filter by principal
 	encoded, err := HashPassword(newPassword)
 	if err != nil {
 		return 0, err
@@ -242,6 +247,7 @@ func (m *SessionManager) ChangePassword(ctx context.Context, caller Caller, curr
 // ListSessions returns the caller's live sessions in every organization,
 // newest first. ponytail: capped at 100; sessions expire within a week.
 func (m *SessionManager) ListSessions(ctx context.Context, caller Caller) ([]Session, error) {
+	ctx = tenant.System(ctx) // the account and its sessions span organizations; queries filter by principal
 	if err := selfCaller(caller); err != nil {
 		return nil, err
 	}
@@ -264,6 +270,7 @@ func (m *SessionManager) ListSessions(ctx context.Context, caller Caller) ([]Ses
 // RevokeSession signs out one of the caller's other sessions. A session of
 // anyone else is indistinguishable from one that does not exist.
 func (m *SessionManager) RevokeSession(ctx context.Context, caller Caller, sessionID string) error {
+	ctx = tenant.System(ctx) // the account and its sessions span organizations; queries filter by principal
 	if !validUUID(sessionID) {
 		return ErrSessionNotFound
 	}
@@ -294,6 +301,7 @@ func (m *SessionManager) RevokeSession(ctx context.Context, caller Caller, sessi
 
 // RevokeOtherSessions signs the caller out everywhere but this session.
 func (m *SessionManager) RevokeOtherSessions(ctx context.Context, caller Caller) (int64, error) {
+	ctx = tenant.System(ctx) // the account and its sessions span organizations; queries filter by principal
 	tx, err := m.db.Begin(ctx)
 	if err != nil {
 		return 0, err

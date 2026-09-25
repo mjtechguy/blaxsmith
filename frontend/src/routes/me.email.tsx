@@ -67,7 +67,7 @@ function SetEmail() {
         {([canSubmit, isSubmitting]) => <button className="primary-button auth-submit" type="submit" disabled={!canSubmit || isSubmitting}>{isSubmitting ? <RefreshCw className="spin" size={16} aria-hidden="true" /> : <AtSign size={16} aria-hidden="true" />}{isSubmitting ? "Saving…" : "Save email and continue"}</button>}
       </form.Subscribe>
     </form>
-    <button type="button" className="secondary-button" onClick={() => void signOut()}><LogOut size={16} aria-hidden="true" /> Sign out instead</button>
+    <button type="button" className="secondary-button auth-submit" onClick={() => void signOut()}><LogOut size={16} aria-hidden="true" /> Sign out instead</button>
     <p className="auth-help">This session can only set an email until you do. The email is not verified yet; no mail is sent.</p>
   </AuthFrame>;
 }

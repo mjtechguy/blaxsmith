@@ -134,6 +134,40 @@ if grep -F -q -- '--allow-open-egress-dev' "$rendered"; then
   echo 'open AX egress was enabled without the explicit dev switch' >&2
   exit 1
 fi
+if grep -F -q 'BLAXSMITH_GUEST_ROUTER' "$rendered"; then
+  echo 'guest router unexpectedly enabled by default' >&2
+  exit 1
+fi
+helm template app "$chart" "$@" $dispatch_args \
+  --set-string dispatch.guestRouter=router.ate-system.svc:443 > "$rendered"
+grep -F -q 'value: "router.ate-system.svc:443"' "$rendered"
+grep -F -A1 'name: BLAXSMITH_GUEST_ROUTER_CA_FILE' "$rendered" | grep -F -q '/run/blaxsmith/dispatch/router-ca.pem'
+grep -F -A1 'name: BLAXSMITH_GUEST_ROUTER_TOKEN_FILE' "$rendered" | grep -F -q '/run/blaxsmith/dispatch/bootstrap-token'
+if grep -F -q 'kind: ServiceAccount' "$rendered" || grep -F -q 'serviceAccountName:' "$rendered"; then
+  echo 'guest router ServiceAccount rendered without the projected token option' >&2
+  exit 1
+fi
+if helm template app "$chart" "$@" --set-string dispatch.guestRouter=router.ate-system.svc:443 >/dev/null 2>&1; then
+  echo 'guest router unexpectedly accepted without dispatch credentials' >&2
+  exit 1
+fi
+helm template app "$chart" "$@" $dispatch_args --set-string dispatch.guestRouter=router.ate-system.svc:443 \
+  --set dispatch.guestRouterToken.projected=true > "$rendered"
+grep -F -q 'kind: ServiceAccount' "$rendered"
+grep -F -q 'serviceAccountName: app-app' "$rendered"
+grep -F -q 'automountServiceAccountToken: false' "$rendered"
+grep -F -A1 'name: BLAXSMITH_GUEST_ROUTER_TOKEN_FILE' "$rendered" | grep -F -q '/run/blaxsmith/guest-router/token'
+grep -F -q 'mountPath: /run/blaxsmith/guest-router' "$rendered"
+grep -F -A3 'serviceAccountToken:' "$rendered" | grep -F -q 'audience: "blaxsmith-bootstrap"'
+grep -F -A3 'serviceAccountToken:' "$rendered" | grep -F -q 'expirationSeconds: 3600'
+for invalid in '--set dispatch.guestRouterToken.expirationSeconds=300' \
+  '--set-string dispatch.guestRouterToken.audience=' '--set-string dispatch.guestRouter='; do
+  if helm template app "$chart" "$@" $dispatch_args --set-string dispatch.guestRouter=router.ate-system.svc:443 \
+    --set dispatch.guestRouterToken.projected=true $invalid >/dev/null 2>&1; then
+    echo "invalid projected guest token values unexpectedly accepted: $invalid" >&2
+    exit 1
+  fi
+done
 helm template app "$chart" "$@" $dispatch_args --set dispatch.egressMode=open-dev \
   --set dispatch.dev.allowOpenEgress=true > "$rendered"
 grep -F -q -- '- --enable-dispatch' "$rendered"
@@ -193,6 +227,30 @@ for invalid in '--set-string gateway.publicURL=' '--set-string gateway.publicURL
   '--set-string accessKeySecretName='; do
   if helm template app "$chart" "$@" $gateway_args $invalid >/dev/null 2>&1; then
     echo "invalid gateway values unexpectedly accepted: $invalid" >&2
+    exit 1
+  fi
+done
+helm template app "$chart" "$@" --set-string accessKeySecretName=app-access-key > "$rendered"
+if grep -F -q 'BLAXSMITH_ACCESS_KEY_ID' "$rendered" || grep -F -q 'previous-access-key' "$rendered"; then
+  echo 'access key rotation settings rendered while unset' >&2
+  exit 1
+fi
+rotation_args='--set-string accessKeySecretName=app-access-key
+--set-string accessKeyID=key-2
+--set previousAccessKeys[0].id=primary
+--set-string previousAccessKeys[0].secretName=old-access-key'
+# Intentional splitting: fixed chart fixture arguments.
+helm lint "$chart" "$@" $rotation_args $gateway_args
+helm template app "$chart" "$@" $rotation_args $gateway_args > "$rendered"
+[ "$(grep -F -c 'value: "key-2"' "$rendered")" -eq 2 ]
+[ "$(grep -F -c 'value: "primary=/run/blaxsmith/previous-access-keys/primary/key"' "$rendered")" -eq 2 ]
+[ "$(grep -F -c 'mountPath: /run/blaxsmith/previous-access-keys/primary' "$rendered")" -eq 2 ]
+[ "$(grep -F -c 'secretName: "old-access-key"' "$rendered")" -eq 2 ]
+for invalid in '--set-string accessKeySecretName=' '--set previousAccessKeys[1].id=primary --set previousAccessKeys[1].secretName=x' \
+  '--set previousAccessKeys[1].id=key-2 --set previousAccessKeys[1].secretName=x' '--set previousAccessKeys[0].id=bad/id' \
+  '--set-string previousAccessKeys[0].secretName=' '--set-string accessKeyID=bad/id'; do
+  if helm template app "$chart" "$@" $rotation_args $invalid >/dev/null 2>&1; then
+    echo "invalid access key rotation values unexpectedly accepted: $invalid" >&2
     exit 1
   fi
 done

@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func main() {
@@ -73,8 +73,9 @@ func run(space, task, repo, commit, tokenFile, modelTokenFile, keyFile, database
 		defer clear(modelToken)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx = tenant.System(ctx) // operator tool: seeds and reads every organization
 	defer cancel()
-	db, err := pgxpool.New(ctx, database)
+	db, err := tenant.NewPool(ctx, database)
 	if err != nil {
 		return err
 	}

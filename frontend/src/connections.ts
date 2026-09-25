@@ -26,6 +26,21 @@ const providerNames: Record<string, string> = {
   github: "GitHub", gitlab: "GitLab", codex: "Codex (ChatGPT)",
 };
 export const providerLabel = (provider: string) => providerNames[provider] ?? provider;
+// "OpenAI · Team key", or just the label when it already names the provider
+// ("OpenAI sandbox", not "OpenAI · OpenAI sandbox").
+export function connectionTitle(c: { provider: string; label: string }): string {
+  const provider = providerLabel(c.provider);
+  const label = c.label.trim();
+  if (!label) return provider;
+  return label.toLowerCase().includes(provider.toLowerCase()) ? label : `${provider} · ${label}`;
+}
+// Who a grant names. The server fills granteeName for users; if it is ever
+// missing, show "Unknown user" and a short id rather than a raw principal id.
+export function granteeLabel(g: { granteeKind: string; granteeId: string; granteeName: string; projectName?: string }, roleSuffix = "+"): string {
+  if (g.granteeKind === "project") return g.projectName || "a project";
+  if (g.granteeKind === "role") return `${g.granteeId}${roleSuffix}`;
+  return g.granteeName || `Unknown user · ${g.granteeId.slice(0, 8)}`;
+}
 export const scopeLabel = (scope: string) => scope === "organization" ? "Organization" : scope === "project" ? "Project" : scope === "personal" ? "Personal" : scope;
 export const kindLabel = (kind: string) => kind === "api_key" ? "API key" : kind === "git" ? "Git" : kind === "subscription" ? "Subscription" : kind;
 

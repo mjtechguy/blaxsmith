@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var ErrProjectVerificationDenied = errors.New("project verification change denied")
@@ -20,6 +21,7 @@ type ProjectVerification struct {
 }
 
 func (s *Store) GetProjectVerification(ctx context.Context, orgID, projectID string) (ProjectVerification, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, projectID) {
 		return ProjectVerification{}, ErrInvalid
 	}
@@ -40,6 +42,7 @@ func (s *Store) GetProjectVerification(ctx context.Context, orgID, projectID str
 }
 
 func (s *Store) SetProjectVerificationAs(ctx context.Context, caller identity.Caller, projectID string, policy VerificationPolicy) (ProjectVerification, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID, projectID) ||
 		(caller.Role != "owner" && caller.Role != "admin") {
 		return ProjectVerification{}, ErrProjectVerificationDenied

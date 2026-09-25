@@ -15,6 +15,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/extension/fixture"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 const guildExtensionURL = "https://github.com/alphabravo-oss/guild"
@@ -48,13 +49,13 @@ func requiredGuildPermissions(t *testing.T, extra ...string) []string {
 
 func installGuild(t *testing.T, store *Store, caller identity.Caller, dir, commit string, approved []string) (Extension, ExtensionVersion, error) {
 	t.Helper()
-	return store.InstallExtensionAs(t.Context(), caller, ExtensionSource{RepositoryURL: guildExtensionURL, GitRef: "main",
+	return store.InstallExtensionAs(tenant.System(t.Context()), caller, ExtensionSource{RepositoryURL: guildExtensionURL, GitRef: "main",
 		Commit: commit, Directory: dir, Overlay: guildOverlay(t)}, approved)
 }
 
 func TestExtensionInstallIsAdminOnlyImmutableAndTracksUpdates(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)
@@ -176,7 +177,7 @@ func TestExtensionInstallIsAdminOnlyImmutableAndTracksUpdates(t *testing.T) {
 
 func TestLaunchFreezesExtensionTemplateDigest(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)
@@ -290,7 +291,7 @@ func TestLaunchFreezesExtensionTemplateDigest(t *testing.T) {
 func taskID(t *testing.T, store *Store, org, runID, key string) string {
 	t.Helper()
 	var id string
-	if err := store.pool.QueryRow(context.Background(), `SELECT id::text FROM workflow_tasks WHERE organization_id=$1 AND run_id=$2 AND task_key=$3`,
+	if err := store.pool.QueryRow(tenant.System(context.Background()), `SELECT id::text FROM workflow_tasks WHERE organization_id=$1 AND run_id=$2 AND task_key=$3`,
 		org, runID, key).Scan(&id); err != nil {
 		t.Fatal(err)
 	}

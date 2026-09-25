@@ -14,6 +14,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/catalog"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func main() {
@@ -108,7 +109,7 @@ func migrateDatabase(args []string) error {
 			return err
 		}
 	}
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := pgxpool.NewWithConfig(ctx, tenant.Configure(config))
 	if err != nil {
 		return fmt.Errorf("configure database: %w", err)
 	}

@@ -9,11 +9,13 @@ import (
 	"net/netip"
 	"strings"
 	"testing"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestMembersPagePostgres(t *testing.T) {
 	pool := identityTestPool(t)
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	password := []byte("correct horse battery staple")
 	if _, err := BootstrapOwner(ctx, pool, "alice@example.com", "engineering", "Engineering", password); err != nil {
 		t.Fatal(err)

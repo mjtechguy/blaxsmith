@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // VerificationPolicy is resolved from trusted organization/project settings,
@@ -48,6 +49,7 @@ type FrozenRunInput struct {
 // exact bytes, the dependency graph, and a dispatch seal. It does not grant
 // access, start workers, or approve results; its caller must authorize first.
 func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, error) {
+	ctx = tenant.Org(ctx, in.OrganizationID)
 	if !ids(in.OrganizationID, in.ProjectID) || len(in.LaunchKey) < 1 || len(in.LaunchKey) > 128 ||
 		(in.RecipeVersionID != "" && (!ids(in.RecipeVersionID) || in.Caller == nil || in.Source.RecipeData == nil)) {
 		return Run{}, ErrInvalid

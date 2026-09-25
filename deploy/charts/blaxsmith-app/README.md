@@ -23,6 +23,9 @@ put `sslmode=verify-full&sslrootcert=/run/blaxsmith/database-ca/ca.crt` in the
 database URL Secret. The URL host must match the PostgreSQL server certificate
 (for CNPG, typically `<cluster>-rw.<namespace>.svc`). A missing CA key blocks
 pod startup; an untrusted or mismatched certificate blocks database readiness.
+The URL's role should own the schema but be neither SUPERUSER nor BYPASSRLS
+(the CNPG `initdb` owner qualifies): row-level security isolates organizations
+only for such a role, and the app logs a warning at startup otherwise.
 For a planned signing-key rotation, set `previousSignerPublicSecretName` to an
 existing Secret containing a raw 32-byte key under `public`. Pre-stage the new
 public key while the old signer is active, roll to the new signer while trusting
@@ -92,6 +95,11 @@ The same namespace must contain the configured access-key Secret with raw
 32-byte value under `key`. None of these values belongs in Helm values or
 command-line `--set` arguments.
 
+To rotate the access master key, set `accessKeyID` to the new key's ID and
+list older keys as `previousAccessKeys: [{id: primary, secretName: <old
+Secret>}]`; each is mounted read-only and passed to the app and gateway. See
+"Rotating the master key" in `docs/access-authority.md`.
+
 The dispatch pod runs `socat` from the same tools image. It listens on the
 configured loopback port (18443 by default) in the shared pod network namespace
 and forwards to the configured AX service, defaulting to
@@ -99,6 +107,17 @@ and forwards to the configured AX service, defaulting to
 immutable tools image containing `socat`; no ServiceAccount token or
 Kubernetes port-forward permission is needed. Both the AX service and the
 Substrate/router endpoints must be reachable from the app namespace.
+
+`dispatch.guestRouter` (terminals, takeover, guest result reads) requires
+dispatch: the app calls the router's HTTPS listener with TLS pinned to
+`router-ca.pem` and a bearer token on every RPC, never plaintext. The token is
+`bootstrap-token` unless `dispatch.guestRouterToken.projected=true`, which
+creates the `<release>-app` ServiceAccount (no RBAC) and mounts a
+kubelet-rotated projected token for it (`audience`, `expirationSeconds`)
+instead, so nothing needs re-minting. The router must run the
+`guest-router-auth.patch` build with `--guest-client-auth` and, for the
+projected token, `--guest-client-username=system:serviceaccount:<namespace>:<release>-app`;
+it checks and strips the token before the guest. See `deploy/dev/README.md`.
 
 Example values (replace all example digests and IDs with the pinned values
 for the target dev cluster):
@@ -129,7 +148,7 @@ dispatch:
   snapshotStorage: blaxsmith-snapshots
   workspace: blaxsmith-workspaces
   gateway: blaxsmith-egress
-  guestRouter: atenet-router.ate-system.svc.cluster.local:80 # optional; empty = terminals 503
+  guestRouter: router.ate-system.svc:443 # optional HTTPS host:port; empty = terminals 503
 ```
 
 The normal setting `egressMode: exact` retains the attempt-scoped host

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // ReadyTask is only a dispatch candidate. ReserveAttempt rechecks readiness
@@ -24,6 +25,7 @@ type ReadyTask struct {
 // ListReadyOrganizationIDs gives a dispatcher bounded, UUID-keyset tenant
 // discovery. Reset afterID to empty after the last page to begin another pass.
 func (s *Store) ListReadyOrganizationIDs(ctx context.Context, afterID string, limit int) ([]string, error) {
+	ctx = tenant.System(ctx)
 	if afterID == "" {
 		afterID = "00000000-0000-0000-0000-000000000000"
 	}
@@ -58,6 +60,7 @@ func (s *Store) ListReadyOrganizationIDs(ctx context.Context, afterID string, li
 
 // ListReadyTasks is tenant-scoped and bounded. It never claims work.
 func (s *Store) ListReadyTasks(ctx context.Context, orgID string, limit int) ([]ReadyTask, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID) || limit < 1 || limit > 100 {
 		return nil, ErrInvalid
 	}
@@ -113,6 +116,7 @@ type FrozenTask struct {
 }
 
 func (s *Store) LoadFrozenTask(ctx context.Context, orgID, runID, taskID string) (FrozenTask, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID, taskID) {
 		return FrozenTask{}, ErrInvalid
 	}

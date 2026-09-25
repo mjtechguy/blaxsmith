@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestLoadSessionSigner(t *testing.T) {
@@ -75,7 +77,7 @@ func TestLoadSessionPublicKey(t *testing.T) {
 
 func TestSessionLifecyclePostgres(t *testing.T) {
 	pool := identityTestPool(t)
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	password := []byte("correct horse battery staple")
 	owner, err := BootstrapOwner(ctx, pool, "alice@example.com", "engineering", "Engineering", password)
 	if err != nil {

@@ -2,10 +2,19 @@ package terminal
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -15,6 +24,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/mjtechguy/blaxsmith/internal/terminal/terminaltest"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 func newFakeGuest(t *testing.T) (*terminaltest.Fake, *Guest) {
@@ -316,11 +327,159 @@ func TestGuestTargetValidated(t *testing.T) {
 			t.Fatalf("accepted %q", bad)
 		}
 	}
-	if _, err := NewRouter("atenet-router.ate-system.svc:80"); err != nil {
+}
+
+// routerTLS returns server credentials for localhost and a CA file trusting them.
+func routerTLS(t *testing.T) (credentials.TransportCredentials, string) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewRouter("http://router"); err == nil {
-		t.Fatal("URL accepted as router address")
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(1), DNSNames: []string{"localhost"},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+		IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caFile := filepath.Join(t.TempDir(), "router-ca.pem")
+	if err := os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return credentials.NewServerTLSFromCert(&tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}), caFile
+}
+
+func TestNewRouterRequiresTLSAndToken(t *testing.T) {
+	_, caFile := routerTLS(t)
+	dir := t.TempDir()
+	token, blank, badCA := filepath.Join(dir, "token"), filepath.Join(dir, "blank"), filepath.Join(dir, "bad-ca")
+	for path, data := range map[string]string{token: "tok\n", blank: " \n", badCA: "not a certificate"} {
+		if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, bad := range [][3]string{
+		{"http://router", caFile, token},
+		{"router:443", "", token},
+		{"router:443", caFile, ""},
+		{"router:443", badCA, token},
+		{"router:443", filepath.Join(dir, "missing"), token},
+		{"router:443", caFile, filepath.Join(dir, "missing")},
+		{"router:443", caFile, blank},
+	} {
+		if _, err := NewRouter(bad[0], bad[1], bad[2]); err == nil {
+			t.Fatalf("NewRouter%q dialed without valid TLS and token", bad)
+		}
+	}
+	r, err := NewRouter("atenet-router.ate-system.svc:443", caFile, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Close()
+}
+
+// The kubelet rotates a projected token by writing a new timestamped directory
+// and swapping the ..data symlink that token points through.
+func TestRouterFollowsProjectedTokenRotation(t *testing.T) {
+	serverCreds, caFile := routerTLS(t)
+	fake, dialer := terminaltest.Serve(t, grpc.Creds(serverCreds))
+	dir := t.TempDir()
+	project := func(name, token string) {
+		t.Helper()
+		if err := os.Mkdir(filepath.Join(dir, name), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name, "token"), []byte(token), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(name, filepath.Join(dir, "..data_tmp")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(filepath.Join(dir, "..data_tmp"), filepath.Join(dir, "..data")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	project("..2026_09_24_01", "sa-one")
+	token := filepath.Join(dir, "token")
+	if err := os.Symlink(filepath.Join("..data", "token"), token); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRouter("localhost:443", caFile, token, dialer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	guest, _ := r.Guest("blaxsmith-org", "attempt-1")
+	for _, next := range []string{"..2026_09_24_02", ""} {
+		if _, _, err := guest.Exec(context.Background(), []string{"true"}, 64); err != nil {
+			t.Fatal(err)
+		}
+		if next != "" {
+			project(next, "sa-two")
+		}
+	}
+	procs := fake.Snapshot()
+	if len(procs) != 2 || procs[0].Auth != "Bearer sa-one" || procs[1].Auth != "Bearer sa-two" {
+		t.Fatalf("router calls = %+v", procs)
+	}
+}
+
+func TestRouterSendsTokenPerRPCOverTLS(t *testing.T) {
+	serverCreds, caFile := routerTLS(t)
+	fake, dialer := terminaltest.Serve(t, grpc.Creds(serverCreds))
+	token := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(token, []byte("first\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRouter("localhost:443", caFile, token, dialer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	guest, err := r.Guest("blaxsmith-org", "attempt-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := guest.Exec(context.Background(), []string{"true"}, 64); err != nil {
+		t.Fatal(err)
+	}
+	// A re-minted token file applies to the next RPC.
+	if err := os.WriteFile(token, []byte("second"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := guest.Exec(context.Background(), []string{"true"}, 64); err != nil {
+		t.Fatal(err)
+	}
+	// An unreadable token fails the RPC instead of calling without one.
+	if err := os.WriteFile(token, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := guest.Exec(context.Background(), []string{"true"}, 64); err == nil {
+		t.Fatal("RPC sent without a token")
+	}
+	procs := fake.Snapshot()
+	if len(procs) != 2 || procs[0].Auth != "Bearer first" || procs[1].Auth != "Bearer second" ||
+		procs[0].Target != "blaxsmith-org/attempt-1" {
+		t.Fatalf("router calls = %+v", procs)
+	}
+
+	// A router certificate outside the pinned CA is refused.
+	_, otherCA := routerTLS(t)
+	if err := os.WriteFile(token, []byte("third"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	untrusted, err := NewRouter("localhost:443", otherCA, token, dialer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer untrusted.Close()
+	guest, _ = untrusted.Guest("blaxsmith-org", "attempt-1")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, _, err := guest.Exec(ctx, []string{"true"}, 64); err == nil || len(fake.Snapshot()) != 2 {
+		t.Fatal("untrusted router certificate accepted")
 	}
 }
 

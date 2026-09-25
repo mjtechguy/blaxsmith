@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestParseAttemptResult(t *testing.T) {
@@ -55,7 +56,7 @@ func TestStageFlowPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org := organization(t, pool, "flow")
 	caller := reviewer(t, pool, org, "owner", "flow-owner")
 	project, err := store.CreateProject(ctx, org, "flow-project", "Flow project")

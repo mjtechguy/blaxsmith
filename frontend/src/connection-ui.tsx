@@ -10,7 +10,7 @@ import { ago } from "./admin";
 import { currentSession, sessionQueryKey } from "./auth";
 import {
   addConnectionUse, apiKeyProviders, authLabel, connectionModelsKey, connectionsKey, createApiKeyConnection, createGitTokenConnection,
-  getGitHubApp, gitHubAppKey, healthFix, listConnectionModels, listConnections, modelsSummary, providerLabel, startGitHubConnect,
+  getGitHubApp, gitHubAppKey, granteeLabel, healthFix, listConnectionModels, listConnections, modelsSummary, providerLabel, startGitHubConnect,
   type ListScope, type Scope,
 } from "./connections";
 import { DataTable } from "./data-table";
@@ -21,13 +21,32 @@ import { ModelSelect } from "./model-select";
 import { isBusy, type SignInState } from "./sign-in";
 import { SignInStatus, useSignIn } from "./sign-in-flow";
 import { Disclosure, sentence, Timestamp, useModalDialog } from "./ui";
-import { listProjects } from "./workflow";
+import { getProject, listProjects } from "./workflow";
 import { listMembersPage, membersPageKey } from "./workspace";
 import { personLabel } from "./account";
 
 export function useOrg() {
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   return { session, org: session.data?.organizationId || "" };
+}
+
+// The caller's effective permissions on a project, as GetProject reports them.
+export function useProjectAccess(projectId: string) {
+  const { org } = useOrg();
+  const project = useQuery({ queryKey: ["project", org, projectId], enabled: Boolean(org && projectId), queryFn: ({ signal }) => getProject(projectId, signal) });
+  return { project, canAdminister: Boolean(project.data?.canAdminister), canLaunch: Boolean(project.data?.canLaunch) };
+}
+
+// Project connection create pages: only project admins get the form.
+export function RequireProjectAdmin({ projectId, children }: { projectId: string; children: ReactNode }) {
+  const { project, canAdminister } = useProjectAccess(projectId);
+  if (project.isPending) return <Loading label="Loading project" />;
+  if (project.isError) return <LoadError label="Project unavailable" retry={() => void project.refetch()} />;
+  if (!canAdminister) return <div className="state-panel" role="note"><h1>Adding project connections is restricted</h1>
+    <p>Only this project’s admins add its connections. Your own keys and subscriptions go in My connections.</p>
+    <div className="page-actions"><Link className="secondary-button" to="/projects/$projectId/connections" params={{ projectId }}>Project connections</Link>
+      <Link className="primary-button" to="/me/connections">My connections</Link></div></div>;
+  return <>{children}</>;
 }
 
 export function failure(cause: unknown, fallback: string): string {
@@ -328,7 +347,7 @@ export function ResourceGrants({ grants, label, description, canManage, canAdd, 
   const columns = useMemo<ColumnDef<typeof features, ResourceGrant>[]>(() => [
     { id: "grantee", header: "Grantee", cell: ({ row }) => row.original.granteeKind === "project"
       ? <span className="task-stage"><strong>Project</strong><small>{row.original.projectName || row.original.projectId.slice(0, 8)}</small></span>
-      : <span className="task-stage"><strong>{row.original.granteeKind === "user" ? "User" : "Minimum role"}</strong><small className="mono">{row.original.granteeName || row.original.granteeId}</small></span> },
+      : <span className="task-stage"><strong>{row.original.granteeKind === "user" ? "User" : "Minimum role"}</strong><small className={row.original.granteeKind === "user" && row.original.granteeName ? undefined : "mono"}>{row.original.granteeKind === "user" ? granteeLabel(row.original) : row.original.granteeId}</small></span> },
     { id: "reach", header: "Reach", cell: ({ row }) => row.original.granteeKind === "project" ? "That project's runs and admins" : "Every project, for matching people" },
     { id: "created", header: "Granted", cell: ({ row }) => <Timestamp value={row.original.createdAt} /> },
     { id: "actions", header: "Actions", cell: ({ row }) => canManage ? <button type="button" className="text-action text-action-danger" disabled={remove.isPending} onClick={() => { setError(""); setPending(row.original); }}><Trash2 size={13} aria-hidden="true" /> Revoke</button> : null },
@@ -343,7 +362,7 @@ export function ResourceGrants({ grants, label, description, canManage, canAdd, 
       memberPicker={(value, onChange) => <MemberSelect value={value} onChange={onChange} idPrefix={`explain-member-${explain.kind}`} label="Member" emptyLabel="You" />} /> : null}
     {pending ? <ConfirmDialog busy={remove.isPending} error={error} onClose={() => setPending(null)} onConfirm={() => remove.mutate(pending)}
       title="Revoke grant" confirmLabel="Revoke"
-      body={<>Revoke this grant for <strong>{pending.granteeKind === "project" ? pending.projectName || pending.projectId : pending.granteeName || pending.granteeId}</strong>?{revokeNote ? ` ${revokeNote}` : ""}</>} /> : null}
+      body={<>Revoke this grant for <strong>{pending.granteeKind === "project" ? pending.projectName || pending.projectId : pending.granteeKind === "user" ? granteeLabel(pending) : pending.granteeId}</strong>?{revokeNote ? ` ${revokeNote}` : ""}</>} /> : null}
   </section>;
 }
 

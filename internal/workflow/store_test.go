@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestWorkflowPostgres(t *testing.T) {
@@ -22,7 +23,7 @@ func TestWorkflowPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org, other := organization(t, pool, "a"), organization(t, pool, "b")
 	project, err := store.CreateProject(ctx, org, "project-a", "Project A")
 	if err != nil {
@@ -241,7 +242,7 @@ func TestWorkflowPostgres(t *testing.T) {
 func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 	pool := testPool(t)
 	store, _ := New(pool)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org := organization(t, pool, "c")
 	project, err := store.CreateProject(ctx, org, "project-c", "Project C")
 	if err != nil {
@@ -402,7 +403,7 @@ func TestWorkflowBudgetAndCancellationPostgres(t *testing.T) {
 func TestDependencyReservationGatePostgres(t *testing.T) {
 	pool := testPool(t)
 	store, _ := New(pool)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org := organization(t, pool, "dependency")
 	project, err := store.CreateProject(ctx, org, "project-dependency", "Dependency")
 	if err != nil {
@@ -460,7 +461,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if dsn == "" {
 		t.Skip("set BLAXSMITH_TEST_DATABASE_URL")
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	admin, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -475,7 +476,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(tenant.System(context.Background()), 10*time.Second)
 		defer cancel()
 		if _, err := admin.Exec(cleanupCtx, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE"); err != nil {
 			t.Error(err)
@@ -486,7 +487,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	config.ConnConfig.RuntimeParams["search_path"] = schema
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := pgxpool.NewWithConfig(ctx, tenant.Configure(config))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,7 +501,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 func organization(t *testing.T, pool *pgxpool.Pool, suffix string) string {
 	t.Helper()
 	var id string
-	if err := pool.QueryRow(t.Context(), `INSERT INTO identity_organizations (id,slug,name)
+	if err := pool.QueryRow(tenant.System(t.Context()), `INSERT INTO identity_organizations (id,slug,name)
 		VALUES (gen_random_uuid(),$1,$2) RETURNING id`, "org-"+suffix, "Organization "+suffix).Scan(&id); err != nil {
 		t.Fatal(err)
 	}

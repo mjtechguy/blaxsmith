@@ -18,14 +18,17 @@ import (
 
 const terminalSocketLimit = 64
 
-// appGuestRouter reads the in-cluster atenet-router host:port. Unset disables
-// terminals and takeover; there is no kubeconfig or port-forward fallback.
+// appGuestRouter reads the in-cluster atenet-router HTTPS host:port, its CA
+// and the connector token file. Unset disables terminals and takeover; set
+// without the CA or token fails startup. There is no kubeconfig,
+// port-forward, or plaintext fallback.
 func appGuestRouter() (*terminal.Router, error) {
 	address := os.Getenv("BLAXSMITH_GUEST_ROUTER")
 	if address == "" {
 		return nil, nil
 	}
-	return terminal.NewRouter(address)
+	return terminal.NewRouter(address, os.Getenv("BLAXSMITH_GUEST_ROUTER_CA_FILE"),
+		os.Getenv("BLAXSMITH_GUEST_ROUTER_TOKEN_FILE"))
 }
 
 // terminalHandler serves GET /api/terminal/attempts/{attemptID}.

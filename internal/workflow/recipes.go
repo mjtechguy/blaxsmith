@@ -11,6 +11,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // ErrRecipeDenied means the caller may read but not change a recipe scope.
@@ -69,6 +70,7 @@ func ValidateRecipe(data []byte, frozenPath string) (recipe.Recipe, []string, *r
 // project, it returns that project's recipes plus organization recipes the
 // project may use. Any organization role may read.
 func (s *Store) ListRecipes(ctx context.Context, caller identity.Caller, projectID string) ([]LibraryRecipe, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID) || (projectID != "" && !ids(projectID)) {
 		return nil, ErrInvalid
 	}
@@ -110,6 +112,7 @@ func (s *Store) ListRecipes(ctx context.Context, caller identity.Caller, project
 
 // GetRecipe returns a recipe and its version metadata, newest first.
 func (s *Store) GetRecipe(ctx context.Context, caller identity.Caller, recipeID string) (LibraryRecipe, []RecipeVersion, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, recipeID) {
 		return LibraryRecipe{}, nil, ErrInvalid
 	}
@@ -139,6 +142,7 @@ func (s *Store) GetRecipe(ctx context.Context, caller identity.Caller, recipeID 
 
 // GetRecipeVersion returns one version with its exact JSON.
 func (s *Store) GetRecipeVersion(ctx context.Context, caller identity.Caller, versionID string) (RecipeVersion, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, versionID) {
 		return RecipeVersion{}, ErrInvalid
 	}
@@ -165,6 +169,7 @@ func getRecipeVersion(ctx context.Context, q queryRower, orgID, versionID string
 // CreateRecipeAs creates a recipe in the organization (projectID empty) or a
 // project with a validated first version that becomes current.
 func (s *Store) CreateRecipeAs(ctx context.Context, caller identity.Caller, projectID, name, description string, data []byte, frozenPath string) (LibraryRecipe, RecipeVersion, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	name, description = strings.TrimSpace(name), strings.TrimSpace(description)
 	if name == "" || len(name) > 120 || len(description) > 2000 || (projectID != "" && !ids(projectID)) {
 		return LibraryRecipe{}, RecipeVersion{}, ErrInvalid
@@ -206,6 +211,7 @@ func (s *Store) CreateRecipeAs(ctx context.Context, caller identity.Caller, proj
 // scope. Cloning an organization recipe into a project requires that the
 // project may use it.
 func (s *Store) CloneRecipeAs(ctx context.Context, caller identity.Caller, sourceVersionID, projectID, name, description string) (LibraryRecipe, RecipeVersion, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, sourceVersionID) || (projectID != "" && !ids(projectID)) {
 		return LibraryRecipe{}, RecipeVersion{}, ErrInvalid
 	}
@@ -246,6 +252,7 @@ func (s *Store) canUseInTx(ctx context.Context, caller identity.Caller, projectI
 
 // CreateRecipeVersionAs appends an immutable validated version.
 func (s *Store) CreateRecipeVersionAs(ctx context.Context, caller identity.Caller, recipeID string, data []byte, frozenPath string, makeCurrent bool) (RecipeVersion, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, recipeID) {
 		return RecipeVersion{}, ErrInvalid
 	}
@@ -275,6 +282,7 @@ func (s *Store) CreateRecipeVersionAs(ctx context.Context, caller identity.Calle
 // SetCurrentRecipeVersionAs marks an existing version as the recipe default.
 // Runs already launched keep the bytes they froze.
 func (s *Store) SetCurrentRecipeVersionAs(ctx context.Context, caller identity.Caller, recipeID, versionID string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, recipeID, versionID) {
 		return ErrInvalid
 	}
@@ -309,6 +317,7 @@ func (s *Store) SetCurrentRecipeVersionAs(ctx context.Context, caller identity.C
 // the caller may launch in projectID: a recipe of that project, or an
 // organization recipe the project may use.
 func (s *Store) LibraryRecipeForLaunch(ctx context.Context, caller identity.Caller, projectID, versionID string) (RecipeVersion, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, projectID, versionID) {
 		return RecipeVersion{}, ErrInvalid
 	}

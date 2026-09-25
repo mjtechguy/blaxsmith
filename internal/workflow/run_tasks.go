@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 type FrozenFile struct {
@@ -41,6 +42,7 @@ type RunTask struct {
 // ListRunTasks returns only the selected organization's run graph. The caller
 // must authorize the run before using this read model.
 func (s *Store) ListRunTasks(ctx context.Context, orgID, runID string) ([]RunTask, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) {
 		return nil, ErrInvalid
 	}

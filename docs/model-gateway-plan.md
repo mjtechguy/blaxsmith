@@ -1,6 +1,6 @@
 # Blaxsmith model gateway: plan
 
-**Status:** G1, G2 and G4 built (see §17); G3 in progress · **Date:** 2026-09-24 · **Owners:** platform, access, web
+**Status:** G1–G4 built (G2 and G4 details in §17) · **Date:** 2026-09-24 · **Owners:** platform, access, web
 
 Related: [`extensions-and-runtimes.md`](extensions-and-runtimes.md),
 [`interactive-sessions.md`](interactive-sessions.md), and plan §10.4
@@ -313,6 +313,43 @@ Claude account, and never a pool.
 - **Forecast:** a linear projection for the current period ("at this rate:
   $412 by Oct 31"), shown next to each budget.
 
+### 8.1 As built (G3, migration 0170)
+
+- **Budgets** (`gateway_budgets`): scope organization, project or user; one
+  active budget per scope target; a monthly amount in estimated USD over the
+  **UTC calendar month**; thresholds 1–6 distinct percents (1–200), default
+  50/80/100. Owners and admins create, edit (name, amount, thresholds, with
+  optimistic concurrency) and archive them; every change is audited. Custom
+  windows, token amounts and per-model or per-pool filters are deferred.
+- **Switch:** "Budgets & alerts" (§15.1) lives in `gateway_budget_settings`,
+  off by default, toggled on Admin → Budgets and audited. Budgets show
+  progress either way; alerts fire only while both it and the gateway master
+  switch are on.
+- **Evaluation:** `workflow.EvaluateBudgets` runs in the gateway maintenance
+  loop right after each rollup tick (about once a minute), comparing
+  month-to-date spend from `gateway_usage_daily` against each budget. Only the
+  highest newly crossed threshold fires (40% → 90% alerts once, at 80%).
+  On-request evaluation is deferred: rollups already lag by at most a minute.
+- **Exactly once:** `gateway_alerts` is unique on (budget, period, threshold).
+  The alert row and its `gateway.budget.threshold_crossed` audit event
+  (actor `system`) are written in one transaction, so concurrent rollup ticks
+  from several replicas produce one alert and one audit event; a losing
+  insert writes nothing.
+- **Delivery:** the alert appears in the inbox (kind `budget_alert`) for its
+  recipients (organization owners and admins, the budget's user, and the
+  project's administrators) until acknowledged, which closes it for everyone,
+  or while snoozed (1 hour to 30 days). Acknowledge and snooze are audited.
+  Webhooks and email are deferred.
+- **Forecast:** month-to-date spend × days in month ÷ days elapsed, with at
+  least one elapsed day.
+- **Pages:** Admin → Budgets (table with progress, forecast and fired
+  thresholds, the switch, add/edit/archive), Admin → Alerts (feed with
+  acknowledge and snooze), and Project → Usage (§9.3: spend against the
+  project budget, spend by model over the month, spend by stage, model and
+  user, top runs, and the project's alerts). Spend by user is shown only to
+  project administrators. Pool headroom on Project → Usage waits for G2
+  pools.
+
 ## 9. UI
 
 It is built on the release-3 templates (DashboardLayout, DetailLayout,
@@ -374,6 +411,12 @@ example "Claude production: 72% of tokens remaining, resets in 38 s").
 - Each request, with its route, retries and failovers.
 - A "paced" timeline showing where a stage waited for headroom.
 - Each stage row shows a small cost chip.
+
+**Privacy (§6):** when a run's model binding used a personal (user-owned)
+connection, or a `personal_subscription` route served it, per-request rows
+are shown only to that connection's owner and to organization owners and
+admins. Other members see the run totals and per-stage aggregates only
+(`GetRunCostResponse.requests_restricted`).
 
 ## 10. Data model (migrations 0100+)
 
@@ -465,7 +508,9 @@ probes in `docs/`.
    a visible reset countdown.
 3. **G3, budgets and alerts:** budgets, thresholds, alerts, forecast, the
    Admin Budgets and Alerts pages, and Project → Usage. Acceptance: crossing
-   80% creates exactly one inbox alert and one audit event.
+   80% creates exactly one inbox alert and one audit event. **Built** (§8.1);
+   the acceptance test runs eight concurrent evaluations
+   (`TestBudgetsAlertsExactlyOnce`).
 4. **G4, subscriptions and Bedrock/Vertex:** personal subscription routes
    with limit and reset meters (Codex first), and the Bedrock and Vertex
    transport adapters.

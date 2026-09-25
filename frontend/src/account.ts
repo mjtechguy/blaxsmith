@@ -45,7 +45,7 @@ export function accountError(cause: unknown, fallback = "The change could not be
       : "This page's security check failed. Reload the page and try again.";
     case Code.AlreadyExists: return "That email is already used by another account.";
     case Code.InvalidArgument: return error.rawMessage.includes("password") ? "Use a password of 12–1024 characters."
-      : error.rawMessage.includes("email") ? "Enter a valid email address." : "Check the details and try again.";
+      : error.rawMessage.includes("email") ? "This email address can't be used. Check it or try a different one." : "Check the details and try again.";
     case Code.ResourceExhausted: return "Too many attempts. Wait a few minutes and try again.";
     case Code.FailedPrecondition: return error.rawMessage.includes("sign out") ? "Use Sign out to end the session you are using."
       : "Set your email before changing anything else.";

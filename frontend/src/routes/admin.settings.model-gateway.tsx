@@ -24,7 +24,7 @@ const laterFlags = [
 ];
 
 // Later-phase flags that are now real switches in the editor above.
-const shipped = new Set(["pools", "pacing", "personal"]);
+const shipped = new Set(["pools", "pacing", "personal", "budgets"]);
 
 function ModelGatewaySettings() {
   const { org } = useOrg();
@@ -117,6 +117,10 @@ function SettingsEditor({ data, org, saved, setSaved }: { data: GetGatewaySettin
 
 function LaterPhases() {
   return <>
+    <section className="editor-card" aria-labelledby="gateway-budgets-heading">
+      <div className="editor-card-heading"><div><h2 id="gateway-budgets-heading">Budgets & alerts</h2>
+        <p>Soft monthly budgets per organization, project or user with threshold alerts to the inbox and the audit log. No blocking. Switch alerts on and manage budgets in <Link className="text-link" to="/admin/budgets">Admin → Budgets</Link>.</p></div></div>
+    </section>
     <section className="editor-card" aria-labelledby="gateway-later-heading">
       <div className="editor-card-heading"><div><h2 id="gateway-later-heading">Later phases</h2><p>Planned switches, shown so you can see what is coming. None of them can be turned on yet.</p></div></div>
       <ul className="flag-list">{laterFlags.filter((flag) => !shipped.has(flag.id)).map((flag) => <li key={flag.id} className="flag-row is-disabled">

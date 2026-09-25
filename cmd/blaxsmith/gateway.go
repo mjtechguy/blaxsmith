@@ -19,6 +19,8 @@ import (
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/gateway"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
+	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
 // appGatewayURL is the model gateway origin sandboxes call, set by the Helm
@@ -81,7 +83,7 @@ func serveGateway(args []string) error {
 	if err := validateDatabaseTransport(config, *localDB); err != nil {
 		return err
 	}
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := pgxpool.NewWithConfig(ctx, tenant.Configure(config))
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
@@ -161,9 +163,11 @@ func serveGateway(args []string) error {
 	return err
 }
 
-// gatewayMaintenance keeps partitions ahead, rolls usage up every minute,
+// gatewayMaintenance keeps partitions ahead, rolls usage up every minute
+// (then evaluates soft budgets against the fresh rollups),
 // and prunes raw events past retention once a day.
 func gatewayMaintenance(ctx context.Context, pool *pgxpool.Pool, retention time.Duration) {
+	ctx = tenant.System(ctx)
 	tick := time.NewTicker(time.Minute)
 	defer tick.Stop()
 	var lastPrune time.Time
@@ -174,6 +178,8 @@ func gatewayMaintenance(ctx context.Context, pool *pgxpool.Pool, retention time.
 		}
 		if err := gateway.Rollup(ctx, pool, now.Add(-24*time.Hour)); err != nil && ctx.Err() == nil {
 			log.Printf("gateway rollup: %v", err)
+		} else if _, err := workflow.EvaluateBudgets(ctx, pool, now); err != nil && ctx.Err() == nil {
+			log.Printf("gateway budgets: %v", err)
 		}
 		if now.Sub(lastPrune) > 24*time.Hour {
 			if err := gateway.PruneEvents(ctx, pool, retention); err != nil && ctx.Err() == nil {

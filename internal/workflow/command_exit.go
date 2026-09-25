@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // CommandExitCollector accepts only the pinned platform connector's signed
@@ -43,6 +44,7 @@ type CommandExitObservation struct {
 // ListCommandExits pages by the durable run event cursor, which also gives
 // clients a stable ordering across retries and reconnects.
 func (s *Store) ListCommandExits(ctx context.Context, orgID, runID string, after int64, limit int) ([]CommandExitObservation, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) || after < 0 || limit < 1 || limit > 100 {
 		return nil, ErrInvalid
 	}
@@ -81,6 +83,7 @@ func (s *Store) ListCommandExits(ctx context.Context, orgID, runID string, after
 }
 
 func (c CommandExitCollector) Record(ctx context.Context, signed runnerexit.SignedReport) error {
+	ctx = tenant.Org(ctx, signed.Report.OrganizationID)
 	if c.Store == nil || c.SignerID == "" || len(c.SignerID) > 128 || c.WorkerPool == "" ||
 		!ids(signed.Report.OrganizationID, signed.Report.RunID, signed.Report.TaskID, signed.Report.AttemptID) {
 		return ErrInvalid

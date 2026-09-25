@@ -60,11 +60,9 @@ function NewSubscription() {
     back={{ href: "/me/connections", label: "My connections" }} steps={connectionSteps({}, "personal", signIn, "Sign in")}
     summary={<>
       <h2>Summary</h2>
-      <p className="form-hint">{scopeNote("personal")} The platform keeps the refresh token and gives each run a short-lived access token.</p>
+      <p className="form-hint">{scopeNote("personal")}</p>
       <h2>OpenCode</h2>
       <p className="form-hint">OpenCode Zen and OpenCode Go (its subscription) use API keys; OpenCode offers no OAuth sign-in for its own provider. <Link to="/me/connections/new/api-key" className="text-action"><KeyRound size={13} aria-hidden="true" /> Add an OpenCode key <ArrowRight size={13} aria-hidden="true" /></Link></p>
-      <h2>Claude (Pro/Max)</h2>
-      <p className="form-hint">Your own <span className="mono">claude setup-token</span>, used only for runs you start, when your organization allows it.</p>
     </>}>
       <section className="editor-card" aria-labelledby="codex-heading">
         <div className="editor-card-heading"><span className="project-symbol"><UserRound size={18} aria-hidden="true" /></span><div><h2 id="codex-heading">Codex (ChatGPT plan)</h2><p>Sign in with your ChatGPT account. The platform keeps the refresh token and gives each run a short-lived access token.</p></div></div>

@@ -76,7 +76,12 @@ func (s *workflowService) GetProject(ctx context.Context, req *connect.Request[a
 	if err != nil {
 		return nil, workflowError(err)
 	}
-	return connect.NewResponse(&api.GetProjectResponse{Project: projectMessage(project)}), nil
+	administer, err := s.store.CanAdministerProject(ctx, caller, project.ID)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.GetProjectResponse{Project: projectMessage(project),
+		CanAdminister: administer, CanLaunch: workflow.CanLaunch(caller)}), nil
 }
 
 func (s *workflowService) GetProjectSource(ctx context.Context, req *connect.Request[api.GetProjectSourceRequest]) (*connect.Response[api.GetProjectSourceResponse], error) {
@@ -291,7 +296,7 @@ func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[ap
 	if err := s.requireDispatch(ctx); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("run dispatcher is not connected on this installation"))
 	}
-	if caller.Role != "owner" && caller.Role != "admin" && caller.Role != "member" {
+	if !workflow.CanLaunch(caller) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("run launch denied"))
 	}
 	var library workflow.RecipeVersion

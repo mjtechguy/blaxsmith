@@ -7,10 +7,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestSecretStorePostgres(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	pool := testPool(t)
 	if _, err := pool.Exec(ctx, `INSERT INTO access_provider_registrations
 		(organization_id,id,provider_kind,origin,delivery_modes,state)
@@ -104,7 +106,7 @@ func TestSecretStorePostgres(t *testing.T) {
 		t.Fatalf("old key read new secret: %v", err)
 	}
 	current, err := read(store2, "org-a")
-	if err != nil || current.Version != 2 || current.KeyID != "key-2" || string(current.Bytes) != "second-synthetic-secret" {
+	if err != nil || current.Version != 2 || current.KeyID != "org-dek-1" || string(current.Bytes) != "second-synthetic-secret" {
 		t.Fatalf("new key/current version: %+v, %v", current, err)
 	}
 	current.Clear()

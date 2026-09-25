@@ -5,11 +5,12 @@ import { clearWorkspaceCache, currentSession, emailSetupPath, isAccountLinkRoute
 import { safeNext } from "../nav";
 import { AuthFrame, AuthUnavailable } from "../auth-frame";
 import { Shell } from "../shell";
+import { NotFoundPage } from "../page";
 
 // The query client is router context so guarded layouts (see admin.tsx) can read the session before rendering.
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: Root,
-  notFoundComponent: () => <div className="state-panel"><h1>Page not found</h1><p>This workspace route does not exist.</p></div>,
+  notFoundComponent: () => <NotFoundPage title="Page not found" back={{ to: "/", label: "Home" }}>This workspace route does not exist.</NotFoundPage>,
 });
 
 function Root() {

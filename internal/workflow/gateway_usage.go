@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Model gateway settings and usage reads (docs/model-gateway-plan.md §9,
@@ -64,6 +65,7 @@ func (s *Store) readGatewaySettings(ctx context.Context, q pgx.Tx, orgID string,
 
 // GatewaySettingsAs reads the organization's switches (owners and admins).
 func (s *Store) GatewaySettingsAs(ctx context.Context, caller identity.Caller) (GatewaySettingsView, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := s.beginScoped(ctx, caller, ScopeOrganization, "")
 	if err != nil {
 		return GatewaySettingsView{}, adminScopeError(err)
@@ -78,6 +80,7 @@ func (s *Store) GatewaySettingsAs(ctx context.Context, caller identity.Caller) (
 // in-flight streams finish; the next request is rejected (gateway authz).
 func (s *Store) UpdateGatewaySettingsAs(ctx context.Context, caller identity.Caller, next GatewaySettings,
 	expectedVersion int64, installed bool) (GatewaySettingsView, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if next.EventRetentionDays == 0 {
 		next.EventRetentionDays = defaultGatewaySettings.EventRetentionDays
 	}
@@ -147,6 +150,7 @@ func adminScopeError(err error) error {
 // GatewayEnabled reports the master switch; UI outside the settings page is
 // hidden while it is off.
 func (s *Store) GatewayEnabled(ctx context.Context, orgID string) (bool, error) {
+	ctx = tenant.Org(ctx, orgID)
 	var enabled bool
 	err := s.pool.QueryRow(ctx, `SELECT enabled FROM gateway_org_settings WHERE organization_id=$1`, orgID).Scan(&enabled)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -189,6 +193,7 @@ func (s *Store) projectDelivery(ctx context.Context, tx pgx.Tx, caller identity.
 
 // ProjectDeliveryAs lets any member read the project's delivery mode.
 func (s *Store) ProjectDeliveryAs(ctx context.Context, caller identity.Caller, projectID string) (ProjectDelivery, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, projectID) {
 		return ProjectDelivery{}, ErrInvalid
 	}
@@ -210,6 +215,7 @@ func (s *Store) ProjectDeliveryAs(ctx context.Context, caller identity.Caller, p
 // Settings → Model access). Empty clears it back to the organization default.
 // Refused while the organization enforces its default.
 func (s *Store) SetProjectDeliveryAs(ctx context.Context, caller identity.Caller, projectID, mode string) (ProjectDelivery, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if mode != "" && !validDeliveryMode(mode) {
 		return ProjectDelivery{}, ErrInvalid
 	}
@@ -319,6 +325,7 @@ func (s *Store) slices(ctx context.Context, tx pgx.Tx, query string, args ...any
 
 // UsageOverviewAs is the Admin → Usage & Gateway dashboard (owners, admins).
 func (s *Store) UsageOverviewAs(ctx context.Context, caller identity.Caller, days int, seriesBy string) (UsageOverview, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if seriesBy == "" {
 		seriesBy = "project"
 	}
@@ -443,6 +450,7 @@ type MyUsage struct {
 
 // MyUsageAs is account menu → My usage: only the caller's own runs.
 func (s *Store) MyUsageAs(ctx context.Context, caller identity.Caller, days int) (MyUsage, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID) {
 		return MyUsage{}, ErrInvalid
 	}
@@ -501,10 +509,36 @@ type RunCost struct {
 	Stages    []StageCost
 	Calls     []ModelCall
 	Truncated bool
+	// CallsRestricted: the run used a personal subscription the caller does
+	// not own, so per-request rows are withheld (§6: admins and other members
+	// see aggregates only for personal routes).
+	CallsRestricted bool
+}
+
+// personalRunOwners lists the owners of personal (user-owned) connections
+// that served the run's model calls: model bindings on user-owned
+// connections, plus any gateway event on a personal_subscription route.
+func personalRunOwners(ctx context.Context, tx pgx.Tx, org, runID string) ([]string, error) {
+	rows, err := tx.Query(ctx, `SELECT c.owner_id FROM workflow_attempts a
+		JOIN access_bindings b ON b.organization_id=a.organization_id::text AND b.attempt_id=a.id::text AND b.capability='model.invoke'
+		JOIN access_grants g ON g.organization_id=b.organization_id AND g.id=b.grant_id
+		JOIN access_connections c ON c.organization_id=g.organization_id AND c.id=g.connection_id
+		WHERE a.organization_id=$1 AND a.run_id=$2 AND c.owner_kind='user'
+		UNION
+		SELECT principal_id FROM gateway_usage_events
+		WHERE organization_id=$1 AND run_id=$2 AND route_kind='personal_subscription'`, org, runID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
 // RunCostAs is the run page Cost tab: any member of the run's organization.
+// When the run used someone's personal subscription, per-request detail is
+// shown only to that owner and to organization owners and admins; everyone
+// else sees totals and per-stage aggregates.
 func (s *Store) RunCostAs(ctx context.Context, caller identity.Caller, runID string) (RunCost, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !uuidPattern.MatchString(runID) {
 		return RunCost{}, ErrInvalid
 	}
@@ -549,6 +583,16 @@ func (s *Store) RunCostAs(ctx context.Context, caller identity.Caller, runID str
 	if err := rows.Err(); err != nil {
 		return out, err
 	}
+	owners, err := personalRunOwners(ctx, tx, org, runID)
+	if err != nil {
+		return out, err
+	}
+	for _, owner := range owners {
+		if owner != caller.PrincipalID && !isOrgAdmin(caller) {
+			out.CallsRestricted = true
+			return out, nil
+		}
+	}
 	rows, err = tx.Query(ctx, `SELECT started_at,stage_key,COALESCE(NULLIF(served_model,''),requested_model),route_kind,api,
 		status,http_status,retry_count,streamed,usage_reported,COALESCE(ttft_ms,-1),duration_ms,
 		input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,cost_usd_micros
@@ -585,6 +629,7 @@ var priceProvider = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 // ModelPricesAs lists bundled manifest prices with any effective override on top.
 func (s *Store) ModelPricesAs(ctx context.Context, caller identity.Caller) ([]ModelPrice, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	tx, err := s.beginScoped(ctx, caller, ScopeOrganization, "")
 	if err != nil {
 		return nil, adminScopeError(err)
@@ -638,6 +683,7 @@ func (s *Store) ModelPricesAs(ctx context.Context, caller identity.Caller) ([]Mo
 
 // SetModelPriceOverrideAs records contracted rates, effective now (audited).
 func (s *Store) SetModelPriceOverrideAs(ctx context.Context, caller identity.Caller, p ModelPrice) (ModelPrice, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	const maxRate = 1_000_000_000 // $1000 per MTok.
 	if !priceProvider.MatchString(p.Provider) || access.ModelOrigin(p.Provider) == "" || !priceModel.MatchString(p.Model) ||
 		p.Input < 0 || p.Output < 0 || p.CacheRead < 0 || p.CacheWrite < 0 ||

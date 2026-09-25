@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var projectModelName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
@@ -21,6 +22,7 @@ type ProjectModelAccess struct {
 }
 
 func (s *Store) ListProjectModelAccess(ctx context.Context, orgID, projectID string) ([]ProjectModelAccess, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, projectID) {
 		return nil, ErrInvalid
 	}
@@ -55,6 +57,7 @@ func (s *Store) ListProjectModelAccess(ctx context.Context, orgID, projectID str
 // in one transaction. It never returns credential material.
 func (s *Store) CreateProjectModelAccessAs(ctx context.Context, caller identity.Caller, projectID, provider, model string,
 	apiKey []byte, secrets *access.SecretStore) (ProjectModelAccess, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if caller.Role != "owner" && caller.Role != "admin" {
 		return ProjectModelAccess{}, ErrProjectModelAccessDenied
 	}
@@ -152,6 +155,7 @@ func (s *Store) CreateProjectModelAccessAs(ctx context.Context, caller identity.
 }
 
 func (s *Store) RevokeProjectModelAccessAs(ctx context.Context, caller identity.Caller, accessID string) error {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if caller.Role != "owner" && caller.Role != "admin" {
 		return ErrProjectModelAccessDenied
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // Grant is one authorized request: the token's bound context plus the route
@@ -46,6 +47,7 @@ type Authorizer struct {
 }
 
 func (a *Authorizer) Authorize(ctx context.Context, token, family string) (Grant, error) {
+	ctx = tenant.System(ctx) // the token hash is the only credential; its row names the organization
 	if a == nil || a.DB == nil || a.Secrets == nil || !validToken(token) {
 		return Grant{}, ErrDenied
 	}

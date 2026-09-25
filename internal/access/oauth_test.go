@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func fakeJWT(claims map[string]any) string {
@@ -50,7 +52,7 @@ func TestParseCodexAuthRejectsUnsafeMaterial(t *testing.T) {
 }
 
 func TestCodexSubscriptionRefreshCustodyPostgres(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenant.System(context.Background())
 	pool := testPool(t)
 	store, err := NewSecretStore(pool, "key", map[string][]byte{"key": []byte(strings.Repeat("k", 32))})
 	if err != nil {
@@ -296,5 +298,69 @@ func TestCodexSubscriptionRefreshCustodyPostgres(t *testing.T) {
 	}
 	if calls.Load() != 2 {
 		t.Fatalf("uncertain refresh retried: calls=%d", calls.Load())
+	}
+}
+
+// A crash after the provider rotated the refresh token but before the session
+// adopted it must not strand the login: the next renewal resumes from the
+// persisted rotation instead of spending the old token again.
+func TestCodexRefreshSurvivesCrashAfterRotationPostgres(t *testing.T) {
+	ctx := tenant.System(context.Background())
+	pool := testPool(t)
+	store, err := NewSecretStore(pool, "key", map[string][]byte{"key": []byte(strings.Repeat("k", 32))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls atomic.Int32
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		var body map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		switch body["refresh_token"] {
+		case "rt-1":
+			_ = json.NewEncoder(w).Encode(map[string]string{"refresh_token": "rt-2",
+				"access_token": fakeJWT(map[string]any{"exp": time.Now().Add(20 * time.Minute).Unix(), "n": 2})})
+		case "rt-2":
+			_ = json.NewEncoder(w).Encode(map[string]string{"refresh_token": "rt-3",
+				"access_token": fakeJWT(map[string]any{"exp": time.Now().Add(2 * time.Hour).Unix(), "n": 3})})
+		default:
+			w.WriteHeader(http.StatusBadRequest) // A spent token.
+		}
+	}))
+	defer endpoint.Close()
+	if _, err := pool.Exec(ctx, `INSERT INTO access_provider_registrations (organization_id,id,provider_kind,origin,delivery_modes,state)
+		VALUES ('org-a','openai','openai','https://api.openai.com',ARRAY['native_raw','oauth_access'],'active')`); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	soon := fakeJWT(map[string]any{"exp": time.Now().Add(2 * time.Minute).Unix(), "n": 1})
+	id, _, err := CreateCodexConnection(ctx, tx, store, "org-a", "alice", "openai", codexAuthJSON(t, "acct", soon, "rt-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	crash := errors.New("crashed before the session commit")
+	refresher := &OAuthRefresher{DB: pool, Secrets: store, TokenURL: endpoint.URL, afterPersist: func() error { return crash }}
+	if _, err := refresher.Deliver(ctx, "org-a", id, time.Now().Add(30*time.Minute)); !errors.Is(err, crash) {
+		t.Fatalf("injected crash: %v", err)
+	}
+	refresher.afterPersist = nil
+	// rt-2's access token (20 minutes) is too short for this lease, so the
+	// renewal must refresh with rt-2, not the spent rt-1.
+	delivery, err := refresher.Deliver(ctx, "org-a", id, time.Now().Add(30*time.Minute))
+	if err != nil || delivery.SecretVersion != 3 || calls.Load() != 2 {
+		t.Fatalf("renewal after crash: v=%d calls=%d %v", delivery.SecretVersion, calls.Load(), err)
+	}
+	var reason *string
+	var version int64
+	if err := pool.QueryRow(ctx, `SELECT secret_version,reconnect_reason FROM access_oauth_sessions
+		WHERE organization_id='org-a' AND connection_id=$1`, id).Scan(&version, &reason); err != nil || version != 3 || reason != nil {
+		t.Fatalf("session after recovery: v=%d reason=%v %v", version, reason, err)
 	}
 }

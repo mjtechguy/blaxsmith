@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestWorkspaceViewsAreScopedRoleAwareAndPaged(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)
@@ -300,7 +301,7 @@ func TestWorkspaceViewsAreScopedRoleAwareAndPaged(t *testing.T) {
 // Runs whose stages say nothing still get a status: the run state.
 func TestWorkspaceRunStatusFallsBackToRunState(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)

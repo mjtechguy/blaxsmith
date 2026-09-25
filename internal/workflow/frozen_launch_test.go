@@ -17,6 +17,7 @@ import (
 
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestFrozenLaunchPostgres(t *testing.T) {
@@ -26,7 +27,7 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	org := organization(t, pool, "frozen")
-	project, err := store.CreateProject(t.Context(), org, "frozen-project", "Frozen project")
+	project, err := store.CreateProject(tenant.System(t.Context()), org, "frozen-project", "Frozen project")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,25 +45,25 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 			{ID: "requirement-coverage", Command: []string{"verify-coverage"}},
 		}},
 	}
-	run, err := store.CreateFrozenRun(t.Context(), in)
+	run, err := store.CreateFrozenRun(tenant.System(t.Context()), in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var sealed bool
 	var tasks, deps int
-	if err := pool.QueryRow(t.Context(), `SELECT graph_sealed FROM workflow_runs
+	if err := pool.QueryRow(tenant.System(t.Context()), `SELECT graph_sealed FROM workflow_runs
 		WHERE organization_id=$1 AND id=$2`, org, run.ID).Scan(&sealed); err != nil || !sealed {
 		t.Fatalf("run did not seal: %v", err)
 	}
-	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM workflow_tasks
+	if err := pool.QueryRow(tenant.System(t.Context()), `SELECT count(*) FROM workflow_tasks
 		WHERE organization_id=$1 AND run_id=$2`, org, run.ID).Scan(&tasks); err != nil || tasks != 5 {
 		t.Fatalf("wrong task count %d: %v", tasks, err)
 	}
-	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM workflow_task_dependencies
+	if err := pool.QueryRow(tenant.System(t.Context()), `SELECT count(*) FROM workflow_task_dependencies
 		WHERE organization_id=$1 AND run_id=$2`, org, run.ID).Scan(&deps); err != nil || deps != 5 {
 		t.Fatalf("wrong dependency count %d: %v", deps, err)
 	}
-	graph, err := store.ListRunTasks(t.Context(), org, run.ID)
+	graph, err := store.ListRunTasks(tenant.System(t.Context()), org, run.ID)
 	if err != nil || len(graph) != 5 {
 		t.Fatalf("run graph: %+v, %v", graph, err)
 	}
@@ -81,69 +82,69 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 		t.Fatalf("frozen tool provenance differs from the recipe: %+v / %+v", byKey["plan"], byKey["implement"])
 	}
 	var bundle, verification []byte
-	if err := pool.QueryRow(t.Context(), `SELECT bundle_json,verification_json FROM workflow_run_bundles
+	if err := pool.QueryRow(tenant.System(t.Context()), `SELECT bundle_json,verification_json FROM workflow_run_bundles
 		WHERE organization_id=$1 AND run_id=$2`, org, run.ID).Scan(&bundle, &verification); err != nil || len(bundle) == 0 || len(verification) == 0 {
 		t.Fatalf("frozen inputs missing: %v", err)
 	}
-	readyOrgs, err := store.ListReadyOrganizationIDs(t.Context(), "", 1)
+	readyOrgs, err := store.ListReadyOrganizationIDs(tenant.System(t.Context()), "", 1)
 	if err != nil || !slices.Equal(readyOrgs, []string{org}) {
 		t.Fatalf("ready organization discovery: %v, %v", readyOrgs, err)
 	}
-	ready, err := store.ListReadyTasks(t.Context(), org, 1)
+	ready, err := store.ListReadyTasks(tenant.System(t.Context()), org, 1)
 	if err != nil || len(ready) != 1 || ready[0].Key != "plan" || ready[0].RunID != run.ID {
 		t.Fatalf("ready task selection: %+v, %v", ready, err)
 	}
-	frozen, err := store.LoadFrozenTask(t.Context(), org, run.ID, ready[0].TaskID)
+	frozen, err := store.LoadFrozenTask(tenant.System(t.Context()), org, run.ID, ready[0].TaskID)
 	if err != nil || frozen.Bundle.Source.Commit != run.SourceCommit || frozen.Stage.ID != "plan" ||
 		frozen.Profile.Harness != "claude-code" || frozen.Verification.SchemaVersion != "blaxsmith.verification/v1alpha1" {
 		t.Fatalf("frozen task loading: %+v, %v", frozen, err)
 	}
-	again, err := store.CreateFrozenRun(t.Context(), in)
+	again, err := store.CreateFrozenRun(tenant.System(t.Context()), in)
 	if err != nil || again.ID != run.ID {
 		t.Fatalf("idempotent replay: %+v, %v", again, err)
 	}
 	in.Verification.Checks[0].Command = []string{"go", "test", "./internal/..."}
-	if _, err := store.CreateFrozenRun(t.Context(), in); !errors.Is(err, ErrConflict) {
+	if _, err := store.CreateFrozenRun(tenant.System(t.Context()), in); !errors.Is(err, ErrConflict) {
 		t.Fatalf("changed verification policy replay accepted: %v", err)
 	}
-	if _, err := pool.Exec(t.Context(), `INSERT INTO workflow_tasks
+	if _, err := pool.Exec(tenant.System(t.Context()), `INSERT INTO workflow_tasks
 		(organization_id,run_id,task_key,input_sha256,max_attempts)
 		VALUES ($1,$2,'late',$3,1)`, org, run.ID, run.BundleSHA256); err == nil {
 		t.Fatal("sealed graph accepted another task")
 	}
 	var firstTask string
-	if err := pool.QueryRow(t.Context(), `SELECT id FROM workflow_tasks
+	if err := pool.QueryRow(tenant.System(t.Context()), `SELECT id FROM workflow_tasks
 		WHERE organization_id=$1 AND run_id=$2 AND task_key='plan'`, org, run.ID).Scan(&firstTask); err != nil {
 		t.Fatal(err)
 	}
-	attempt, err := store.ReserveAttempt(context.Background(), org, run.ID, firstTask)
+	attempt, err := store.ReserveAttempt(tenant.System(context.Background()), org, run.ID, firstTask)
 	if err != nil {
 		t.Fatalf("sealed root task could not reserve: %v", err)
 	}
-	if ready, err := store.ListReadyTasks(t.Context(), org, 1); err != nil || len(ready) != 0 {
+	if ready, err := store.ListReadyTasks(tenant.System(t.Context()), org, 1); err != nil || len(ready) != 0 {
 		t.Fatalf("reserved task remained ready: %+v, %v", ready, err)
 	}
 	binding := RuntimeBinding{AXAtespace: "team", AXTask: "attempt", ActorUID: "actor-one",
 		TemplateUID: "template-one", Image: "runner@sha256:" + strings.Repeat("a", 64),
 		WorkerPool: "pool-one", CommandSHA256: strings.Repeat("b", 64)}
-	if err := store.BindRuntime(t.Context(), attempt, binding); err != nil {
+	if err := store.BindRuntime(tenant.System(t.Context()), attempt, binding); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.BindRuntime(t.Context(), attempt, binding); err != nil {
+	if err := store.BindRuntime(tenant.System(t.Context()), attempt, binding); err != nil {
 		t.Fatalf("same runtime binding was not idempotent: %v", err)
 	}
 	binding.ActorUID = "different-actor"
-	if err := store.BindRuntime(t.Context(), attempt, binding); !errors.Is(err, ErrConflict) {
+	if err := store.BindRuntime(tenant.System(t.Context()), attempt, binding); !errors.Is(err, ErrConflict) {
 		t.Fatalf("runtime identity changed: %v", err)
 	}
 	binding.ActorUID = "actor-one"
-	if err := store.ConfirmStarting(t.Context(), attempt); err != nil {
+	if err := store.ConfirmStarting(tenant.System(t.Context()), attempt); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ConfirmStarted(t.Context(), attempt); err != nil {
+	if err := store.ConfirmStarted(tenant.System(t.Context()), attempt); err != nil {
 		t.Fatal(err)
 	}
-	graph, err = store.ListRunTasks(t.Context(), org, run.ID)
+	graph, err = store.ListRunTasks(tenant.System(t.Context()), org, run.ID)
 	if err != nil || len(graph) != 5 || graph[0].Key != "plan" || graph[0].State != "running" ||
 		graph[0].Generation != 1 || graph[0].ActiveAttemptID == nil || *graph[0].ActiveAttemptID != attempt.ID {
 		t.Fatalf("active task read model: %+v, %v", graph, err)
@@ -170,23 +171,23 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 	}
 	wrong := signed
 	wrong.Report.ActorUID = "other-actor"
-	if err := collector.Record(t.Context(), wrong); !errors.Is(err, ErrInvalid) {
+	if err := collector.Record(tenant.System(t.Context()), wrong); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("altered signed report accepted: %v", err)
 	}
 	wrong, err = runnerexit.Sign(wrong.Report, private)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := collector.Record(t.Context(), wrong); !errors.Is(err, ErrFenced) {
+	if err := collector.Record(tenant.System(t.Context()), wrong); !errors.Is(err, ErrFenced) {
 		t.Fatalf("wrong actor accepted: %v", err)
 	}
-	if err := collector.Record(t.Context(), signed); err != nil {
+	if err := collector.Record(tenant.System(t.Context()), signed); err != nil {
 		t.Fatal(err)
 	}
-	if err := collector.Record(t.Context(), signed); err != nil {
+	if err := collector.Record(tenant.System(t.Context()), signed); err != nil {
 		t.Fatalf("same signed receipt was not idempotent: %v", err)
 	}
-	observations, err := store.ListCommandExits(t.Context(), org, run.ID, 0, 1)
+	observations, err := store.ListCommandExits(tenant.System(t.Context()), org, run.ID, 0, 1)
 	if err != nil || len(observations) != 1 || observations[0].TaskID != firstTask ||
 		observations[0].AttemptID != attempt.ID || observations[0].ActorUID != binding.ActorUID ||
 		observations[0].SignerID != "pool-one/connector" ||
@@ -195,23 +196,23 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 		observations[0].EventID < 1 {
 		t.Fatalf("command exit observation: %+v, %v", observations, err)
 	}
-	if older, err := store.ListCommandExits(t.Context(), org, run.ID, observations[0].EventID, 1); err != nil || len(older) != 0 {
+	if older, err := store.ListCommandExits(tenant.System(t.Context()), org, run.ID, observations[0].EventID, 1); err != nil || len(older) != 0 {
 		t.Fatalf("receipt cursor replay: %+v, %v", older, err)
 	}
 	other := organization(t, pool, "frozen-other")
-	if ready, err := store.ListReadyTasks(t.Context(), other, 1); err != nil || len(ready) != 0 {
+	if ready, err := store.ListReadyTasks(tenant.System(t.Context()), other, 1); err != nil || len(ready) != 0 {
 		t.Fatalf("cross-tenant ready tasks: %+v, %v", ready, err)
 	}
-	if _, err := store.LoadFrozenTask(t.Context(), other, run.ID, firstTask); !errors.Is(err, ErrNotFound) {
+	if _, err := store.LoadFrozenTask(tenant.System(t.Context()), other, run.ID, firstTask); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cross-tenant frozen task: %v", err)
 	}
-	if leaked, err := store.ListRunTasks(t.Context(), other, run.ID); err != nil || len(leaked) != 0 {
+	if leaked, err := store.ListRunTasks(tenant.System(t.Context()), other, run.ID); err != nil || len(leaked) != 0 {
 		t.Fatalf("cross-tenant task graph: %+v, %v", leaked, err)
 	}
-	if leaked, err := store.ListCommandExits(t.Context(), other, run.ID, 0, 1); err != nil || len(leaked) != 0 {
+	if leaked, err := store.ListCommandExits(tenant.System(t.Context()), other, run.ID, 0, 1); err != nil || len(leaked) != 0 {
 		t.Fatalf("cross-tenant command exit: %+v, %v", leaked, err)
 	}
-	if _, err := store.ListCommandExits(t.Context(), org, run.ID, -1, 1); !errors.Is(err, ErrInvalid) {
+	if _, err := store.ListCommandExits(tenant.System(t.Context()), org, run.ID, -1, 1); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("negative command exit cursor accepted: %v", err)
 	}
 	report.ExitCode = 1
@@ -219,11 +220,11 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := collector.Record(t.Context(), wrong); !errors.Is(err, ErrConflict) {
+	if err := collector.Record(tenant.System(t.Context()), wrong); !errors.Is(err, ErrConflict) {
 		t.Fatalf("changed receipt replaced first report: %v", err)
 	}
 	var state string
-	if err := pool.QueryRow(t.Context(), `SELECT state FROM workflow_tasks WHERE organization_id=$1 AND id=$2`,
+	if err := pool.QueryRow(tenant.System(t.Context()), `SELECT state FROM workflow_tasks WHERE organization_id=$1 AND id=$2`,
 		org, firstTask).Scan(&state); err != nil || state != "running" {
 		t.Fatalf("command exit implied task success: %q %v", state, err)
 	}

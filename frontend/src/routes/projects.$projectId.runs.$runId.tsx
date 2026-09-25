@@ -9,6 +9,7 @@ import { DataTable } from "../data-table";
 import type { RunTask } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { useGatewayEnabled } from "../gateway";
 import { DetailLayout } from "../layouts";
+import { isMissing, NotFoundPage } from "../page";
 import { RunCostTab, StageCostChip, useRunCost } from "../run-cost";
 import { Card, CopyValue, Disclosure, sentence, ShowMore, StatePanel, Timestamp, type TabSpec } from "../ui";
 import { Inbox, interactionsKey, StagePanel, useInteractions } from "../run-live";
@@ -212,6 +213,8 @@ function RunDetail() {
   const tabLink = (target: string, label: string) => <Link from={Route.fullPath} to={Route.fullPath} search={{ tab: target }} className="text-action">{label} <ArrowRight size={13} aria-hidden="true" /></Link>;
 
   if (run.isPending) return <StatePanel kind="loading" title="Loading run" />;
+  if (run.isError && isMissing(run.error)) return <NotFoundPage title="Run not found" back={{ to: `/projects/${projectId}/runs`, label: "Project runs" }}>
+    This run does not exist or is not in your organization.</NotFoundPage>;
   if (run.isError || !runData) return <StatePanel kind="error" title="Run unavailable" retry={() => void run.refetch()}>This run could not be loaded.</StatePanel>;
 
   const activityCard = <section className="table-section" aria-labelledby="activity-heading">

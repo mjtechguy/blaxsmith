@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestAttemptControlFencePostgres(t *testing.T) {
@@ -12,7 +14,7 @@ func TestAttemptControlFencePostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org, other := organization(t, pool, "control-a"), organization(t, pool, "control-b")
 	owner := reviewer(t, pool, org, "owner", "control-owner")
 	member := reviewer(t, pool, org, "member", "control-member")

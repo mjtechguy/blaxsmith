@@ -114,6 +114,107 @@ message SetModelPriceOverrideResponse {
   ModelPrice price = 1;
 }
 
+// §8 soft budgets (G3). Monthly (UTC calendar month) estimated USD; alerts
+// never block anything.
+message Budget {
+  string id = 1;
+  string name = 2;
+  string scope = 3; // organization, project, or user.
+  string project_id = 4; // Set for scope project.
+  string project_name = 5;
+  string principal_id = 6; // Set for scope user.
+  string principal_name = 7;
+  int64 amount_usd_micros = 8;
+  repeated int32 thresholds = 9; // Percent, ascending; default 50, 80, 100.
+  int64 version = 10;
+  int64 spend_usd_micros = 11; // Month to date, from the rollups.
+  // Month-to-date run-rate projected to the end of the month.
+  int64 forecast_usd_micros = 12;
+  repeated int32 fired_thresholds = 13; // Thresholds already alerted this period.
+  string period_start = 14; // YYYY-MM-DD, UTC.
+  string period_end = 15; // YYYY-MM-DD, UTC, inclusive.
+  string created_at = 16;
+}
+
+message BudgetInput {
+  string name = 1;
+  string scope = 2;
+  string project_id = 3;
+  string principal_id = 4;
+  int64 amount_usd_micros = 5;
+  repeated int32 thresholds = 6; // Empty means 50, 80, 100.
+}
+
+message ListBudgetsRequest {}
+
+message ListBudgetsResponse {
+  bool gateway_enabled = 1;
+  bool budgets_enabled = 2; // The §15.1 "Budgets & alerts" switch.
+  repeated Budget budgets = 3;
+}
+
+message SetBudgetsEnabledRequest {
+  bool enabled = 1;
+}
+
+message SetBudgetsEnabledResponse {
+  bool enabled = 1;
+}
+
+message CreateBudgetRequest {
+  BudgetInput budget = 1;
+}
+
+message CreateBudgetResponse {
+  Budget budget = 1;
+}
+
+message UpdateBudgetRequest {
+  string budget_id = 1;
+  // Name, amount and thresholds; scope and target cannot change.
+  BudgetInput budget = 2;
+  int64 expected_version = 3;
+}
+
+message UpdateBudgetResponse {
+  Budget budget = 1;
+}
+
+message ArchiveBudgetRequest {
+  string budget_id = 1;
+}
+
+message ArchiveBudgetResponse {}
+
+// A threshold crossing. Each threshold fires once per budget period.
+message BudgetAlert {
+  string id = 1;
+  string budget_id = 2;
+  string budget_name = 3;
+  string scope = 4;
+  string project_id = 5;
+  string project_name = 6;
+  string principal_id = 7;
+  string principal_name = 8;
+  int32 threshold_pct = 9;
+  int64 spend_usd_micros = 10; // At the time of the crossing.
+  int64 amount_usd_micros = 11;
+  int64 forecast_usd_micros = 12;
+  string period_start = 13;
+  string created_at = 14;
+  string acknowledged_at = 15; // Empty while open.
+  string acknowledged_by_username = 16;
+  string snoozed_until = 17; // Hidden from the inbox until then.
+}
+
+message ListBudgetAlertsRequest {
+  bool open_only = 1;
+}
+
+message ListBudgetAlertsResponse {
+  repeated BudgetAlert alerts = 1; // Newest first, at most 200.
+}
+
 // Owner and admin operations. Mutations are CSRF-protected and audited.
 service GatewayAdminService {
   rpc GetGatewaySettings(GetGatewaySettingsRequest) returns (GetGatewaySettingsResponse);
@@ -126,6 +227,12 @@ service GatewayAdminService {
   rpc SaveGatewayRoute(SaveGatewayRouteRequest) returns (SaveGatewayRouteResponse);
   rpc SetGatewayRouteState(SetGatewayRouteStateRequest) returns (SetGatewayRouteStateResponse);
   rpc SaveGatewayPool(SaveGatewayPoolRequest) returns (SaveGatewayPoolResponse);
+  rpc ListBudgets(ListBudgetsRequest) returns (ListBudgetsResponse);
+  rpc SetBudgetsEnabled(SetBudgetsEnabledRequest) returns (SetBudgetsEnabledResponse);
+  rpc CreateBudget(CreateBudgetRequest) returns (CreateBudgetResponse);
+  rpc UpdateBudget(UpdateBudgetRequest) returns (UpdateBudgetResponse);
+  rpc ArchiveBudget(ArchiveBudgetRequest) returns (ArchiveBudgetResponse);
+  rpc ListBudgetAlerts(ListBudgetAlertsRequest) returns (ListBudgetAlertsResponse);
 }
 
 // One provider-reported limit window on a route (§5).
@@ -315,6 +422,10 @@ message GetRunCostResponse {
   repeated StageCost stages = 3;
   repeated ModelCall requests = 4; // Newest first, at most 500.
   bool truncated = 5;
+  // The run used someone's personal subscription and the caller is neither
+  // its owner nor an organization owner or admin: only totals and per-stage
+  // aggregates are returned, never per-request rows.
+  bool requests_restricted = 6;
 }
 
 message GetProjectDeliveryRequest {
@@ -339,6 +450,42 @@ message SetProjectDeliveryResponse {
   GetProjectDeliveryResponse delivery = 1;
 }
 
+message GetProjectUsageRequest {
+  string project_id = 1;
+}
+
+// Project → Usage: this month (UTC) to date.
+message GetProjectUsageResponse {
+  bool enabled = 1;
+  string from_day = 2;
+  string to_day = 3;
+  UsageTotals totals = 4;
+  Budget budget = 5; // The project's active budget, if any.
+  repeated UsagePoint series = 6; // Daily spend by model.
+  repeated UsageSlice by_stage = 7; // key = stage id.
+  repeated UsageSlice by_model = 8;
+  // Project administrators only; empty with by_user_hidden for others.
+  repeated UsageSlice by_user = 9;
+  bool by_user_hidden = 10;
+  repeated UsageSlice top_runs = 11;
+  repeated BudgetAlert alerts = 12; // This project's budget alerts, newest first.
+}
+
+message AcknowledgeBudgetAlertRequest {
+  string alert_id = 1;
+}
+
+message AcknowledgeBudgetAlertResponse {}
+
+message SnoozeBudgetAlertRequest {
+  string alert_id = 1;
+  int32 hours = 2; // 1–720.
+}
+
+message SnoozeBudgetAlertResponse {
+  string snoozed_until = 1;
+}
+
 // Any member, scoped to themselves, their runs' organization, or projects
 // they administer.
 service UsageService {
@@ -349,4 +496,9 @@ service UsageService {
   rpc SetProjectDelivery(SetProjectDeliveryRequest) returns (SetProjectDeliveryResponse);
   // The caller's own personal subscriptions only (§6, §9.2).
   rpc ListMySubscriptionLimits(ListMySubscriptionLimitsRequest) returns (ListMySubscriptionLimitsResponse);
+  rpc GetProjectUsage(GetProjectUsageRequest) returns (GetProjectUsageResponse);
+  // A budget alert's recipients (organization owners and admins, the
+  // budget's user, the project's administrators) acknowledge or snooze it.
+  rpc AcknowledgeBudgetAlert(AcknowledgeBudgetAlertRequest) returns (AcknowledgeBudgetAlertResponse);
+  rpc SnoozeBudgetAlert(SnoozeBudgetAlertRequest) returns (SnoozeBudgetAlertResponse);
 }

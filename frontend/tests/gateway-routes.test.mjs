@@ -103,7 +103,7 @@ test("settings show the G2/G4 switches; My usage shows only my own subscription 
     assert.match(settings, /never pooled, shared or rotated/);
     assert.match(settings, /id="gw-retention"[^>]*value="90"/);
     assert.doesNotMatch(settings, /Coming in G2/); // shipped switches are real now
-    assert.match(settings, /Coming in G3/); // budgets remain a later phase here
+    assert.match(settings, /Coming in a later phase/); // content capture is still a later phase
 
     const scope = `${org}:${owner.principalId}`;
     const totals = { requests: 0n, errors: 0n, rateLimited: 0n, inputTokens: 0n, outputTokens: 0n, cacheReadTokens: 0n, cacheWriteTokens: 0n, reasoningTokens: 0n, costUsdMicros: 0n };

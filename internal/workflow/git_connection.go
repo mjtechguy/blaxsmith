@@ -8,6 +8,7 @@ import (
 
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var gitUsername = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
@@ -21,6 +22,7 @@ type GitConnection struct {
 }
 
 func (s *Store) ListGitConnections(ctx context.Context, orgID string) ([]GitConnection, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID) {
 		return nil, ErrInvalid
 	}
@@ -49,6 +51,7 @@ func (s *Store) ListGitConnections(ctx context.Context, orgID string) ([]GitConn
 // transaction. It never returns credential material.
 func (s *Store) CreateGitConnectionAs(ctx context.Context, caller identity.Caller, host, username string,
 	token []byte, secrets *access.SecretStore) (GitConnection, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if caller.Role != "owner" && caller.Role != "admin" {
 		return GitConnection{}, ErrProjectModelAccessDenied
 	}

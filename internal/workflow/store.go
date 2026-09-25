@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var (
@@ -93,6 +94,7 @@ type Event struct {
 
 // CreateProject creates a tenant-owned project; slug conflicts are explicit.
 func (s *Store) CreateProject(ctx context.Context, orgID, slug, name string) (string, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !uuidPattern.MatchString(orgID) || !slugPattern.MatchString(slug) || strings.TrimSpace(name) == "" || len(name) > 160 {
 		return "", ErrInvalid
 	}
@@ -106,6 +108,7 @@ func (s *Store) CreateProject(ctx context.Context, orgID, slug, name string) (st
 }
 
 func (s *Store) GetProject(ctx context.Context, orgID, projectID string) (Project, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, projectID) {
 		return Project{}, ErrInvalid
 	}
@@ -127,6 +130,7 @@ type ListPage struct {
 }
 
 func (s *Store) ListProjects(ctx context.Context, orgID string, page ListPage) ([]Project, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !uuidPattern.MatchString(orgID) || !validPage(page) {
 		return nil, ErrInvalid
 	}
@@ -158,6 +162,7 @@ func (s *Store) ListProjects(ctx context.Context, orgID string, page ListPage) (
 }
 
 func (s *Store) ListRuns(ctx context.Context, orgID, projectID string, page ListPage) ([]Run, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, projectID) || !validPage(page) {
 		return nil, ErrInvalid
 	}
@@ -210,6 +215,7 @@ func pageOperator(direction string) string {
 // CreateRun treats the project-scoped launch key as an idempotency key. A
 // replay with changed frozen inputs is a conflict, never a new run.
 func (s *Store) CreateRun(ctx context.Context, in RunInput) (Run, error) {
+	ctx = tenant.Org(ctx, in.OrganizationID)
 	if !uuidPattern.MatchString(in.OrganizationID) || !uuidPattern.MatchString(in.ProjectID) ||
 		len(in.LaunchKey) < 1 || len(in.LaunchKey) > 128 || !commitPattern.MatchString(in.SourceCommit) ||
 		!hashPattern.MatchString(in.BundleSHA256) || !hashPattern.MatchString(in.VerificationSHA256) {
@@ -263,6 +269,7 @@ func getRun(ctx context.Context, tx pgx.Tx, orgID, projectID, key string) (Run, 
 
 // GetRun deliberately requires both organization and run identity.
 func (s *Store) GetRun(ctx context.Context, orgID, runID string) (Run, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !uuidPattern.MatchString(orgID) || !uuidPattern.MatchString(runID) {
 		return Run{}, ErrInvalid
 	}
@@ -281,6 +288,7 @@ func (s *Store) GetRun(ctx context.Context, orgID, runID string) (Run, error) {
 // AddTask fixes each assignment's input digest and finite retry budget before
 // the first attempt is reserved. Scope amendments need a separate contract.
 func (s *Store) AddTask(ctx context.Context, orgID, runID, taskKey, inputSHA256 string, maxAttempts int) (string, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !uuidPattern.MatchString(orgID) || !uuidPattern.MatchString(runID) || !keyPattern.MatchString(taskKey) ||
 		!hashPattern.MatchString(inputSHA256) || maxAttempts < 1 || maxAttempts > 20 {
 		return "", ErrInvalid
@@ -348,6 +356,7 @@ func (s *Store) ReserveAttemptWithBinding(ctx context.Context, orgID, runID, tas
 
 func (s *Store) reserveAttempt(ctx context.Context, orgID, runID, taskID string,
 	bind func(context.Context, pgx.Tx, Attempt) error) (Attempt, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID, taskID) {
 		return Attempt{}, ErrInvalid
 	}
@@ -441,6 +450,7 @@ func (s *Store) MarkUnknown(ctx context.Context, a Attempt) error {
 }
 
 func (s *Store) transition(ctx context.Context, a Attempt, from, to, kind string) error {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if !validAttempt(a) {
 		return ErrInvalid
 	}
@@ -498,6 +508,7 @@ func (s *Store) transition(ctx context.Context, a Attempt, from, to, kind string
 // independently verify the result. Runtime-bound failures require an actor
 // stop proof before retry, so this method never releases a live AX actor.
 func (s *Store) FinishAttempt(ctx context.Context, a Attempt, succeeded bool, resultSHA256 string) error {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if !validAttempt(a) || !hashPattern.MatchString(resultSHA256) {
 		return ErrInvalid
 	}
@@ -592,6 +603,7 @@ func (s *Store) FinishAttempt(ctx context.Context, a Attempt, succeeded bool, re
 // ConfirmStopped must only follow authoritative connector evidence that the
 // workload cannot still publish. It is the sole path out of reconciliation.
 func (s *Store) ConfirmStopped(ctx context.Context, a Attempt) error {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if !validAttempt(a) {
 		return ErrInvalid
 	}
@@ -668,6 +680,7 @@ func (s *Store) ConfirmStopped(ctx context.Context, a Attempt) error {
 // Succeeded means engineering tasks finished; human approval is separate.
 // All task mutations lock the run first, so cancellation cannot race this gate.
 func (s *Store) FinalizeRun(ctx context.Context, orgID, runID string) (string, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) {
 		return "", ErrInvalid
 	}
@@ -716,6 +729,7 @@ func (s *Store) FinalizeRun(ctx context.Context, orgID, runID string) (string, e
 // RequestCancel prevents new dispatch and owner result publication. Existing
 // workloads still need connector stop/reconciliation before final cancellation.
 func (s *Store) RequestCancel(ctx context.Context, orgID, runID string) error {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) {
 		return ErrInvalid
 	}
@@ -761,6 +775,7 @@ func requestCancel(ctx context.Context, tx pgx.Tx, orgID, runID string) (bool, e
 
 // FinalizeCancel requires all active attempts to have been confirmed stopped.
 func (s *Store) FinalizeCancel(ctx context.Context, orgID, runID string) error {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) {
 		return ErrInvalid
 	}
@@ -801,6 +816,7 @@ func (s *Store) FinalizeCancel(ctx context.Context, orgID, runID string) error {
 
 // EventsAfter gives a reconnectable, tenant-scoped event cursor.
 func (s *Store) EventsAfter(ctx context.Context, orgID, runID string, after int64, limit int) ([]Event, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) || after < 0 || limit < 1 || limit > 500 {
 		return nil, ErrInvalid
 	}
@@ -824,6 +840,7 @@ func (s *Store) EventsAfter(ctx context.Context, orgID, runID string, after int6
 
 // EventHead verifies run visibility and bounds a reconnect cursor.
 func (s *Store) EventHead(ctx context.Context, orgID, runID string) (int64, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) {
 		return 0, ErrInvalid
 	}

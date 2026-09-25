@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestClaudeSubscriptionIsOwnerOnlyAndOrgGated(t *testing.T) {
@@ -15,7 +16,7 @@ func TestClaudeSubscriptionIsOwnerOnlyAndOrgGated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org := organization(t, pool, "claude-sub")
 	owner := reviewer(t, pool, org, "owner", "claude-sub-owner")
 	alice := reviewer(t, pool, org, "member", "claude-sub-alice")
@@ -55,7 +56,11 @@ func TestClaudeSubscriptionIsOwnerOnlyAndOrgGated(t *testing.T) {
 	if raw, _ := json.Marshal(c); strings.Contains(string(raw), "sk-ant-oat") {
 		t.Fatalf("connection response leaks the token: %s", raw)
 	}
-
+	// Any role may add personal connections, viewers included.
+	viewer := reviewer(t, pool, org, "viewer", "claude-sub-viewer")
+	if v, err := store.CreateClaudeSubscriptionAs(ctx, viewer, token, secrets); err != nil || v.Scope != ScopePersonal || v.OwnerID != viewer.PrincipalID {
+		t.Fatalf("viewer personal Claude subscription: %+v %v", v, err)
+	}
 	// Only its owner can use it in a project, as a user grant.
 	project, err := store.CreateProjectAs(ctx, alice, "claude-sub-proj", "Claude sub")
 	if err != nil {

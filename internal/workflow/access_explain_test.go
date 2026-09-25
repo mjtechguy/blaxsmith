@@ -7,13 +7,14 @@ import (
 
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // ExplainAccessAs must agree with access.CanUse for every principal, project,
 // and resource, and name the grant MatchingGrant returns.
 func TestExplainAccessMatchesCanUse(t *testing.T) {
 	pool := testPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	store, err := New(pool)
 	if err != nil {
 		t.Fatal(err)

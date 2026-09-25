@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // The stored list keeps what the provider reported; the manifest overlays
@@ -24,11 +25,11 @@ func TestConnectionModelMetadataEffortFiltering(t *testing.T) {
 		{ID: "claude-sonnet-5", DisplayName: "Claude Sonnet 5", Meta: access.ModelMeta{Efforts: []string{"low", "high", "bogus effort"}}},
 		{ID: "claude-mystery-1", DisplayName: "Mystery"},
 	}
-	c, err := store.CreateAPIKeyConnectionAs(t.Context(), owner, ScopePersonal, "", "anthropic", "", []byte("sk-ant-meta"), models, "", secrets)
+	c, err := store.CreateAPIKeyConnectionAs(tenant.System(t.Context()), owner, ScopePersonal, "", "anthropic", "", []byte("sk-ant-meta"), models, "", secrets)
 	if err != nil {
 		t.Fatal(err)
 	}
-	list, _, _, err := store.ListConnectionModelsAs(t.Context(), owner, c.ID, "claude-code")
+	list, _, _, err := store.ListConnectionModelsAs(tenant.System(t.Context()), owner, c.ID, "claude-code")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +52,7 @@ func TestConnectionModelMetadataEffortFiltering(t *testing.T) {
 		t.Fatalf("unknown model: %+v", m.ModelMeta)
 	}
 	var stored []string
-	if err := pool.QueryRow(t.Context(), `SELECT efforts FROM access_connection_models WHERE connection_id=$1 AND model_id='claude-sonnet-5'`,
+	if err := pool.QueryRow(tenant.System(t.Context()), `SELECT efforts FROM access_connection_models WHERE connection_id=$1 AND model_id='claude-sonnet-5'`,
 		c.ID).Scan(&stored); err != nil || !slices.Equal(stored, []string{"low", "high"}) {
 		t.Fatalf("stored efforts %v %v", stored, err)
 	}

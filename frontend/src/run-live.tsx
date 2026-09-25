@@ -8,6 +8,7 @@ import {
   answerInteraction, eventPayload, getAttemptControl, handBackAttempt, listInteractions, steerAttempt, takeOverAttempt,
   type Interaction, type SteerKind, type TerminalState,
 } from "./run-control";
+import { Markdown } from "./markdown";
 import { AttemptTerminal, type TerminalLink } from "./terminal";
 import { approvalChoices, cardKey, workLog, type AgentStatus, type Progress } from "./agent-view";
 import { StatusPill, TasksBadge, WorkLog } from "./work-log";
@@ -113,7 +114,7 @@ export function QuestionCard({ item, mayAnswer, scope, runId }: { item: Interact
       {item.blocking && open ? <span className={`status-pill ${item.kind === "approval" ? "status-needs_approval" : "status-awaiting_input"}`}>{item.kind === "approval" ? "Needs approval" : "Agent waiting"}</span> : null}
     </header>
     <h3>{item.title}</h3>
-    {item.bodyMd ? <div className="ix-body">{item.bodyMd}</div> : null}
+    {item.bodyMd ? <Markdown className="ix-body md" text={item.bodyMd} /> : null}
     {item.sources.length ? <ul className="ix-sources" aria-label="Sources">{item.sources.map((source) =>
       <li key={`${source.path}:${source.line ?? ""}`}><FileText size={13} aria-hidden="true" /><code>{source.path}{source.line ? `:${source.line}` : ""}</code></li>)}</ul> : null}
     {open ? <fieldset className="ix-options" disabled={!mayAnswer || answer.isPending} aria-describedby={mayAnswer ? hintId : undefined}>
@@ -169,7 +170,7 @@ function InterviewView({ items, mayAnswer, scope, runId }: { items: Interaction[
     <div className="table-heading"><div><h2 id="interview-heading">Interview</h2><p>One question per round. Finalize when the spec has what it needs.</p></div>
       {current?.interview?.finalizeOption && mayAnswer ? <button type="button" className="secondary-button" onClick={() => { finalize.reset(); setConfirm(true); }}>Finalize interview</button> : null}</div>
     <ol className="chat">{rounds.filter((item) => item !== current).map((item) => <li key={item.id}>
-      <div className="chat-agent"><small>Round {item.interview?.round} · agent</small><strong>{item.title}</strong>{item.bodyMd ? <p>{item.bodyMd}</p> : null}</div>
+      <div className="chat-agent"><small>Round {item.interview?.round} · agent</small><strong>{item.title}</strong>{item.bodyMd ? <Markdown text={item.bodyMd} /> : null}</div>
       {item.answer ? <div className="chat-human"><small>You</small><p>{[item.answer.optionIds.map((id) => item.options.find((option) => option.id === id)?.label ?? id).join(", "), item.answer.text].filter(Boolean).join(" — ")}</p></div> : null}
     </li>)}</ol>
     {current ? <div className="chat-pinned"><QuestionCard key={current.id} item={current} mayAnswer={mayAnswer} scope={scope} runId={runId} /></div>

@@ -15,6 +15,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -54,7 +55,7 @@ func TestAttemptDispatchAndUncertainReadBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	var org string
 	if err := pool.QueryRow(ctx, `INSERT INTO identity_organizations (id,slug,name)
 		VALUES (gen_random_uuid(),'bridge-org','Bridge Org') RETURNING id`).Scan(&org); err != nil {
@@ -256,7 +257,7 @@ func bridgePool(t *testing.T) *pgxpool.Pool {
 	if dsn == "" {
 		t.Skip("set BLAXSMITH_TEST_DATABASE_URL")
 	}
-	admin, err := pgxpool.New(t.Context(), dsn)
+	admin, err := pgxpool.New(tenant.System(t.Context()), dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,11 +267,11 @@ func bridgePool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	schema := "bridge_" + hex.EncodeToString(suffix[:])
-	if _, err := admin.Exec(t.Context(), "CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()); err != nil {
+	if _, err := admin.Exec(tenant.System(t.Context()), "CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(tenant.System(context.Background()), 10*time.Second)
 		defer cancel()
 		_, _ = admin.Exec(ctx, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE")
 	})
@@ -279,12 +280,12 @@ func bridgePool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	config.ConnConfig.RuntimeParams["search_path"] = schema
-	pool, err := pgxpool.NewWithConfig(t.Context(), config)
+	pool, err := pgxpool.NewWithConfig(tenant.System(t.Context()), tenant.Configure(config))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := db.Migrate(t.Context(), pool); err != nil {
+	if _, err := db.Migrate(tenant.System(t.Context()), pool); err != nil {
 		t.Fatal(err)
 	}
 	return pool

@@ -3,8 +3,8 @@
 // Visibility only mirrors server RBAC: admin pages are also guarded by the
 // /admin layout and every admin RPC is enforced on the server.
 import {
-  Activity, BookCopy, FolderKanban, Gauge, GitBranch, GitPullRequest, House, Inbox, KeyRound, LayoutDashboard,
-  ListChecks, Package, PlugZap, ScrollText, Settings, ShieldCheck, Timer, Users, Waypoints, Wrench, type LucideIcon,
+  Activity, BellRing, BookCopy, ChartColumn, FolderKanban, Gauge, GitBranch, GitPullRequest, House, Inbox, KeyRound, LayoutDashboard,
+  ListChecks, Package, PiggyBank, PlugZap, ScrollText, Settings, ShieldCheck, Timer, Users, Waypoints, Wrench, type LucideIcon,
 } from "lucide-react";
 
 export type NavItem = {
@@ -51,6 +51,7 @@ export function navigation({ role, projectId, projectName, gatewayEnabled }: Nav
     groups.push({ id: "project", label: projectName || "Project", collapsible: true, items: [
       { id: "project-overview", label: "Overview", href: base, icon: LayoutDashboard, exact: true, also: [`${base}/setup`] },
       { id: "project-runs", label: "Runs", href: `${base}/runs`, icon: GitBranch },
+      ...(gatewayEnabled ? [{ id: "project-usage", label: "Usage", href: `${base}/usage`, icon: ChartColumn }] : []),
       { id: "project-recipes", label: "Project recipes", href: `${base}/recipes`, icon: BookCopy },
       { id: "project-connections", label: "Project connections", href: `${base}/connections`, icon: KeyRound, also: [`${base}/model-access`] },
       { id: "project-source", label: "Source & verification", href: `${base}/settings/source`, icon: ListChecks, also: [`${base}/settings/verification`] },
@@ -71,6 +72,8 @@ export function navigation({ role, projectId, projectName, gatewayEnabled }: Nav
     { id: "admin-extensions", label: "Extensions", href: "/admin/extensions", icon: Package },
     ...(gatewayEnabled ? [{ id: "admin-usage", label: "Usage & gateway", href: "/admin/usage", icon: Gauge }] : []),
     ...(gatewayEnabled ? [{ id: "admin-routes", label: "Routes & pools", href: "/admin/routes", icon: Waypoints }] : []),
+    ...(gatewayEnabled ? [{ id: "admin-budgets", label: "Budgets", href: "/admin/budgets", icon: PiggyBank },
+      { id: "admin-alerts", label: "Alerts", href: "/admin/alerts", icon: BellRing }] : []),
     { id: "admin-audit", label: "Audit", href: "/admin/audit", icon: ScrollText },
     { id: "admin-settings", label: "Settings", href: "/admin/settings", icon: Settings, children: [
       { id: "admin-github-app", label: "GitHub app", href: "/admin/settings/github-app", icon: GitPullRequest },
@@ -157,7 +160,7 @@ export function switchPath(pathname: string, nextProjectId: string): string {
   const section = /^\/projects\/[^/]+\/([^/]+)(\/([^/]+))?/.exec(pathname);
   if (!section) return base;
   if (section[1] === "settings") return section[3] ? `${base}/settings/${section[3]}` : `${base}/settings`;
-  return ["runs", "recipes", "connections"].includes(section[1]) ? `${base}/${section[1]}` : base;
+  return ["runs", "recipes", "connections", "usage"].includes(section[1]) ? `${base}/${section[1]}` : base;
 }
 
 // Where to go after sign-in: a same-origin app path only. Anything else

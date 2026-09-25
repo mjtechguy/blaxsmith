@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 var ErrDenied = errors.New("bootstrap authority denied")
@@ -68,6 +69,7 @@ func NewLedger(db *pgxpool.Pool) *Ledger { return &Ledger{db: db} }
 // Assign records the scheduler's next execution owner. previousGeneration is
 // zero only for a new attempt; otherwise it must match the current row.
 func (l *Ledger) Assign(ctx context.Context, clusterID, attemptID string, previousGeneration int64, actor Actor) (Scope, error) {
+	ctx = tenant.System(ctx)
 	if clusterID == "" || attemptID == "" || previousGeneration < 0 ||
 		actor.Atespace == "" || actor.Name == "" || actor.UID == "" {
 		return Scope{}, ErrDenied
@@ -96,6 +98,7 @@ func (l *Ledger) Assign(ctx context.Context, clusterID, attemptID string, previo
 
 // Deactivate fences the current owner. A stale generation cannot stop its replacement.
 func (l *Ledger) Deactivate(ctx context.Context, scope Scope) (Scope, error) {
+	ctx = tenant.System(ctx)
 	if !validScope(scope) {
 		return Scope{}, ErrDenied
 	}
@@ -115,6 +118,7 @@ func (l *Ledger) Deactivate(ctx context.Context, scope Scope) (Scope, error) {
 // CurrentOwner reads the durable owner needed to revoke access after a
 // connector restart. A missing row is distinct from an inactive owner.
 func (l *Ledger) CurrentOwner(ctx context.Context, clusterID, attemptID string) (Scope, Actor, bool, bool, error) {
+	ctx = tenant.System(ctx)
 	if l == nil || l.db == nil || clusterID == "" || attemptID == "" {
 		return Scope{}, Actor{}, false, false, ErrDenied
 	}
@@ -142,6 +146,7 @@ func (l *Ledger) Issue(ctx context.Context, scope Scope) (Offer, error) {
 // IssuePhase binds a one-use actor challenge to either workspace setup or the
 // post-readiness model credential release.
 func (l *Ledger) IssuePhase(ctx context.Context, scope Scope, phase string) (Offer, error) {
+	ctx = tenant.System(ctx)
 	if !validScope(scope) {
 		return Offer{}, ErrDenied
 	}
@@ -202,6 +207,7 @@ func (l *Ledger) IssuePhase(ctx context.Context, scope Scope, phase string) (Off
 // current execution owner. The caller must still recheck AX/Substrate actor
 // assignment and platform policy immediately before any release or delivery.
 func (l *Ledger) Redeem(ctx context.Context, scope Scope, id string, nonce [32]byte, proof Proof, roots *x509.CertPool) (Redeemed, error) {
+	ctx = tenant.System(ctx)
 	if !validScope(scope) || id == "" || nonce == [32]byte{} || roots == nil {
 		return Redeemed{}, ErrDenied
 	}
@@ -279,6 +285,7 @@ func (l *Ledger) Redeem(ctx context.Context, scope Scope, id string, nonce [32]b
 // callers must issue a new challenge rather than retry this redemption.
 func (l *Ledger) Release(ctx context.Context, redeemed Redeemed,
 	prepare func(context.Context, pgx.Tx) error, checkAndSend func(context.Context, pgx.Tx) error) (time.Time, error) {
+	ctx = tenant.System(ctx)
 	if !validScope(redeemed.Scope) || redeemed.ID == "" || redeemed.ActorAtespace == "" ||
 		redeemed.ActorName == "" || redeemed.ActorUID == "" || checkAndSend == nil {
 		return time.Time{}, ErrDenied
@@ -408,6 +415,7 @@ func (l *Ledger) BindActivation(ctx context.Context, tx pgx.Tx, redeemed Redeeme
 // VerifyActivation accepts only the latest released nonce for the current
 // owner and its exact actor/template/image/pool. Old unbound releases deny.
 func (l *Ledger) VerifyActivation(ctx context.Context, scope Scope, runtime Runtime, nonce string) error {
+	ctx = tenant.System(ctx)
 	decoded, err := base64.RawURLEncoding.DecodeString(nonce)
 	if l == nil || l.db == nil || !validScope(scope) || runtime.Actor.Atespace == "" ||
 		runtime.Actor.Name == "" || runtime.Actor.UID == "" || runtime.TemplateUID == "" ||

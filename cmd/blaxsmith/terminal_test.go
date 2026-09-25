@@ -24,6 +24,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/db"
 	api "github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/terminal"
 	"github.com/mjtechguy/blaxsmith/internal/terminal/terminaltest"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
@@ -80,7 +81,7 @@ func TestTerminalAccessOnlyHolderSocketControls(t *testing.T) {
 
 func TestTerminalTakeoverPostgres(t *testing.T) {
 	pool := terminalTestPool(t)
-	ctx := t.Context()
+	ctx := tenant.System(t.Context()) // fixtures and assertions read every organization
 	password := []byte("correct horse battery staple")
 	owner, err := identity.BootstrapOwner(ctx, pool, "alice@example.com", "engineering", "Engineering", password)
 	if err != nil {
@@ -338,7 +339,7 @@ func TestTerminalTakeoverPostgres(t *testing.T) {
 
 func runningTerminalAttempt(t *testing.T, pool *pgxpool.Pool, store *workflow.Store, org string) workflow.Attempt {
 	t.Helper()
-	ctx := t.Context()
+	ctx := tenant.System(t.Context()) // fixtures and assertions read every organization
 	project, err := store.CreateProject(ctx, org, "terminal-project", "Terminal project")
 	if err != nil {
 		t.Fatal(err)
@@ -380,7 +381,7 @@ func terminalTestPool(t *testing.T) *pgxpool.Pool {
 	if dsn == "" {
 		t.Skip("set BLAXSMITH_TEST_DATABASE_URL")
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context()) // fixtures and assertions read every organization
 	admin, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -404,7 +405,7 @@ func terminalTestPool(t *testing.T) *pgxpool.Pool {
 	query := u.Query()
 	query.Set("search_path", schema)
 	u.RawQuery = query.Encode()
-	pool, err := pgxpool.New(ctx, u.String())
+	pool, err := tenant.NewPool(ctx, u.String())
 	if err != nil {
 		t.Fatal(err)
 	}

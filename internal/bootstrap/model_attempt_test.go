@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
 
@@ -23,7 +24,7 @@ func modelAttemptPool(t *testing.T) *pgxpool.Pool {
 	if dsn == "" {
 		t.Skip("set BLAXSMITH_TEST_DATABASE_URL for PostgreSQL bootstrap test")
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	admin, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +39,7 @@ func modelAttemptPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanup, cancel := context.WithTimeout(tenant.System(context.Background()), 10*time.Second)
 		defer cancel()
 		_, _ = admin.Exec(cleanup, "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE")
 	})
@@ -47,7 +48,7 @@ func modelAttemptPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	config.ConnConfig.RuntimeParams["search_path"] = schema
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := pgxpool.NewWithConfig(ctx, tenant.Configure(config))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +86,7 @@ func modelAttemptFixtureWith(t *testing.T, spec modelFixtureSpec) (*pgxpool.Pool
 	def(&spec.ownerKind, "organization")
 	def(&spec.granteeKind, "workload")
 	def(&spec.grantee, "worker")
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	pool := modelAttemptPool(t)
 	var orgID string
 	if err := pool.QueryRow(ctx, `INSERT INTO identity_organizations (id,slug,name)
@@ -220,15 +221,15 @@ func modelPhaseFixture(t *testing.T, pool *pgxpool.Pool, ledger *Ledger, model M
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ConfirmStarted(t.Context(), model.Attempt); err != nil {
+	if err := store.ConfirmStarted(tenant.System(t.Context()), model.Attempt); err != nil {
 		t.Fatal(err)
 	}
-	offer, err := ledger.IssuePhase(t.Context(), model.Scope, PhaseModel)
+	offer, err := ledger.IssuePhase(tenant.System(t.Context()), model.Scope, PhaseModel)
 	if err != nil {
 		t.Fatal(err)
 	}
 	proof, roots := signedProof(t, offer)
-	redeemed, err := ledger.Redeem(t.Context(), model.Scope, offer.ID, offer.Nonce, proof, roots)
+	redeemed, err := ledger.Redeem(tenant.System(t.Context()), model.Scope, offer.ID, offer.Nonce, proof, roots)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +241,7 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 		pool, ledger, secrets, model, runtime, redeemed := modelAttemptFixture(t)
 		const repoURL = "https://github.com/owner/repo.git"
 		commit := strings.Repeat("a", 40)
-		if _, err := pool.Exec(t.Context(), `UPDATE access_project_policies SET git_read_enabled=true
+		if _, err := pool.Exec(tenant.System(t.Context()), `UPDATE access_project_policies SET git_read_enabled=true
 			WHERE organization_id=$1 AND project_id=$2`, model.Invoke.OrganizationID, model.Invoke.ProjectID); err != nil {
 			t.Fatal(err)
 		}
@@ -266,11 +267,11 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 				[]any{model.Invoke.OrganizationID, model.Attempt.ID, model.Invoke.ProjectID, repoURL, commit}},
 		}
 		for _, statement := range statements {
-			if _, err := pool.Exec(t.Context(), statement.sql, statement.args...); err != nil {
+			if _, err := pool.Exec(tenant.System(t.Context()), statement.sql, statement.args...); err != nil {
 				t.Fatal(err)
 			}
 		}
-		if _, err := secrets.Rotate(t.Context(), model.Invoke.OrganizationID, "git-connection", 0, []byte("private-git-token"), nil); err != nil {
+		if _, err := secrets.Rotate(tenant.System(t.Context()), model.Invoke.OrganizationID, "git-connection", 0, []byte("private-git-token"), nil); err != nil {
 			t.Fatal(err)
 		}
 		model.Git = &GitAttempt{Read: access.GitRead{OrganizationID: model.Invoke.OrganizationID,
@@ -282,7 +283,7 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		reserve := func(ctx context.Context, tx pgx.Tx) error { return connector.Reserve(ctx, tx, redeemed) }
-		_, err = ledger.Release(t.Context(), redeemed, reserve, func(ctx context.Context, tx pgx.Tx) error {
+		_, err = ledger.Release(tenant.System(t.Context()), redeemed, reserve, func(ctx context.Context, tx pgx.Tx) error {
 			if err := connector.Authorize(ctx, tx, runtime, redeemed.Challenge); err != nil {
 				return err
 			}
@@ -307,13 +308,13 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		var count, delivered int
-		if err := pool.QueryRow(t.Context(), `SELECT count(*),count(*) FILTER (WHERE delivered_at IS NOT NULL)
+		if err := pool.QueryRow(tenant.System(t.Context()), `SELECT count(*),count(*) FILTER (WHERE delivered_at IS NOT NULL)
 			FROM access_leases WHERE bootstrap_challenge_id=$1`, redeemed.ID).Scan(&count, &delivered); err != nil || count != 1 || delivered != 1 {
 			t.Fatalf("setup capability leases: count=%d delivered=%d err=%v", count, delivered, err)
 		}
 		modelRedeemed := modelPhaseFixture(t, pool, ledger, model)
 		reserveModel := func(ctx context.Context, tx pgx.Tx) error { return connector.Reserve(ctx, tx, modelRedeemed) }
-		_, err = ledger.Release(t.Context(), modelRedeemed, reserveModel, func(ctx context.Context, tx pgx.Tx) error {
+		_, err = ledger.Release(tenant.System(t.Context()), modelRedeemed, reserveModel, func(ctx context.Context, tx pgx.Tx) error {
 			if err := connector.Authorize(ctx, tx, runtime, modelRedeemed.Challenge); err != nil {
 				return err
 			}
@@ -334,7 +335,7 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		var phase string
-		if err := pool.QueryRow(t.Context(), `SELECT c.phase FROM access_leases l JOIN bootstrap_challenges c
+		if err := pool.QueryRow(tenant.System(t.Context()), `SELECT c.phase FROM access_leases l JOIN bootstrap_challenges c
 			ON c.id=l.bootstrap_challenge_id WHERE l.attempt_id=$1 AND l.capability='model.invoke'`,
 			model.Attempt.ID).Scan(&phase); err != nil || phase != PhaseModel {
 			t.Fatalf("model lease was not bound to model phase: %q %v", phase, err)
@@ -349,7 +350,7 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		reserve := func(ctx context.Context, tx pgx.Tx) error { return connector.Reserve(ctx, tx, redeemed) }
-		_, err = ledger.Release(t.Context(), redeemed, reserve, func(ctx context.Context, tx pgx.Tx) error {
+		_, err = ledger.Release(tenant.System(t.Context()), redeemed, reserve, func(ctx context.Context, tx pgx.Tx) error {
 			if err := connector.Authorize(ctx, tx, runtime, redeemed.Challenge); err != nil {
 				return err
 			}
@@ -371,34 +372,34 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		var delivered bool
-		if err := pool.QueryRow(t.Context(), `SELECT delivered_at IS NOT NULL FROM access_leases
+		if err := pool.QueryRow(tenant.System(t.Context()), `SELECT delivered_at IS NOT NULL FROM access_leases
 			WHERE organization_id=$1 AND binding_id=$2 AND attempt_id=$3`, model.Invoke.OrganizationID,
 			model.Invoke.BindingID, model.Attempt.ID).Scan(&delivered); err != nil || !delivered {
 			t.Fatalf("same-attempt lease not delivered: %t %v", delivered, err)
 		}
 		// A still-authorized running attempt's short lease is renewed near expiry.
-		renewed, err := access.RenewModelLeases(t.Context(), pool, 30*time.Minute)
+		renewed, err := access.RenewModelLeases(tenant.System(t.Context()), pool, 30*time.Minute)
 		if err != nil || len(renewed) != 1 || renewed[0].AttemptID != model.Attempt.ID ||
 			time.Until(renewed[0].ExpiresAt) < 25*time.Minute {
 			t.Fatalf("renewal: %+v %v", renewed, err)
 		}
-		if again, err := access.RenewModelLeases(t.Context(), pool, 30*time.Minute); err != nil || len(again) != 0 {
+		if again, err := access.RenewModelLeases(tenant.System(t.Context()), pool, 30*time.Minute); err != nil || len(again) != 0 {
 			t.Fatalf("a fresh lease was renewed again: %+v %v", again, err)
 		}
 		// A revoked grant is never renewed; the worker stops at the old expiry.
-		if _, err := pool.Exec(t.Context(), `UPDATE access_leases SET expires_at=clock_timestamp()+interval '1 minute'
+		if _, err := pool.Exec(tenant.System(t.Context()), `UPDATE access_leases SET expires_at=clock_timestamp()+interval '1 minute'
 			WHERE attempt_id=$1`, model.Attempt.ID); err != nil {
 			t.Fatal(err)
 		}
 		var grantID string
-		if err := pool.QueryRow(t.Context(), `SELECT grant_id FROM access_bindings WHERE organization_id=$1 AND id=$2`,
+		if err := pool.QueryRow(tenant.System(t.Context()), `SELECT grant_id FROM access_bindings WHERE organization_id=$1 AND id=$2`,
 			model.Invoke.OrganizationID, model.Invoke.BindingID).Scan(&grantID); err != nil {
 			t.Fatal(err)
 		}
-		if err := access.RevokeGrant(t.Context(), pool, model.Invoke.OrganizationID, grantID); err != nil {
+		if err := access.RevokeGrant(tenant.System(t.Context()), pool, model.Invoke.OrganizationID, grantID); err != nil {
 			t.Fatal(err)
 		}
-		if revoked, err := access.RenewModelLeases(t.Context(), pool, 30*time.Minute); err != nil || len(revoked) != 0 {
+		if revoked, err := access.RenewModelLeases(tenant.System(t.Context()), pool, 30*time.Minute); err != nil || len(revoked) != 0 {
 			t.Fatalf("revoked lease renewed: %+v %v", revoked, err)
 		}
 	})
@@ -410,7 +411,7 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		reserve := func(ctx context.Context, tx pgx.Tx) error { return connector.Reserve(ctx, tx, redeemed) }
-		_, err = ledger.Release(t.Context(), redeemed, reserve, func(ctx context.Context, tx pgx.Tx) error {
+		_, err = ledger.Release(tenant.System(t.Context()), redeemed, reserve, func(ctx context.Context, tx pgx.Tx) error {
 			if err := access.RevokeGrant(ctx, pool, model.Invoke.OrganizationID, "grant"); err != nil {
 				return err
 			}
@@ -420,7 +421,7 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 			t.Fatalf("revocation before release was not fenced: %v", err)
 		}
 		var attempted, delivered, revoked bool
-		if err := pool.QueryRow(t.Context(), `SELECT delivery_attempted_at IS NOT NULL,delivered_at IS NOT NULL,revoked_at IS NOT NULL
+		if err := pool.QueryRow(tenant.System(t.Context()), `SELECT delivery_attempted_at IS NOT NULL,delivered_at IS NOT NULL,revoked_at IS NOT NULL
 			FROM access_leases WHERE organization_id=$1 AND binding_id=$2`, model.Invoke.OrganizationID,
 			model.Invoke.BindingID).Scan(&attempted, &delivered, &revoked); err != nil || attempted || delivered || !revoked {
 			t.Fatalf("revoked intent incorrectly delivered: %t %t %t %v", attempted, delivered, revoked, err)
@@ -429,7 +430,7 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 	t.Run("binding belongs to another attempt", func(t *testing.T) {
 		pool, ledger, secrets, model, _, redeemed := modelAttemptFixture(t)
 		redeemed = modelPhaseFixture(t, pool, ledger, model)
-		if _, err := pool.Exec(t.Context(), `INSERT INTO access_bindings
+		if _, err := pool.Exec(tenant.System(t.Context()), `INSERT INTO access_bindings
 			(organization_id,id,attempt_id,project_id,grant_id,grant_version,capability,resource,policy_version)
 			VALUES ($1,'other-binding','other-attempt',$2,'grant',1,'model.invoke','openai/gpt-6-luna',1)`,
 			model.Invoke.OrganizationID, model.Invoke.ProjectID); err != nil {
@@ -441,7 +442,7 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		reserve := func(ctx context.Context, tx pgx.Tx) error { return connector.Reserve(ctx, tx, redeemed) }
-		if _, err := ledger.Release(t.Context(), redeemed, reserve,
+		if _, err := ledger.Release(tenant.System(t.Context()), redeemed, reserve,
 			func(context.Context, pgx.Tx) error { return nil }); !errors.Is(err, access.ErrDenied) {
 			t.Fatalf("foreign attempt binding reached release: %v", err)
 		}

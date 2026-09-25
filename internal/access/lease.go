@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // LeaseRequest is constructed from a consumed actor proof and trusted
@@ -165,6 +166,7 @@ func MarkLeaseDelivered(ctx context.Context, tx pgx.Tx, organizationID, leaseID 
 // delivered to this cluster/attempt. Stopping the actor is still required to
 // destroy any raw provider credential already copied into its memory.
 func RevokeAttemptLeases(ctx context.Context, db *pgxpool.Pool, clusterID, attemptID string) error {
+	ctx = tenant.System(ctx)
 	if db == nil || clusterID == "" || attemptID == "" {
 		return ErrDenied
 	}
@@ -179,6 +181,7 @@ func RevokeAttemptLeases(ctx context.Context, db *pgxpool.Pool, clusterID, attem
 // RevokeGrant blocks future decisions and marks its recorded leases revoked.
 // It does not invalidate a bearer token already copied into a sandbox.
 func RevokeGrant(ctx context.Context, db *pgxpool.Pool, organizationID, grantID string) error {
+	ctx = tenant.Org(ctx, organizationID)
 	if db == nil || organizationID == "" || grantID == "" {
 		return ErrDenied
 	}
@@ -213,6 +216,7 @@ func RevokeGrant(ctx context.Context, db *pgxpool.Pool, organizationID, grantID 
 // from that connection revoked. Provider-side bearer credentials still require
 // provider revocation or rotation to become unusable outside this platform.
 func RevokeConnection(ctx context.Context, db *pgxpool.Pool, organizationID, connectionID string) error {
+	ctx = tenant.Org(ctx, organizationID)
 	if db == nil || organizationID == "" || connectionID == "" {
 		return ErrDenied
 	}

@@ -197,7 +197,8 @@ func (s *usageService) GetRunCost(ctx context.Context, req *connect.Request[api.
 	if err != nil {
 		return nil, gatewayError(err)
 	}
-	response := &api.GetRunCostResponse{Enabled: cost.Enabled, Totals: totalsMessage(cost.Totals), Truncated: cost.Truncated}
+	response := &api.GetRunCostResponse{Enabled: cost.Enabled, Totals: totalsMessage(cost.Totals), Truncated: cost.Truncated,
+		RequestsRestricted: cost.CallsRestricted}
 	for _, stage := range cost.Stages {
 		ratio := 0.0
 		if in := stage.Totals.Input + stage.Totals.CacheRead + stage.Totals.CacheWrite; in > 0 {

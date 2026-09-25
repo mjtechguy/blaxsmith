@@ -114,6 +114,6 @@ route used only for its owner's own runs (docs/model-gateway-plan.md §6).
   Not yet tried against the live backend.
 
 ## Not done
-- **Device code.** The connections hub runs the Codex device-code sign-in server-side (`access.CodexDevice`, from `codex-rs/login/src/device_code_auth.rs`): `POST /api/accounts/deviceauth/usercode`, the user approves at `/codex/device`, `POST /api/accounts/deviceauth/token` polls, and `/oauth/token` exchanges the code once. Pasting `auth.json` stays as the Advanced fallback. Pending sign-ins live in app memory (single replica or session affinity). Not yet tried against the live endpoint.
+- **Device code.** The connections hub runs the Codex device-code sign-in server-side (`access.CodexDevice`, from `codex-rs/login/src/device_code_auth.rs`): `POST /api/accounts/deviceauth/usercode`, the user approves at `/codex/device`, `POST /api/accounts/deviceauth/token` polls, and `/oauth/token` exchanges the code once. Pasting `auth.json` stays as the Advanced fallback. Pending sign-ins are encrypted, session-bound rows in `access_pending_sign_ins`, so any replica can finish one. Not yet tried against the live endpoint.
 - **Reconnect and cleanup.** Reconnect creates a new connection. `SecretStore.Rotate` on a refreshed connection fails on a version conflict, which fails closed. Superseded secret versions are not pruned.
 - **Live endpoint.** Nothing has been tested against the live `auth.openai.com` endpoint or a real Codex CLI.

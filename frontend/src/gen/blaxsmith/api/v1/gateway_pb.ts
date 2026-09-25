@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file blaxsmith/api/v1/gateway.proto.
  */
 export const file_blaxsmith_api_v1_gateway: GenFile = /*@__PURE__*/
-  fileDesc("Ch5ibGF4c21pdGgvYXBpL3YxL2dhdGV3YXkucHJvdG8SEGJsYXhzbWl0aC5hcGkudjEi6wEKD0dhdGV3YXlTZXR0aW5ncxIPCgdlbmFibGVkGAEgASgIEh0KFWRlZmF1bHRfZGVsaXZlcnlfbW9kZRgCIAEoCRIcChRhbGxvd19wcm9qZWN0X2Nob2ljZRgDIAEoCBIcChRyZW1vdmVfZGlyZWN0X2VncmVzcxgEIAEoCBIVCg1wb29sc19lbmFibGVkGBQgASgIEhYKDnBhY2luZ19lbmFibGVkGBUgASgIEh8KF3BlcnNvbmFsX3JvdXRlc19lbmFibGVkGBYgASgIEhwKFGV2ZW50X3JldGVudGlvbl9kYXlzGBcgASgFIhsKGUdldEdhdGV3YXlTZXR0aW5nc1JlcXVlc3QiswEKGkdldEdhdGV3YXlTZXR0aW5nc1Jlc3BvbnNlEjMKCHNldHRpbmdzGAEgASgLMiEuYmxheHNtaXRoLmFwaS52MS5HYXRld2F5U2V0dGluZ3MSHgoWaW5zdGFsbGF0aW9uX2F2YWlsYWJsZRgCIAEoCBIPCgd2ZXJzaW9uGAMgASgDEhIKCnVwZGF0ZWRfYXQYBCABKAkSGwoTdXBkYXRlZF9ieV91c2VybmFtZRgFIAEoCSJtChxVcGRhdGVHYXRld2F5U2V0dGluZ3NSZXF1ZXN0EjMKCHNldHRpbmdzGAEgASgLMiEuYmxheHNtaXRoLmFwaS52MS5HYXRld2F5U2V0dGluZ3MSGAoQZXhwZWN0ZWRfdmVyc2lvbhgCIAEoAyJlCh1VcGRhdGVHYXRld2F5U2V0dGluZ3NSZXNwb25zZRIzCghzZXR0aW5ncxgBIAEoCzIhLmJsYXhzbWl0aC5hcGkudjEuR2F0ZXdheVNldHRpbmdzEg8KB3ZlcnNpb24YAiABKAMi3AEKC1VzYWdlVG90YWxzEhAKCHJlcXVlc3RzGAEgASgDEg4KBmVycm9ycxgCIAEoAxIUCgxyYXRlX2xpbWl0ZWQYAyABKAMSFAoMaW5wdXRfdG9rZW5zGAQgASgDEhUKDW91dHB1dF90b2tlbnMYBSABKAMSGQoRY2FjaGVfcmVhZF90b2tlbnMYBiABKAMSGgoSY2FjaGVfd3JpdGVfdG9rZW5zGAcgASgDEhgKEHJlYXNvbmluZ190b2tlbnMYCCABKAMSFwoPY29zdF91c2RfbWljcm9zGAkgASgDInsKClVzYWdlU2xpY2USCwoDa2V5GAEgASgJEg0KBWxhYmVsGAIgASgJEg4KBmRldGFpbBgDIAEoCRItCgZ0b3RhbHMYBCABKAsyHS5ibGF4c21pdGguYXBpLnYxLlVzYWdlVG90YWxzEhIKCnByb2plY3RfaWQYBSABKAkiTwoKVXNhZ2VQb2ludBILCgNkYXkYASABKAkSCwoDa2V5GAIgASgJEhcKD2Nvc3RfdXNkX21pY3JvcxgDIAEoAxIOCgZ0b2tlbnMYBCABKAMiOgoXR2V0VXNhZ2VPdmVydmlld1JlcXVlc3QSDAoEZGF5cxgBIAEoBRIRCglzZXJpZXNfYnkYAiABKAkijAMKGEdldFVzYWdlT3ZlcnZpZXdSZXNwb25zZRIPCgdlbmFibGVkGAEgASgIEhAKCGZyb21fZGF5GAIgASgJEg4KBnRvX2RheRgDIAEoCRItCgZ0b3RhbHMYBCABKAsyHS5ibGF4c21pdGguYXBpLnYxLlVzYWdlVG90YWxzEhYKDm1lZGlhbl90dGZ0X21zGAUgASgDEiwKBnNlcmllcxgGIAMoCzIcLmJsYXhzbWl0aC5hcGkudjEuVXNhZ2VQb2ludBIzCg1zZXJpZXNfbGFiZWxzGAcgAygLMhwuYmxheHNtaXRoLmFwaS52MS5Vc2FnZVNsaWNlEjIKDHRvcF9wcm9qZWN0cxgIIAMoCzIcLmJsYXhzbWl0aC5hcGkudjEuVXNhZ2VTbGljZRIvCgl0b3BfdXNlcnMYCSADKAsyHC5ibGF4c21pdGguYXBpLnYxLlVzYWdlU2xpY2USLgoIdG9wX3J1bnMYCiADKAsyHC5ibGF4c21pdGguYXBpLnYxLlVzYWdlU2xpY2Ui7gEKCk1vZGVsUHJpY2USEAoIcHJvdmlkZXIYASABKAkSDQoFbW9kZWwYAiABKAkSHQoVaW5wdXRfbWljcm9zX3Blcl9tdG9rGAMgASgDEh4KFm91dHB1dF9taWNyb3NfcGVyX210b2sYBCABKAMSIgoaY2FjaGVfcmVhZF9taWNyb3NfcGVyX210b2sYBSABKAMSIwobY2FjaGVfd3JpdGVfbWljcm9zX3Blcl9tdG9rGAYgASgDEg4KBnNvdXJjZRgHIAEoCRIPCgd2ZXJzaW9uGAggASgJEhYKDmVmZmVjdGl2ZV9mcm9tGAkgASgJIhgKFkxpc3RNb2RlbFByaWNlc1JlcXVlc3QiRwoXTGlzdE1vZGVsUHJpY2VzUmVzcG9uc2USLAoGcHJpY2VzGAEgAygLMhwuYmxheHNtaXRoLmFwaS52MS5Nb2RlbFByaWNlIksKHFNldE1vZGVsUHJpY2VPdmVycmlkZVJlcXVlc3QSKwoFcHJpY2UYASABKAsyHC5ibGF4c21pdGguYXBpLnYxLk1vZGVsUHJpY2UiTAodU2V0TW9kZWxQcmljZU92ZXJyaWRlUmVzcG9uc2USKwoFcHJpY2UYASABKAsyHC5ibGF4c21pdGguYXBpLnYxLk1vZGVsUHJpY2UiVgoSR2F0ZXdheVJvdXRlTWV0cmljEgwKBG5hbWUYASABKAkSDQoFbGltaXQYAiABKAMSEQoJcmVtYWluaW5nGAMgASgDEhAKCHJlc2V0X2F0GAQgASgJIt8ECgxHYXRld2F5Um91dGUSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIMCgRraW5kGAMgASgJEhUKDWNvbm5lY3Rpb25faWQYBCABKAkSGAoQY29ubmVjdGlvbl9sYWJlbBgFIAEoCRIOCgZyZWdpb24YBiABKAkSFQoNY2xvdWRfcHJvamVjdBgHIAEoCRI/Cgltb2RlbF9tYXAYCCADKAsyLC5ibGF4c21pdGguYXBpLnYxLkdhdGV3YXlSb3V0ZS5Nb2RlbE1hcEVudHJ5Eg4KBndlaWdodBgJIAEoBRIQCghwcmlvcml0eRgKIAEoBRIXCg9jb25jdXJyZW5jeV9jYXAYCyABKAUSGwoTcmVxdWVzdHNfcGVyX21pbnV0ZRgMIAEoBRIZChF0b2tlbnNfcGVyX21pbnV0ZRgNIAEoAxINCgVzdGF0ZRgOIAEoCRIQCghwb29sX2lkcxgPIAMoCRIPCgdicmVha2VyGBAgASgJEhYKDmNvb2xkb3duX3VudGlsGBEgASgJEhAKCGluZmxpZ2h0GBIgASgFEjUKB21ldHJpY3MYEyADKAsyJC5ibGF4c21pdGguYXBpLnYxLkdhdGV3YXlSb3V0ZU1ldHJpYxIUCgxyZXF1ZXN0c18xNW0YFCABKAUSEgoKZXJyb3JzXzE1bRgVIAEoBRITCgtsYXN0XzQyOV9hdBgWIAEoCRIYChBzdGF0ZV91cGRhdGVkX2F0GBcgASgJGi8KDU1vZGVsTWFwRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASKrAQoLR2F0ZXdheVBvb2wSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIOCgZmYW1pbHkYAyABKAkSEAoIc3RyYXRlZ3kYBCABKAkSFwoPY29uY3VycmVuY3lfY2FwGAUgASgFEhAKCGFmZmluaXR5GAYgASgIEg0KBXN0YXRlGAcgASgJEhEKCXJvdXRlX2lkcxgIIAMoCRITCgtwcm9qZWN0X2lkcxgJIAMoCSKTAQoKUGFjZWRTdGFnZRIPCgd0YXNrX2lkGAEgASgJEg4KBnJ1bl9pZBgCIAEoCRISCgpwcm9qZWN0X2lkGAMgASgJEg0KBXN0YWdlGAQgASgJEg8KB3Bvb2xfaWQYBSABKAkSDgoGcmVhc29uGAYgASgJEhEKCXJlc2V0c19hdBgHIAEoCRINCgVzaW5jZRgIIAEoCSI/ChJHYXRld2F5Um91dGVPcHRpb24SCgoCaWQYASABKAkSDQoFbGFiZWwYAiABKAkSDgoGZGV0YWlsGAMgASgJIhoKGExpc3RHYXRld2F5Um91dGVzUmVxdWVzdCLIAgoZTGlzdEdhdGV3YXlSb3V0ZXNSZXNwb25zZRIuCgZyb3V0ZXMYASADKAsyHi5ibGF4c21pdGguYXBpLnYxLkdhdGV3YXlSb3V0ZRIsCgVwb29scxgCIAMoCzIdLmJsYXhzbWl0aC5hcGkudjEuR2F0ZXdheVBvb2wSKwoFcGFjZWQYAyADKAsyHC5ibGF4c21pdGguYXBpLnYxLlBhY2VkU3RhZ2USOQoLY29ubmVjdGlvbnMYBCADKAsyJC5ibGF4c21pdGguYXBpLnYxLkdhdGV3YXlSb3V0ZU9wdGlvbhI2Cghwcm9qZWN0cxgFIAMoCzIkLmJsYXhzbWl0aC5hcGkudjEuR2F0ZXdheVJvdXRlT3B0aW9uEhUKDXBvb2xzX2VuYWJsZWQYBiABKAgSFgoOcGFjaW5nX2VuYWJsZWQYByABKAgiYgoXU2F2ZUdhdGV3YXlSb3V0ZVJlcXVlc3QSLQoFcm91dGUYASABKAsyHi5ibGF4c21pdGguYXBpLnYxLkdhdGV3YXlSb3V0ZRIYChBjbG91ZF9jcmVkZW50aWFsGAIgASgJIkkKGFNhdmVHYXRld2F5Um91dGVSZXNwb25zZRItCgVyb3V0ZRgBIAEoCzIeLmJsYXhzbWl0aC5hcGkudjEuR2F0ZXdheVJvdXRlIjgKG1NldEdhdGV3YXlSb3V0ZVN0YXRlUmVxdWVzdBIKCgJpZBgBIAEoCRINCgVzdGF0ZRgCIAEoCSIeChxTZXRHYXRld2F5Um91dGVTdGF0ZVJlc3BvbnNlIkUKFlNhdmVHYXRld2F5UG9vbFJlcXVlc3QSKwoEcG9vbBgBIAEoCzIdLmJsYXhzbWl0aC5hcGkudjEuR2F0ZXdheVBvb2wiRgoXU2F2ZUdhdGV3YXlQb29sUmVzcG9uc2USKwoEcG9vbBgBIAEoCzIdLmJsYXhzbWl0aC5hcGkudjEuR2F0ZXdheVBvb2wieQoXU3Vic2NyaXB0aW9uTGltaXRXaW5kb3cSDAoEbmFtZRgBIAEoCRIQCgh1c2VkX3BjdBgCIAEoARIWCg53aW5kb3dfbWludXRlcxgDIAEoBRIRCglyZXNldHNfYXQYBCABKAkSEwoLb2JzZXJ2ZWRfYXQYBSABKAkirAEKElN1YnNjcmlwdGlvbkxpbWl0cxIVCg1jb25uZWN0aW9uX2lkGAEgASgJEg0KBWxhYmVsGAIgASgJEhAKCHByb3ZpZGVyGAMgASgJEhMKC2F1dGhfbWV0aG9kGAQgASgJEg0KBXN0YXRlGAUgASgJEjoKB3dpbmRvd3MYBiADKAsyKS5ibGF4c21pdGguYXBpLnYxLlN1YnNjcmlwdGlvbkxpbWl0V2luZG93IiEKH0xpc3RNeVN1YnNjcmlwdGlvbkxpbWl0c1JlcXVlc3QigAEKIExpc3RNeVN1YnNjcmlwdGlvbkxpbWl0c1Jlc3BvbnNlEjsKDXN1YnNjcmlwdGlvbnMYASADKAsyJC5ibGF4c21pdGguYXBpLnYxLlN1YnNjcmlwdGlvbkxpbWl0cxIfChdwZXJzb25hbF9yb3V0ZXNfZW5hYmxlZBgCIAEoCCIZChdHZXRHYXRld2F5U3RhdHVzUmVxdWVzdCIrChhHZXRHYXRld2F5U3RhdHVzUmVzcG9uc2USDwoHZW5hYmxlZBgBIAEoCCIhChFHZXRNeVVzYWdlUmVxdWVzdBIMCgRkYXlzGAEgASgFIogCChJHZXRNeVVzYWdlUmVzcG9uc2USDwoHZW5hYmxlZBgBIAEoCBIQCghmcm9tX2RheRgCIAEoCRIOCgZ0b19kYXkYAyABKAkSLQoGdG90YWxzGAQgASgLMh0uYmxheHNtaXRoLmFwaS52MS5Vc2FnZVRvdGFscxIwCgpieV9wcm9qZWN0GAUgAygLMhwuYmxheHNtaXRoLmFwaS52MS5Vc2FnZVNsaWNlEi4KCGJ5X21vZGVsGAYgAygLMhwuYmxheHNtaXRoLmFwaS52MS5Vc2FnZVNsaWNlEi4KCHRvcF9ydW5zGAcgAygLMhwuYmxheHNtaXRoLmFwaS52MS5Vc2FnZVNsaWNlIpcCCglNb2RlbENhbGwSEgoKc3RhcnRlZF9hdBgBIAEoCRINCgVzdGFnZRgCIAEoCRINCgVtb2RlbBgDIAEoCRISCgpyb3V0ZV9raW5kGAQgASgJEgsKA2FwaRgFIAEoCRIOCgZzdGF0dXMYBiABKAkSEwoLaHR0cF9zdGF0dXMYByABKAUSEwoLcmV0cnlfY291bnQYCCABKAUSEAoIc3RyZWFtZWQYCSABKAgSFgoOdXNhZ2VfcmVwb3J0ZWQYCiABKAgSDwoHdHRmdF9tcxgLIAEoBRITCgtkdXJhdGlvbl9tcxgMIAEoBRItCgZ0b3RhbHMYDSABKAsyHS5ibGF4c21pdGguYXBpLnYxLlVzYWdlVG90YWxzInMKCVN0YWdlQ29zdBIPCgd0YXNrX2lkGAEgASgJEg0KBXN0YWdlGAIgASgJEi0KBnRvdGFscxgDIAEoCzIdLmJsYXhzbWl0aC5hcGkudjEuVXNhZ2VUb3RhbHMSFwoPY2FjaGVfaGl0X3JhdGlvGAQgASgBIiMKEUdldFJ1bkNvc3RSZXF1ZXN0Eg4KBnJ1bl9pZBgBIAEoCSLDAQoSR2V0UnVuQ29zdFJlc3BvbnNlEg8KB2VuYWJsZWQYASABKAgSLQoGdG90YWxzGAIgASgLMh0uYmxheHNtaXRoLmFwaS52MS5Vc2FnZVRvdGFscxIrCgZzdGFnZXMYAyADKAsyGy5ibGF4c21pdGguYXBpLnYxLlN0YWdlQ29zdBItCghyZXF1ZXN0cxgEIAMoCzIbLmJsYXhzbWl0aC5hcGkudjEuTW9kZWxDYWxsEhEKCXRydW5jYXRlZBgFIAEoCCIvChlHZXRQcm9qZWN0RGVsaXZlcnlSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkiowEKGkdldFByb2plY3REZWxpdmVyeVJlc3BvbnNlEhUKDWRlbGl2ZXJ5X21vZGUYASABKAkSFgoOcHJvamVjdF9jaG9pY2UYAiABKAkSEwoLb3JnX2RlZmF1bHQYAyABKAkSFwoPZ2F0ZXdheV9lbmFibGVkGAQgASgIEhYKDmNob2ljZV9hbGxvd2VkGAUgASgIEhAKCGNhbl9lZGl0GAYgASgIIkYKGVNldFByb2plY3REZWxpdmVyeVJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIVCg1kZWxpdmVyeV9tb2RlGAIgASgJIlwKGlNldFByb2plY3REZWxpdmVyeVJlc3BvbnNlEj4KCGRlbGl2ZXJ5GAEgASgLMiwuYmxheHNtaXRoLmFwaS52MS5HZXRQcm9qZWN0RGVsaXZlcnlSZXNwb25zZTKFCAoTR2F0ZXdheUFkbWluU2VydmljZRJvChJHZXRHYXRld2F5U2V0dGluZ3MSKy5ibGF4c21pdGguYXBpLnYxLkdldEdhdGV3YXlTZXR0aW5nc1JlcXVlc3QaLC5ibGF4c21pdGguYXBpLnYxLkdldEdhdGV3YXlTZXR0aW5nc1Jlc3BvbnNlEngKFVVwZGF0ZUdhdGV3YXlTZXR0aW5ncxIuLmJsYXhzbWl0aC5hcGkudjEuVXBkYXRlR2F0ZXdheVNldHRpbmdzUmVxdWVzdBovLmJsYXhzbWl0aC5hcGkudjEuVXBkYXRlR2F0ZXdheVNldHRpbmdzUmVzcG9uc2USaQoQR2V0VXNhZ2VPdmVydmlldxIpLmJsYXhzbWl0aC5hcGkudjEuR2V0VXNhZ2VPdmVydmlld1JlcXVlc3QaKi5ibGF4c21pdGguYXBpLnYxLkdldFVzYWdlT3ZlcnZpZXdSZXNwb25zZRJmCg9MaXN0TW9kZWxQcmljZXMSKC5ibGF4c21pdGguYXBpLnYxLkxpc3RNb2RlbFByaWNlc1JlcXVlc3QaKS5ibGF4c21pdGguYXBpLnYxLkxpc3RNb2RlbFByaWNlc1Jlc3BvbnNlEngKFVNldE1vZGVsUHJpY2VPdmVycmlkZRIuLmJsYXhzbWl0aC5hcGkudjEuU2V0TW9kZWxQcmljZU92ZXJyaWRlUmVxdWVzdBovLmJsYXhzbWl0aC5hcGkudjEuU2V0TW9kZWxQcmljZU92ZXJyaWRlUmVzcG9uc2USbAoRTGlzdEdhdGV3YXlSb3V0ZXMSKi5ibGF4c21pdGguYXBpLnYxLkxpc3RHYXRld2F5Um91dGVzUmVxdWVzdBorLmJsYXhzbWl0aC5hcGkudjEuTGlzdEdhdGV3YXlSb3V0ZXNSZXNwb25zZRJpChBTYXZlR2F0ZXdheVJvdXRlEikuYmxheHNtaXRoLmFwaS52MS5TYXZlR2F0ZXdheVJvdXRlUmVxdWVzdBoqLmJsYXhzbWl0aC5hcGkudjEuU2F2ZUdhdGV3YXlSb3V0ZVJlc3BvbnNlEnUKFFNldEdhdGV3YXlSb3V0ZVN0YXRlEi0uYmxheHNtaXRoLmFwaS52MS5TZXRHYXRld2F5Um91dGVTdGF0ZVJlcXVlc3QaLi5ibGF4c21pdGguYXBpLnYxLlNldEdhdGV3YXlSb3V0ZVN0YXRlUmVzcG9uc2USZgoPU2F2ZUdhdGV3YXlQb29sEiguYmxheHNtaXRoLmFwaS52MS5TYXZlR2F0ZXdheVBvb2xSZXF1ZXN0GikuYmxheHNtaXRoLmFwaS52MS5TYXZlR2F0ZXdheVBvb2xSZXNwb25zZTKRBQoMVXNhZ2VTZXJ2aWNlEmkKEEdldEdhdGV3YXlTdGF0dXMSKS5ibGF4c21pdGguYXBpLnYxLkdldEdhdGV3YXlTdGF0dXNSZXF1ZXN0GiouYmxheHNtaXRoLmFwaS52MS5HZXRHYXRld2F5U3RhdHVzUmVzcG9uc2USVwoKR2V0TXlVc2FnZRIjLmJsYXhzbWl0aC5hcGkudjEuR2V0TXlVc2FnZVJlcXVlc3QaJC5ibGF4c21pdGguYXBpLnYxLkdldE15VXNhZ2VSZXNwb25zZRJXCgpHZXRSdW5Db3N0EiMuYmxheHNtaXRoLmFwaS52MS5HZXRSdW5Db3N0UmVxdWVzdBokLmJsYXhzbWl0aC5hcGkudjEuR2V0UnVuQ29zdFJlc3BvbnNlEm8KEkdldFByb2plY3REZWxpdmVyeRIrLmJsYXhzbWl0aC5hcGkudjEuR2V0UHJvamVjdERlbGl2ZXJ5UmVxdWVzdBosLmJsYXhzbWl0aC5hcGkudjEuR2V0UHJvamVjdERlbGl2ZXJ5UmVzcG9uc2USbwoSU2V0UHJvamVjdERlbGl2ZXJ5EisuYmxheHNtaXRoLmFwaS52MS5TZXRQcm9qZWN0RGVsaXZlcnlSZXF1ZXN0GiwuYmxheHNtaXRoLmFwaS52MS5TZXRQcm9qZWN0RGVsaXZlcnlSZXNwb25zZRKBAQoYTGlzdE15U3Vic2NyaXB0aW9uTGltaXRzEjEuYmxheHNtaXRoLmFwaS52MS5MaXN0TXlTdWJzY3JpcHRpb25MaW1pdHNSZXF1ZXN0GjIuYmxheHNtaXRoLmFwaS52MS5MaXN0TXlTdWJzY3JpcHRpb25MaW1pdHNSZXNwb25zZULEAQoUY29tLmJsYXhzbWl0aC5hcGkudjFCDEdhdGV3YXlQcm90b1ABWjxnaXRodWIuY29tL21qdGVjaGd1eS9ibGF4c21pdGgvZ2VuL2dvL2JsYXhzbWl0aC9hcGkvdjE7YXBpdjGiAgNCQViqAhBCbGF4c21pdGguQXBpLlYxygIQQmxheHNtaXRoXEFwaVxWMeICHEJsYXhzbWl0aFxBcGlcVjFcR1BCTWV0YWRhdGHqAhJCbGF4c21pdGg6OkFwaTo6VjFiBnByb3RvMw");
+  fileDesc("Ch5ibGF4c21pdGgvYXBpL3YxL2dhdGV3YXkucHJvdG8SEGJsYXhzbWl0aC5hcGkudjEi6wEKD0dhdGV3YXlTZXR0aW5ncxIPCgdlbmFibGVkGAEgASgIEh0KFWRlZmF1bHRfZGVsaXZlcnlfbW9kZRgCIAEoCRIcChRhbGxvd19wcm9qZWN0X2Nob2ljZRgDIAEoCBIcChRyZW1vdmVfZGlyZWN0X2VncmVzcxgEIAEoCBIVCg1wb29sc19lbmFibGVkGBQgASgIEhYKDnBhY2luZ19lbmFibGVkGBUgASgIEh8KF3BlcnNvbmFsX3JvdXRlc19lbmFibGVkGBYgASgIEhwKFGV2ZW50X3JldGVudGlvbl9kYXlzGBcgASgFIhsKGUdldEdhdGV3YXlTZXR0aW5nc1JlcXVlc3QiswEKGkdldEdhdGV3YXlTZXR0aW5nc1Jlc3BvbnNlEjMKCHNldHRpbmdzGAEgASgLMiEuYmxheHNtaXRoLmFwaS52MS5HYXRld2F5U2V0dGluZ3MSHgoWaW5zdGFsbGF0aW9uX2F2YWlsYWJsZRgCIAEoCBIPCgd2ZXJzaW9uGAMgASgDEhIKCnVwZGF0ZWRfYXQYBCABKAkSGwoTdXBkYXRlZF9ieV91c2VybmFtZRgFIAEoCSJtChxVcGRhdGVHYXRld2F5U2V0dGluZ3NSZXF1ZXN0EjMKCHNldHRpbmdzGAEgASgLMiEuYmxheHNtaXRoLmFwaS52MS5HYXRld2F5U2V0dGluZ3MSGAoQZXhwZWN0ZWRfdmVyc2lvbhgCIAEoAyJlCh1VcGRhdGVHYXRld2F5U2V0dGluZ3NSZXNwb25zZRIzCghzZXR0aW5ncxgBIAEoCzIhLmJsYXhzbWl0aC5hcGkudjEuR2F0ZXdheVNldHRpbmdzEg8KB3ZlcnNpb24YAiABKAMi3AEKC1VzYWdlVG90YWxzEhAKCHJlcXVlc3RzGAEgASgDEg4KBmVycm9ycxgCIAEoAxIUCgxyYXRlX2xpbWl0ZWQYAyABKAMSFAoMaW5wdXRfdG9rZW5zGAQgASgDEhUKDW91dHB1dF90b2tlbnMYBSABKAMSGQoRY2FjaGVfcmVhZF90b2tlbnMYBiABKAMSGgoSY2FjaGVfd3JpdGVfdG9rZW5zGAcgASgDEhgKEHJlYXNvbmluZ190b2tlbnMYCCABKAMSFwoPY29zdF91c2RfbWljcm9zGAkgASgDInsKClVzYWdlU2xpY2USCwoDa2V5GAEgASgJEg0KBWxhYmVsGAIgASgJEg4KBmRldGFpbBgDIAEoCRItCgZ0b3RhbHMYBCABKAsyHS5ibGF4c21pdGguYXBpLnYxLlVzYWdlVG90YWxzEhIKCnByb2plY3RfaWQYBSABKAkiTwoKVXNhZ2VQb2ludBILCgNkYXkYASABKAkSCwoDa2V5GAIgASgJEhcKD2Nvc3RfdXNkX21pY3JvcxgDIAEoAxIOCgZ0b2tlbnMYBCABKAMiOgoXR2V0VXNhZ2VPdmVydmlld1JlcXVlc3QSDAoEZGF5cxgBIAEoBRIRCglzZXJpZXNfYnkYAiABKAkijAMKGEdldFVzYWdlT3ZlcnZpZXdSZXNwb25zZRIPCgdlbmFibGVkGAEgASgIEhAKCGZyb21fZGF5GAIgASgJEg4KBnRvX2RheRgDIAEoCRItCgZ0b3RhbHMYBCABKAsyHS5ibGF4c21pdGguYXBpLnYxLlVzYWdlVG90YWxzEhYKDm1lZGlhbl90dGZ0X21zGAUgASgDEiwKBnNlcmllcxgGIAMoCzIcLmJsYXhzbWl0aC5hcGkudjEuVXNhZ2VQb2ludBIzCg1zZXJpZXNfbGFiZWxzGAcgAygLMhwuYmxheHNtaXRoLmFwaS52MS5Vc2FnZVNsaWNlEjIKDHRvcF9wcm9qZWN0cxgIIAMoCzIcLmJsYXhzbWl0aC5hcGkudjEuVXNhZ2VTbGljZRIvCgl0b3BfdXNlcnMYCSADKAsyHC5ibGF4c21pdGguYXBpLnYxLlVzYWdlU2xpY2USLgoIdG9wX3J1bnMYCiADKAsyHC5ibGF4c21pdGguYXBpLnYxLlVzYWdlU2xpY2Ui7gEKCk1vZGVsUHJpY2USEAoIcHJvdmlkZXIYASABKAkSDQoFbW9kZWwYAiABKAkSHQoVaW5wdXRfbWljcm9zX3Blcl9tdG9rGAMgASgDEh4KFm91dHB1dF9taWNyb3NfcGVyX210b2sYBCABKAMSIgoaY2FjaGVfcmVhZF9taWNyb3NfcGVyX210b2sYBSABKAMSIwobY2FjaGVfd3JpdGVfbWljcm9zX3Blcl9tdG9rGAYgASgDEg4KBnNvdXJjZRgHIAEoCRIPCgd2ZXJzaW9uGAggASgJEhYKDmVmZmVjdGl2ZV9mcm9tGAkgASgJIhgKFkxpc3RNb2RlbFByaWNlc1JlcXVlc3QiRwoXTGlzdE1vZGVsUHJpY2VzUmVzcG9uc2USLAoGcHJpY2VzGAEgAygLMhwuYmxheHNtaXRoLmFwaS52MS5Nb2RlbFByaWNlIksKHFNldE1vZGVsUHJpY2VPdmVycmlkZVJlcXVlc3QSKwoFcHJpY2UYASABKAsyHC5ibGF4c21pdGguYXBpLnYxLk1vZGVsUHJpY2UiTAodU2V0TW9kZWxQcmljZU92ZXJyaWRlUmVzcG9uc2USKwoFcHJpY2UYASABKAsyHC5ibGF4c21pdGguYXBpLnYxLk1vZGVsUHJpY2Ui2AIKBkJ1ZGdldBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEg0KBXNjb3BlGAMgASgJEhIKCnByb2plY3RfaWQYBCABKAkSFAoMcHJvamVjdF9uYW1lGAUgASgJEhQKDHByaW5jaXBhbF9pZBgGIAEoCRIWCg5wcmluY2lwYWxfbmFtZRgHIAEoCRIZChFhbW91bnRfdXNkX21pY3JvcxgIIAEoAxISCgp0aHJlc2hvbGRzGAkgAygFEg8KB3ZlcnNpb24YCiABKAMSGAoQc3BlbmRfdXNkX21pY3JvcxgLIAEoAxIbChNmb3JlY2FzdF91c2RfbWljcm9zGAwgASgDEhgKEGZpcmVkX3RocmVzaG9sZHMYDSADKAUSFAoMcGVyaW9kX3N0YXJ0GA4gASgJEhIKCnBlcmlvZF9lbmQYDyABKAkSEgoKY3JlYXRlZF9hdBgQIAEoCSKDAQoLQnVkZ2V0SW5wdXQSDAoEbmFtZRgBIAEoCRINCgVzY29wZRgCIAEoCRISCgpwcm9qZWN0X2lkGAMgASgJEhQKDHByaW5jaXBhbF9pZBgEIAEoCRIZChFhbW91bnRfdXNkX21pY3JvcxgFIAEoAxISCgp0aHJlc2hvbGRzGAYgAygFIhQKEkxpc3RCdWRnZXRzUmVxdWVzdCJyChNMaXN0QnVkZ2V0c1Jlc3BvbnNlEhcKD2dhdGV3YXlfZW5hYmxlZBgBIAEoCBIXCg9idWRnZXRzX2VuYWJsZWQYAiABKAgSKQoHYnVkZ2V0cxgDIAMoCzIYLmJsYXhzbWl0aC5hcGkudjEuQnVkZ2V0IisKGFNldEJ1ZGdldHNFbmFibGVkUmVxdWVzdBIPCgdlbmFibGVkGAEgASgIIiwKGVNldEJ1ZGdldHNFbmFibGVkUmVzcG9uc2USDwoHZW5hYmxlZBgBIAEoCCJEChNDcmVhdGVCdWRnZXRSZXF1ZXN0Ei0KBmJ1ZGdldBgBIAEoCzIdLmJsYXhzbWl0aC5hcGkudjEuQnVkZ2V0SW5wdXQiQAoUQ3JlYXRlQnVkZ2V0UmVzcG9uc2USKAoGYnVkZ2V0GAEgASgLMhguYmxheHNtaXRoLmFwaS52MS5CdWRnZXQicQoTVXBkYXRlQnVkZ2V0UmVxdWVzdBIRCglidWRnZXRfaWQYASABKAkSLQoGYnVkZ2V0GAIgASgLMh0uYmxheHNtaXRoLmFwaS52MS5CdWRnZXRJbnB1dBIYChBleHBlY3RlZF92ZXJzaW9uGAMgASgDIkAKFFVwZGF0ZUJ1ZGdldFJlc3BvbnNlEigKBmJ1ZGdldBgBIAEoCzIYLmJsYXhzbWl0aC5hcGkudjEuQnVkZ2V0IikKFEFyY2hpdmVCdWRnZXRSZXF1ZXN0EhEKCWJ1ZGdldF9pZBgBIAEoCSIXChVBcmNoaXZlQnVkZ2V0UmVzcG9uc2UijQMKC0J1ZGdldEFsZXJ0EgoKAmlkGAEgASgJEhEKCWJ1ZGdldF9pZBgCIAEoCRITCgtidWRnZXRfbmFtZRgDIAEoCRINCgVzY29wZRgEIAEoCRISCgpwcm9qZWN0X2lkGAUgASgJEhQKDHByb2plY3RfbmFtZRgGIAEoCRIUCgxwcmluY2lwYWxfaWQYByABKAkSFgoOcHJpbmNpcGFsX25hbWUYCCABKAkSFQoNdGhyZXNob2xkX3BjdBgJIAEoBRIYChBzcGVuZF91c2RfbWljcm9zGAogASgDEhkKEWFtb3VudF91c2RfbWljcm9zGAsgASgDEhsKE2ZvcmVjYXN0X3VzZF9taWNyb3MYDCABKAMSFAoMcGVyaW9kX3N0YXJ0GA0gASgJEhIKCmNyZWF0ZWRfYXQYDiABKAkSFwoPYWNrbm93bGVkZ2VkX2F0GA8gASgJEiAKGGFja25vd2xlZGdlZF9ieV91c2VybmFtZRgQIAEoCRIVCg1zbm9vemVkX3VudGlsGBEgASgJIiwKF0xpc3RCdWRnZXRBbGVydHNSZXF1ZXN0EhEKCW9wZW5fb25seRgBIAEoCCJJChhMaXN0QnVkZ2V0QWxlcnRzUmVzcG9uc2USLQoGYWxlcnRzGAEgAygLMh0uYmxheHNtaXRoLmFwaS52MS5CdWRnZXRBbGVydCJWChJHYXRld2F5Um91dGVNZXRyaWMSDAoEbmFtZRgBIAEoCRINCgVsaW1pdBgCIAEoAxIRCglyZW1haW5pbmcYAyABKAMSEAoIcmVzZXRfYXQYBCABKAki3wQKDEdhdGV3YXlSb3V0ZRIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgwKBGtpbmQYAyABKAkSFQoNY29ubmVjdGlvbl9pZBgEIAEoCRIYChBjb25uZWN0aW9uX2xhYmVsGAUgASgJEg4KBnJlZ2lvbhgGIAEoCRIVCg1jbG91ZF9wcm9qZWN0GAcgASgJEj8KCW1vZGVsX21hcBgIIAMoCzIsLmJsYXhzbWl0aC5hcGkudjEuR2F0ZXdheVJvdXRlLk1vZGVsTWFwRW50cnkSDgoGd2VpZ2h0GAkgASgFEhAKCHByaW9yaXR5GAogASgFEhcKD2NvbmN1cnJlbmN5X2NhcBgLIAEoBRIbChNyZXF1ZXN0c19wZXJfbWludXRlGAwgASgFEhkKEXRva2Vuc19wZXJfbWludXRlGA0gASgDEg0KBXN0YXRlGA4gASgJEhAKCHBvb2xfaWRzGA8gAygJEg8KB2JyZWFrZXIYECABKAkSFgoOY29vbGRvd25fdW50aWwYESABKAkSEAoIaW5mbGlnaHQYEiABKAUSNQoHbWV0cmljcxgTIAMoCzIkLmJsYXhzbWl0aC5hcGkudjEuR2F0ZXdheVJvdXRlTWV0cmljEhQKDHJlcXVlc3RzXzE1bRgUIAEoBRISCgplcnJvcnNfMTVtGBUgASgFEhMKC2xhc3RfNDI5X2F0GBYgASgJEhgKEHN0YXRlX3VwZGF0ZWRfYXQYFyABKAkaLwoNTW9kZWxNYXBFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIqsBCgtHYXRld2F5UG9vbBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEg4KBmZhbWlseRgDIAEoCRIQCghzdHJhdGVneRgEIAEoCRIXCg9jb25jdXJyZW5jeV9jYXAYBSABKAUSEAoIYWZmaW5pdHkYBiABKAgSDQoFc3RhdGUYByABKAkSEQoJcm91dGVfaWRzGAggAygJEhMKC3Byb2plY3RfaWRzGAkgAygJIpMBCgpQYWNlZFN0YWdlEg8KB3Rhc2tfaWQYASABKAkSDgoGcnVuX2lkGAIgASgJEhIKCnByb2plY3RfaWQYAyABKAkSDQoFc3RhZ2UYBCABKAkSDwoHcG9vbF9pZBgFIAEoCRIOCgZyZWFzb24YBiABKAkSEQoJcmVzZXRzX2F0GAcgASgJEg0KBXNpbmNlGAggASgJIj8KEkdhdGV3YXlSb3V0ZU9wdGlvbhIKCgJpZBgBIAEoCRINCgVsYWJlbBgCIAEoCRIOCgZkZXRhaWwYAyABKAkiGgoYTGlzdEdhdGV3YXlSb3V0ZXNSZXF1ZXN0IsgCChlMaXN0R2F0ZXdheVJvdXRlc1Jlc3BvbnNlEi4KBnJvdXRlcxgBIAMoCzIeLmJsYXhzbWl0aC5hcGkudjEuR2F0ZXdheVJvdXRlEiwKBXBvb2xzGAIgAygLMh0uYmxheHNtaXRoLmFwaS52MS5HYXRld2F5UG9vbBIrCgVwYWNlZBgDIAMoCzIcLmJsYXhzbWl0aC5hcGkudjEuUGFjZWRTdGFnZRI5Cgtjb25uZWN0aW9ucxgEIAMoCzIkLmJsYXhzbWl0aC5hcGkudjEuR2F0ZXdheVJvdXRlT3B0aW9uEjYKCHByb2plY3RzGAUgAygLMiQuYmxheHNtaXRoLmFwaS52MS5HYXRld2F5Um91dGVPcHRpb24SFQoNcG9vbHNfZW5hYmxlZBgGIAEoCBIWCg5wYWNpbmdfZW5hYmxlZBgHIAEoCCJiChdTYXZlR2F0ZXdheVJvdXRlUmVxdWVzdBItCgVyb3V0ZRgBIAEoCzIeLmJsYXhzbWl0aC5hcGkudjEuR2F0ZXdheVJvdXRlEhgKEGNsb3VkX2NyZWRlbnRpYWwYAiABKAkiSQoYU2F2ZUdhdGV3YXlSb3V0ZVJlc3BvbnNlEi0KBXJvdXRlGAEgASgLMh4uYmxheHNtaXRoLmFwaS52MS5HYXRld2F5Um91dGUiOAobU2V0R2F0ZXdheVJvdXRlU3RhdGVSZXF1ZXN0EgoKAmlkGAEgASgJEg0KBXN0YXRlGAIgASgJIh4KHFNldEdhdGV3YXlSb3V0ZVN0YXRlUmVzcG9uc2UiRQoWU2F2ZUdhdGV3YXlQb29sUmVxdWVzdBIrCgRwb29sGAEgASgLMh0uYmxheHNtaXRoLmFwaS52MS5HYXRld2F5UG9vbCJGChdTYXZlR2F0ZXdheVBvb2xSZXNwb25zZRIrCgRwb29sGAEgASgLMh0uYmxheHNtaXRoLmFwaS52MS5HYXRld2F5UG9vbCJ5ChdTdWJzY3JpcHRpb25MaW1pdFdpbmRvdxIMCgRuYW1lGAEgASgJEhAKCHVzZWRfcGN0GAIgASgBEhYKDndpbmRvd19taW51dGVzGAMgASgFEhEKCXJlc2V0c19hdBgEIAEoCRITCgtvYnNlcnZlZF9hdBgFIAEoCSKsAQoSU3Vic2NyaXB0aW9uTGltaXRzEhUKDWNvbm5lY3Rpb25faWQYASABKAkSDQoFbGFiZWwYAiABKAkSEAoIcHJvdmlkZXIYAyABKAkSEwoLYXV0aF9tZXRob2QYBCABKAkSDQoFc3RhdGUYBSABKAkSOgoHd2luZG93cxgGIAMoCzIpLmJsYXhzbWl0aC5hcGkudjEuU3Vic2NyaXB0aW9uTGltaXRXaW5kb3ciIQofTGlzdE15U3Vic2NyaXB0aW9uTGltaXRzUmVxdWVzdCKAAQogTGlzdE15U3Vic2NyaXB0aW9uTGltaXRzUmVzcG9uc2USOwoNc3Vic2NyaXB0aW9ucxgBIAMoCzIkLmJsYXhzbWl0aC5hcGkudjEuU3Vic2NyaXB0aW9uTGltaXRzEh8KF3BlcnNvbmFsX3JvdXRlc19lbmFibGVkGAIgASgIIhkKF0dldEdhdGV3YXlTdGF0dXNSZXF1ZXN0IisKGEdldEdhdGV3YXlTdGF0dXNSZXNwb25zZRIPCgdlbmFibGVkGAEgASgIIiEKEUdldE15VXNhZ2VSZXF1ZXN0EgwKBGRheXMYASABKAUiiAIKEkdldE15VXNhZ2VSZXNwb25zZRIPCgdlbmFibGVkGAEgASgIEhAKCGZyb21fZGF5GAIgASgJEg4KBnRvX2RheRgDIAEoCRItCgZ0b3RhbHMYBCABKAsyHS5ibGF4c21pdGguYXBpLnYxLlVzYWdlVG90YWxzEjAKCmJ5X3Byb2plY3QYBSADKAsyHC5ibGF4c21pdGguYXBpLnYxLlVzYWdlU2xpY2USLgoIYnlfbW9kZWwYBiADKAsyHC5ibGF4c21pdGguYXBpLnYxLlVzYWdlU2xpY2USLgoIdG9wX3J1bnMYByADKAsyHC5ibGF4c21pdGguYXBpLnYxLlVzYWdlU2xpY2UilwIKCU1vZGVsQ2FsbBISCgpzdGFydGVkX2F0GAEgASgJEg0KBXN0YWdlGAIgASgJEg0KBW1vZGVsGAMgASgJEhIKCnJvdXRlX2tpbmQYBCABKAkSCwoDYXBpGAUgASgJEg4KBnN0YXR1cxgGIAEoCRITCgtodHRwX3N0YXR1cxgHIAEoBRITCgtyZXRyeV9jb3VudBgIIAEoBRIQCghzdHJlYW1lZBgJIAEoCBIWCg51c2FnZV9yZXBvcnRlZBgKIAEoCBIPCgd0dGZ0X21zGAsgASgFEhMKC2R1cmF0aW9uX21zGAwgASgFEi0KBnRvdGFscxgNIAEoCzIdLmJsYXhzbWl0aC5hcGkudjEuVXNhZ2VUb3RhbHMicwoJU3RhZ2VDb3N0Eg8KB3Rhc2tfaWQYASABKAkSDQoFc3RhZ2UYAiABKAkSLQoGdG90YWxzGAMgASgLMh0uYmxheHNtaXRoLmFwaS52MS5Vc2FnZVRvdGFscxIXCg9jYWNoZV9oaXRfcmF0aW8YBCABKAEiIwoRR2V0UnVuQ29zdFJlcXVlc3QSDgoGcnVuX2lkGAEgASgJIuABChJHZXRSdW5Db3N0UmVzcG9uc2USDwoHZW5hYmxlZBgBIAEoCBItCgZ0b3RhbHMYAiABKAsyHS5ibGF4c21pdGguYXBpLnYxLlVzYWdlVG90YWxzEisKBnN0YWdlcxgDIAMoCzIbLmJsYXhzbWl0aC5hcGkudjEuU3RhZ2VDb3N0Ei0KCHJlcXVlc3RzGAQgAygLMhsuYmxheHNtaXRoLmFwaS52MS5Nb2RlbENhbGwSEQoJdHJ1bmNhdGVkGAUgASgIEhsKE3JlcXVlc3RzX3Jlc3RyaWN0ZWQYBiABKAgiLwoZR2V0UHJvamVjdERlbGl2ZXJ5UmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJIqMBChpHZXRQcm9qZWN0RGVsaXZlcnlSZXNwb25zZRIVCg1kZWxpdmVyeV9tb2RlGAEgASgJEhYKDnByb2plY3RfY2hvaWNlGAIgASgJEhMKC29yZ19kZWZhdWx0GAMgASgJEhcKD2dhdGV3YXlfZW5hYmxlZBgEIAEoCBIWCg5jaG9pY2VfYWxsb3dlZBgFIAEoCBIQCghjYW5fZWRpdBgGIAEoCCJGChlTZXRQcm9qZWN0RGVsaXZlcnlSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSFQoNZGVsaXZlcnlfbW9kZRgCIAEoCSJcChpTZXRQcm9qZWN0RGVsaXZlcnlSZXNwb25zZRI+CghkZWxpdmVyeRgBIAEoCzIsLmJsYXhzbWl0aC5hcGkudjEuR2V0UHJvamVjdERlbGl2ZXJ5UmVzcG9uc2UiLAoWR2V0UHJvamVjdFVzYWdlUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJItkDChdHZXRQcm9qZWN0VXNhZ2VSZXNwb25zZRIPCgdlbmFibGVkGAEgASgIEhAKCGZyb21fZGF5GAIgASgJEg4KBnRvX2RheRgDIAEoCRItCgZ0b3RhbHMYBCABKAsyHS5ibGF4c21pdGguYXBpLnYxLlVzYWdlVG90YWxzEigKBmJ1ZGdldBgFIAEoCzIYLmJsYXhzbWl0aC5hcGkudjEuQnVkZ2V0EiwKBnNlcmllcxgGIAMoCzIcLmJsYXhzbWl0aC5hcGkudjEuVXNhZ2VQb2ludBIuCghieV9zdGFnZRgHIAMoCzIcLmJsYXhzbWl0aC5hcGkudjEuVXNhZ2VTbGljZRIuCghieV9tb2RlbBgIIAMoCzIcLmJsYXhzbWl0aC5hcGkudjEuVXNhZ2VTbGljZRItCgdieV91c2VyGAkgAygLMhwuYmxheHNtaXRoLmFwaS52MS5Vc2FnZVNsaWNlEhYKDmJ5X3VzZXJfaGlkZGVuGAogASgIEi4KCHRvcF9ydW5zGAsgAygLMhwuYmxheHNtaXRoLmFwaS52MS5Vc2FnZVNsaWNlEi0KBmFsZXJ0cxgMIAMoCzIdLmJsYXhzbWl0aC5hcGkudjEuQnVkZ2V0QWxlcnQiMQodQWNrbm93bGVkZ2VCdWRnZXRBbGVydFJlcXVlc3QSEAoIYWxlcnRfaWQYASABKAkiIAoeQWNrbm93bGVkZ2VCdWRnZXRBbGVydFJlc3BvbnNlIjsKGFNub296ZUJ1ZGdldEFsZXJ0UmVxdWVzdBIQCghhbGVydF9pZBgBIAEoCRINCgVob3VycxgCIAEoBSIyChlTbm9vemVCdWRnZXRBbGVydFJlc3BvbnNlEhUKDXNub296ZWRfdW50aWwYASABKAky2gwKE0dhdGV3YXlBZG1pblNlcnZpY2USbwoSR2V0R2F0ZXdheVNldHRpbmdzEisuYmxheHNtaXRoLmFwaS52MS5HZXRHYXRld2F5U2V0dGluZ3NSZXF1ZXN0GiwuYmxheHNtaXRoLmFwaS52MS5HZXRHYXRld2F5U2V0dGluZ3NSZXNwb25zZRJ4ChVVcGRhdGVHYXRld2F5U2V0dGluZ3MSLi5ibGF4c21pdGguYXBpLnYxLlVwZGF0ZUdhdGV3YXlTZXR0aW5nc1JlcXVlc3QaLy5ibGF4c21pdGguYXBpLnYxLlVwZGF0ZUdhdGV3YXlTZXR0aW5nc1Jlc3BvbnNlEmkKEEdldFVzYWdlT3ZlcnZpZXcSKS5ibGF4c21pdGguYXBpLnYxLkdldFVzYWdlT3ZlcnZpZXdSZXF1ZXN0GiouYmxheHNtaXRoLmFwaS52MS5HZXRVc2FnZU92ZXJ2aWV3UmVzcG9uc2USZgoPTGlzdE1vZGVsUHJpY2VzEiguYmxheHNtaXRoLmFwaS52MS5MaXN0TW9kZWxQcmljZXNSZXF1ZXN0GikuYmxheHNtaXRoLmFwaS52MS5MaXN0TW9kZWxQcmljZXNSZXNwb25zZRJ4ChVTZXRNb2RlbFByaWNlT3ZlcnJpZGUSLi5ibGF4c21pdGguYXBpLnYxLlNldE1vZGVsUHJpY2VPdmVycmlkZVJlcXVlc3QaLy5ibGF4c21pdGguYXBpLnYxLlNldE1vZGVsUHJpY2VPdmVycmlkZVJlc3BvbnNlEmwKEUxpc3RHYXRld2F5Um91dGVzEiouYmxheHNtaXRoLmFwaS52MS5MaXN0R2F0ZXdheVJvdXRlc1JlcXVlc3QaKy5ibGF4c21pdGguYXBpLnYxLkxpc3RHYXRld2F5Um91dGVzUmVzcG9uc2USaQoQU2F2ZUdhdGV3YXlSb3V0ZRIpLmJsYXhzbWl0aC5hcGkudjEuU2F2ZUdhdGV3YXlSb3V0ZVJlcXVlc3QaKi5ibGF4c21pdGguYXBpLnYxLlNhdmVHYXRld2F5Um91dGVSZXNwb25zZRJ1ChRTZXRHYXRld2F5Um91dGVTdGF0ZRItLmJsYXhzbWl0aC5hcGkudjEuU2V0R2F0ZXdheVJvdXRlU3RhdGVSZXF1ZXN0Gi4uYmxheHNtaXRoLmFwaS52MS5TZXRHYXRld2F5Um91dGVTdGF0ZVJlc3BvbnNlEmYKD1NhdmVHYXRld2F5UG9vbBIoLmJsYXhzbWl0aC5hcGkudjEuU2F2ZUdhdGV3YXlQb29sUmVxdWVzdBopLmJsYXhzbWl0aC5hcGkudjEuU2F2ZUdhdGV3YXlQb29sUmVzcG9uc2USWgoLTGlzdEJ1ZGdldHMSJC5ibGF4c21pdGguYXBpLnYxLkxpc3RCdWRnZXRzUmVxdWVzdBolLmJsYXhzbWl0aC5hcGkudjEuTGlzdEJ1ZGdldHNSZXNwb25zZRJsChFTZXRCdWRnZXRzRW5hYmxlZBIqLmJsYXhzbWl0aC5hcGkudjEuU2V0QnVkZ2V0c0VuYWJsZWRSZXF1ZXN0GisuYmxheHNtaXRoLmFwaS52MS5TZXRCdWRnZXRzRW5hYmxlZFJlc3BvbnNlEl0KDENyZWF0ZUJ1ZGdldBIlLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlQnVkZ2V0UmVxdWVzdBomLmJsYXhzbWl0aC5hcGkudjEuQ3JlYXRlQnVkZ2V0UmVzcG9uc2USXQoMVXBkYXRlQnVkZ2V0EiUuYmxheHNtaXRoLmFwaS52MS5VcGRhdGVCdWRnZXRSZXF1ZXN0GiYuYmxheHNtaXRoLmFwaS52MS5VcGRhdGVCdWRnZXRSZXNwb25zZRJgCg1BcmNoaXZlQnVkZ2V0EiYuYmxheHNtaXRoLmFwaS52MS5BcmNoaXZlQnVkZ2V0UmVxdWVzdBonLmJsYXhzbWl0aC5hcGkudjEuQXJjaGl2ZUJ1ZGdldFJlc3BvbnNlEmkKEExpc3RCdWRnZXRBbGVydHMSKS5ibGF4c21pdGguYXBpLnYxLkxpc3RCdWRnZXRBbGVydHNSZXF1ZXN0GiouYmxheHNtaXRoLmFwaS52MS5MaXN0QnVkZ2V0QWxlcnRzUmVzcG9uc2Uy5AcKDFVzYWdlU2VydmljZRJpChBHZXRHYXRld2F5U3RhdHVzEikuYmxheHNtaXRoLmFwaS52MS5HZXRHYXRld2F5U3RhdHVzUmVxdWVzdBoqLmJsYXhzbWl0aC5hcGkudjEuR2V0R2F0ZXdheVN0YXR1c1Jlc3BvbnNlElcKCkdldE15VXNhZ2USIy5ibGF4c21pdGguYXBpLnYxLkdldE15VXNhZ2VSZXF1ZXN0GiQuYmxheHNtaXRoLmFwaS52MS5HZXRNeVVzYWdlUmVzcG9uc2USVwoKR2V0UnVuQ29zdBIjLmJsYXhzbWl0aC5hcGkudjEuR2V0UnVuQ29zdFJlcXVlc3QaJC5ibGF4c21pdGguYXBpLnYxLkdldFJ1bkNvc3RSZXNwb25zZRJvChJHZXRQcm9qZWN0RGVsaXZlcnkSKy5ibGF4c21pdGguYXBpLnYxLkdldFByb2plY3REZWxpdmVyeVJlcXVlc3QaLC5ibGF4c21pdGguYXBpLnYxLkdldFByb2plY3REZWxpdmVyeVJlc3BvbnNlEm8KElNldFByb2plY3REZWxpdmVyeRIrLmJsYXhzbWl0aC5hcGkudjEuU2V0UHJvamVjdERlbGl2ZXJ5UmVxdWVzdBosLmJsYXhzbWl0aC5hcGkudjEuU2V0UHJvamVjdERlbGl2ZXJ5UmVzcG9uc2USgQEKGExpc3RNeVN1YnNjcmlwdGlvbkxpbWl0cxIxLmJsYXhzbWl0aC5hcGkudjEuTGlzdE15U3Vic2NyaXB0aW9uTGltaXRzUmVxdWVzdBoyLmJsYXhzbWl0aC5hcGkudjEuTGlzdE15U3Vic2NyaXB0aW9uTGltaXRzUmVzcG9uc2USZgoPR2V0UHJvamVjdFVzYWdlEiguYmxheHNtaXRoLmFwaS52MS5HZXRQcm9qZWN0VXNhZ2VSZXF1ZXN0GikuYmxheHNtaXRoLmFwaS52MS5HZXRQcm9qZWN0VXNhZ2VSZXNwb25zZRJ7ChZBY2tub3dsZWRnZUJ1ZGdldEFsZXJ0Ei8uYmxheHNtaXRoLmFwaS52MS5BY2tub3dsZWRnZUJ1ZGdldEFsZXJ0UmVxdWVzdBowLmJsYXhzbWl0aC5hcGkudjEuQWNrbm93bGVkZ2VCdWRnZXRBbGVydFJlc3BvbnNlEmwKEVNub296ZUJ1ZGdldEFsZXJ0EiouYmxheHNtaXRoLmFwaS52MS5Tbm9vemVCdWRnZXRBbGVydFJlcXVlc3QaKy5ibGF4c21pdGguYXBpLnYxLlNub296ZUJ1ZGdldEFsZXJ0UmVzcG9uc2VCxAEKFGNvbS5ibGF4c21pdGguYXBpLnYxQgxHYXRld2F5UHJvdG9QAVo8Z2l0aHViLmNvbS9tanRlY2hndXkvYmxheHNtaXRoL2dlbi9nby9ibGF4c21pdGgvYXBpL3YxO2FwaXYxogIDQkFYqgIQQmxheHNtaXRoLkFwaS5WMcoCEEJsYXhzbWl0aFxBcGlcVjHiAhxCbGF4c21pdGhcQXBpXFYxXEdQQk1ldGFkYXRh6gISQmxheHNtaXRoOjpBcGk6OlYxYgZwcm90bzM");
 
 /**
  * §15.1 organization switches. Later-phase switches are not settable in G1.
@@ -539,6 +539,490 @@ export const SetModelPriceOverrideResponseSchema: GenMessage<SetModelPriceOverri
   messageDesc(file_blaxsmith_api_v1_gateway, 14);
 
 /**
+ * §8 soft budgets (G3). Monthly (UTC calendar month) estimated USD; alerts
+ * never block anything.
+ *
+ * @generated from message blaxsmith.api.v1.Budget
+ */
+export type Budget = Message<"blaxsmith.api.v1.Budget"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * organization, project, or user.
+   *
+   * @generated from field: string scope = 3;
+   */
+  scope: string;
+
+  /**
+   * Set for scope project.
+   *
+   * @generated from field: string project_id = 4;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string project_name = 5;
+   */
+  projectName: string;
+
+  /**
+   * Set for scope user.
+   *
+   * @generated from field: string principal_id = 6;
+   */
+  principalId: string;
+
+  /**
+   * @generated from field: string principal_name = 7;
+   */
+  principalName: string;
+
+  /**
+   * @generated from field: int64 amount_usd_micros = 8;
+   */
+  amountUsdMicros: bigint;
+
+  /**
+   * Percent, ascending; default 50, 80, 100.
+   *
+   * @generated from field: repeated int32 thresholds = 9;
+   */
+  thresholds: number[];
+
+  /**
+   * @generated from field: int64 version = 10;
+   */
+  version: bigint;
+
+  /**
+   * Month to date, from the rollups.
+   *
+   * @generated from field: int64 spend_usd_micros = 11;
+   */
+  spendUsdMicros: bigint;
+
+  /**
+   * Month-to-date run-rate projected to the end of the month.
+   *
+   * @generated from field: int64 forecast_usd_micros = 12;
+   */
+  forecastUsdMicros: bigint;
+
+  /**
+   * Thresholds already alerted this period.
+   *
+   * @generated from field: repeated int32 fired_thresholds = 13;
+   */
+  firedThresholds: number[];
+
+  /**
+   * YYYY-MM-DD, UTC.
+   *
+   * @generated from field: string period_start = 14;
+   */
+  periodStart: string;
+
+  /**
+   * YYYY-MM-DD, UTC, inclusive.
+   *
+   * @generated from field: string period_end = 15;
+   */
+  periodEnd: string;
+
+  /**
+   * @generated from field: string created_at = 16;
+   */
+  createdAt: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.Budget.
+ * Use `create(BudgetSchema)` to create a new message.
+ */
+export const BudgetSchema: GenMessage<Budget> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 15);
+
+/**
+ * @generated from message blaxsmith.api.v1.BudgetInput
+ */
+export type BudgetInput = Message<"blaxsmith.api.v1.BudgetInput"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string scope = 2;
+   */
+  scope: string;
+
+  /**
+   * @generated from field: string project_id = 3;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string principal_id = 4;
+   */
+  principalId: string;
+
+  /**
+   * @generated from field: int64 amount_usd_micros = 5;
+   */
+  amountUsdMicros: bigint;
+
+  /**
+   * Empty means 50, 80, 100.
+   *
+   * @generated from field: repeated int32 thresholds = 6;
+   */
+  thresholds: number[];
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.BudgetInput.
+ * Use `create(BudgetInputSchema)` to create a new message.
+ */
+export const BudgetInputSchema: GenMessage<BudgetInput> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 16);
+
+/**
+ * @generated from message blaxsmith.api.v1.ListBudgetsRequest
+ */
+export type ListBudgetsRequest = Message<"blaxsmith.api.v1.ListBudgetsRequest"> & {
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ListBudgetsRequest.
+ * Use `create(ListBudgetsRequestSchema)` to create a new message.
+ */
+export const ListBudgetsRequestSchema: GenMessage<ListBudgetsRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 17);
+
+/**
+ * @generated from message blaxsmith.api.v1.ListBudgetsResponse
+ */
+export type ListBudgetsResponse = Message<"blaxsmith.api.v1.ListBudgetsResponse"> & {
+  /**
+   * @generated from field: bool gateway_enabled = 1;
+   */
+  gatewayEnabled: boolean;
+
+  /**
+   * The §15.1 "Budgets & alerts" switch.
+   *
+   * @generated from field: bool budgets_enabled = 2;
+   */
+  budgetsEnabled: boolean;
+
+  /**
+   * @generated from field: repeated blaxsmith.api.v1.Budget budgets = 3;
+   */
+  budgets: Budget[];
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ListBudgetsResponse.
+ * Use `create(ListBudgetsResponseSchema)` to create a new message.
+ */
+export const ListBudgetsResponseSchema: GenMessage<ListBudgetsResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 18);
+
+/**
+ * @generated from message blaxsmith.api.v1.SetBudgetsEnabledRequest
+ */
+export type SetBudgetsEnabledRequest = Message<"blaxsmith.api.v1.SetBudgetsEnabledRequest"> & {
+  /**
+   * @generated from field: bool enabled = 1;
+   */
+  enabled: boolean;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.SetBudgetsEnabledRequest.
+ * Use `create(SetBudgetsEnabledRequestSchema)` to create a new message.
+ */
+export const SetBudgetsEnabledRequestSchema: GenMessage<SetBudgetsEnabledRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 19);
+
+/**
+ * @generated from message blaxsmith.api.v1.SetBudgetsEnabledResponse
+ */
+export type SetBudgetsEnabledResponse = Message<"blaxsmith.api.v1.SetBudgetsEnabledResponse"> & {
+  /**
+   * @generated from field: bool enabled = 1;
+   */
+  enabled: boolean;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.SetBudgetsEnabledResponse.
+ * Use `create(SetBudgetsEnabledResponseSchema)` to create a new message.
+ */
+export const SetBudgetsEnabledResponseSchema: GenMessage<SetBudgetsEnabledResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 20);
+
+/**
+ * @generated from message blaxsmith.api.v1.CreateBudgetRequest
+ */
+export type CreateBudgetRequest = Message<"blaxsmith.api.v1.CreateBudgetRequest"> & {
+  /**
+   * @generated from field: blaxsmith.api.v1.BudgetInput budget = 1;
+   */
+  budget?: BudgetInput | undefined;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.CreateBudgetRequest.
+ * Use `create(CreateBudgetRequestSchema)` to create a new message.
+ */
+export const CreateBudgetRequestSchema: GenMessage<CreateBudgetRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 21);
+
+/**
+ * @generated from message blaxsmith.api.v1.CreateBudgetResponse
+ */
+export type CreateBudgetResponse = Message<"blaxsmith.api.v1.CreateBudgetResponse"> & {
+  /**
+   * @generated from field: blaxsmith.api.v1.Budget budget = 1;
+   */
+  budget?: Budget | undefined;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.CreateBudgetResponse.
+ * Use `create(CreateBudgetResponseSchema)` to create a new message.
+ */
+export const CreateBudgetResponseSchema: GenMessage<CreateBudgetResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 22);
+
+/**
+ * @generated from message blaxsmith.api.v1.UpdateBudgetRequest
+ */
+export type UpdateBudgetRequest = Message<"blaxsmith.api.v1.UpdateBudgetRequest"> & {
+  /**
+   * @generated from field: string budget_id = 1;
+   */
+  budgetId: string;
+
+  /**
+   * Name, amount and thresholds; scope and target cannot change.
+   *
+   * @generated from field: blaxsmith.api.v1.BudgetInput budget = 2;
+   */
+  budget?: BudgetInput | undefined;
+
+  /**
+   * @generated from field: int64 expected_version = 3;
+   */
+  expectedVersion: bigint;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.UpdateBudgetRequest.
+ * Use `create(UpdateBudgetRequestSchema)` to create a new message.
+ */
+export const UpdateBudgetRequestSchema: GenMessage<UpdateBudgetRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 23);
+
+/**
+ * @generated from message blaxsmith.api.v1.UpdateBudgetResponse
+ */
+export type UpdateBudgetResponse = Message<"blaxsmith.api.v1.UpdateBudgetResponse"> & {
+  /**
+   * @generated from field: blaxsmith.api.v1.Budget budget = 1;
+   */
+  budget?: Budget | undefined;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.UpdateBudgetResponse.
+ * Use `create(UpdateBudgetResponseSchema)` to create a new message.
+ */
+export const UpdateBudgetResponseSchema: GenMessage<UpdateBudgetResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 24);
+
+/**
+ * @generated from message blaxsmith.api.v1.ArchiveBudgetRequest
+ */
+export type ArchiveBudgetRequest = Message<"blaxsmith.api.v1.ArchiveBudgetRequest"> & {
+  /**
+   * @generated from field: string budget_id = 1;
+   */
+  budgetId: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ArchiveBudgetRequest.
+ * Use `create(ArchiveBudgetRequestSchema)` to create a new message.
+ */
+export const ArchiveBudgetRequestSchema: GenMessage<ArchiveBudgetRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 25);
+
+/**
+ * @generated from message blaxsmith.api.v1.ArchiveBudgetResponse
+ */
+export type ArchiveBudgetResponse = Message<"blaxsmith.api.v1.ArchiveBudgetResponse"> & {
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ArchiveBudgetResponse.
+ * Use `create(ArchiveBudgetResponseSchema)` to create a new message.
+ */
+export const ArchiveBudgetResponseSchema: GenMessage<ArchiveBudgetResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 26);
+
+/**
+ * A threshold crossing. Each threshold fires once per budget period.
+ *
+ * @generated from message blaxsmith.api.v1.BudgetAlert
+ */
+export type BudgetAlert = Message<"blaxsmith.api.v1.BudgetAlert"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string budget_id = 2;
+   */
+  budgetId: string;
+
+  /**
+   * @generated from field: string budget_name = 3;
+   */
+  budgetName: string;
+
+  /**
+   * @generated from field: string scope = 4;
+   */
+  scope: string;
+
+  /**
+   * @generated from field: string project_id = 5;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string project_name = 6;
+   */
+  projectName: string;
+
+  /**
+   * @generated from field: string principal_id = 7;
+   */
+  principalId: string;
+
+  /**
+   * @generated from field: string principal_name = 8;
+   */
+  principalName: string;
+
+  /**
+   * @generated from field: int32 threshold_pct = 9;
+   */
+  thresholdPct: number;
+
+  /**
+   * At the time of the crossing.
+   *
+   * @generated from field: int64 spend_usd_micros = 10;
+   */
+  spendUsdMicros: bigint;
+
+  /**
+   * @generated from field: int64 amount_usd_micros = 11;
+   */
+  amountUsdMicros: bigint;
+
+  /**
+   * @generated from field: int64 forecast_usd_micros = 12;
+   */
+  forecastUsdMicros: bigint;
+
+  /**
+   * @generated from field: string period_start = 13;
+   */
+  periodStart: string;
+
+  /**
+   * @generated from field: string created_at = 14;
+   */
+  createdAt: string;
+
+  /**
+   * Empty while open.
+   *
+   * @generated from field: string acknowledged_at = 15;
+   */
+  acknowledgedAt: string;
+
+  /**
+   * @generated from field: string acknowledged_by_username = 16;
+   */
+  acknowledgedByUsername: string;
+
+  /**
+   * Hidden from the inbox until then.
+   *
+   * @generated from field: string snoozed_until = 17;
+   */
+  snoozedUntil: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.BudgetAlert.
+ * Use `create(BudgetAlertSchema)` to create a new message.
+ */
+export const BudgetAlertSchema: GenMessage<BudgetAlert> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 27);
+
+/**
+ * @generated from message blaxsmith.api.v1.ListBudgetAlertsRequest
+ */
+export type ListBudgetAlertsRequest = Message<"blaxsmith.api.v1.ListBudgetAlertsRequest"> & {
+  /**
+   * @generated from field: bool open_only = 1;
+   */
+  openOnly: boolean;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ListBudgetAlertsRequest.
+ * Use `create(ListBudgetAlertsRequestSchema)` to create a new message.
+ */
+export const ListBudgetAlertsRequestSchema: GenMessage<ListBudgetAlertsRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 28);
+
+/**
+ * @generated from message blaxsmith.api.v1.ListBudgetAlertsResponse
+ */
+export type ListBudgetAlertsResponse = Message<"blaxsmith.api.v1.ListBudgetAlertsResponse"> & {
+  /**
+   * Newest first, at most 200.
+   *
+   * @generated from field: repeated blaxsmith.api.v1.BudgetAlert alerts = 1;
+   */
+  alerts: BudgetAlert[];
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.ListBudgetAlertsResponse.
+ * Use `create(ListBudgetAlertsResponseSchema)` to create a new message.
+ */
+export const ListBudgetAlertsResponseSchema: GenMessage<ListBudgetAlertsResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 29);
+
+/**
  * One provider-reported limit window on a route (§5).
  *
  * @generated from message blaxsmith.api.v1.GatewayRouteMetric
@@ -574,7 +1058,7 @@ export type GatewayRouteMetric = Message<"blaxsmith.api.v1.GatewayRouteMetric"> 
  * Use `create(GatewayRouteMetricSchema)` to create a new message.
  */
 export const GatewayRouteMetricSchema: GenMessage<GatewayRouteMetric> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 15);
+  messageDesc(file_blaxsmith_api_v1_gateway, 30);
 
 /**
  * A route: one organization-owned API-key or cloud connection plus an
@@ -728,7 +1212,7 @@ export type GatewayRoute = Message<"blaxsmith.api.v1.GatewayRoute"> & {
  * Use `create(GatewayRouteSchema)` to create a new message.
  */
 export const GatewayRouteSchema: GenMessage<GatewayRoute> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 16);
+  messageDesc(file_blaxsmith_api_v1_gateway, 31);
 
 /**
  * @generated from message blaxsmith.api.v1.GatewayPool
@@ -797,7 +1281,7 @@ export type GatewayPool = Message<"blaxsmith.api.v1.GatewayPool"> & {
  * Use `create(GatewayPoolSchema)` to create a new message.
  */
 export const GatewayPoolSchema: GenMessage<GatewayPool> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 17);
+  messageDesc(file_blaxsmith_api_v1_gateway, 32);
 
 /**
  * A ready stage queued for pool headroom (§5).
@@ -851,7 +1335,7 @@ export type PacedStage = Message<"blaxsmith.api.v1.PacedStage"> & {
  * Use `create(PacedStageSchema)` to create a new message.
  */
 export const PacedStageSchema: GenMessage<PacedStage> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 18);
+  messageDesc(file_blaxsmith_api_v1_gateway, 33);
 
 /**
  * @generated from message blaxsmith.api.v1.GatewayRouteOption
@@ -880,7 +1364,7 @@ export type GatewayRouteOption = Message<"blaxsmith.api.v1.GatewayRouteOption"> 
  * Use `create(GatewayRouteOptionSchema)` to create a new message.
  */
 export const GatewayRouteOptionSchema: GenMessage<GatewayRouteOption> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 19);
+  messageDesc(file_blaxsmith_api_v1_gateway, 34);
 
 /**
  * @generated from message blaxsmith.api.v1.ListGatewayRoutesRequest
@@ -893,7 +1377,7 @@ export type ListGatewayRoutesRequest = Message<"blaxsmith.api.v1.ListGatewayRout
  * Use `create(ListGatewayRoutesRequestSchema)` to create a new message.
  */
 export const ListGatewayRoutesRequestSchema: GenMessage<ListGatewayRoutesRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 20);
+  messageDesc(file_blaxsmith_api_v1_gateway, 35);
 
 /**
  * @generated from message blaxsmith.api.v1.ListGatewayRoutesResponse
@@ -942,7 +1426,7 @@ export type ListGatewayRoutesResponse = Message<"blaxsmith.api.v1.ListGatewayRou
  * Use `create(ListGatewayRoutesResponseSchema)` to create a new message.
  */
 export const ListGatewayRoutesResponseSchema: GenMessage<ListGatewayRoutesResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 21);
+  messageDesc(file_blaxsmith_api_v1_gateway, 36);
 
 /**
  * @generated from message blaxsmith.api.v1.SaveGatewayRouteRequest
@@ -968,7 +1452,7 @@ export type SaveGatewayRouteRequest = Message<"blaxsmith.api.v1.SaveGatewayRoute
  * Use `create(SaveGatewayRouteRequestSchema)` to create a new message.
  */
 export const SaveGatewayRouteRequestSchema: GenMessage<SaveGatewayRouteRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 22);
+  messageDesc(file_blaxsmith_api_v1_gateway, 37);
 
 /**
  * @generated from message blaxsmith.api.v1.SaveGatewayRouteResponse
@@ -985,7 +1469,7 @@ export type SaveGatewayRouteResponse = Message<"blaxsmith.api.v1.SaveGatewayRout
  * Use `create(SaveGatewayRouteResponseSchema)` to create a new message.
  */
 export const SaveGatewayRouteResponseSchema: GenMessage<SaveGatewayRouteResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 23);
+  messageDesc(file_blaxsmith_api_v1_gateway, 38);
 
 /**
  * @generated from message blaxsmith.api.v1.SetGatewayRouteStateRequest
@@ -1009,7 +1493,7 @@ export type SetGatewayRouteStateRequest = Message<"blaxsmith.api.v1.SetGatewayRo
  * Use `create(SetGatewayRouteStateRequestSchema)` to create a new message.
  */
 export const SetGatewayRouteStateRequestSchema: GenMessage<SetGatewayRouteStateRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 24);
+  messageDesc(file_blaxsmith_api_v1_gateway, 39);
 
 /**
  * @generated from message blaxsmith.api.v1.SetGatewayRouteStateResponse
@@ -1022,7 +1506,7 @@ export type SetGatewayRouteStateResponse = Message<"blaxsmith.api.v1.SetGatewayR
  * Use `create(SetGatewayRouteStateResponseSchema)` to create a new message.
  */
 export const SetGatewayRouteStateResponseSchema: GenMessage<SetGatewayRouteStateResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 25);
+  messageDesc(file_blaxsmith_api_v1_gateway, 40);
 
 /**
  * @generated from message blaxsmith.api.v1.SaveGatewayPoolRequest
@@ -1039,7 +1523,7 @@ export type SaveGatewayPoolRequest = Message<"blaxsmith.api.v1.SaveGatewayPoolRe
  * Use `create(SaveGatewayPoolRequestSchema)` to create a new message.
  */
 export const SaveGatewayPoolRequestSchema: GenMessage<SaveGatewayPoolRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 26);
+  messageDesc(file_blaxsmith_api_v1_gateway, 41);
 
 /**
  * @generated from message blaxsmith.api.v1.SaveGatewayPoolResponse
@@ -1056,7 +1540,7 @@ export type SaveGatewayPoolResponse = Message<"blaxsmith.api.v1.SaveGatewayPoolR
  * Use `create(SaveGatewayPoolResponseSchema)` to create a new message.
  */
 export const SaveGatewayPoolResponseSchema: GenMessage<SaveGatewayPoolResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 27);
+  messageDesc(file_blaxsmith_api_v1_gateway, 42);
 
 /**
  * A personal subscription's usage window as its provider reported it on the
@@ -1100,7 +1584,7 @@ export type SubscriptionLimitWindow = Message<"blaxsmith.api.v1.SubscriptionLimi
  * Use `create(SubscriptionLimitWindowSchema)` to create a new message.
  */
 export const SubscriptionLimitWindowSchema: GenMessage<SubscriptionLimitWindow> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 28);
+  messageDesc(file_blaxsmith_api_v1_gateway, 43);
 
 /**
  * @generated from message blaxsmith.api.v1.SubscriptionLimits
@@ -1144,7 +1628,7 @@ export type SubscriptionLimits = Message<"blaxsmith.api.v1.SubscriptionLimits"> 
  * Use `create(SubscriptionLimitsSchema)` to create a new message.
  */
 export const SubscriptionLimitsSchema: GenMessage<SubscriptionLimits> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 29);
+  messageDesc(file_blaxsmith_api_v1_gateway, 44);
 
 /**
  * @generated from message blaxsmith.api.v1.ListMySubscriptionLimitsRequest
@@ -1157,7 +1641,7 @@ export type ListMySubscriptionLimitsRequest = Message<"blaxsmith.api.v1.ListMySu
  * Use `create(ListMySubscriptionLimitsRequestSchema)` to create a new message.
  */
 export const ListMySubscriptionLimitsRequestSchema: GenMessage<ListMySubscriptionLimitsRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 30);
+  messageDesc(file_blaxsmith_api_v1_gateway, 45);
 
 /**
  * @generated from message blaxsmith.api.v1.ListMySubscriptionLimitsResponse
@@ -1179,7 +1663,7 @@ export type ListMySubscriptionLimitsResponse = Message<"blaxsmith.api.v1.ListMyS
  * Use `create(ListMySubscriptionLimitsResponseSchema)` to create a new message.
  */
 export const ListMySubscriptionLimitsResponseSchema: GenMessage<ListMySubscriptionLimitsResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 31);
+  messageDesc(file_blaxsmith_api_v1_gateway, 46);
 
 /**
  * @generated from message blaxsmith.api.v1.GetGatewayStatusRequest
@@ -1192,7 +1676,7 @@ export type GetGatewayStatusRequest = Message<"blaxsmith.api.v1.GetGatewayStatus
  * Use `create(GetGatewayStatusRequestSchema)` to create a new message.
  */
 export const GetGatewayStatusRequestSchema: GenMessage<GetGatewayStatusRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 32);
+  messageDesc(file_blaxsmith_api_v1_gateway, 47);
 
 /**
  * Whether gateway UI is shown to this organization (the master switch).
@@ -1211,7 +1695,7 @@ export type GetGatewayStatusResponse = Message<"blaxsmith.api.v1.GetGatewayStatu
  * Use `create(GetGatewayStatusResponseSchema)` to create a new message.
  */
 export const GetGatewayStatusResponseSchema: GenMessage<GetGatewayStatusResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 33);
+  messageDesc(file_blaxsmith_api_v1_gateway, 48);
 
 /**
  * @generated from message blaxsmith.api.v1.GetMyUsageRequest
@@ -1230,7 +1714,7 @@ export type GetMyUsageRequest = Message<"blaxsmith.api.v1.GetMyUsageRequest"> & 
  * Use `create(GetMyUsageRequestSchema)` to create a new message.
  */
 export const GetMyUsageRequestSchema: GenMessage<GetMyUsageRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 34);
+  messageDesc(file_blaxsmith_api_v1_gateway, 49);
 
 /**
  * @generated from message blaxsmith.api.v1.GetMyUsageResponse
@@ -1277,7 +1761,7 @@ export type GetMyUsageResponse = Message<"blaxsmith.api.v1.GetMyUsageResponse"> 
  * Use `create(GetMyUsageResponseSchema)` to create a new message.
  */
 export const GetMyUsageResponseSchema: GenMessage<GetMyUsageResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 35);
+  messageDesc(file_blaxsmith_api_v1_gateway, 50);
 
 /**
  * @generated from message blaxsmith.api.v1.ModelCall
@@ -1356,7 +1840,7 @@ export type ModelCall = Message<"blaxsmith.api.v1.ModelCall"> & {
  * Use `create(ModelCallSchema)` to create a new message.
  */
 export const ModelCallSchema: GenMessage<ModelCall> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 36);
+  messageDesc(file_blaxsmith_api_v1_gateway, 51);
 
 /**
  * @generated from message blaxsmith.api.v1.StageCost
@@ -1390,7 +1874,7 @@ export type StageCost = Message<"blaxsmith.api.v1.StageCost"> & {
  * Use `create(StageCostSchema)` to create a new message.
  */
 export const StageCostSchema: GenMessage<StageCost> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 37);
+  messageDesc(file_blaxsmith_api_v1_gateway, 52);
 
 /**
  * @generated from message blaxsmith.api.v1.GetRunCostRequest
@@ -1407,7 +1891,7 @@ export type GetRunCostRequest = Message<"blaxsmith.api.v1.GetRunCostRequest"> & 
  * Use `create(GetRunCostRequestSchema)` to create a new message.
  */
 export const GetRunCostRequestSchema: GenMessage<GetRunCostRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 38);
+  messageDesc(file_blaxsmith_api_v1_gateway, 53);
 
 /**
  * @generated from message blaxsmith.api.v1.GetRunCostResponse
@@ -1439,6 +1923,15 @@ export type GetRunCostResponse = Message<"blaxsmith.api.v1.GetRunCostResponse"> 
    * @generated from field: bool truncated = 5;
    */
   truncated: boolean;
+
+  /**
+   * The run used someone's personal subscription and the caller is neither
+   * its owner nor an organization owner or admin: only totals and per-stage
+   * aggregates are returned, never per-request rows.
+   *
+   * @generated from field: bool requests_restricted = 6;
+   */
+  requestsRestricted: boolean;
 };
 
 /**
@@ -1446,7 +1939,7 @@ export type GetRunCostResponse = Message<"blaxsmith.api.v1.GetRunCostResponse"> 
  * Use `create(GetRunCostResponseSchema)` to create a new message.
  */
 export const GetRunCostResponseSchema: GenMessage<GetRunCostResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 39);
+  messageDesc(file_blaxsmith_api_v1_gateway, 54);
 
 /**
  * @generated from message blaxsmith.api.v1.GetProjectDeliveryRequest
@@ -1463,7 +1956,7 @@ export type GetProjectDeliveryRequest = Message<"blaxsmith.api.v1.GetProjectDeli
  * Use `create(GetProjectDeliveryRequestSchema)` to create a new message.
  */
 export const GetProjectDeliveryRequestSchema: GenMessage<GetProjectDeliveryRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 40);
+  messageDesc(file_blaxsmith_api_v1_gateway, 55);
 
 /**
  * @generated from message blaxsmith.api.v1.GetProjectDeliveryResponse
@@ -1513,7 +2006,7 @@ export type GetProjectDeliveryResponse = Message<"blaxsmith.api.v1.GetProjectDel
  * Use `create(GetProjectDeliveryResponseSchema)` to create a new message.
  */
 export const GetProjectDeliveryResponseSchema: GenMessage<GetProjectDeliveryResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 41);
+  messageDesc(file_blaxsmith_api_v1_gateway, 56);
 
 /**
  * @generated from message blaxsmith.api.v1.SetProjectDeliveryRequest
@@ -1537,7 +2030,7 @@ export type SetProjectDeliveryRequest = Message<"blaxsmith.api.v1.SetProjectDeli
  * Use `create(SetProjectDeliveryRequestSchema)` to create a new message.
  */
 export const SetProjectDeliveryRequestSchema: GenMessage<SetProjectDeliveryRequest> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 42);
+  messageDesc(file_blaxsmith_api_v1_gateway, 57);
 
 /**
  * @generated from message blaxsmith.api.v1.SetProjectDeliveryResponse
@@ -1554,7 +2047,179 @@ export type SetProjectDeliveryResponse = Message<"blaxsmith.api.v1.SetProjectDel
  * Use `create(SetProjectDeliveryResponseSchema)` to create a new message.
  */
 export const SetProjectDeliveryResponseSchema: GenMessage<SetProjectDeliveryResponse> = /*@__PURE__*/
-  messageDesc(file_blaxsmith_api_v1_gateway, 43);
+  messageDesc(file_blaxsmith_api_v1_gateway, 58);
+
+/**
+ * @generated from message blaxsmith.api.v1.GetProjectUsageRequest
+ */
+export type GetProjectUsageRequest = Message<"blaxsmith.api.v1.GetProjectUsageRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.GetProjectUsageRequest.
+ * Use `create(GetProjectUsageRequestSchema)` to create a new message.
+ */
+export const GetProjectUsageRequestSchema: GenMessage<GetProjectUsageRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 59);
+
+/**
+ * Project → Usage: this month (UTC) to date.
+ *
+ * @generated from message blaxsmith.api.v1.GetProjectUsageResponse
+ */
+export type GetProjectUsageResponse = Message<"blaxsmith.api.v1.GetProjectUsageResponse"> & {
+  /**
+   * @generated from field: bool enabled = 1;
+   */
+  enabled: boolean;
+
+  /**
+   * @generated from field: string from_day = 2;
+   */
+  fromDay: string;
+
+  /**
+   * @generated from field: string to_day = 3;
+   */
+  toDay: string;
+
+  /**
+   * @generated from field: blaxsmith.api.v1.UsageTotals totals = 4;
+   */
+  totals?: UsageTotals | undefined;
+
+  /**
+   * The project's active budget, if any.
+   *
+   * @generated from field: blaxsmith.api.v1.Budget budget = 5;
+   */
+  budget?: Budget | undefined;
+
+  /**
+   * Daily spend by model.
+   *
+   * @generated from field: repeated blaxsmith.api.v1.UsagePoint series = 6;
+   */
+  series: UsagePoint[];
+
+  /**
+   * key = stage id.
+   *
+   * @generated from field: repeated blaxsmith.api.v1.UsageSlice by_stage = 7;
+   */
+  byStage: UsageSlice[];
+
+  /**
+   * @generated from field: repeated blaxsmith.api.v1.UsageSlice by_model = 8;
+   */
+  byModel: UsageSlice[];
+
+  /**
+   * Project administrators only; empty with by_user_hidden for others.
+   *
+   * @generated from field: repeated blaxsmith.api.v1.UsageSlice by_user = 9;
+   */
+  byUser: UsageSlice[];
+
+  /**
+   * @generated from field: bool by_user_hidden = 10;
+   */
+  byUserHidden: boolean;
+
+  /**
+   * @generated from field: repeated blaxsmith.api.v1.UsageSlice top_runs = 11;
+   */
+  topRuns: UsageSlice[];
+
+  /**
+   * This project's budget alerts, newest first.
+   *
+   * @generated from field: repeated blaxsmith.api.v1.BudgetAlert alerts = 12;
+   */
+  alerts: BudgetAlert[];
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.GetProjectUsageResponse.
+ * Use `create(GetProjectUsageResponseSchema)` to create a new message.
+ */
+export const GetProjectUsageResponseSchema: GenMessage<GetProjectUsageResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 60);
+
+/**
+ * @generated from message blaxsmith.api.v1.AcknowledgeBudgetAlertRequest
+ */
+export type AcknowledgeBudgetAlertRequest = Message<"blaxsmith.api.v1.AcknowledgeBudgetAlertRequest"> & {
+  /**
+   * @generated from field: string alert_id = 1;
+   */
+  alertId: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.AcknowledgeBudgetAlertRequest.
+ * Use `create(AcknowledgeBudgetAlertRequestSchema)` to create a new message.
+ */
+export const AcknowledgeBudgetAlertRequestSchema: GenMessage<AcknowledgeBudgetAlertRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 61);
+
+/**
+ * @generated from message blaxsmith.api.v1.AcknowledgeBudgetAlertResponse
+ */
+export type AcknowledgeBudgetAlertResponse = Message<"blaxsmith.api.v1.AcknowledgeBudgetAlertResponse"> & {
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.AcknowledgeBudgetAlertResponse.
+ * Use `create(AcknowledgeBudgetAlertResponseSchema)` to create a new message.
+ */
+export const AcknowledgeBudgetAlertResponseSchema: GenMessage<AcknowledgeBudgetAlertResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 62);
+
+/**
+ * @generated from message blaxsmith.api.v1.SnoozeBudgetAlertRequest
+ */
+export type SnoozeBudgetAlertRequest = Message<"blaxsmith.api.v1.SnoozeBudgetAlertRequest"> & {
+  /**
+   * @generated from field: string alert_id = 1;
+   */
+  alertId: string;
+
+  /**
+   * 1–720.
+   *
+   * @generated from field: int32 hours = 2;
+   */
+  hours: number;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.SnoozeBudgetAlertRequest.
+ * Use `create(SnoozeBudgetAlertRequestSchema)` to create a new message.
+ */
+export const SnoozeBudgetAlertRequestSchema: GenMessage<SnoozeBudgetAlertRequest> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 63);
+
+/**
+ * @generated from message blaxsmith.api.v1.SnoozeBudgetAlertResponse
+ */
+export type SnoozeBudgetAlertResponse = Message<"blaxsmith.api.v1.SnoozeBudgetAlertResponse"> & {
+  /**
+   * @generated from field: string snoozed_until = 1;
+   */
+  snoozedUntil: string;
+};
+
+/**
+ * Describes the message blaxsmith.api.v1.SnoozeBudgetAlertResponse.
+ * Use `create(SnoozeBudgetAlertResponseSchema)` to create a new message.
+ */
+export const SnoozeBudgetAlertResponseSchema: GenMessage<SnoozeBudgetAlertResponse> = /*@__PURE__*/
+  messageDesc(file_blaxsmith_api_v1_gateway, 64);
 
 /**
  * Owner and admin operations. Mutations are CSRF-protected and audited.
@@ -1636,6 +2301,54 @@ export const GatewayAdminService: GenService<{
     input: typeof SaveGatewayPoolRequestSchema;
     output: typeof SaveGatewayPoolResponseSchema;
   },
+  /**
+   * @generated from rpc blaxsmith.api.v1.GatewayAdminService.ListBudgets
+   */
+  listBudgets: {
+    methodKind: "unary";
+    input: typeof ListBudgetsRequestSchema;
+    output: typeof ListBudgetsResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.GatewayAdminService.SetBudgetsEnabled
+   */
+  setBudgetsEnabled: {
+    methodKind: "unary";
+    input: typeof SetBudgetsEnabledRequestSchema;
+    output: typeof SetBudgetsEnabledResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.GatewayAdminService.CreateBudget
+   */
+  createBudget: {
+    methodKind: "unary";
+    input: typeof CreateBudgetRequestSchema;
+    output: typeof CreateBudgetResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.GatewayAdminService.UpdateBudget
+   */
+  updateBudget: {
+    methodKind: "unary";
+    input: typeof UpdateBudgetRequestSchema;
+    output: typeof UpdateBudgetResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.GatewayAdminService.ArchiveBudget
+   */
+  archiveBudget: {
+    methodKind: "unary";
+    input: typeof ArchiveBudgetRequestSchema;
+    output: typeof ArchiveBudgetResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.GatewayAdminService.ListBudgetAlerts
+   */
+  listBudgetAlerts: {
+    methodKind: "unary";
+    input: typeof ListBudgetAlertsRequestSchema;
+    output: typeof ListBudgetAlertsResponseSchema;
+  },
 }> = /*@__PURE__*/
   serviceDesc(file_blaxsmith_api_v1_gateway, 0);
 
@@ -1695,6 +2408,33 @@ export const UsageService: GenService<{
     methodKind: "unary";
     input: typeof ListMySubscriptionLimitsRequestSchema;
     output: typeof ListMySubscriptionLimitsResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.UsageService.GetProjectUsage
+   */
+  getProjectUsage: {
+    methodKind: "unary";
+    input: typeof GetProjectUsageRequestSchema;
+    output: typeof GetProjectUsageResponseSchema;
+  },
+  /**
+   * A budget alert's recipients (organization owners and admins, the
+   * budget's user, the project's administrators) acknowledge or snooze it.
+   *
+   * @generated from rpc blaxsmith.api.v1.UsageService.AcknowledgeBudgetAlert
+   */
+  acknowledgeBudgetAlert: {
+    methodKind: "unary";
+    input: typeof AcknowledgeBudgetAlertRequestSchema;
+    output: typeof AcknowledgeBudgetAlertResponseSchema;
+  },
+  /**
+   * @generated from rpc blaxsmith.api.v1.UsageService.SnoozeBudgetAlert
+   */
+  snoozeBudgetAlert: {
+    methodKind: "unary";
+    input: typeof SnoozeBudgetAlertRequestSchema;
+    output: typeof SnoozeBudgetAlertResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_blaxsmith_api_v1_gateway, 1);

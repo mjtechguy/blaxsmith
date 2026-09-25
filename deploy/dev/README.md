@@ -629,3 +629,43 @@ Runner images (`04*-workers-*.sh`) and the AX allowlist (`05-allowlist.sh`) are
 only needed when `internal/tooladapter`, `cmd/blaxsmith-tool-worker`, or the
 runner Dockerfile change. Take `07-db-backup.sh` before any release with new
 migrations. `09-tokens.sh` re-mints the connector tokens without printing them.
+
+### Authenticated guest router (terminals, takeover, result reads)
+
+Upstream atenet-router routes guest daemon gRPC (`/ateenv.*`: process exec and
+file read/write, exposed by AX `spec.debug=true` tasks) to whichever actor
+`ate-target-actor` names, with no caller authentication on any port; the
+connector TokenReview covers only `/blaxsmith/bootstrap/*` and
+`/blaxsmith/command-exit`. The app now calls the guest router over the router's
+HTTPS listener with TLS pinned to `router-ca.pem` and a per-RPC bearer; startup
+fails if either is missing. With `dispatch.guestRouterToken.projected: true`
+(the preview default) the bearer is a projected ServiceAccount token for the
+chart-created `preview-app` ServiceAccount (audience `blaxsmith-bootstrap`,
+1h, rotated by the kubelet and re-read per call), so it never needs
+re-minting and guest access has its own identity,
+`system:serviceaccount:blaxsmith-preview:preview-app`. Without it the app falls
+back to the manually minted `bootstrap-token` (24h, `09-tokens.sh`). The router
+side is [`guest-router-auth.patch`](../../integrations/substrate/README.md)
+with `--guest-client-auth --guest-client-username=<that identity>`: TLS plus a
+TokenReview for exactly that username on `/ateenv.*` (the bootstrap connector
+token is refused there, and the app token is refused on bootstrap routes), and
+the bearer is stripped before the guest. Order matters: an unpatched router
+would forward the token into the guest.
+
+```sh
+# 1. node: build (reused if present), publish, show the diff, confirm, patch, probe
+ssh ... 'cd /opt/blaxsmith-dev/golive-<sha7> && S=<sha7> bash 12-guest-router-auth.sh'
+# 2. workstation: app image + values (guestRouter :443, projected token, ServiceAccount)
+S=<sha7> BUNDLE_REF=refs/heads/main bash deploy/dev/golive/10-local-values-apply.sh
+# 3. node: rerun for the positive probe as preview-app (no router change the second time)
+ssh ... 'cd /opt/blaxsmith-dev/golive-<sha7> && S=<sha7> bash 12-guest-router-auth.sh'
+# 4. node: narrow the router NetworkPolicy (app :443 only, ax-controller :80 only)
+ssh ... 'cd /opt/blaxsmith-dev/golive-<sha7> && S=<sha7> bash 08-netpol.sh'
+ssh ... 'cd /opt/blaxsmith-dev/golive-<sha7> && S=<sha7> bash 11-verify.sh'
+```
+
+Between steps 1 and 2 the running app still dials plaintext `:80` and gets
+426, so terminals and result reads fail until the new app rolls out. The
+app identity is still all-or-nothing across guests; per-attempt access
+remains the app's authorization. Operator `ax debug` through a router
+port-forward is refused while the flag is on.

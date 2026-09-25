@@ -23,9 +23,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
-	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/interact"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/terminal"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 )
@@ -45,6 +45,10 @@ func serveApp(args []string) error {
 }
 
 func serveAppContext(ctx context.Context, args []string) error {
+	// Startup and the background loops started here are cross-organization.
+	// Request handlers get fresh contexts from net/http, so a request reaches
+	// organization rows only through store calls that scope to its caller.
+	ctx = tenant.System(ctx)
 	config, err := parseAppConfig(args)
 	if err != nil {
 		return err
@@ -86,7 +90,7 @@ func serveAppContext(ctx context.Context, args []string) error {
 	}
 	startupCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	pool, err := pgxpool.NewWithConfig(startupCtx, dbConfig)
+	pool, err := pgxpool.NewWithConfig(startupCtx, tenant.Configure(dbConfig))
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
@@ -102,6 +106,11 @@ func serveAppContext(ctx context.Context, args []string) error {
 	}
 	if migrationErr != nil {
 		return fmt.Errorf("verify database migrations: %w", migrationErr)
+	}
+	var bypassRLS bool
+	if err := pool.QueryRow(startupCtx, `SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname=current_user`).
+		Scan(&bypassRLS); err == nil && bypassRLS {
+		log.Printf("database role bypasses row-level security; tenant isolation relies on query filters alone")
 	}
 	manager, err := identity.NewSessionManager(pool, config.origin, signer, previous...)
 	if err != nil {
@@ -185,6 +194,22 @@ func serveAppContext(ctx context.Context, args []string) error {
 	} else {
 		close(dispatchDone)
 	}
+	// Moves legacy master-key secrets onto per-organization data keys.
+	// Idempotent and batched, so every replica may run it.
+	secretsDone := make(chan struct{})
+	go func() {
+		defer close(secretsDone)
+		secrets, err := appSecretStore(pool)
+		if err != nil || secrets == nil {
+			return
+		}
+		summary, err := upgradeSecrets(serveCtx, secrets)
+		if err != nil {
+			log.Printf("upgrade access secrets: %v", err)
+			return
+		}
+		log.Print(summary)
+	}()
 	interactionDone := make(chan struct{})
 	go func() {
 		defer close(interactionDone)
@@ -197,6 +222,7 @@ func serveAppContext(ctx context.Context, args []string) error {
 	<-pruneDone
 	<-dispatchDone
 	<-interactionDone
+	<-secretsDone
 	if errors.Is(err, http.ErrServerClosed) {
 		return shutdownErr
 	}
@@ -401,24 +427,4 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 		})
 	}
 	return mux, product, nil
-}
-
-func appSecretStore(pool *pgxpool.Pool) (*access.SecretStore, error) {
-	path := os.Getenv("BLAXSMITH_ACCESS_KEY_FILE")
-	if path == "" {
-		return nil, nil
-	}
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o027 != 0 {
-		return nil, errors.New("access encryption key must be a private regular file")
-	}
-	key, err := os.ReadFile(path)
-	if err != nil {
-		return nil, errors.New("access encryption key unavailable")
-	}
-	defer clear(key)
-	if len(key) != 32 {
-		return nil, errors.New("access encryption key must be 32 bytes")
-	}
-	return access.NewSecretStore(pool, "primary", map[string][]byte{"primary": key})
 }

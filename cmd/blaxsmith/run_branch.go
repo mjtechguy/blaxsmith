@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/runbranch"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/terminal"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 	"google.golang.org/grpc/codes"
@@ -93,6 +94,7 @@ func guestBundleReader(store *workflow.Store, router *terminal.Router) func(cont
 // access tables and secret custody as private-Git bootstrap.
 func gitWriteRemote(pool *pgxpool.Pool, secrets *access.SecretStore) func(context.Context, string, string, string) (runbranch.Remote, error) {
 	return func(ctx context.Context, orgID, projectID, repoURL string) (runbranch.Remote, error) {
+		ctx = tenant.Org(ctx, orgID)
 		tx, err := pool.Begin(ctx)
 		if err != nil {
 			return runbranch.Remote{}, err

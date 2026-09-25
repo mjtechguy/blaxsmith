@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 func TestReviewPostgres(t *testing.T) {
@@ -17,7 +18,7 @@ func TestReviewPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := t.Context()
+	ctx := tenant.System(t.Context())
 	org, other := organization(t, pool, "review-a"), organization(t, pool, "review-b")
 	caller := reviewer(t, pool, org, "owner", "review-owner")
 	viewer := reviewer(t, pool, org, "viewer", "review-viewer")
@@ -288,15 +289,15 @@ func TestReviewPostgres(t *testing.T) {
 func reviewer(t *testing.T, pool *pgxpool.Pool, orgID, role, username string) identity.Caller {
 	t.Helper()
 	var principal, session string
-	if err := pool.QueryRow(t.Context(), `INSERT INTO identity_principals (id,username)
+	if err := pool.QueryRow(tenant.System(t.Context()), `INSERT INTO identity_principals (id,username)
 		VALUES (gen_random_uuid(),$1) RETURNING id`, username).Scan(&principal); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(t.Context(), `INSERT INTO identity_memberships (organization_id,principal_id,role)
+	if _, err := pool.Exec(tenant.System(t.Context()), `INSERT INTO identity_memberships (organization_id,principal_id,role)
 		VALUES ($1,$2,$3)`, orgID, principal, role); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(t.Context(), `INSERT INTO identity_sessions
+	if err := pool.QueryRow(tenant.System(t.Context()), `INSERT INTO identity_sessions
 		(organization_id,id,principal_id,auth_method,mfa_level,expires_at)
 		VALUES ($1,gen_random_uuid(),$2,'local','none',clock_timestamp()+interval '1 hour') RETURNING id`,
 		orgID, principal).Scan(&session); err != nil {

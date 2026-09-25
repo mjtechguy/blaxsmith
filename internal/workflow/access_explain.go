@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 // AccessStep is one link of "where this comes from", closest to the
@@ -32,6 +33,7 @@ var roleReach = map[string]string{"member": "members and above", "admin": "admin
 // admins may ask about someone else; a member asking about a connection they
 // cannot see learns only that it is not usable.
 func (s *Store) ExplainAccessAs(ctx context.Context, caller identity.Caller, projectID, kind, resourceID, principalID string) (AccessExplanation, error) {
+	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, projectID) || resourceID == "" || len(resourceID) > 64 ||
 		(kind != access.ResourceConnection && kind != access.ResourceRecipe) {
 		return AccessExplanation{}, ErrInvalid

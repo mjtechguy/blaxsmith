@@ -16,7 +16,9 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as RunsRouteImport } from './routes/runs'
 import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAlertsRouteImport } from './routes/admin.alerts'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
+import { Route as AdminBudgetsRouteImport } from './routes/admin.budgets'
 import { Route as AdminRoutesRouteImport } from './routes/admin.routes'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminUsageRouteImport } from './routes/admin.usage'
@@ -61,6 +63,7 @@ import { Route as ProjectsProjectIdModelAccessRouteImport } from './routes/proje
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as ProjectsProjectIdSetupRouteImport } from './routes/projects.$projectId.setup'
 import { Route as ProjectsProjectIdSourceRouteImport } from './routes/projects.$projectId.source'
+import { Route as ProjectsProjectIdUsageRouteImport } from './routes/projects.$projectId.usage'
 import { Route as ProjectsProjectIdVerificationRouteImport } from './routes/projects.$projectId.verification'
 import { Route as RecipesRecipeIdIndexRouteImport } from './routes/recipes.$recipeId.index'
 import { Route as AdminConnectionsNewIndexRouteImport } from './routes/admin.connections.new.index'
@@ -124,9 +127,19 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminAlertsRoute = AdminAlertsRouteImport.update({
+  id: '/alerts',
+  path: '/alerts',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAuditRoute = AdminAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminBudgetsRoute = AdminBudgetsRouteImport.update({
+  id: '/budgets',
+  path: '/budgets',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminRoutesRoute = AdminRoutesRouteImport.update({
@@ -357,6 +370,11 @@ const ProjectsProjectIdSourceRoute = ProjectsProjectIdSourceRouteImport.update({
   path: '/source',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const ProjectsProjectIdUsageRoute = ProjectsProjectIdUsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
+  getParentRoute: () => ProjectsProjectIdRoute,
+} as any)
 const ProjectsProjectIdVerificationRoute =
   ProjectsProjectIdVerificationRouteImport.update({
     id: '/verification',
@@ -524,7 +542,9 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/runs': typeof RunsRoute
   '/tools': typeof ToolsRoute
+  '/admin/alerts': typeof AdminAlertsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/admin/budgets': typeof AdminBudgetsRoute
   '/admin/routes': typeof AdminRoutesRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/usage': typeof AdminUsageRoute
@@ -562,6 +582,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRouteWithChildren
   '/projects/$projectId/setup': typeof ProjectsProjectIdSetupRoute
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
+  '/projects/$projectId/usage': typeof ProjectsProjectIdUsageRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/admin/connections/': typeof AdminConnectionsIndexRoute
   '/admin/extensions/': typeof AdminExtensionsIndexRoute
@@ -604,7 +625,9 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/runs': typeof RunsRoute
   '/tools': typeof ToolsRoute
+  '/admin/alerts': typeof AdminAlertsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/admin/budgets': typeof AdminBudgetsRoute
   '/admin/routes': typeof AdminRoutesRoute
   '/admin/usage': typeof AdminUsageRoute
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
@@ -638,6 +661,7 @@ export interface FileRoutesByTo {
   '/projects/$projectId/model-access': typeof ProjectsProjectIdModelAccessRouteWithChildren
   '/projects/$projectId/setup': typeof ProjectsProjectIdSetupRoute
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
+  '/projects/$projectId/usage': typeof ProjectsProjectIdUsageRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/admin/connections': typeof AdminConnectionsIndexRoute
   '/admin/extensions': typeof AdminExtensionsIndexRoute
@@ -682,7 +706,9 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/runs': typeof RunsRoute
   '/tools': typeof ToolsRoute
+  '/admin/alerts': typeof AdminAlertsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/admin/budgets': typeof AdminBudgetsRoute
   '/admin/routes': typeof AdminRoutesRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/usage': typeof AdminUsageRoute
@@ -720,6 +746,7 @@ export interface FileRoutesById {
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRouteWithChildren
   '/projects/$projectId/setup': typeof ProjectsProjectIdSetupRoute
   '/projects/$projectId/source': typeof ProjectsProjectIdSourceRoute
+  '/projects/$projectId/usage': typeof ProjectsProjectIdUsageRoute
   '/projects/$projectId/verification': typeof ProjectsProjectIdVerificationRoute
   '/admin/connections/': typeof AdminConnectionsIndexRoute
   '/admin/extensions/': typeof AdminExtensionsIndexRoute
@@ -765,7 +792,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/runs'
     | '/tools'
+    | '/admin/alerts'
     | '/admin/audit'
+    | '/admin/budgets'
     | '/admin/routes'
     | '/admin/settings'
     | '/admin/usage'
@@ -803,6 +832,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/settings'
     | '/projects/$projectId/setup'
     | '/projects/$projectId/source'
+    | '/projects/$projectId/usage'
     | '/projects/$projectId/verification'
     | '/admin/connections/'
     | '/admin/extensions/'
@@ -845,7 +875,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/runs'
     | '/tools'
+    | '/admin/alerts'
     | '/admin/audit'
+    | '/admin/budgets'
     | '/admin/routes'
     | '/admin/usage'
     | '/extensions/$extensionId'
@@ -879,6 +911,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/model-access'
     | '/projects/$projectId/setup'
     | '/projects/$projectId/source'
+    | '/projects/$projectId/usage'
     | '/projects/$projectId/verification'
     | '/admin/connections'
     | '/admin/extensions'
@@ -922,7 +955,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/runs'
     | '/tools'
+    | '/admin/alerts'
     | '/admin/audit'
+    | '/admin/budgets'
     | '/admin/routes'
     | '/admin/settings'
     | '/admin/usage'
@@ -960,6 +995,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/settings'
     | '/projects/$projectId/setup'
     | '/projects/$projectId/source'
+    | '/projects/$projectId/usage'
     | '/projects/$projectId/verification'
     | '/admin/connections/'
     | '/admin/extensions/'
@@ -1074,11 +1110,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/alerts': {
+      id: '/admin/alerts'
+      path: '/alerts'
+      fullPath: '/admin/alerts'
+      preLoaderRoute: typeof AdminAlertsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/audit': {
       id: '/admin/audit'
       path: '/audit'
       fullPath: '/admin/audit'
       preLoaderRoute: typeof AdminAuditRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/budgets': {
+      id: '/admin/budgets'
+      path: '/budgets'
+      fullPath: '/admin/budgets'
+      preLoaderRoute: typeof AdminBudgetsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/routes': {
@@ -1389,6 +1439,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdSourceRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/usage': {
+      id: '/projects/$projectId/usage'
+      path: '/usage'
+      fullPath: '/projects/$projectId/usage'
+      preLoaderRoute: typeof ProjectsProjectIdUsageRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/verification': {
       id: '/projects/$projectId/verification'
       path: '/verification'
@@ -1604,7 +1661,9 @@ const AdminSettingsRouteWithChildren = AdminSettingsRoute._addFileChildren(
 )
 
 interface AdminRouteChildren {
+  AdminAlertsRoute: typeof AdminAlertsRoute
   AdminAuditRoute: typeof AdminAuditRoute
+  AdminBudgetsRoute: typeof AdminBudgetsRoute
   AdminRoutesRoute: typeof AdminRoutesRoute
   AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
   AdminUsageRoute: typeof AdminUsageRoute
@@ -1628,7 +1687,9 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAlertsRoute: AdminAlertsRoute,
   AdminAuditRoute: AdminAuditRoute,
+  AdminBudgetsRoute: AdminBudgetsRoute,
   AdminRoutesRoute: AdminRoutesRoute,
   AdminSettingsRoute: AdminSettingsRouteWithChildren,
   AdminUsageRoute: AdminUsageRoute,
@@ -1719,6 +1780,7 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRouteWithChildren
   ProjectsProjectIdSetupRoute: typeof ProjectsProjectIdSetupRoute
   ProjectsProjectIdSourceRoute: typeof ProjectsProjectIdSourceRoute
+  ProjectsProjectIdUsageRoute: typeof ProjectsProjectIdUsageRoute
   ProjectsProjectIdVerificationRoute: typeof ProjectsProjectIdVerificationRoute
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
   ProjectsProjectIdConnectionsConnectionIdRoute: typeof ProjectsProjectIdConnectionsConnectionIdRoute
@@ -1740,6 +1802,7 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRouteWithChildren,
   ProjectsProjectIdSetupRoute: ProjectsProjectIdSetupRoute,
   ProjectsProjectIdSourceRoute: ProjectsProjectIdSourceRoute,
+  ProjectsProjectIdUsageRoute: ProjectsProjectIdUsageRoute,
   ProjectsProjectIdVerificationRoute: ProjectsProjectIdVerificationRoute,
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,
   ProjectsProjectIdConnectionsConnectionIdRoute:

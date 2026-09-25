@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
 
 const (
@@ -63,6 +64,7 @@ func truncateUTF8(s string, max int) string {
 // exit. It takes effect only when ConfirmStopped proves the actor is gone. The
 // first recorded result wins so a partially stopped attempt stays replayable.
 func (s *Store) RecordAttemptResult(ctx context.Context, a Attempt, result AttemptResult) error {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if !validAttempt(a) || len(result.Summary) > maxSummaryBytes {
 		return ErrInvalid
 	}
@@ -119,6 +121,7 @@ func (s *Store) RecordAttemptResult(ctx context.Context, a Attempt, result Attem
 // HasAttemptResult lets completion resume a stop without re-reading a guest
 // that may already be gone.
 func (s *Store) HasAttemptResult(ctx context.Context, a Attempt) (bool, error) {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if !validAttempt(a) {
 		return false, ErrInvalid
 	}
@@ -328,6 +331,7 @@ func findStage(bundle *recipe.Bundle, id string) (recipe.Stage, bool) {
 // attempt: each direct upstream stage's accepted summary and revision, plus
 // unconsumed correction requests. RecordHandoff freezes it with the attempt.
 func (s *Store) BuildHandoff(ctx context.Context, orgID, runID, taskID string) (string, []string, error) {
+	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID, taskID) {
 		return "", nil, ErrInvalid
 	}
@@ -405,6 +409,7 @@ func RecordHandoff(ctx context.Context, tx pgx.Tx, a Attempt, handoff string, co
 
 // LoadHandoff returns the exact handoff frozen into an attempt's prompt.
 func (s *Store) LoadHandoff(ctx context.Context, a Attempt) (string, error) {
+	ctx = tenant.Org(ctx, a.OrganizationID)
 	if !validAttempt(a) {
 		return "", ErrInvalid
 	}
