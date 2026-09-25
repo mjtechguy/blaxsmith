@@ -13,7 +13,7 @@ import { effortChoices, effortForModel } from "./connections";
 import { DataTable } from "./data-table";
 import { TextField } from "./form-field";
 import type { LibraryRecipe, RecipeModelConnection, RecipeValidationError, RecipeVersion } from "./gen/blaxsmith/api/v1/recipes_pb";
-import { PageHeader, PageShell } from "./page";
+import { isMissing, NotFoundPage, PageHeader, PageShell } from "./page";
 import { CollectionTable, inSet, useUrlView, type GridColumn } from "./data-table";
 import { DetailLayout, SummaryList } from "./layouts";
 import { Card, CopyValue, Disclosure, EmptyState, StatePanel, sentence, tabFrom, Timestamp, type TabSpec } from "./ui";
@@ -139,6 +139,8 @@ export function RecipeDetailPage({ projectId, recipeId }: { projectId?: string; 
   const tabLink = (id: string, label: string) => <Link to={base as "/"} search={{ tab: id } as never} className="text-action">{label} <ArrowRight size={13} aria-hidden="true" /></Link>;
 
   if (recipe.isPending) return <StatePanel kind="loading" title="Loading recipe" />;
+  if ((recipe.isError && isMissing(recipe.error)) || (recipe.isSuccess && !current)) return <NotFoundPage title="Recipe not found"
+    back={projectId ? { to: `/projects/${projectId}/recipes`, label: "Project recipes" } : { to: "/recipes", label: "Recipes" }}>It may have been removed, or the link is wrong.</NotFoundPage>;
   if (recipe.isError || !current) return <StatePanel kind="error" title="Recipe unavailable" retry={() => void recipe.refetch()}>This recipe could not be loaded.</StatePanel>;
   const currentVersion = recipe.data.versions.find((v) => v.id === current.currentVersionId);
   const listHref = projectId ? `/projects/${projectId}/recipes` : "/recipes";

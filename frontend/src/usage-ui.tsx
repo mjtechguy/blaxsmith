@@ -24,17 +24,18 @@ export function GatewayOff({ admin }: { admin?: boolean }) {
   </EmptyState>;
 }
 
-type Kind = "project" | "user" | "model" | "run";
+type Kind = "project" | "user" | "model" | "run" | "stage";
 
 export function SliceTable({ id, label, kind, slices, loading, error, empty }: {
   id: string; label: string; kind: Kind; slices: UsageSlice[]; loading?: boolean; error?: ReactNode; empty: string;
 }) {
   const [view, setView] = useLocalView({ size: 10, sort: [{ id: "cost", desc: true }] });
   const columns = useMemo<GridColumn<UsageSlice>[]>(() => [
-    { id: "name", accessorKey: "label", header: kind === "run" ? "Run" : kind === "user" ? "User" : kind === "model" ? "Model" : "Project", enableHiding: false,
+    { id: "name", accessorKey: "label", header: kind === "run" ? "Run" : kind === "user" ? "User" : kind === "model" ? "Model" : kind === "stage" ? "Stage" : "Project", enableHiding: false,
       cell: ({ row }) => {
         const s = row.original;
         if (kind === "run") return <span className="task-stage"><Link className="row-title" to="/projects/$projectId/runs/$runId" params={{ projectId: s.projectId, runId: s.key }} search={{ tab: "cost" }}>{s.label}</Link><small>{s.detail}</small></span>;
+        if (kind === "stage") return <strong>{s.label}</strong>;
         if (kind === "model") return <span className="task-stage"><strong className="mono">{s.label}</strong><small>{s.detail}</small></span>;
         if (kind === "project") return <Link className="row-title" to="/projects/$projectId" params={{ projectId: s.key }}>{s.label}</Link>;
         return <span className="task-stage"><strong>{s.label}</strong>{s.detail ? <small>@{s.detail}</small> : null}</span>;

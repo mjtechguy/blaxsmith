@@ -34,8 +34,9 @@ export async function renderDetailFixture() {
 }
 
 // Renders one component inside a router (so Link works) at a path.
-export async function renderInRouter(node: ReactNode, path = "/") {
+export async function renderInRouter(node: ReactNode, path = "/", seed: Array<[readonly unknown[], unknown]> = []) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } } });
+  for (const [key, data] of seed) queryClient.setQueryData(key, data);
   const rootRoute = createRootRoute({ component: () => <>{node}</> });
   const router = createRouter({ routeTree: rootRoute, history: createMemoryHistory({ initialEntries: [path] }) });
   await router.load();
@@ -53,4 +54,10 @@ export async function renderChecklist(items: Array<{ id: string; done: boolean |
   const { SetupChecklist } = await import("../src/setup-checklist");
   return renderInRouter(<SetupChecklist title="Set up this project" storageKey="test-checklist"
     items={items.map((i) => ({ ...i, label: `Step ${i.id}`, hint: `Do ${i.id}`, to: "/" }))} />);
+}
+
+// Agent Markdown as static HTML.
+export async function renderMarkdown(text: string) {
+  const { Markdown } = await import("../src/markdown");
+  return renderToString(<Markdown text={text} />);
 }

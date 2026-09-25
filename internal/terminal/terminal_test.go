@@ -380,6 +380,52 @@ func TestNewRouterRequiresTLSAndToken(t *testing.T) {
 	r.Close()
 }
 
+// The kubelet rotates a projected token by writing a new timestamped directory
+// and swapping the ..data symlink that token points through.
+func TestRouterFollowsProjectedTokenRotation(t *testing.T) {
+	serverCreds, caFile := routerTLS(t)
+	fake, dialer := terminaltest.Serve(t, grpc.Creds(serverCreds))
+	dir := t.TempDir()
+	project := func(name, token string) {
+		t.Helper()
+		if err := os.Mkdir(filepath.Join(dir, name), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name, "token"), []byte(token), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(name, filepath.Join(dir, "..data_tmp")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(filepath.Join(dir, "..data_tmp"), filepath.Join(dir, "..data")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	project("..2026_09_24_01", "sa-one")
+	token := filepath.Join(dir, "token")
+	if err := os.Symlink(filepath.Join("..data", "token"), token); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRouter("localhost:443", caFile, token, dialer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	guest, _ := r.Guest("blaxsmith-org", "attempt-1")
+	for _, next := range []string{"..2026_09_24_02", ""} {
+		if _, _, err := guest.Exec(context.Background(), []string{"true"}, 64); err != nil {
+			t.Fatal(err)
+		}
+		if next != "" {
+			project(next, "sa-two")
+		}
+	}
+	procs := fake.Snapshot()
+	if len(procs) != 2 || procs[0].Auth != "Bearer sa-one" || procs[1].Auth != "Bearer sa-two" {
+		t.Fatalf("router calls = %+v", procs)
+	}
+}
+
 func TestRouterSendsTokenPerRPCOverTLS(t *testing.T) {
 	serverCreds, caFile := routerTLS(t)
 	fake, dialer := terminaltest.Serve(t, grpc.Creds(serverCreds))

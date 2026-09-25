@@ -3,7 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { RefreshCw, Search } from "lucide-react";
-import { auditActions, auditKey, listAuditEvents } from "../admin";
+import { auditActionsKey, auditKey, listAuditActions, listAuditEvents } from "../admin";
 import { CollectionTable, useLocalView, type GridColumn } from "../data-table";
 import type { AdminAuditEvent } from "../gen/blaxsmith/api/v1/admin_pb";
 import { PageHeader, PageShell } from "../page";
@@ -14,7 +14,8 @@ import { listProjects } from "../workflow";
 type AuditSearch = { action?: string; actor?: string; project?: string };
 export const Route = createFileRoute("/admin/audit")({
   validateSearch: (search: Record<string, unknown>): AuditSearch => ({
-    ...(typeof search.action === "string" && auditActions.includes(search.action) ? { action: search.action } : {}),
+    // Any well-formed action; the server lists which ones this organization has recorded.
+    ...(typeof search.action === "string" && /^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(search.action) && search.action.length <= 128 ? { action: search.action } : {}),
     ...(typeof search.actor === "string" && search.actor ? { actor: search.actor.slice(0, 64) } : {}),
     ...(typeof search.project === "string" && search.project ? { project: search.project } : {}),
   }),
@@ -45,6 +46,9 @@ function AuditLog() {
   useEffect(() => { const timer = window.setTimeout(() => { if (actorInput.trim() !== actor) setFilter({ actor: actorInput.trim() || undefined }); }, 300); return () => window.clearTimeout(timer); });
   // ponytail: the project filter offers the first 20 projects by recency.
   const projects = useQuery({ queryKey: ["admin-audit-projects", org], enabled: Boolean(org), queryFn: ({ signal }) => listProjects("", "", "created_at", "desc", signal) });
+  const actions = useQuery({ queryKey: auditActionsKey(org), enabled: Boolean(org), queryFn: ({ signal }) => listAuditActions(signal), staleTime: 60_000 });
+  // A linked action may predate the list loading (or be one this org has not recorded yet); keep it selectable.
+  const actionOptions = action && !actions.data?.includes(action) ? [action, ...(actions.data ?? [])] : actions.data ?? [];
   const events = useInfiniteQuery({
     queryKey: auditKey(org, action, actor, projectId), enabled: Boolean(org), initialPageParam: "", placeholderData: keepPreviousData,
     queryFn: ({ pageParam, signal }) => listAuditEvents(pageParam, action, actor, projectId, signal),
@@ -60,7 +64,7 @@ function AuditLog() {
     <section className="table-section" aria-label="Audit events">
       <div className="grid-toolbar">
         <label className="filter-field"><span className="filter-label">Event</span>
-          <select value={action} onChange={(event) => setFilter({ action: event.target.value || undefined })}><option value="">All events</option>{auditActions.map((entry) => <option key={entry} value={entry}>{entry}</option>)}</select></label>
+          <select value={action} onChange={(event) => setFilter({ action: event.target.value || undefined })}><option value="">{actions.isError ? "All events (list unavailable)" : "All events"}</option>{actionOptions.map((entry) => <option key={entry} value={entry}>{entry}</option>)}</select></label>
         <label className="search-field"><Search size={16} aria-hidden="true" /><span className="sr-only">Actor</span>
           <input value={actorInput} onChange={(event) => setActorInput(event.target.value)} placeholder="Actor email or ID" maxLength={254} /></label>
         <label className="filter-field"><span className="filter-label">Project</span>

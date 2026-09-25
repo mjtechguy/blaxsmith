@@ -114,6 +114,11 @@ message ListAuditEventsResponse {
   string next_page_token = 2;
 }
 
+// ListAuditActions lists the distinct actions recorded for this organization,
+// for the audit log's event filter.
+message ListAuditActionsRequest {}
+message ListAuditActionsResponse { repeated string actions = 1; }
+
 // HaltRun requests cancellation: pending stages are cancelled and running
 // attempts are stopped by the completion sweep before the run is cancelled.
 message HaltRunRequest { string run_id = 1; }
@@ -126,6 +131,7 @@ message RevokeGrantResponse { string grant_id = 1; }
 service AdminService {
   rpc GetAdminOverview(GetAdminOverviewRequest) returns (GetAdminOverviewResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
+  rpc ListAuditActions(ListAuditActionsRequest) returns (ListAuditActionsResponse);
   rpc HaltRun(HaltRunRequest) returns (HaltRunResponse);
   rpc RevokeGrant(RevokeGrantRequest) returns (RevokeGrantResponse);
 }

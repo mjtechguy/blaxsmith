@@ -44,9 +44,17 @@ dispatch:
   # In-cluster atenet-router HTTPS host:port (its TLS listener, e.g.
   # atenet-router.ate-system.svc:443; the host must match the router cert) for
   # live terminals, takeover, guest result reads, and lease renewal notices.
-  # Calls use TLS pinned to router-ca.pem and bootstrap-token as bearer, so the
-  # router must run with --guest-client-auth. Empty disables them (terminals 503).
+  # Calls use TLS pinned to router-ca.pem and a bearer (bootstrap-token, or
+  # guestRouterToken below), so the router must run with --guest-client-auth. Empty disables them (terminals 503).
   guestRouter: ""
+  guestRouterToken:
+    # true: the guest router token is a kubelet-rotated projected token for the
+    # pod's own ServiceAccount (<release>-app, created by the chart) instead of
+    # the manually minted bootstrap-token. The router must accept
+    # system:serviceaccount:<namespace>:<release>-app via --guest-client-username.
+    projected: false
+    audience: blaxsmith-bootstrap # the router's --bootstrap-audience
+    expirationSeconds: 3600 # kubelet refreshes at 80%; 600..86400
 resources:
   requests:
     cpu: 100m

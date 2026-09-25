@@ -266,6 +266,27 @@ func (s *Store) ListAuditEvents(ctx context.Context, caller identity.Caller, f A
 	})
 }
 
+// ListAuditActions returns the distinct actions this organization has
+// recorded, sorted, for the audit log's event filter. Reading them from the
+// events (not a hand-kept list) means every inserted action is filterable.
+// The recursive query walks identity_audit_by_action one action at a time,
+// so it stays cheap however many events share an action.
+func (s *Store) ListAuditActions(ctx context.Context, caller identity.Caller) ([]string, error) {
+	if err := requireAdmin(caller); err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `WITH RECURSIVE a(action) AS (
+		(SELECT action FROM identity_audit_events WHERE organization_id=$1 ORDER BY action LIMIT 1)
+		UNION ALL
+		SELECT (SELECT e.action FROM identity_audit_events e WHERE e.organization_id=$1 AND e.action>a.action ORDER BY e.action LIMIT 1)
+		FROM a WHERE a.action IS NOT NULL)
+		SELECT action FROM a WHERE action IS NOT NULL`, caller.OrganizationID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
 // HaltRunAs requests cancellation of a queued or active run for an owner or
 // admin. The completion sweep stops live attempts; Progress then closes it.
 func (s *Store) HaltRunAs(ctx context.Context, caller identity.Caller, runID string) (string, error) {

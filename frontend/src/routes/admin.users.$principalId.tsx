@@ -7,6 +7,7 @@ import { auditKey, listAuditEvents } from "../admin";
 import { CollectionTable, useLocalView, type GridColumn } from "../data-table";
 import type { AdminAuditEvent } from "../gen/blaxsmith/api/v1/admin_pb";
 import { DetailLayout, SummaryList } from "../layouts";
+import { NotFoundPage } from "../page";
 import { Card, CopyValue, EmptyState, sentence, StatePanel, tabFrom, Timestamp, type TabSpec } from "../ui";
 import { assignableRoles, canManage, listMembers, membersKey } from "../users";
 import { MemberActionDialog, memberStatusBadge, roleLabel, type MemberAction } from "../users-ui";
@@ -26,7 +27,7 @@ function UserDetail() {
   const [action, setAction] = useState<MemberAction | null>(null);
   if (members.isPending) return <StatePanel kind="loading" title="Loading member" />;
   if (members.isError) return <StatePanel kind="error" title="Member unavailable" retry={() => void members.refetch()} />;
-  if (!member) return <StatePanel kind="error" title="Member not found">They may have been removed from this organization.</StatePanel>;
+  if (!member) return <NotFoundPage title="Member not found" back={{ to: "/admin/users", label: "Users" }}>They may have been removed from this organization.</NotFoundPage>;
   const self = member.principalId === session.data?.principalId;
   const manage = canManage(session.data, member.role);
   const why = manage ? undefined : "Only an owner can change an owner";

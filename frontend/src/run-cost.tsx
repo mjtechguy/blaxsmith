@@ -64,11 +64,12 @@ export function RunCostTab({ scope, runId }: { scope: string; runId: string }) {
         <CollectionTable id="run-cost-stages" label="Cost per stage" columns={stageColumns} data={c.stages} getRowId={(s) => s.taskId + s.stage}
           view={stageView} onView={setStageView} empty="No stages." noun="stages" paged={false} defaultHidden={["input", "output"]} />
       </Card>
-      <Card title="Requests" description={c.truncated ? "The newest 500 model requests. Route, retries and failovers are recorded per request." : "Every model request, newest first. Route, retries and failovers are recorded per request."}>
+      {c.requestsRestricted ? <Card title="Requests" description="This run used a member's personal subscription. Per-request detail is visible only to that member and to organization owners and admins; the totals and per-stage figures above are complete." />
+      : <Card title="Requests" description={c.truncated ? "The newest 500 model requests. Route, retries and failovers are recorded per request." : "Every model request, newest first. Route, retries and failovers are recorded per request."}>
         <CollectionTable id="run-cost-requests" label="Model requests" columns={callColumns} data={c.requests} getRowId={(r) => `${r.startedAt}-${r.stage}-${r.durationMs}-${r.httpStatus}`}
           view={callView} onView={setCallView} empty="No requests." noun="requests" defaultHidden={["duration"]}
           facets={[facet("stage", "Stage", c.requests.map((r) => r.stage)), facet("model", "Model", c.requests.map((r) => r.model)), facet("status", "Status", c.requests.map((r) => r.status))]} />
-      </Card>
+      </Card>}
     </>}
   </>;
 }

@@ -16,8 +16,10 @@ CA, without loading kubeconfig or querying the Kubernetes API. The build now
 packages this patched CLI with the connector's runtime binaries.
 `guest-router-auth.patch` adds `--guest-client-auth`: guest daemon gRPC
 routes (`/ateenv.*`, i.e. process exec and file read/write on AX debug tasks)
-then need verified HTTPS plus the same connector TokenReview as bootstrap
-routes, and the router strips the bearer before the guest. Without the flag,
+then need verified HTTPS plus a TokenReview (bootstrap audience) for
+`--guest-client-username` (default: the bootstrap connector username), and
+the router strips the bearer before the guest. The two identities are checked
+separately: a guest token does not open bootstrap routes and vice versa. Without the flag,
 upstream routes them unauthenticated on every listener. The actor UID fence
 is not applied to guest routes. CONNECT-tunneled requests re-enter
 `main_internal`, whose ext_proc sees the inner path and should see no TLS

@@ -50,7 +50,7 @@ function open(stage, fields) {
 }
 const rounds = [
   { title: "Who is the primary user of the export feature?", options: [option("ops", "Operations admins", "Bulk exports for audits", true), option("customers", "End customers"), option("both", "Both")] },
-  { title: "Which export formats must ship in v1?", multiSelect: true, bodyMd: "The transcript mentions CSV twice and JSON once.\nXLSX appears only in the stretch-goals list.", options: [option("csv", "CSV", "Spreadsheet-friendly", true), option("json", "JSON", "For API consumers"), option("xlsx", "XLSX")] },
+  { title: "Which export formats must ship in v1?", multiSelect: true, bodyMd: "The transcript mentions **CSV** twice and `JSON` once.\n\n- XLSX appears only in the [stretch-goals list](https://example.com/spec#stretch).\n- <img src=x onerror=alert(1)> raw HTML is dropped.", options: [option("csv", "CSV", "Spreadsheet-friendly", true), option("json", "JSON", "For API consumers"), option("xlsx", "XLSX")] },
   { title: "How long should generated exports be retained?", options: [option("1d", "24 hours"), option("7d", "7 days", "Matches the audit window in docs/spec.md", true), option("30d", "30 days")] },
   { title: "Anything else before I write the spec?", options: [] },
 ];
@@ -321,6 +321,7 @@ const rpc = {
       grants: adminGrants,
     };
   },
+  ListAuditActions: () => ({ actions: [...new Set(audit.map((e) => e.action))].sort() }),
   ListAuditEvents: ({ pageToken = "", action = "", actor = "", projectId: project = "", pageSize = 50 }) => {
     const before = pageToken ? Number(atob(pageToken)) : Infinity;
     const rows = audit.filter((e) => Number(e.id) < before && (!action || e.action === action) && (!actor || e.actorUsername === actor || e.actorId === actor) && (!project || e.projectId === project));
@@ -341,7 +342,7 @@ const rpc = {
     return { grantId };
   },
   // ConnectionService: an in-memory hub. No handler ever echoes a secret.
-  ListConnections: ({ scope = "", projectId: pid = "" }) => ({ connections: hub.filter((c) => scope === "project_available" ? c.scope === "organization" && c.grants.some((g) => g.projectId === pid) : c.scope === scope && (scope !== "project" || c.ownerId === pid)) }),
+  ListConnections: ({ scope = "", projectId: pid = "" }) => scope === "project" && !administers(pid) ? connectError(403, "permission_denied", "connection access denied") : ({ connections: hub.filter((c) => scope === "project_available" ? c.scope === "organization" && c.grants.some((g) => g.projectId === pid) : c.scope === scope && (scope !== "project" || c.ownerId === pid)) }),
   CreateApiKeyConnection: ({ scope, projectId: pid = "", provider, label = "" }) => hubAdd({ scope, ownerId: scope === "project" ? pid : scope === "personal" ? principalId : "org-demo", kind: "api_key", provider, label, account: `${provider} key`, modelCount: 3, modelsCheckedAt: now() }),
   CreateGitTokenConnection: ({ scope, projectId: pid = "", host, username }) => hubAdd({ scope, ownerId: scope === "project" ? pid : "org-demo", kind: "git", provider: host === "gitlab.com" ? "gitlab" : "github", account: username }),
   CreateCodexSubscription: () => hubAdd({ scope: "personal", ownerId: principalId, kind: "subscription", provider: "codex", account: "acct-demo", modelCount: 2, modelsCheckedAt: now() }),
@@ -449,6 +450,9 @@ for (const [i, action] of ["installation.bootstrap_owner", "identity.login", "wo
 const mockRole = process.env.MOCK_ROLE || "owner";
 const mayAnswer = () => ["owner", "admin", "member"].includes(mockRole);
 const mayDecide = () => ["owner", "admin"].includes(mockRole);
+// Members administer projects they created; in the mock, Mobile app and any project made this session.
+const memberAdministers = new Set(["proj-mobile"]);
+const administers = (pid) => mayDecide() || (mockRole === "member" && memberAdministers.has(pid));
 const projects = [
   { id: projectId, slug: "demo", name: "Demo project", createdAt: minutesAgo(60 * 24 * 21) },
   { id: "proj-billing", slug: "billing-service", name: "Billing service", createdAt: minutesAgo(60 * 24 * 14) },
@@ -481,6 +485,7 @@ function liveRun() {
   return { ...run, projectName: projectName(projectId), status, openInteractions: open.length, reviewWaiting: Boolean(reviewPackage && !reviewPackage.decision), stageCount: tasks.length, stagesSucceeded: tasks.filter((t) => t.state === "succeeded").length };
 }
 const allRuns = () => [liveRun(), ...staticRuns];
+const mockBudgetAlerts = []; // Filled by the model gateway G3 block below.
 function inboxItems() {
   const items = interactions.filter((i) => i.state === "open").map((i) => ({ id: i.id, kind: i.kind, runId, projectId, projectName: projectName(projectId), runLaunchKey: run.launchKey, stage: i.stage, title: i.title, blocking: i.blocking, createdAt: i.createdAt, canAct: mayAnswer() }));
   if (reviewPackage && !reviewPackage.decision) items.push({ id: reviewPackage.id, kind: "review", runId, projectId, projectName: projectName(projectId), runLaunchKey: run.launchKey, stage: "", title: "Review package revision 1", blocking: true, createdAt: reviewPackage.presentedAt, canAct: mayDecide() });
@@ -488,6 +493,10 @@ function inboxItems() {
     { id: "ix-billing-1", kind: "question", runId: "run-invoice-retry-fix", projectId: "proj-billing", projectName: "Billing service", runLaunchKey: "invoice-retry-fix", stage: "implement", title: "Should retries back off exponentially or on a fixed schedule?", blocking: true, createdAt: minutesAgo(52), canAct: mayAnswer() },
     { id: "pkg-ledger", kind: "review", runId: "run-ledger-export-v2", projectId: "proj-billing", projectName: "Billing service", runLaunchKey: "ledger-export-v2", stage: "", title: "Review package revision 2", blocking: true, createdAt: minutesAgo(60 * 4), canAct: mayDecide() },
   );
+  if (mayDecide()) for (const a of mockBudgetAlerts.filter((x) => !x.acknowledgedAt && !(x.snoozedUntil && Date.parse(x.snoozedUntil) > Date.now()))) {
+    items.push({ id: a.id, kind: "budget_alert", runId: "", projectId: a.projectId, projectName: a.projectName, runLaunchKey: "", stage: a.scope, title: `${a.budgetName} passed ${a.thresholdPct}% of its monthly budget`, blocking: false, createdAt: a.createdAt, canAct: true,
+      target: a.scope === "project" ? "project_usage" : a.scope === "user" && a.principalId === principalId ? "my_usage" : "admin_alerts" });
+  }
   return items.sort((a, b) => Number(b.blocking) - Number(a.blocking) || a.createdAt.localeCompare(b.createdAt));
 }
 const page = (rows, pageNumber = 1, size = 25) => rows.slice((Math.max(1, pageNumber) - 1) * size, Math.max(1, pageNumber) * size);
@@ -500,12 +509,13 @@ const members = [
 const roleOrder = ["owner", "admin", "member", "viewer"];
 Object.assign(rpc, {
   CurrentSession: () => ({ session: { organizationId: "org-demo", principalId, role: mockRole, accessExpiresAt: new Date(Date.now() + 3_600_000).toISOString() } }),
-  GetProject: ({ projectId: pid = projectId }) => { const p = projects.find((x) => x.id === pid); return p ? { project: p } : connectError(404, "not_found", "workflow resource not found"); },
+  GetProject: ({ projectId: pid = projectId }) => { const p = projects.find((x) => x.id === pid); return p ? { project: p, canAdminister: administers(pid), canLaunch: mayAnswer() } : connectError(404, "not_found", "workflow resource not found"); },
   // New projects start with no source or checks, so the setup flow's repository prefill shows.
   CreateProject: ({ slug, name }) => {
     if (projects.some((p) => p.slug === slug)) return connectError(409, "already_exists", "project slug already exists");
     const p = { id: `proj-${slug}`, slug, name, createdAt: now() };
     projects.push(p);
+    memberAdministers.add(p.id);
     return { project: p };
   },
   GetProjectSource: ({ projectId: pid = projectId }) => pid === projectId ? { source: { projectId, repositoryUrl: "https://github.com/example/blaxsmith-demo.git", ref: "main" } } : projectSources.has(pid) ? { source: projectSources.get(pid) } : {},
@@ -770,6 +780,75 @@ function mayUseExtension(e, pid) {
     },
     GetProjectDelivery: () => delivery(),
     SetProjectDelivery: ({ deliveryMode = "" }) => { projectChoice = deliveryMode; auditEvent("gateway.project_delivery.updated", projectId); return { delivery: delivery() }; },
+  });
+}
+
+// Model gateway G3: budgets, alerts and Project → Usage. Alerts also show in
+// the inbox (kind budget_alert) for owners and admins.
+{
+  const month = new Date(); month.setUTCDate(1); month.setUTCHours(0, 0, 0, 0);
+  const monthEnd = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0));
+  const elapsed = Math.max(1, (Date.now() - month.getTime()) / 86_400_000);
+  const days = monthEnd.getUTCDate();
+  const forecast = (spend) => String(Math.round(spend * days / elapsed));
+  let budgetsEnabled = true;
+  let version = 0;
+  const budgets = [
+    ["Acme engineering", "organization", "", "", 900_000_000, 612_000_000],
+    ["Billing service", "project", "proj-billing", "", 150_000_000, 131_500_000],
+    ["Demo project", "project", projectId, "", 120_000_000, 38_200_000],
+    ["Chidi's experiments", "user", "", "p-dev.okafor", 40_000_000, 41_300_000],
+  ].map(([name, scope, pid, principal, amount, spend], i) => ({ id: `budget-${i + 1}`, name, scope, projectId: pid, projectName: pid ? projectName(pid) : "",
+    principalId: principal, principalName: principal ? "Chidi Okafor" : "", amountUsdMicros: String(amount), thresholds: [50, 80, 100], version: "1",
+    spendUsdMicros: String(spend), forecastUsdMicros: forecast(spend), firedThresholds: [50, 80, 100].filter((t) => spend * 100 >= amount * t),
+    periodStart: month.toISOString().slice(0, 10), periodEnd: monthEnd.toISOString().slice(0, 10), createdAt: minutesAgo(60 * 24 * 20) }));
+  const alertFor = (b, t, minutes, ack) => ({ id: `alert-${b.id}-${t}`, budgetId: b.id, budgetName: b.name, scope: b.scope, projectId: b.projectId, projectName: b.projectName,
+    principalId: b.principalId, principalName: b.principalName, thresholdPct: t, spendUsdMicros: String(Math.round(Number(b.amountUsdMicros) * t / 100 + 400_000)),
+    amountUsdMicros: b.amountUsdMicros, forecastUsdMicros: b.forecastUsdMicros, periodStart: b.periodStart, createdAt: minutesAgo(minutes),
+    acknowledgedAt: ack ? minutesAgo(minutes - 30) : "", acknowledgedByUsername: ack ? "mara" : "", snoozedUntil: "" });
+  mockBudgetAlerts.push(alertFor(budgets[3], 100, 90, false), alertFor(budgets[1], 80, 60 * 5, false), alertFor(budgets[0], 50, 60 * 30, true),
+    alertFor(budgets[1], 50, 60 * 48, true), alertFor(budgets[3], 80, 60 * 50, true));
+  const active = () => budgets.filter((b) => !b.archived);
+  Object.assign(rpc, {
+    ListBudgets: () => mayDecide() ? { gatewayEnabled: process.env.MOCK_GATEWAY !== "off", budgetsEnabled, budgets: active() } : connectError(403, "permission_denied", "organization administration denied"),
+    SetBudgetsEnabled: ({ enabled = false }) => { budgetsEnabled = enabled; auditEvent("gateway.budgets.settings.updated", "org-demo"); return { enabled }; },
+    CreateBudget: ({ budget: b = {} }) => {
+      if (active().some((x) => x.scope === b.scope && x.projectId === (b.projectId ?? "") && x.principalId === (b.principalId ?? ""))) return connectError(409, "already_exists", "an active budget already exists for this scope");
+      const member = members.find((m) => m.principalId === b.principalId);
+      const row = { id: `budget-new-${++version}`, name: b.name, scope: b.scope, projectId: b.projectId ?? "", projectName: b.projectId ? projectName(b.projectId) : "",
+        principalId: b.principalId ?? "", principalName: member?.displayName ?? "", amountUsdMicros: String(b.amountUsdMicros), thresholds: b.thresholds?.length ? b.thresholds : [50, 80, 100],
+        version: "1", spendUsdMicros: "0", forecastUsdMicros: "0", firedThresholds: [], periodStart: budgets[0].periodStart, periodEnd: budgets[0].periodEnd, createdAt: now() };
+      budgets.push(row); auditEvent("gateway.budget.created", row.id); return { budget: row };
+    },
+    UpdateBudget: ({ budgetId, budget: b = {}, expectedVersion }) => {
+      const row = active().find((x) => x.id === budgetId);
+      if (!row) return connectError(404, "not_found", "workflow resource not found");
+      if (String(expectedVersion) !== row.version) return connectError(409, "aborted", "the budget changed since you loaded it; reload and try again");
+      Object.assign(row, { name: b.name, amountUsdMicros: String(b.amountUsdMicros), thresholds: b.thresholds, version: String(Number(row.version) + 1) });
+      auditEvent("gateway.budget.updated", row.id); return { budget: row };
+    },
+    ArchiveBudget: ({ budgetId }) => { const row = active().find((x) => x.id === budgetId); if (row) row.archived = true; auditEvent("gateway.budget.archived", budgetId); return {}; },
+    ListBudgetAlerts: ({ openOnly = false }) => mayDecide() ? { alerts: mockBudgetAlerts.filter((a) => !openOnly || !a.acknowledgedAt) } : connectError(403, "permission_denied", "organization administration denied"),
+    AcknowledgeBudgetAlert: ({ alertId }) => { const a = mockBudgetAlerts.find((x) => x.id === alertId); if (!a) return connectError(404, "not_found", "workflow resource not found");
+      if (!a.acknowledgedAt) Object.assign(a, { acknowledgedAt: now(), acknowledgedByUsername: "you" }); auditEvent("gateway.budget_alert.acknowledged", alertId); return {}; },
+    SnoozeBudgetAlert: ({ alertId, hours = 24 }) => { const a = mockBudgetAlerts.find((x) => x.id === alertId); if (!a) return connectError(404, "not_found", "workflow resource not found");
+      a.snoozedUntil = new Date(Date.now() + hours * 3_600_000).toISOString(); auditEvent("gateway.budget_alert.snoozed", alertId); return { snoozedUntil: a.snoozedUntil }; },
+    GetProjectUsage: ({ projectId: pid = projectId }) => {
+      const budget = active().find((b) => b.scope === "project" && b.projectId === pid);
+      const spend = Number(budget?.spendUsdMicros ?? 21_400_000);
+      const series = [];
+      for (let d = new Date(month); d <= new Date(); d = new Date(d.getTime() + 86_400_000)) ["claude-opus-5-5", "gpt-6-luna"].forEach((model, k) =>
+        series.push({ day: d.toISOString().slice(0, 10), key: model, costUsdMicros: String(Math.round(spend / elapsed * (k ? 0.35 : 0.65) * (0.7 + ((d.getUTCDate() * 7 + k) % 5) / 8))), tokens: "0" }));
+      const t = (share) => ({ requests: String(Math.round(share * 900)), errors: String(Math.round(share * 12)), rateLimited: "0", inputTokens: String(Math.round(share * 4e6)), outputTokens: String(Math.round(share * 6e5)),
+        cacheReadTokens: String(Math.round(share * 9e6)), cacheWriteTokens: "0", reasoningTokens: "0", costUsdMicros: String(Math.round(spend * share)) });
+      return { enabled: process.env.MOCK_GATEWAY !== "off", fromDay: month.toISOString().slice(0, 10), toDay: new Date().toISOString().slice(0, 10), totals: t(1), budget,
+        series, byStage: [["implement", 0.52], ["plan", 0.24], ["verify", 0.16], ["review", 0.08]].map(([key, s]) => ({ key, label: key, detail: "", totals: t(s) })),
+        byModel: [["claude-opus-5-5", 0.65, "anthropic"], ["gpt-6-luna", 0.35, "openai"]].map(([key, s, detail]) => ({ key, label: key, detail, totals: t(s) })),
+        byUser: mayDecide() ? [["p-you", "You", "you", 0.6], ["p-dev.okafor", "Chidi Okafor", "dev.okafor", 0.4]].map(([key, label, detail, s]) => ({ key, label, detail, totals: t(s) })) : [],
+        byUserHidden: !mayDecide(),
+        topRuns: [{ key: runId, label: run.launchKey, detail: projectName(pid), projectId: pid, totals: t(0.31) }, { key: "run-export-retention", label: "export-retention", detail: projectName(pid), projectId: pid, totals: t(0.12) }],
+        alerts: mockBudgetAlerts.filter((a) => a.scope === "project" && a.projectId === pid) };
+    },
   });
 }
 
