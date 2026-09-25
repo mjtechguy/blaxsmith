@@ -610,3 +610,22 @@ environment, not a production installation or tenancy boundary. Keep sensitive
 work out until the [remaining runtime/access gates](../../docs/phase-0-baseline.md)
 pass. Product Helm packaging, durable state/restore, authenticated connector
 enrollment, secrets delivery, and multi-tenant isolation remain planned work.
+
+## Redeploying the preview from a commit (`golive/`)
+
+[`golive/`](golive/) holds the numbered steps used to ship a commit to the dev
+node. `WORKSTATION` scripts run locally; `NODE` scripts run on the node from
+`/opt/blaxsmith-dev/golive-<sha7>` with `S=<sha7>`. The usual app-only redeploy:
+
+```sh
+git bundle create /tmp/b.bundle <deployed-sha>..main
+BUNDLE_REF=refs/heads/main bash deploy/dev/golive/00-local-sync.sh /tmp/b.bundle
+ssh ... 'cd /opt/blaxsmith-dev/golive-<sha7> && S=<sha7> BUNDLE_REF=refs/heads/main bash 01-node-sync.sh'
+ssh ... 'cd /opt/blaxsmith-dev/golive-<sha7> && S=<sha7> bash 06-app-image.sh'   # prints APP=...
+S=<sha7> BUNDLE_REF=refs/heads/main bash deploy/dev/golive/10-local-values-apply.sh  # diff, confirm, apply
+```
+
+Runner images (`04*-workers-*.sh`) and the AX allowlist (`05-allowlist.sh`) are
+only needed when `internal/tooladapter`, `cmd/blaxsmith-tool-worker`, or the
+runner Dockerfile change. Take `07-db-backup.sh` before any release with new
+migrations. `09-tokens.sh` re-mints the connector tokens without printing them.

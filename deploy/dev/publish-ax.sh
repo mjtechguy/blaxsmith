@@ -8,14 +8,14 @@ python3 - "$build" <<'PY'
 import hashlib, json, pathlib, sys
 build = pathlib.Path(sys.argv[1])
 record = json.loads((build / 'provenance.json').read_text())
-for name in ['ax-controller', 'ax-task-runner']:
+for name in ['ax-server', 'ax-controller', 'ax-task-runner']:
     if hashlib.sha256((build / name).read_bytes()).hexdigest() != record['binaries'][name]:
         sys.exit('Binary differs from the verified build: ' + name)
 askpass = pathlib.Path('integrations/ax/blaxsmith-git-askpass')
 if hashlib.sha256(askpass.read_bytes()).hexdigest() != record['askpass_sha256']:
     sys.exit('Git askpass differs from the verified build')
 PY
-for component in ax-controller ax-task-runner; do
+for component in ax-server ax-controller ax-task-runner; do
   test ! -e "$build/$component.image" || { echo 'Build directory already has published images; use a fresh verified build.' >&2; exit 2; }
 done
 image_build=$(mktemp -d)
@@ -53,6 +53,7 @@ record = json.loads((build / 'provenance.json').read_text())
 materials = {
     'controller_base': controller_base,
     'runner_base': runner_base,
+    'server_image': (build / 'ax-server.image').read_text().strip(),
     'controller_image': (build / 'ax-controller.image').read_text().strip(),
     'runner_image': (build / 'ax-task-runner.image').read_text().strip(),
     'askpass_sha256': record['askpass_sha256'],

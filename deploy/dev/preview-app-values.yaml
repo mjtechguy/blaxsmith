@@ -1,5 +1,5 @@
 replicaCount: 1
-image: 127.0.0.1:5001/blaxsmith-app@sha256:2eaf62f76968ec3181024b48250d37bc85981da06c0232d39492b9e60ddfa6fa
+image: 127.0.0.1:5001/blaxsmith-app@sha256:eb44ccab799440fddd1e5acac55cca92d34f5bb129ffcf3794ef61d54cc9dd6c
 imagePullPolicy: IfNotPresent
 origin: https://135.181.34.21
 tlsSecretName: preview-app-tls
@@ -14,13 +14,13 @@ dispatch:
     allowOpenEgress: true
   credentialsSecretName: preview-app-dispatch
   tools:
-    image: 127.0.0.1:5001/blaxsmith-dispatch-tools@sha256:a464b577f1317e86fe32892a3ce455420037a34c8b735edac26d605168a18d7b
+    image: 127.0.0.1:5001/blaxsmith-dispatch-tools@sha256:f5824b7b21e60327e9d336a7023d054e818f0c2c85fb9f78813cec1dad191079
   tunnel:
     targetHost: ax-server.ax-system.svc.cluster.local
     targetPort: 8080
     localPort: 18443
   ax:
-    cliSHA256: b9320558808f77122c515ec71b31448cd45da1180074bc4558c8402758d901c7
+    cliSHA256: 91435374643d5b3a294c7b02bef04ce05d706087b13bd8ed4e5ffa15d5fd1992
   substrate:
     cliSHA256: 8b63542a649c4dc0de06c3c05560dead7a83fc2cc5e93221224d07b1be322e44
     endpoint: api.ate-system.svc:443
@@ -28,7 +28,8 @@ dispatch:
     routerURL: https://atenet-router.ate-system.svc
   clusterID: blaxsmith-dev1
   leaseTTL: 10m
-  workerImage: 127.0.0.1:5001/blaxsmith-tool-worker@sha256:3a04f031ba71c8f197cda90f48a39e05492e5e67e6490b7601efc045137fe1df
+  workerImage: 127.0.0.1:5001/blaxsmith-tool-worker@sha256:9ea53383b527846e00bf42abc113a64d7b632ed7c798fc551cbbf6693c1f70a0
+  guestRouter: atenet-router.ate-system.svc.cluster.local:80
   workerPool: blaxsmith-smoke
   snapshotStorage: gs://ate-snapshots/blaxsmith/
   workspace: blaxsmith-source
