@@ -485,9 +485,34 @@ type RunCost struct {
 	Stages    []StageCost
 	Calls     []ModelCall
 	Truncated bool
+	// CallsRestricted: the run used a personal subscription the caller does
+	// not own, so per-request rows are withheld (§6: admins and other members
+	// see aggregates only for personal routes).
+	CallsRestricted bool
+}
+
+// personalRunOwners lists the owners of personal (user-owned) connections
+// that served the run's model calls: model bindings on user-owned
+// connections, plus any gateway event on a personal_subscription route.
+func personalRunOwners(ctx context.Context, tx pgx.Tx, org, runID string) ([]string, error) {
+	rows, err := tx.Query(ctx, `SELECT c.owner_id FROM workflow_attempts a
+		JOIN access_bindings b ON b.organization_id=a.organization_id::text AND b.attempt_id=a.id::text AND b.capability='model.invoke'
+		JOIN access_grants g ON g.organization_id=b.organization_id AND g.id=b.grant_id
+		JOIN access_connections c ON c.organization_id=g.organization_id AND c.id=g.connection_id
+		WHERE a.organization_id=$1 AND a.run_id=$2 AND c.owner_kind='user'
+		UNION
+		SELECT principal_id FROM gateway_usage_events
+		WHERE organization_id=$1 AND run_id=$2 AND route_kind='personal_subscription'`, org, runID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
 // RunCostAs is the run page Cost tab: any member of the run's organization.
+// When the run used someone's personal subscription, per-request detail is
+// shown only to that owner and to organization owners and admins; everyone
+// else sees totals and per-stage aggregates.
 func (s *Store) RunCostAs(ctx context.Context, caller identity.Caller, runID string) (RunCost, error) {
 	if !uuidPattern.MatchString(runID) {
 		return RunCost{}, ErrInvalid
@@ -532,6 +557,16 @@ func (s *Store) RunCostAs(ctx context.Context, caller identity.Caller, runID str
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return out, err
+	}
+	owners, err := personalRunOwners(ctx, tx, org, runID)
+	if err != nil {
+		return out, err
+	}
+	for _, owner := range owners {
+		if owner != caller.PrincipalID && !isOrgAdmin(caller) {
+			out.CallsRestricted = true
+			return out, nil
+		}
 	}
 	rows, err = tx.Query(ctx, `SELECT started_at,stage_key,COALESCE(NULLIF(served_model,''),requested_model),route_kind,api,
 		status,http_status,retry_count,streamed,usage_reported,COALESCE(ttft_ms,-1),duration_ms,

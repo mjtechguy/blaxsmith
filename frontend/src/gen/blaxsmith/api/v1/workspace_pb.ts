@@ -106,14 +106,16 @@ export const WorkspaceRunSchema: GenMessage<WorkspaceRun> = /*@__PURE__*/
  */
 export type InboxItem = Message<"blaxsmith.api.v1.InboxItem"> & {
   /**
-   * Interaction id, or the review package id for kind review.
+   * Interaction id, the review package id for kind review, or the alert id for kind budget_alert.
    *
    * @generated from field: string id = 1;
    */
   id: string;
 
   /**
-   * question, approval, escalation, interview_round, or review.
+   * question, approval, escalation, interview_round, review, or budget_alert
+   * (a model-gateway budget threshold; run_id is empty, stage holds the
+   * budget scope: organization, project, or user).
    *
    * @generated from field: string kind = 2;
    */

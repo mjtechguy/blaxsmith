@@ -1069,3 +1069,16 @@ a.row-title:hover { color: var(--primary); text-decoration: underline; }
 .session-main strong { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
 .session-main small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 560px) { .session-item { flex-wrap: wrap; } }
+
+/* Model gateway budgets (G3): progress meter, forecast, alert actions. */
+.budget-meter { display: grid; gap: 3px; min-width: 180px; }
+.budget-meter-line { display: flex; align-items: center; gap: 8px; }
+.budget-meter meter { flex: 1; min-width: 96px; height: 8px; }
+.budget-meter small { color: var(--muted); font-size: 12px; }
+.budget-meter.tone-danger strong { color: var(--danger-text); }
+.budget-meter.tone-attention strong { color: var(--warning-text); }
+.budget-forecast.is-over { color: var(--warning-text); font-weight: 600; }
+.row-actions { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
+.budget-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; padding: 0 18px 16px; }
+.budget-form .form-hint { grid-column: 1 / -1; margin: 0; }
+.budget-switch { padding: 0 18px 4px; }
