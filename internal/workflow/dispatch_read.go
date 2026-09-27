@@ -22,6 +22,15 @@ type ReadyTask struct {
 	MaxAttempts    int32
 }
 
+// Filtering prevents stopped goals occupying the head of a bounded scheduler
+// page. ReserveAttempt repeats the authoritative check under the goal lock.
+const goalAllowsAttempt = `NOT EXISTS (
+ SELECT 1 FROM workflow_goal_runs gr JOIN workflow_goals g ON g.organization_id=gr.organization_id AND g.id=gr.goal_id
+ LEFT JOIN workflow_goal_allowances ga ON ga.organization_id=g.organization_id AND ga.goal_id=g.id
+ WHERE gr.organization_id=r.organization_id AND gr.run_id=r.id AND (g.control_state<>'active'
+ OR ga.admit_until<=clock_timestamp()
+ OR (ga.max_attempts>0 AND ga.max_attempts<=(SELECT count(*) FROM workflow_attempts a JOIN workflow_goal_runs ar ON ar.organization_id=a.organization_id AND ar.run_id=a.run_id WHERE ar.organization_id=g.organization_id AND ar.goal_id=g.id))))`
+
 // ListReadyOrganizationIDs gives a dispatcher bounded, UUID-keyset tenant
 // discovery. Reset afterID to empty after the last page to begin another pass.
 func (s *Store) ListReadyOrganizationIDs(ctx context.Context, afterID string, limit int) ([]string, error) {
@@ -36,6 +45,7 @@ func (s *Store) ListReadyOrganizationIDs(ctx context.Context, afterID string, li
 		JOIN workflow_tasks t ON t.organization_id=r.organization_id AND t.run_id=r.id
 		JOIN workflow_run_bundles b ON b.organization_id=r.organization_id AND b.run_id=r.id
 		WHERE r.organization_id>$1 AND r.graph_sealed AND r.state IN ('queued','active')
+		AND `+goalAllowsAttempt+`
 		AND t.state='pending' AND t.active_attempt_id IS NULL AND t.generation<LEAST(20,t.max_attempts+t.extra_attempts)
 		AND NOT EXISTS (SELECT 1 FROM workflow_task_dependencies d
 			JOIN workflow_tasks parent ON parent.organization_id=d.organization_id
@@ -69,6 +79,7 @@ func (s *Store) ListReadyTasks(ctx context.Context, orgID string, limit int) ([]
 		JOIN workflow_tasks t ON t.organization_id=r.organization_id AND t.run_id=r.id
 		JOIN workflow_run_bundles b ON b.organization_id=r.organization_id AND b.run_id=r.id
 		WHERE r.organization_id=$1 AND r.graph_sealed AND r.state IN ('queued','active')
+		AND `+goalAllowsAttempt+`
 		AND t.state='pending' AND t.active_attempt_id IS NULL AND t.generation<LEAST(20,t.max_attempts+t.extra_attempts)
 		AND NOT EXISTS (SELECT 1 FROM workflow_task_dependencies d
 			JOIN workflow_tasks parent ON parent.organization_id=d.organization_id
@@ -181,7 +192,7 @@ func decodeFrozenBundle(sourceCommit, bundleSHA, verificationSHA string, bundleJ
 	if err != nil || sha(encodedBundle) != bundleSHA {
 		return nil, VerificationPolicy{}, ErrConflict
 	}
-	encodedPolicy, err := validateVerification(verification, bundle.Recipe.RequiredChecks)
+	encodedPolicy, err := validateVerification(verification, platformRequiredChecks(&bundle))
 	if err != nil || sha(encodedPolicy) != verificationSHA {
 		return nil, VerificationPolicy{}, ErrConflict
 	}

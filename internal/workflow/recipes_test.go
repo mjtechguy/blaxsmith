@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/guild"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/tenant"
@@ -74,14 +74,14 @@ func guildRecipe(t *testing.T) []byte {
 	return data
 }
 
-func seededGuild(t *testing.T, store *Store, caller identity.Caller) (LibraryRecipe, RecipeVersion) {
+func seededAnvil(t *testing.T, store *Store, caller identity.Caller) (LibraryRecipe, RecipeVersion) {
 	t.Helper()
 	recipes, err := store.ListRecipes(tenant.System(t.Context()), caller, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range recipes {
-		if r.Name == "Guild engineering" {
+		if r.Name == "Anvil starter" {
 			v, err := store.GetRecipeVersion(tenant.System(t.Context()), caller, r.CurrentVersionID)
 			if err != nil {
 				t.Fatal(err)
@@ -89,7 +89,7 @@ func seededGuild(t *testing.T, store *Store, caller identity.Caller) (LibraryRec
 			return r, v
 		}
 	}
-	t.Fatalf("Guild engineering seed missing: %+v", recipes)
+	t.Fatalf("Anvil starter seed missing: %+v", recipes)
 	return LibraryRecipe{}, RecipeVersion{}
 }
 
@@ -102,10 +102,10 @@ func TestRecipeSeedIsIdempotentAndVersionsAreImmutable(t *testing.T) {
 	}
 	org := organization(t, pool, "recipe-seed")
 	owner := reviewer(t, pool, org, "owner", "recipe-seed-owner")
-	seed, version := seededGuild(t, store, owner)
-	if seed.ProjectID != "" || seed.CurrentVersion != 1 || version.FrozenPath != "examples/guild/recipe.json" ||
-		string(version.JSON) != string(guildRecipe(t)) || version.SHA256 != sha(guildRecipe(t)) || version.AuthorID != "" {
-		t.Fatalf("seed does not match examples/guild/recipe.json: %+v %+v", seed, version)
+	seed, version := seededAnvil(t, store, owner)
+	if seed.ProjectID != "" || seed.CurrentVersion != 1 || version.FrozenPath != "examples/anvil/recipe.json" ||
+		string(version.JSON) != string(anvilRecipe(t)) || version.SHA256 != sha(anvilRecipe(t)) || version.AuthorID != "" {
+		t.Fatalf("seed does not match examples/anvil/recipe.json: %+v %+v", seed, version)
 	}
 	if _, _, fe := recipe.Validate(version.JSON); fe != nil {
 		t.Fatalf("seed is invalid: %v", fe)
@@ -161,9 +161,9 @@ func TestRecipeSeedIsIdempotentAndVersionsAreImmutable(t *testing.T) {
 		t.Fatalf("seed not idempotent: %d recipes, %d versions, %v", recipes, versions, err)
 	}
 
-	edited := []byte(strings.Replace(string(guildRecipe(t)), `"max_cycles": 3`, `"max_cycles": 2`, 1))
+	edited := []byte(strings.Replace(string(anvilRecipe(t)), `"timeout_seconds": 1800`, `"timeout_seconds": 1200`, 1))
 	second, err := store.CreateRecipeVersionAs(ctx, owner, seed.ID, edited, "", false)
-	if err != nil || second.Version != 2 || second.FrozenPath != ".blaxsmith/recipes/guild-engineering.json" || second.AuthorID != owner.PrincipalID {
+	if err != nil || second.Version != 2 || second.FrozenPath != ".blaxsmith/recipes/anvil-starter.json" || second.AuthorID != owner.PrincipalID {
 		t.Fatalf("second version: %+v %v", second, err)
 	}
 	if current, _, err := store.GetRecipe(ctx, owner, seed.ID); err != nil || current.CurrentVersionID != version.ID || current.VersionCount != 2 {
@@ -194,7 +194,7 @@ func TestRecipeSeedIsIdempotentAndVersionsAreImmutable(t *testing.T) {
 	}
 	// A new organization is seeded by the trigger.
 	later := organization(t, pool, "recipe-seed-later")
-	laterSeed, v := seededGuild(t, store, reviewer(t, pool, later, "viewer", "recipe-seed-viewer"))
+	laterSeed, v := seededAnvil(t, store, reviewer(t, pool, later, "viewer", "recipe-seed-viewer"))
 	if v.SHA256 != version.SHA256 {
 		t.Fatal("later organization seeded different bytes")
 	}
@@ -226,11 +226,11 @@ func TestRecipeValidationErrorsAreSurfaced(t *testing.T) {
 		invalid.Field.Path != "frozen_path" {
 		t.Fatalf("path label error: %v", err)
 	}
-	seed, _ := seededGuild(t, store, owner)
+	seed, _ := seededAnvil(t, store, owner)
 	if _, err := store.CreateRecipeVersionAs(ctx, owner, seed.ID, bad, "", true); !errors.As(err, &invalid) {
 		t.Fatalf("invalid version accepted: %v", err)
 	}
-	if _, _, err := store.CreateRecipeAs(ctx, owner, "", "guild ENGINEERING", "", guildRecipe(t), ""); !errors.Is(err, ErrConflict) {
+	if _, _, err := store.CreateRecipeAs(ctx, owner, "", "anvil STARTER", "", guildRecipe(t), ""); !errors.Is(err, ErrConflict) {
 		t.Fatalf("duplicate scoped name: %v", err)
 	}
 	var count int
@@ -306,11 +306,11 @@ func TestRecipeScopesAndPermissions(t *testing.T) {
 		return out
 	}
 	inProject, err := store.ListRecipes(ctx, member, project)
-	if err != nil || strings.Join(names(inProject), ",") != "Org fast@project,Guild engineering@org,Org fast@org" {
+	if err != nil || strings.Join(names(inProject), ",") != "Org fast@project,Anvil starter@org,Org fast@org" {
 		t.Fatalf("project library: %v %v", names(inProject), err)
 	}
 	inSibling, err := store.ListRecipes(ctx, member, sibling)
-	if err != nil || strings.Join(names(inSibling), ",") != "Guild engineering@org,Org fast@org" {
+	if err != nil || strings.Join(names(inSibling), ",") != "Anvil starter@org,Org fast@org" {
 		t.Fatalf("sibling sees project recipe: %v %v", names(inSibling), err)
 	}
 	if _, err := store.LibraryRecipeForLaunch(ctx, member, sibling, projectVersion.ID); !errors.Is(err, ErrNotFound) {
@@ -340,7 +340,7 @@ func TestRecipeScopesAndPermissions(t *testing.T) {
 	for _, id := range orgFastGrants {
 		revokeRecipeGrant(t, store, owner, id)
 	}
-	if list, err := store.ListRecipes(ctx, member, project); err != nil || strings.Join(names(list), ",") != "Org fast@project,Guild engineering@org" {
+	if list, err := store.ListRecipes(ctx, member, project); err != nil || strings.Join(names(list), ",") != "Org fast@project,Anvil starter@org" {
 		t.Fatalf("ungranted org recipes visible: %v %v", names(list), err)
 	}
 	if _, err := store.LibraryRecipeForLaunch(ctx, member, project, orgVersion.ID); !errors.Is(err, ErrNotFound) {
@@ -377,16 +377,12 @@ func TestLaunchFromLibraryFreezesSameDigestAsFile(t *testing.T) {
 		{ID: "project-tests", Command: []string{"go", "test", "./..."}},
 		{ID: "requirement-coverage", Command: []string{"verify-coverage"}},
 	}}
-	verification, err := store.SetProjectVerificationAs(ctx, owner, project, policy)
+	verification, err := store.SetProjectVerificationAs(ctx, owner, project, 0, policy)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	source := recipe.Input{Repo: filepath.Join(wd, "../.."), Ref: "HEAD", Recipe: "examples/guild/recipe.json",
-		Spec: "examples/guild/spec.md", Transcript: "examples/guild/transcript.md", Scope: "examples/guild"}
+	source := recipe.Input{Validators: map[string]recipe.Validator{"guild-forge": guild.ValidateInputs}, Repo: anvilRepo(t), Ref: "HEAD", Recipe: "examples/anvil/recipe.json",
+		Scope: "examples/anvil"}
 	launch := func(key string, source recipe.Input, versionID string) (Run, error) {
 		return store.CreateFrozenRun(ctx, FrozenRunInput{OrganizationID: org, ProjectID: project, LaunchKey: key,
 			Source: source, Verification: policy, Caller: &member, SourceRepositoryURL: repositoryURL, SourceRef: "main",
@@ -396,7 +392,7 @@ func TestLaunchFromLibraryFreezesSameDigestAsFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	guild, seed := seededGuild(t, store, member)
+	guild, seed := seededAnvil(t, store, member)
 	guildGrants := seedGrants(t, store, org, guild.ID) // Seeded: no explicit grant needed.
 	library, err := store.LibraryRecipeForLaunch(ctx, member, project, seed.ID)
 	if err != nil {
@@ -416,15 +412,15 @@ func TestLaunchFromLibraryFreezesSameDigestAsFile(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT COALESCE(r.recipe_version_id::text,''),b.bundle_json->'source'->>'recipe'
 		FROM workflow_runs r JOIN workflow_run_bundles b ON b.organization_id=r.organization_id AND b.run_id=r.id
 		WHERE r.organization_id=$1 AND r.id=$2`, org, run.ID).Scan(&recorded, &bundleRecipe); err != nil ||
-		recorded != library.ID || bundleRecipe != "examples/guild/recipe.json" {
+		recorded != library.ID || bundleRecipe != "examples/anvil/recipe.json" {
 		t.Fatalf("library provenance: %q %q %v", recorded, bundleRecipe, err)
 	}
-	if tasks, err := store.ListRunTasks(ctx, org, run.ID); err != nil || len(tasks) != 5 {
+	if tasks, err := store.ListRunTasks(ctx, org, run.ID); err != nil || len(tasks) != 2 {
 		t.Fatalf("library run graph: %d %v", len(tasks), err)
 	}
 	// Bytes that differ from the named version are refused at admission.
 	tampered := fromLibrary
-	tampered.RecipeData = []byte(strings.Replace(string(library.JSON), `"max_cycles": 3`, `"max_cycles": 2`, 1))
+	tampered.RecipeData = []byte(strings.Replace(string(library.JSON), `"timeout_seconds": 1800`, `"timeout_seconds": 1200`, 1))
 	if _, err := launch("tampered", tampered, library.ID); !errors.Is(err, ErrConflict) {
 		t.Fatalf("tampered library bytes launched: %v", err)
 	}
@@ -510,4 +506,13 @@ func TestRecipeGrantsAreManagedAndAudited(t *testing.T) {
 		WHERE organization_id=$1 AND actor_id=$2`, org, owner.PrincipalID).Scan(&created, &revoked); err != nil || created != 2 || revoked != 2 {
 		t.Fatalf("grant audit: %d created, %d revoked, %v", created, revoked, err)
 	}
+}
+
+func anvilRecipe(t *testing.T) []byte {
+	t.Helper()
+	data, err := os.ReadFile("../../examples/anvil/recipe.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }

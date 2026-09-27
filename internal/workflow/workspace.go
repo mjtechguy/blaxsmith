@@ -121,7 +121,7 @@ const inboxItems = `WITH items AS (
 	FROM workflow_runs r
 	JOIN workflow_review_packages k ON k.organization_id=r.organization_id AND k.run_id=r.id AND k.id=r.review_package_id
 	JOIN workflow_projects p ON p.organization_id=r.organization_id AND p.id=r.project_id
-	WHERE r.organization_id=$1 AND r.state='succeeded' AND NOT EXISTS (SELECT 1 FROM workflow_review_decisions d
+	WHERE r.organization_id=$1 AND r.state='succeeded' AND k.acceptance_mode='manual' AND NOT EXISTS (SELECT 1 FROM workflow_review_decisions d
 		WHERE d.organization_id=r.organization_id AND d.run_id=r.id AND d.package_id=r.review_package_id)
 ), filtered AS (
 	SELECT * FROM items WHERE (cardinality($4::text[])=0 OR kind=ANY($4::text[]))
@@ -244,7 +244,7 @@ func (s *Store) workspaceRuns(ctx context.Context, page string, args ...any) ([]
 			FROM workflow_tasks x WHERE x.organization_id=r.organization_id AND x.run_id=r.id) t ON true
 		LEFT JOIN LATERAL (SELECT count(*)::integer AS open,bool_or(x.kind='approval') AS approval
 			FROM workflow_interactions x WHERE x.organization_id=r.organization_id AND x.run_id=r.id AND x.state='open') i ON true
-		CROSS JOIN LATERAL (SELECT r.state='succeeded' AND r.review_package_id IS NOT NULL AND NOT EXISTS (
+		CROSS JOIN LATERAL (SELECT r.state='succeeded' AND EXISTS (SELECT 1 FROM workflow_review_packages k WHERE k.organization_id=r.organization_id AND k.id=r.review_package_id AND k.acceptance_mode='manual') AND NOT EXISTS (
 			SELECT 1 FROM workflow_review_decisions d WHERE d.organization_id=r.organization_id AND d.run_id=r.id
 			AND d.package_id=r.review_package_id) AS waiting) rv
 		ORDER BY r.ord`, args...)

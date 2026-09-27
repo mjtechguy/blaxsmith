@@ -23,12 +23,14 @@ import (
 type Fake struct {
 	ateenv.UnimplementedProcessServiceServer
 	ateenv.UnimplementedFileSystemServiceServer
-	mu      sync.Mutex
-	seq     int
-	procs   map[string]*proc
-	order   []*proc
-	targets []string
-	Stdout  func(argv []string) string
+	mu       sync.Mutex
+	seq      int
+	procs    map[string]*proc
+	order    []*proc
+	targets  []string
+	Stdout   func(argv []string) string
+	ExitCode func(argv []string) int
+	Hold     func(argv []string) bool // hold a test process until Exit or cancellation
 }
 
 type proc struct {
@@ -83,13 +85,17 @@ func (f *Fake) StartProcess(ctx context.Context, req *ateenv.StartProcessRequest
 	f.seq++
 	id := fmt.Sprint(f.seq)
 	p := &proc{argv: req.Command, auth: strings.Join(md.Get("authorization"), ","), exit: make(chan int, 1), out: make(chan []byte, 4)}
-	if req.Command[0] == "script" {
+	if req.Command[0] == "script" || (f.Hold != nil && f.Hold(req.Command)) {
 		p.out <- []byte("screen\r\n")
 	} else {
 		if f.Stdout != nil {
 			p.out <- []byte(f.Stdout(req.Command))
 		}
-		p.exit <- 0
+		code := 0
+		if f.ExitCode != nil {
+			code = f.ExitCode(req.Command)
+		}
+		p.exit <- code
 	}
 	f.procs[id] = p
 	f.order = append(f.order, p)

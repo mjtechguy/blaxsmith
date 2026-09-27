@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mjtechguy/blaxsmith/db"
 	"github.com/mjtechguy/blaxsmith/internal/catalog"
+	"github.com/mjtechguy/blaxsmith/internal/guild"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
@@ -26,10 +27,19 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve|serve-app|migrate|bootstrap-owner|admin> [flags]")
+		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve|serve-app|mcp|api-contract|migrate|bootstrap-owner|admin> [flags]")
+	}
+	if os.Args[1] == "api-contract" {
+		if len(os.Args) != 2 {
+			return fmt.Errorf("api-contract accepts no arguments")
+		}
+		return writeAPIContract(os.Stdout)
 	}
 	if os.Args[1] == "tools" {
 		return listTools(os.Args[2:])
+	}
+	if os.Args[1] == "mcp" {
+		return serveMCP(os.Args[2:])
 	}
 	if os.Args[1] == "serve" {
 		return serve(os.Args[2:])
@@ -47,21 +57,19 @@ func run() error {
 		return adminCommand(os.Args[2:])
 	}
 	if os.Args[1] != "check" && os.Args[1] != "freeze" {
-		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve|serve-app|migrate|bootstrap-owner|admin> [flags]")
+		return fmt.Errorf("usage: blaxsmith <check|freeze|tools|serve|serve-app|mcp|api-contract|migrate|bootstrap-owner|admin> [flags]")
 	}
-	var in recipe.Input
+	in := recipe.Input{Validators: map[string]recipe.Validator{"guild-forge": guild.ValidateInputs}}
 	flags := flag.NewFlagSet(os.Args[1], flag.ContinueOnError)
 	flags.StringVar(&in.Repo, "repo", ".", "local Git repository")
 	flags.StringVar(&in.Ref, "ref", "HEAD", "commit or ref to resolve once; working tree changes are ignored")
 	flags.StringVar(&in.Recipe, "recipe", "", "committed recipe JSON path, relative to repository root")
-	flags.StringVar(&in.Spec, "spec", "", "committed Forge specification path")
-	flags.StringVar(&in.Transcript, "transcript", "", "committed Forge interview transcript path")
 	flags.StringVar(&in.Scope, "scope", ".", "source directory for AGENTS.md inheritance")
 	if err := flags.Parse(os.Args[2:]); err != nil {
 		return err
 	}
-	if flags.NArg() != 0 || in.Recipe == "" || in.Spec == "" || in.Transcript == "" {
-		return fmt.Errorf("provide --recipe, --spec, and --transcript; positional arguments are not supported")
+	if flags.NArg() != 0 || in.Recipe == "" {
+		return fmt.Errorf("provide --recipe; positional arguments are not supported")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -72,7 +80,7 @@ func run() error {
 		return err
 	}
 	if os.Args[1] == "check" {
-		fmt.Printf("PASS %s: %d stages, %d frozen artifacts\ncommit: %s\nbundle: %s\n%s\n", bundle.Recipe.Name, len(bundle.StageOrder), len(bundle.Artifacts), bundle.Source.Commit, bundle.Digest, bundle.Guild.Report)
+		fmt.Printf("PASS %s: %d stages, %d frozen artifacts\ncommit: %s\nbundle: %s\n%s\n", bundle.Recipe.Name, len(bundle.StageOrder), len(bundle.Artifacts), bundle.Source.Commit, bundle.Digest, validationReport(bundle))
 		return nil
 	}
 	encoder := json.NewEncoder(os.Stdout)
@@ -149,4 +157,11 @@ func listTools(args []string) error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(results)
+}
+
+func validationReport(bundle *recipe.Bundle) string {
+	if bundle.Validation == nil {
+		return ""
+	}
+	return bundle.Validation.Report
 }

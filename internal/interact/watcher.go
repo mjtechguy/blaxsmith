@@ -16,9 +16,10 @@ import (
 // Watcher runs `bx watch` for one attempt at a time, persists what the guest
 // streams, and delivers persisted answers and steers through guest exec.
 type Watcher struct {
-	Store *Store
-	Guest GuestExec
-	Poll  time.Duration // delivery poll; zero selects 2s
+	Store    *Store
+	Guest    GuestExec
+	Evidence func(context.Context, workflow.Attempt, []byte) (bool, error)
+	Poll     time.Duration // delivery poll; zero selects 2s
 }
 
 // Run watches until ctx ends (the owner cancels it when the attempt stops),
@@ -80,6 +81,16 @@ func (w *Watcher) session(ctx context.Context, a workflow.Attempt) error {
 	scanner := bufio.NewScanner(proc.Stdout)
 	scanner.Buffer(make([]byte, 64<<10), 256<<10)
 	for scanner.Scan() {
+		if w.Evidence != nil {
+			handled, err := w.Evidence(ctx, a, scanner.Bytes())
+			if err != nil {
+				cancel()
+				return err
+			}
+			if handled {
+				continue
+			}
+		}
 		if err := w.Store.Persist(ctx, a, scanner.Bytes()); errors.Is(err, workflow.ErrInvalid) {
 			log.Printf("interaction watch for attempt %s: skipped malformed line", a.ID)
 		} else if err != nil {

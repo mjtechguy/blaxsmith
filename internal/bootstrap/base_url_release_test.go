@@ -52,18 +52,14 @@ func TestModelBaseURLIsFrozenAndFencedPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if renewed, err := access.RenewModelLeases(ctx, pool, 30*time.Minute); err != nil || len(renewed) != 1 {
+	if renewed, err := access.RenewModelLeases(ctx, pool, 30*time.Minute, "", "", 100); err != nil || len(renewed) != 1 {
 		t.Fatalf("renewal with an unchanged base URL: %+v %v", renewed, err)
-	}
-	if _, err := pool.Exec(ctx, `UPDATE access_leases SET expires_at=clock_timestamp()+interval '1 minute'
-		WHERE attempt_id=$1`, model.Attempt.ID); err != nil {
-		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE access_connections SET base_url='https://elsewhere.example.com/v1'
 		WHERE organization_id=$1 AND id='connection'`, model.Invoke.OrganizationID); err != nil {
 		t.Fatal(err)
 	}
-	if renewed, err := access.RenewModelLeases(ctx, pool, 30*time.Minute); err != nil || len(renewed) != 0 {
+	if renewed, err := access.RenewModelLeases(ctx, pool, 30*time.Minute, "", "", 100); err != nil || len(renewed) != 0 {
 		t.Fatalf("a changed base URL still renewed: %+v %v", renewed, err)
 	}
 	tx, err := pool.Begin(ctx)

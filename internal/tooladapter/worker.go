@@ -95,8 +95,11 @@ func Command(request Request) ([]string, error) {
 		return nil, err
 	}
 	body, err := json.Marshal(request)
-	if err != nil || len(body) > maxTaskArg {
-		return nil, ErrBlocked
+	if err != nil {
+		return nil, fmt.Errorf("%w: could not encode worker request", ErrBlocked)
+	}
+	if len(body) > maxTaskArg {
+		return nil, fmt.Errorf("%w: encoded worker request is %d bytes; limit is %d bytes; reduce instructions or split the work", ErrBlocked, len(body), maxTaskArg)
 	}
 	return []string{WorkerBinary, string(body)}, nil
 }
@@ -327,6 +330,7 @@ var skillName = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 func skillFilesByRoot(files []string) (map[string][]string, error) {
 	roots := map[string][]string{}
 	seen := map[string]bool{}
+	names := map[string]bool{}
 	for _, file := range files {
 		if !filepath.IsLocal(file) || path.Clean(file) != file || strings.ContainsAny(file, "\\\r\n\x00") || seen[file] {
 			return nil, fmt.Errorf("%w: invalid or duplicate skill artifact path", ErrBlocked)
@@ -340,6 +344,10 @@ func skillFilesByRoot(files []string) (map[string][]string, error) {
 		if root == "." || len(name) > 64 || !skillName.MatchString(name) {
 			return nil, fmt.Errorf("%w: skill directory must have a portable name", ErrBlocked)
 		}
+		if names[name] {
+			return nil, fmt.Errorf("%w: selected skill names must be unique", ErrBlocked)
+		}
+		names[name] = true
 		roots[root] = append(roots[root], file)
 	}
 	for root, manifests := range roots {
@@ -419,7 +427,6 @@ func materializeSkills(workdir, home, harness string, skills []string, artifacts
 	if err := os.MkdirAll(base, 0700); err != nil {
 		return "", err
 	}
-	names := map[string]bool{}
 	orderedRoots := make([]string, 0, len(roots))
 	for root := range roots {
 		orderedRoots = append(orderedRoots, root)
@@ -427,10 +434,6 @@ func materializeSkills(workdir, home, harness string, skills []string, artifacts
 	sort.Strings(orderedRoots)
 	for _, root := range orderedRoots {
 		name := path.Base(root)
-		if names[name] {
-			return "", fmt.Errorf("%w: selected skill names must be unique", ErrBlocked)
-		}
-		names[name] = true
 		files := roots[root]
 		sort.Strings(files)
 		var metadata skillFrontmatter
@@ -444,9 +447,9 @@ func materializeSkills(workdir, home, harness string, skills []string, artifacts
 				return "", err
 			}
 			if file == root+"/SKILL.md" {
-				metadata, err = parseSkillFrontmatter(data)
-				if err != nil || metadata.Name != name {
-					return "", fmt.Errorf("%w: skill frontmatter must use its portable directory name and description", ErrBlocked)
+				metadata, err = validateSkillMetadata(file, data)
+				if err != nil {
+					return "", err
 				}
 			}
 			relative := strings.TrimPrefix(file, root+"/")
@@ -469,6 +472,42 @@ func materializeSkills(workdir, home, harness string, skills []string, artifacts
 }
 
 type skillFrontmatter struct{ Name, Description string }
+
+// ValidateSkillFiles applies the worker's portable skill rules before admission.
+// Supporting files must be selected explicitly and bound to the same Git bundle.
+func ValidateSkillFiles(files []string, artifacts []recipe.Artifact) error {
+	if _, err := skillFilesByRoot(files); err != nil {
+		return err
+	}
+	byPath := make(map[string]recipe.Artifact, len(artifacts))
+	for _, a := range artifacts {
+		byPath[a.Path] = a
+	}
+	for _, file := range files {
+		a, ok := byPath[file]
+		sum := sha256.Sum256(a.Data)
+		if !ok || a.Source != "" || hex.EncodeToString(sum[:]) != a.SHA256 {
+			return fmt.Errorf("%w: skill file %q is not bound to frozen Git bytes", ErrBlocked, file)
+		}
+		if path.Base(file) == "SKILL.md" {
+			if _, err := validateSkillMetadata(file, a.Data); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateSkillMetadata(file string, data []byte) (skillFrontmatter, error) {
+	metadata, err := parseSkillFrontmatter(data)
+	if err != nil {
+		return metadata, fmt.Errorf("skill %q: %w", file, err)
+	}
+	if metadata.Name != path.Base(path.Dir(file)) {
+		return metadata, fmt.Errorf("%w: skill %q name must match its directory", ErrBlocked, file)
+	}
+	return metadata, nil
+}
 
 func parseSkillFrontmatter(data []byte) (skillFrontmatter, error) {
 	var result skillFrontmatter

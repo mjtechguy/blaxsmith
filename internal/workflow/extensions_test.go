@@ -5,14 +5,15 @@ import (
 	"errors"
 	"maps"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/mjtechguy/blaxsmith/internal/access"
+	"github.com/mjtechguy/blaxsmith/internal/evidence"
 	"github.com/mjtechguy/blaxsmith/internal/extension"
 	"github.com/mjtechguy/blaxsmith/internal/extension/fixture"
+	"github.com/mjtechguy/blaxsmith/internal/guild"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/tenant"
@@ -198,11 +199,7 @@ func TestLaunchFreezesExtensionTemplateDigest(t *testing.T) {
 		{ID: "project-tests", Command: []string{"go", "test", "./..."}},
 		{ID: "requirement-coverage", Command: []string{"verify-coverage"}},
 	}}
-	verification, err := store.SetProjectVerificationAs(ctx, owner, project, policy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wd, err := os.Getwd()
+	verification, err := store.SetProjectVerificationAs(ctx, owner, project, 0, policy)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,8 +215,8 @@ func TestLaunchFreezesExtensionTemplateDigest(t *testing.T) {
 	if !strings.Contains(data, "foundry-build") || !strings.Contains(data, "claude-opus-4-8") {
 		t.Fatal("recipe fixture edit did not apply")
 	}
-	source := recipe.Input{Repo: filepath.Join(wd, "../.."), Ref: "HEAD", Recipe: "examples/guild/recipe.json",
-		Spec: "examples/guild/spec.md", Transcript: "examples/guild/transcript.md", Scope: "examples/guild",
+	source := recipe.Input{Validators: map[string]recipe.Validator{"guild-forge": guild.ValidateInputs}, Repo: guildRepo(t), Ref: "HEAD", Recipe: "examples/guild/recipe.json",
+		Scope:      "examples/guild",
 		RecipeData: []byte(data)}
 	launch := func(key string) (Run, error) {
 		return store.CreateFrozenRun(ctx, FrozenRunInput{OrganizationID: org, ProjectID: project, LaunchKey: key,
@@ -266,6 +263,43 @@ func TestLaunchFreezesExtensionTemplateDigest(t *testing.T) {
 	if _, err := frozen.Load(); err != nil {
 		t.Fatalf("frozen manifest: %v", err)
 	}
+	if required, err := GateDeclaration(task, "foundry-assay", "pass"); err != nil || required {
+		t.Fatalf("informational gate: %v %v", required, err)
+	}
+	if _, err := GateDeclaration(task, "undeclared", "pass"); err == nil {
+		t.Fatal("undeclared gate accepted")
+	}
+	// Make the plan succeeded so the implement fixture can exercise live gates.
+	if _, err := pool.Exec(ctx, `UPDATE workflow_tasks SET state='succeeded' WHERE organization_id=$1 AND run_id=$2 AND task_key='plan'`, org, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	a, err := store.ReserveAttempt(ctx, org, run.ID, task.TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.ConfirmStarting(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.ConfirmStarted(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	gate := evidence.Gate{ID: "assay-1", Check: "foundry-assay", Verdict: "fail", Summary: "A check failed."}
+	receipt, err := store.RecordGate(ctx, a, run.SourceCommit, gate, "")
+	if err != nil || !receipt.Accepted {
+		t.Fatalf("gate record: %+v %v", receipt, err)
+	}
+	if replay, found, err := store.GateReceipt(ctx, a, gate); err != nil || !found || replay != receipt {
+		t.Fatalf("gate replay: %+v %v %v", replay, found, err)
+	}
+	gate.Verdict = "pass"
+	if replay, found, err := store.GateReceipt(ctx, a, gate); err != nil || !found || replay.Accepted {
+		t.Fatalf("changed gate replay: %+v %v %v", replay, found, err)
+	}
+	gate.ID = "assay-missing"
+	gate.Check = "undeclared"
+	if receipt, err := store.RecordGate(ctx, a, run.SourceCommit, gate, ""); err != nil || receipt.Accepted {
+		t.Fatalf("unknown gate: %+v %v", receipt, err)
+	}
 	recorded, err := store.RunExtensions(ctx, org, run.ID)
 	if err != nil || len(recorded) != 1 || recorded[0].ID != version.ID {
 		t.Fatalf("run provenance: %+v %v", recorded, err)
@@ -280,6 +314,51 @@ func TestLaunchFreezesExtensionTemplateDigest(t *testing.T) {
 	if plain.BundleSHA256 == run.BundleSHA256 {
 		t.Fatal("extension did not change the bundle digest")
 	}
+	// A recipe can require an extension gate without inventing a platform
+	// command with the same id. Missing, failed and stale submissions fail closed.
+	source.RecipeData = []byte(strings.Replace(data, `"required_checks": ["project-tests", "requirement-coverage"]`, `"required_checks": ["project-tests", "requirement-coverage", "foundry-assay"]`, 1))
+	gated, err := launch("required-gate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_tasks SET state='succeeded' WHERE organization_id=$1 AND run_id=$2 AND task_key='plan'`, org, gated.ID); err != nil {
+		t.Fatal(err)
+	}
+	ga, err := store.ReserveAttempt(ctx, org, gated.ID, taskID(t, store, org, gated.ID, "implement"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.ConfirmStarting(ctx, ga); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.ConfirmStarted(ctx, ga); err != nil {
+		t.Fatal(err)
+	}
+	assertGate := func(revision string, want bool) {
+		t.Helper()
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tx.Rollback(ctx)
+		err = requiredGates(ctx, tx, ga, revision)
+		if (err == nil) != want {
+			t.Fatalf("required gate readiness=%v err=%v", want, err)
+		}
+	}
+	assertGate(gated.SourceCommit, false)
+	pass := evidence.Gate{ID: "required-pass", Check: "foundry-assay", Verdict: "pass", Summary: "Pass"}
+	if receipt, err := store.RecordGate(ctx, ga, gated.SourceCommit, pass, ""); err != nil || !receipt.Accepted {
+		t.Fatalf("required pass: %+v %v", receipt, err)
+	}
+	assertGate(gated.SourceCommit, true)
+	assertGate(strings.Repeat("f", 40), false)
+	pass.ID = "required-fail"
+	pass.Verdict = "fail"
+	if _, err := store.RecordGate(ctx, ga, gated.SourceCommit, pass, ""); err != nil {
+		t.Fatal(err)
+	}
+	assertGate(gated.SourceCommit, false)
 	// A template on the wrong harness is refused at freeze.
 	source.RecipeData = []byte(strings.Replace(string(guildRecipe(t)), `"prompt": "examples/guild/prompts/implement.md"}`,
 		`"prompt": "examples/guild/prompts/implement.md", "template": "guild@1.0.0/foundry-build"}`, 1))

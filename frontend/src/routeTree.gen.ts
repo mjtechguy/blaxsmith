@@ -22,6 +22,7 @@ import { Route as ExtensionsIndexRouteImport } from './routes/extensions.index'
 import { Route as ExtensionsExtensionIdRouteImport } from './routes/extensions.$extensionId'
 import { Route as MeEmailRouteImport } from './routes/me.email'
 import { Route as MeSettingsRouteImport } from './routes/me.settings'
+import { Route as OauthConsentRouteImport } from './routes/oauth.consent'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsNewRouteImport } from './routes/projects.new'
@@ -68,6 +69,8 @@ import { Route as MeConnectionsNewApiKeyRouteImport } from './routes/me.connecti
 import { Route as MeConnectionsNewSubscriptionRouteImport } from './routes/me.connections.new.subscription'
 import { Route as ProjectsProjectIdConnectionsIndexRouteImport } from './routes/projects.$projectId.connections.index'
 import { Route as ProjectsProjectIdConnectionsConnectionIdRouteImport } from './routes/projects.$projectId.connections.$connectionId'
+import { Route as ProjectsProjectIdGoalsIndexRouteImport } from './routes/projects.$projectId.goals.index'
+import { Route as ProjectsProjectIdGoalsGoalIdRouteImport } from './routes/projects.$projectId.goals.$goalId'
 import { Route as ProjectsProjectIdModelAccessNewRouteImport } from './routes/projects.$projectId.model-access.new'
 import { Route as ProjectsProjectIdModelAccessSubscriptionRouteImport } from './routes/projects.$projectId.model-access.subscription'
 import { Route as ProjectsProjectIdRecipesIndexRouteImport } from './routes/projects.$projectId.recipes.index'
@@ -76,6 +79,7 @@ import { Route as ProjectsProjectIdRunsIndexRouteImport } from './routes/project
 import { Route as ProjectsProjectIdRunsRunIdRouteImport } from './routes/projects.$projectId.runs.$runId'
 import { Route as ProjectsProjectIdRunsNewRouteImport } from './routes/projects.$projectId.runs.new'
 import { Route as ProjectsProjectIdSettingsIndexRouteImport } from './routes/projects.$projectId.settings.index'
+import { Route as ProjectsProjectIdSettingsAgentsRouteImport } from './routes/projects.$projectId.settings.agents'
 import { Route as ProjectsProjectIdSettingsSourceRouteImport } from './routes/projects.$projectId.settings.source'
 import { Route as ProjectsProjectIdSettingsVerificationRouteImport } from './routes/projects.$projectId.settings.verification'
 import { Route as RecipesRecipeIdVersionsNewRouteImport } from './routes/recipes.$recipeId.versions.new'
@@ -148,6 +152,11 @@ const MeEmailRoute = MeEmailRouteImport.update({
 const MeSettingsRoute = MeSettingsRouteImport.update({
   id: '/me/settings',
   path: '/me/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthConsentRoute = OauthConsentRouteImport.update({
+  id: '/oauth/consent',
+  path: '/oauth/consent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
@@ -394,6 +403,18 @@ const ProjectsProjectIdConnectionsConnectionIdRoute =
     path: '/connections/$connectionId',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProjectsProjectIdGoalsIndexRoute =
+  ProjectsProjectIdGoalsIndexRouteImport.update({
+    id: '/goals/',
+    path: '/goals/',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdGoalsGoalIdRoute =
+  ProjectsProjectIdGoalsGoalIdRouteImport.update({
+    id: '/goals/$goalId',
+    path: '/goals/$goalId',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdModelAccessNewRoute =
   ProjectsProjectIdModelAccessNewRouteImport.update({
     id: '/new',
@@ -440,6 +461,12 @@ const ProjectsProjectIdSettingsIndexRoute =
   ProjectsProjectIdSettingsIndexRouteImport.update({
     id: '/',
     path: '/',
+    getParentRoute: () => ProjectsProjectIdSettingsRoute,
+  } as any)
+const ProjectsProjectIdSettingsAgentsRoute =
+  ProjectsProjectIdSettingsAgentsRouteImport.update({
+    id: '/agents',
+    path: '/agents',
     getParentRoute: () => ProjectsProjectIdSettingsRoute,
   } as any)
 const ProjectsProjectIdSettingsSourceRoute =
@@ -503,6 +530,7 @@ export interface FileRoutesByFullPath {
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
   '/me/email': typeof MeEmailRoute
   '/me/settings': typeof MeSettingsRouteWithChildren
+  '/oauth/consent': typeof OauthConsentRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
   '/recipes/new': typeof RecipesNewRoute
@@ -548,17 +576,20 @@ export interface FileRoutesByFullPath {
   '/me/connections/new/api-key': typeof MeConnectionsNewApiKeyRoute
   '/me/connections/new/subscription': typeof MeConnectionsNewSubscriptionRoute
   '/projects/$projectId/connections/$connectionId': typeof ProjectsProjectIdConnectionsConnectionIdRoute
+  '/projects/$projectId/goals/$goalId': typeof ProjectsProjectIdGoalsGoalIdRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/model-access/subscription': typeof ProjectsProjectIdModelAccessSubscriptionRoute
   '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/projects/$projectId/settings/agents': typeof ProjectsProjectIdSettingsAgentsRoute
   '/projects/$projectId/settings/source': typeof ProjectsProjectIdSettingsSourceRoute
   '/projects/$projectId/settings/verification': typeof ProjectsProjectIdSettingsVerificationRoute
   '/recipes/$recipeId/versions/new': typeof RecipesRecipeIdVersionsNewRoute
   '/admin/connections/new/': typeof AdminConnectionsNewIndexRoute
   '/admin/recipes/$recipeId/': typeof AdminRecipesRecipeIdIndexRoute
   '/projects/$projectId/connections/': typeof ProjectsProjectIdConnectionsIndexRoute
+  '/projects/$projectId/goals/': typeof ProjectsProjectIdGoalsIndexRoute
   '/projects/$projectId/recipes/': typeof ProjectsProjectIdRecipesIndexRoute
   '/projects/$projectId/runs/': typeof ProjectsProjectIdRunsIndexRoute
   '/projects/$projectId/settings/': typeof ProjectsProjectIdSettingsIndexRoute
@@ -577,6 +608,7 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof AdminAuditRoute
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
   '/me/email': typeof MeEmailRoute
+  '/oauth/consent': typeof OauthConsentRoute
   '/projects/new': typeof ProjectsNewRoute
   '/recipes/new': typeof RecipesNewRoute
   '/setup/$token': typeof SetupTokenRoute
@@ -620,17 +652,20 @@ export interface FileRoutesByTo {
   '/me/connections/new/api-key': typeof MeConnectionsNewApiKeyRoute
   '/me/connections/new/subscription': typeof MeConnectionsNewSubscriptionRoute
   '/projects/$projectId/connections/$connectionId': typeof ProjectsProjectIdConnectionsConnectionIdRoute
+  '/projects/$projectId/goals/$goalId': typeof ProjectsProjectIdGoalsGoalIdRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/model-access/subscription': typeof ProjectsProjectIdModelAccessSubscriptionRoute
   '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/projects/$projectId/settings/agents': typeof ProjectsProjectIdSettingsAgentsRoute
   '/projects/$projectId/settings/source': typeof ProjectsProjectIdSettingsSourceRoute
   '/projects/$projectId/settings/verification': typeof ProjectsProjectIdSettingsVerificationRoute
   '/recipes/$recipeId/versions/new': typeof RecipesRecipeIdVersionsNewRoute
   '/admin/connections/new': typeof AdminConnectionsNewIndexRoute
   '/admin/recipes/$recipeId': typeof AdminRecipesRecipeIdIndexRoute
   '/projects/$projectId/connections': typeof ProjectsProjectIdConnectionsIndexRoute
+  '/projects/$projectId/goals': typeof ProjectsProjectIdGoalsIndexRoute
   '/projects/$projectId/recipes': typeof ProjectsProjectIdRecipesIndexRoute
   '/projects/$projectId/runs': typeof ProjectsProjectIdRunsIndexRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsIndexRoute
@@ -653,6 +688,7 @@ export interface FileRoutesById {
   '/extensions/$extensionId': typeof ExtensionsExtensionIdRoute
   '/me/email': typeof MeEmailRoute
   '/me/settings': typeof MeSettingsRouteWithChildren
+  '/oauth/consent': typeof OauthConsentRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
   '/recipes/new': typeof RecipesNewRoute
@@ -698,17 +734,20 @@ export interface FileRoutesById {
   '/me/connections/new/api-key': typeof MeConnectionsNewApiKeyRoute
   '/me/connections/new/subscription': typeof MeConnectionsNewSubscriptionRoute
   '/projects/$projectId/connections/$connectionId': typeof ProjectsProjectIdConnectionsConnectionIdRoute
+  '/projects/$projectId/goals/$goalId': typeof ProjectsProjectIdGoalsGoalIdRoute
   '/projects/$projectId/model-access/new': typeof ProjectsProjectIdModelAccessNewRoute
   '/projects/$projectId/model-access/subscription': typeof ProjectsProjectIdModelAccessSubscriptionRoute
   '/projects/$projectId/recipes/new': typeof ProjectsProjectIdRecipesNewRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
   '/projects/$projectId/runs/new': typeof ProjectsProjectIdRunsNewRoute
+  '/projects/$projectId/settings/agents': typeof ProjectsProjectIdSettingsAgentsRoute
   '/projects/$projectId/settings/source': typeof ProjectsProjectIdSettingsSourceRoute
   '/projects/$projectId/settings/verification': typeof ProjectsProjectIdSettingsVerificationRoute
   '/recipes/$recipeId/versions/new': typeof RecipesRecipeIdVersionsNewRoute
   '/admin/connections/new/': typeof AdminConnectionsNewIndexRoute
   '/admin/recipes/$recipeId/': typeof AdminRecipesRecipeIdIndexRoute
   '/projects/$projectId/connections/': typeof ProjectsProjectIdConnectionsIndexRoute
+  '/projects/$projectId/goals/': typeof ProjectsProjectIdGoalsIndexRoute
   '/projects/$projectId/recipes/': typeof ProjectsProjectIdRecipesIndexRoute
   '/projects/$projectId/runs/': typeof ProjectsProjectIdRunsIndexRoute
   '/projects/$projectId/settings/': typeof ProjectsProjectIdSettingsIndexRoute
@@ -732,6 +771,7 @@ export interface FileRouteTypes {
     | '/extensions/$extensionId'
     | '/me/email'
     | '/me/settings'
+    | '/oauth/consent'
     | '/projects/$projectId'
     | '/projects/new'
     | '/recipes/new'
@@ -777,17 +817,20 @@ export interface FileRouteTypes {
     | '/me/connections/new/api-key'
     | '/me/connections/new/subscription'
     | '/projects/$projectId/connections/$connectionId'
+    | '/projects/$projectId/goals/$goalId'
     | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/model-access/subscription'
     | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/projects/$projectId/settings/agents'
     | '/projects/$projectId/settings/source'
     | '/projects/$projectId/settings/verification'
     | '/recipes/$recipeId/versions/new'
     | '/admin/connections/new/'
     | '/admin/recipes/$recipeId/'
     | '/projects/$projectId/connections/'
+    | '/projects/$projectId/goals/'
     | '/projects/$projectId/recipes/'
     | '/projects/$projectId/runs/'
     | '/projects/$projectId/settings/'
@@ -806,6 +849,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/extensions/$extensionId'
     | '/me/email'
+    | '/oauth/consent'
     | '/projects/new'
     | '/recipes/new'
     | '/setup/$token'
@@ -849,17 +893,20 @@ export interface FileRouteTypes {
     | '/me/connections/new/api-key'
     | '/me/connections/new/subscription'
     | '/projects/$projectId/connections/$connectionId'
+    | '/projects/$projectId/goals/$goalId'
     | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/model-access/subscription'
     | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/projects/$projectId/settings/agents'
     | '/projects/$projectId/settings/source'
     | '/projects/$projectId/settings/verification'
     | '/recipes/$recipeId/versions/new'
     | '/admin/connections/new'
     | '/admin/recipes/$recipeId'
     | '/projects/$projectId/connections'
+    | '/projects/$projectId/goals'
     | '/projects/$projectId/recipes'
     | '/projects/$projectId/runs'
     | '/projects/$projectId/settings'
@@ -881,6 +928,7 @@ export interface FileRouteTypes {
     | '/extensions/$extensionId'
     | '/me/email'
     | '/me/settings'
+    | '/oauth/consent'
     | '/projects/$projectId'
     | '/projects/new'
     | '/recipes/new'
@@ -926,17 +974,20 @@ export interface FileRouteTypes {
     | '/me/connections/new/api-key'
     | '/me/connections/new/subscription'
     | '/projects/$projectId/connections/$connectionId'
+    | '/projects/$projectId/goals/$goalId'
     | '/projects/$projectId/model-access/new'
     | '/projects/$projectId/model-access/subscription'
     | '/projects/$projectId/recipes/new'
     | '/projects/$projectId/runs/$runId'
     | '/projects/$projectId/runs/new'
+    | '/projects/$projectId/settings/agents'
     | '/projects/$projectId/settings/source'
     | '/projects/$projectId/settings/verification'
     | '/recipes/$recipeId/versions/new'
     | '/admin/connections/new/'
     | '/admin/recipes/$recipeId/'
     | '/projects/$projectId/connections/'
+    | '/projects/$projectId/goals/'
     | '/projects/$projectId/recipes/'
     | '/projects/$projectId/runs/'
     | '/projects/$projectId/settings/'
@@ -957,6 +1008,7 @@ export interface RootRouteChildren {
   ExtensionsExtensionIdRoute: typeof ExtensionsExtensionIdRoute
   MeEmailRoute: typeof MeEmailRoute
   MeSettingsRoute: typeof MeSettingsRouteWithChildren
+  OauthConsentRoute: typeof OauthConsentRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
   ProjectsNewRoute: typeof ProjectsNewRoute
   RecipesNewRoute: typeof RecipesNewRoute
@@ -1063,6 +1115,13 @@ declare module '@tanstack/react-router' {
       path: '/me/settings'
       fullPath: '/me/settings'
       preLoaderRoute: typeof MeSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/consent': {
+      id: '/oauth/consent'
+      path: '/oauth/consent'
+      fullPath: '/oauth/consent'
+      preLoaderRoute: typeof OauthConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/': {
@@ -1387,6 +1446,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdConnectionsConnectionIdRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/goals/': {
+      id: '/projects/$projectId/goals/'
+      path: '/goals'
+      fullPath: '/projects/$projectId/goals/'
+      preLoaderRoute: typeof ProjectsProjectIdGoalsIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/goals/$goalId': {
+      id: '/projects/$projectId/goals/$goalId'
+      path: '/goals/$goalId'
+      fullPath: '/projects/$projectId/goals/$goalId'
+      preLoaderRoute: typeof ProjectsProjectIdGoalsGoalIdRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/model-access/new': {
       id: '/projects/$projectId/model-access/new'
       path: '/new'
@@ -1441,6 +1514,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/projects/$projectId/settings/'
       preLoaderRoute: typeof ProjectsProjectIdSettingsIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdSettingsRoute
+    }
+    '/projects/$projectId/settings/agents': {
+      id: '/projects/$projectId/settings/agents'
+      path: '/agents'
+      fullPath: '/projects/$projectId/settings/agents'
+      preLoaderRoute: typeof ProjectsProjectIdSettingsAgentsRouteImport
       parentRoute: typeof ProjectsProjectIdSettingsRoute
     }
     '/projects/$projectId/settings/source': {
@@ -1610,6 +1690,7 @@ const ProjectsProjectIdModelAccessRouteWithChildren =
   )
 
 interface ProjectsProjectIdSettingsRouteChildren {
+  ProjectsProjectIdSettingsAgentsRoute: typeof ProjectsProjectIdSettingsAgentsRoute
   ProjectsProjectIdSettingsSourceRoute: typeof ProjectsProjectIdSettingsSourceRoute
   ProjectsProjectIdSettingsVerificationRoute: typeof ProjectsProjectIdSettingsVerificationRoute
   ProjectsProjectIdSettingsIndexRoute: typeof ProjectsProjectIdSettingsIndexRoute
@@ -1617,6 +1698,7 @@ interface ProjectsProjectIdSettingsRouteChildren {
 
 const ProjectsProjectIdSettingsRouteChildren: ProjectsProjectIdSettingsRouteChildren =
   {
+    ProjectsProjectIdSettingsAgentsRoute: ProjectsProjectIdSettingsAgentsRoute,
     ProjectsProjectIdSettingsSourceRoute: ProjectsProjectIdSettingsSourceRoute,
     ProjectsProjectIdSettingsVerificationRoute:
       ProjectsProjectIdSettingsVerificationRoute,
@@ -1636,10 +1718,12 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdVerificationRoute: typeof ProjectsProjectIdVerificationRoute
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
   ProjectsProjectIdConnectionsConnectionIdRoute: typeof ProjectsProjectIdConnectionsConnectionIdRoute
+  ProjectsProjectIdGoalsGoalIdRoute: typeof ProjectsProjectIdGoalsGoalIdRoute
   ProjectsProjectIdRecipesNewRoute: typeof ProjectsProjectIdRecipesNewRoute
   ProjectsProjectIdRunsRunIdRoute: typeof ProjectsProjectIdRunsRunIdRoute
   ProjectsProjectIdRunsNewRoute: typeof ProjectsProjectIdRunsNewRoute
   ProjectsProjectIdConnectionsIndexRoute: typeof ProjectsProjectIdConnectionsIndexRoute
+  ProjectsProjectIdGoalsIndexRoute: typeof ProjectsProjectIdGoalsIndexRoute
   ProjectsProjectIdRecipesIndexRoute: typeof ProjectsProjectIdRecipesIndexRoute
   ProjectsProjectIdRunsIndexRoute: typeof ProjectsProjectIdRunsIndexRoute
   ProjectsProjectIdConnectionsNewApiKeyRoute: typeof ProjectsProjectIdConnectionsNewApiKeyRoute
@@ -1658,11 +1742,13 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,
   ProjectsProjectIdConnectionsConnectionIdRoute:
     ProjectsProjectIdConnectionsConnectionIdRoute,
+  ProjectsProjectIdGoalsGoalIdRoute: ProjectsProjectIdGoalsGoalIdRoute,
   ProjectsProjectIdRecipesNewRoute: ProjectsProjectIdRecipesNewRoute,
   ProjectsProjectIdRunsRunIdRoute: ProjectsProjectIdRunsRunIdRoute,
   ProjectsProjectIdRunsNewRoute: ProjectsProjectIdRunsNewRoute,
   ProjectsProjectIdConnectionsIndexRoute:
     ProjectsProjectIdConnectionsIndexRoute,
+  ProjectsProjectIdGoalsIndexRoute: ProjectsProjectIdGoalsIndexRoute,
   ProjectsProjectIdRecipesIndexRoute: ProjectsProjectIdRecipesIndexRoute,
   ProjectsProjectIdRunsIndexRoute: ProjectsProjectIdRunsIndexRoute,
   ProjectsProjectIdConnectionsNewApiKeyRoute:
@@ -1688,6 +1774,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExtensionsExtensionIdRoute: ExtensionsExtensionIdRoute,
   MeEmailRoute: MeEmailRoute,
   MeSettingsRoute: MeSettingsRouteWithChildren,
+  OauthConsentRoute: OauthConsentRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
   ProjectsNewRoute: ProjectsNewRoute,
   RecipesNewRoute: RecipesNewRoute,

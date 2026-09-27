@@ -15,7 +15,7 @@ import { inspectKey, inspectRepository } from "./setup";
 import { Disclosure } from "./ui";
 import {
   createGitConnection, gitConnectionsQueryKey, launchAvailabilityQueryKey, listGitConnections, projectSourceQueryKey,
-  projectVerificationQueryKey, setProjectSource, setProjectVerification,
+  projectVerificationQueryKey, setProjectSource, setProjectVerification, listProjectVerificationHistory,
 } from "./workflow";
 
 export const flowOrder = ["details", "source", "verification", "recipe", "access"] as const;
@@ -69,6 +69,7 @@ export function SourceEditor({ projectId, org, source, mode }: { projectId: stri
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: projectSourceQueryKey(org, projectId) }),
           queryClient.invalidateQueries({ queryKey: launchAvailabilityQueryKey(org, projectId) }),
+          queryClient.invalidateQueries({ queryKey: ["verification-history", org, projectId] }),
         ]);
         // A new source means new suggestions: read the repository now, so the
         // verification and recipe steps can prefill from it.
@@ -209,41 +210,50 @@ function RepoPicker({ connectionId, repositoryUrl, gitRef, onRepository, onRef }
   </>;
 }
 
+const presetMode = (preset: string, category: string) => preset === "mvp"
+  ? category === "build" ? "required" : ["test", "other"].includes(category) ? "advisory" : "off"
+  : preset === "balanced" && ["review", "e2e", "security", "performance"].includes(category) ? "advisory" : "required";
 const checkId = /^[a-z][a-z0-9_-]{0,63}$/;
 
 export function VerificationEditor({ projectId, org, current, mode }: { projectId: string; org: string; current: ProjectVerification | null; mode: EditorMode }) {
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
   const [saved, setSaved] = useSaved();
-  const initial = () => current?.checks.map((check) => ({ id: check.id, command: [...check.command] })) || [{ id: "", command: [""] }];
+  const [baseVersion, setBaseVersion] = useState(current?.version ?? 0n);
+  const [preset, setPreset] = useState(current?.preset || (current ? "custom" : "balanced"));
+  const initial = () => current?.checks.map((check) => ({ category: check.category || "other", mode: check.mode || "required", id: check.id, command: [...check.command], trustedPaths: check.trustedPaths.join(", ") })) || [];
   // Suggestions from .blaxsmith.json or detection prefill an empty policy; an
   // existing one is replaced only on request. Nothing is saved until the user confirms.
   const inspection = useRepositoryInspection(projectId);
-  const suggested = inspection.data?.verification.map((c) => ({ id: c.id, command: [...c.command] })) ?? [];
+  const suggested = inspection.data?.verification.map((c) => ({ category: "other", mode: "required", id: c.id, command: [...c.command], trustedPaths: "" })) ?? [];
   const [prefilled, setPrefilled] = useState(false);
   const form = useForm({
     defaultValues: { checks: initial() },
     onSubmit: async ({ value }) => {
       setError("");
-      const checks = value.checks.map((check) => ({ id: check.id.trim(), command: check.command }));
-      if (checks.length < 1 || checks.length > 64 || new Set(checks.map((check) => check.id)).size !== checks.length ||
+      const checks = value.checks.map((check) => ({ category: check.category, mode: check.mode, id: check.id.trim(), command: check.command, trustedPaths: check.trustedPaths.split(",").map((path) => path.trim()).filter(Boolean) }));
+      if (checks.length > 64 || new Set(checks.map((check) => check.id)).size !== checks.length ||
         checks.some((check) => !checkId.test(check.id) || check.command.length < 1 || check.command.length > 32 ||
           check.command.some((part) => !part || part.length > 4096 || part.includes("\0")))) {
-        setError("Use 1–64 checks with unique lowercase IDs and 1–32 nonempty command arguments each.");
+        setError("Use 0–64 checks with unique lowercase IDs and 1–32 nonempty command arguments each.");
         return;
       }
       try {
-        await setProjectVerification(projectId, checks);
+        const response = await setProjectVerification(projectId, checks, baseVersion, preset);
+        setBaseVersion(response.verification!.version);
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: projectVerificationQueryKey(org, projectId) }),
           queryClient.invalidateQueries({ queryKey: launchAvailabilityQueryKey(org, projectId) }),
+          queryClient.invalidateQueries({ queryKey: ["verification-history", org, projectId] }),
         ]);
-        form.reset({ checks });
+        form.reset({ checks: checks.map((check) => ({ ...check, trustedPaths: check.trustedPaths.join(", ") })) });
         setSaved(true);
         if (mode.kind === "flow") mode.next();
       } catch (cause) {
         const code = ConnectError.from(cause).code;
+        if (code === Code.Aborted) await queryClient.invalidateQueries({ queryKey: projectVerificationQueryKey(org, projectId) });
         setError(code === Code.InvalidArgument ? "Check IDs and command arguments are invalid. Use unique lowercase IDs and separate argv fields."
+          : code === Code.Aborted ? "Checks changed elsewhere. Your draft is preserved. Cancel to load the current version, then reapply your changes."
           : code === Code.PermissionDenied ? "Your session cannot change verification."
             : "Verification could not be saved. Please try again.");
       }
@@ -255,22 +265,35 @@ export function VerificationEditor({ projectId, org, current, mode }: { projectI
     form.setFieldValue("checks", suggested);
     setPrefilled(true);
   }, [current, prefilled, suggested.length]);
-  const applySuggested = () => { form.setFieldValue("checks", suggested); setPrefilled(true); };
+  const applySuggested = () => { form.setFieldValue("checks", suggested); setPreset("custom"); setPrefilled(true); };
 
-  return <form className="settings-form" noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
+  return <form className="settings-form" onChangeCapture={() => setPreset("custom")} noValidate onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
     <section className="editor-card" aria-labelledby="checks-heading">
       <div className="editor-card-heading"><span className="project-symbol"><ShieldCheck size={18} aria-hidden="true" /></span><div><h2 id="checks-heading">Checks</h2>
-        <p>{current ? `Version ${current.version.toString()}${current.updatedAt ? ` · updated ${new Date(current.updatedAt).toLocaleString()}` : ""}. ` : "At least one check is required to launch a run. "}Enter the executable and each argument separately; shell syntax is not parsed.</p></div></div>
+        <p>{current ? `Version ${current.version.toString()}${current.updatedAt ? ` · updated ${new Date(current.updatedAt).toLocaleString()}` : ""}. ` : "Choose required, advisory, or off for each check. An empty policy explicitly selects no automated checks. "}Enter the executable and each argument separately; shell syntax is not parsed.</p></div></div>
       <div className="editor-form">
         <RepositorySuggestion projectId={projectId} />
+        <div className="form-field"><label htmlFor="verification-preset">Check preset</label><select id="verification-preset" value={preset} onChange={(event) => {
+          const selected = event.target.value; setPreset(selected);
+          if (selected !== "custom") form.setFieldValue("checks", form.state.values.checks.map((check) => ({ ...check, mode: presetMode(selected, check.category) })));
+        }}><option value="mvp">MVP</option><option value="balanced">Balanced</option><option value="thorough">Thorough</option><option value="custom">Custom</option></select></div>
+        <p className="form-hint">Choose each check’s category first. MVP requires build checks, makes focused tests advisory and turns review, E2E, security and performance off. Balanced requires build and focused tests and makes the others advisory. Thorough requires every configured check. You can change every mode. Presets never add missing checks.</p>
+        <p className="form-hint">Saving affects future runs. Existing runs retain their frozen policy and all historical results.</p>
         {prefilled ? <p className="notice" role="status">These checks were prefilled from the repository. Review them, then {mode.kind === "flow" ? "save and continue" : "save"} to confirm.</p> : null}
         {current && suggested.length && !prefilled ? <button type="button" className="secondary-button" onClick={applySuggested}>Use suggested checks</button> : null}
         <form.Field name="checks" mode="array">{(checksField) => <>
+          {checksField.state.value.length === 0 ? <p className="notice">No automated checks selected. Save to confirm this policy for future runs.</p> : null}
           {checksField.state.value.map((check, checkIndex) => <div className="verification-check" key={checkIndex}>
-            <div className="verification-check-heading"><strong>Check {checkIndex + 1}{check.id ? ` · ${check.id}` : ""}</strong><button type="button" className="text-action" disabled={checksField.state.value.length === 1} onClick={() => checksField.removeValue(checkIndex)}><Trash2 size={14} aria-hidden="true" /> Remove</button></div>
+            <div className="verification-check-heading"><strong>Check {checkIndex + 1}{check.id ? ` · ${check.id}` : ""}</strong><button type="button" className="text-action"  onClick={() => { setPreset("custom"); checksField.removeValue(checkIndex); }}><Trash2 size={14} aria-hidden="true" /> Remove</button></div>
             <form.Field name={`checks[${checkIndex}].id`} validators={{ onBlur: ({ value }) => checkId.test(value.trim()) ? undefined : "Use a lowercase ID starting with a letter, up to 64 characters." }}>
               {(field) => <TextField label="Check ID" name={field.name} autoComplete="off" placeholder="unit-tests" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} error={field.state.meta.errors.join(", ")} />}
             </form.Field>
+            <form.Field name={`checks[${checkIndex}].category`}>{(field) => <div className="form-field"><label htmlFor={`check-category-${checkIndex}`}>Category</label><select id={`check-category-${checkIndex}`} value={field.state.value} onChange={(event) => field.handleChange(event.target.value)}><option value="other">Other</option><option value="build">Build / type check</option><option value="test">Focused test</option><option value="review">Independent review command</option><option value="e2e">Browser / E2E</option><option value="security">Security</option><option value="performance">Performance</option></select></div>}</form.Field>
+            <form.Field name={`checks[${checkIndex}].mode`}>{(field) => <div className="form-field"><label htmlFor={`check-mode-${checkIndex}`}>Enforcement</label><select id={`check-mode-${checkIndex}`} value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} onBlur={field.handleBlur}><option value="required">Required — must pass</option><option value="advisory">Advisory — record findings</option><option value="off">Off — do not run</option></select></div>}</form.Field>
+            <form.Field name={`checks[${checkIndex}].trustedPaths`}>
+              {(field) => <TextField required={false} label="Protected check paths" name={field.name} autoComplete="off" placeholder="tests, scripts/verify.sh, package.json" value={field.state.value} onChange={field.handleChange} onBlur={field.handleBlur} />}
+            </form.Field>
+            <p className="form-hint">Comma-separated repository files or directories. These must match the run’s original revision, so candidate changes cannot weaken the checks. Include test scripts and configuration used by this command.</p>
             <p className="form-hint mono">{check.command.filter(Boolean).join(" ") || "No command yet"}</p>
             <Disclosure summary={`Command arguments (${check.command.length})`} defaultOpen={!current}>
               <form.Field name={`checks[${checkIndex}].command`} mode="array">{(commandField) => <div className="verification-arguments">
@@ -284,14 +307,28 @@ export function VerificationEditor({ projectId, org, current, mode }: { projectI
               </div>}</form.Field>
             </Disclosure>
           </div>)}
-          <button type="button" className="secondary-button" disabled={checksField.state.value.length >= 64} onClick={() => checksField.pushValue({ id: "", command: [""] })}><Plus size={15} aria-hidden="true" /> Add check</button>
+          <button type="button" className="secondary-button" disabled={checksField.state.value.length >= 64} onClick={() => { setPreset("custom"); checksField.pushValue({ category: "other", mode: "required", id: "", command: [""], trustedPaths: "" }); }}><Plus size={15} aria-hidden="true" /> Add check</button>
         </>}</form.Field>
         {error && mode.kind === "flow" ? <p className="auth-alert" role="alert">{error}</p> : null}
       </div>
     </section>
     <form.Subscribe selector={(state) => [state.isDirty, state.isSubmitting, state.canSubmit] as const}>
       {([dirty, submitting, canSubmit]) => mode.kind === "flow" ? <FlowActions mode={mode} submitting={submitting} canSubmit={canSubmit} label="Save checks and continue" />
-        : <GuardedSaveBar dirty={dirty} saving={submitting} canSave={canSubmit} error={error} saved={saved} onCancel={() => { form.reset({ checks: initial() }); setError(""); }} saveLabel="Save checks" />}
+        : <GuardedSaveBar dirty={dirty || !current || preset !== (current.preset || "custom")} saving={submitting} canSave={canSubmit} error={error} saved={saved} onCancel={() => { form.reset({ checks: initial() }); setBaseVersion(current?.version ?? 0n); setPreset(current?.preset || "custom"); setError(""); }} saveLabel="Save checks" />}
     </form.Subscribe>
+    {current ? <VerificationHistory projectId={projectId} org={org} /> : null}
   </form>;
+}
+
+function VerificationHistory({ projectId, org }: { projectId: string; org: string }) {
+ const [before, setBefore] = useState(0n);
+ const history = useQuery({ queryKey: ["verification-history", org, projectId, before.toString()], queryFn: ({ signal }) => listProjectVerificationHistory(projectId, before, signal) });
+ return <details className="editor-card"><summary>Check policy history</summary>
+  {history.isPending ? <p>Loading revisions…</p> : history.isError ? <p role="alert">History could not be loaded. <button type="button" onClick={() => void history.refetch()}>Retry</button></p> : history.data.revisions.map((revision) => <section key={revision.version.toString()}>
+   <h3>Version {revision.version.toString()} · {revision.preset || "custom"}</h3><p>{new Date(revision.updatedAt).toLocaleString()}</p>
+   {revision.checks.length ? <ul>{revision.checks.map((check) => <li key={check.id}>{check.id} · {check.category || "other"} · {check.mode || "required"}<pre>{JSON.stringify(check.command)}</pre><p>Protected paths: {check.trustedPaths.join(", ") || "none"}</p></li>)}</ul> : <p>No automated checks selected.</p>}
+  </section>)}
+  {history.data?.nextBeforeVersion ? <button type="button" className="secondary-button" onClick={() => setBefore(history.data.nextBeforeVersion)}>Older revisions</button> : null}
+  {before ? <button type="button" className="secondary-button" onClick={() => setBefore(0n)}>Newest revisions</button> : null}
+ </details>;
 }

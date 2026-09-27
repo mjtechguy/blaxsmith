@@ -1,0 +1,17 @@
+{
+  "schema_version": "blaxsmith.inputs/v1alpha1",
+  "stack": {
+    "name": "Blaxsmith Go and React",
+    "prerequisites": ["Go matching go.mod", "Node matching frontend/package.json", "Isolated PostgreSQL via BLAXSMITH_TEST_DATABASE_URL"],
+    "conventions": ["Reuse the workflow stores, tenant isolation and session fences", "Run selected checks; label skipped live-runtime qualification honestly"],
+    "commands": [{"id": "go-test", "command": ["go", "test", "./..."]}, {"id": "e2e", "command": ["make", "e2e"]}]
+  },
+  "agents": {
+    "implementer": {
+      "responsibility": "Deliver a bounded feature with real verification evidence",
+      "harnesses": ["codex", "claude-code", "opencode"],
+      "capabilities": ["read_repository", "ask_user", "publish_artifacts", "write_candidate"],
+      "completion_criteria": ["Preserve existing contracts", "Report candidate identity, checks, and remaining uncertainties"]
+    }
+  }
+}

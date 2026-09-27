@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -52,12 +53,27 @@ func runDispatchCoordinator(ctx context.Context, pool *pgxpool.Pool, product *pr
 
 func runDispatchLeader(ctx context.Context, connection *pgxpool.Conn, product *productDispatch) {
 	var afterOrganizationID string
+	var cancellation [2]string
 	var completion, recovery, progress [2]string // Keyset cursors; empty restarts a pass.
-	for ctx.Err() == nil {
-		if err := connection.QueryRow(ctx, `SELECT 1`).Scan(new(int)); err != nil {
-			log.Printf("dispatch leader lost database session: %v", err)
-			return
+	var stopCancelled func(context.Context)
+	if product.Completion != nil {
+		stopCancelled = func(ctx context.Context) {
+			done, err := product.Completion.SweepCancelled(ctx, cancellation[0], cancellation[1], 10)
+			logSweep(ctx, "cancellation", err)
+			cancellation = [2]string{done.AfterOrganizationID, done.AfterAttemptID}
 		}
+	}
+	var advanceRuns func(context.Context)
+	if product.Workflow != nil {
+		advanceRuns = func(ctx context.Context) {
+			done, err := product.Workflow.Progress(ctx, progress[0], progress[1], 10, product.Escalations)
+			logSweep(ctx, "stage progress", err)
+			progress = [2]string{done.AfterOrganizationID, done.AfterRunID}
+		}
+	}
+	superviseDispatch(ctx, func(ctx context.Context) error {
+		return connection.QueryRow(ctx, `SELECT 1`).Scan(new(int))
+	}, func(ctx context.Context) {
 		batchCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		batch, err := product.Dispatcher.DispatchBatch(batchCtx, afterOrganizationID, 1, 1)
 		cancel()
@@ -67,26 +83,65 @@ func runDispatchLeader(ctx context.Context, connection *pgxpool.Conn, product *p
 		if err == nil {
 			afterOrganizationID = batch.NextOrganizationID
 		}
-		sweepCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		if product.Completion != nil {
+			sweepCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 			done, err := product.Completion.Sweep(sweepCtx, completion[0], completion[1], 10)
+			cancel()
 			logSweep(ctx, "completion", err)
 			completion = [2]string{done.AfterOrganizationID, done.AfterAttemptID}
 		}
 		if product.Recovery != nil {
+			sweepCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 			done, err := product.Recovery.Sweep(sweepCtx, recovery[0], recovery[1], 10)
+			cancel()
 			logSweep(ctx, "recovery", err)
 			recovery = [2]string{done.AfterOrganizationID, done.AfterAttemptID}
 		}
-		if product.Workflow != nil {
-			done, err := product.Workflow.Progress(sweepCtx, progress[0], progress[1], 10, product.Escalations)
-			logSweep(ctx, "stage progress", err)
-			progress = [2]string{done.AfterOrganizationID, done.AfterRunID}
+	}, product.RenewLeases, stopCancelled, advanceRuns)
+}
+
+// Keep authority checks and lease renewal responsive while a bounded dispatch
+// pass waits on a guest. Launch and recovery stay serial: recovery must not
+// mistake an in-flight launch for a crashed dispatcher. All goroutines finish
+// before the caller releases the leader connection.
+func superviseDispatch(ctx context.Context, heartbeat func(context.Context) error, work func(context.Context), maintenance ...func(context.Context)) {
+	ctx, cancel := context.WithCancel(ctx)
+	var workers sync.WaitGroup
+	defer func() { cancel(); workers.Wait() }()
+	workers.Go(func() {
+		for ctx.Err() == nil {
+			probe, stop := context.WithTimeout(ctx, 3*time.Second)
+			err := heartbeat(probe)
+			stop()
+			if err != nil {
+				if ctx.Err() == nil {
+					log.Printf("dispatch leader lost database session: %v", err)
+				}
+				cancel()
+				return
+			}
+			if !waitContext(ctx, 2*time.Second) {
+				return
+			}
 		}
-		if product.RenewLeases != nil {
-			product.RenewLeases(sweepCtx)
+	})
+	for _, tickWork := range maintenance {
+		if tickWork == nil {
+			continue
 		}
-		cancel()
+		workers.Go(func() {
+			for ctx.Err() == nil {
+				tick, stop := context.WithTimeout(ctx, 30*time.Second)
+				tickWork(tick)
+				stop()
+				if !waitContext(ctx, 2*time.Second) {
+					return
+				}
+			}
+		})
+	}
+	for ctx.Err() == nil {
+		work(ctx)
 		if !waitContext(ctx, 2*time.Second) {
 			return
 		}

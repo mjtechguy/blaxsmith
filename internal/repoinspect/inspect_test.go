@@ -1,4 +1,4 @@
-package repoinspect
+package repoinspect_test
 
 import (
 	"encoding/json"
@@ -12,10 +12,11 @@ import (
 	"testing"
 
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"github.com/mjtechguy/blaxsmith/internal/repoinspect"
 )
 
 // fixture reads a testdata repository the way InspectRepository does: every
-// file name plus the Wanted root files' contents.
+// file name plus the repoinspect.Wanted root files' contents.
 func fixture(t *testing.T, name string) ([]string, map[string][]byte) {
 	t.Helper()
 	root := filepath.Join("testdata", name)
@@ -30,7 +31,7 @@ func fixture(t *testing.T, name string) ([]string, map[string][]byte) {
 		t.Fatal(err)
 	}
 	contents := map[string][]byte{}
-	for _, want := range Wanted {
+	for _, want := range repoinspect.Wanted {
 		if data, err := os.ReadFile(filepath.Join(root, want)); err == nil {
 			contents[want] = data
 		}
@@ -38,7 +39,7 @@ func fixture(t *testing.T, name string) ([]string, map[string][]byte) {
 	return files, contents
 }
 
-func argv(cs []Command) []string {
+func argv(cs []repoinspect.Command) []string {
 	out := make([]string, len(cs))
 	for i, c := range cs {
 		out[i] = c.ID + "=" + strings.Join(c.Command, " ")
@@ -66,7 +67,7 @@ func TestInspectFixtureRepositories(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.fixture, func(t *testing.T) {
-			r := Inspect(fixture(t, tc.fixture))
+			r := repoinspect.Inspect(fixture(t, tc.fixture))
 			if r.Source != tc.source || r.Recipe != tc.recipe || (r.FileError != "") != tc.fileError ||
 				!slices.Equal(argv(r.Verification), tc.verification) || !slices.Equal(argv(r.Setup), tc.setup) {
 				t.Fatalf("got %+v\nverification %q\nsetup %q", r, argv(r.Verification), argv(r.Setup))
@@ -90,16 +91,16 @@ func TestParseProjectFileRejects(t *testing.T) {
 		"trailing data":   `{"version":1} {}`,
 		"blank recipe":    `{"version":1,"recipe":"   "}`,
 	} {
-		if _, err := ParseProjectFile([]byte(body)); err == nil {
+		if _, err := repoinspect.ParseProjectFile([]byte(body)); err == nil {
 			t.Errorf("%s accepted", name)
 		}
 	}
-	if _, err := ParseProjectFile([]byte(`{"$schema":"x","version":1,"recipe":"Guild engineering"}`)); err != nil {
+	if _, err := repoinspect.ParseProjectFile([]byte(`{"$schema":"x","version":1,"recipe":"Guild engineering"}`)); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// The schema documents exactly the fields ParseProjectFile accepts.
+// The schema documents exactly the fields repoinspect.ParseProjectFile accepts.
 func TestSchemaMatchesParser(t *testing.T) {
 	data, err := os.ReadFile("../../docs/project-file.schema.json")
 	if err != nil {
@@ -118,8 +119,8 @@ func TestSchemaMatchesParser(t *testing.T) {
 	}
 	slices.Sort(keys)
 	var fields []string
-	for i := range reflect.TypeFor[ProjectFile]().NumField() {
-		tag, _, _ := strings.Cut(reflect.TypeFor[ProjectFile]().Field(i).Tag.Get("json"), ",")
+	for i := range reflect.TypeFor[repoinspect.ProjectFile]().NumField() {
+		tag, _, _ := strings.Cut(reflect.TypeFor[repoinspect.ProjectFile]().Field(i).Tag.Get("json"), ",")
 		fields = append(fields, tag)
 	}
 	slices.Sort(fields)
@@ -144,11 +145,11 @@ func TestInspectCommittedRepository(t *testing.T) {
 			t.Fatalf("git %v: %v %s", args, err, out)
 		}
 	}
-	commit, files, contents, err := recipe.ReadFiles(t.Context(), repo, "HEAD", Wanted)
+	commit, files, contents, err := recipe.ReadFiles(t.Context(), repo, "HEAD", repoinspect.Wanted)
 	if err != nil || len(commit) != 40 {
 		t.Fatalf("read %q %v", commit, err)
 	}
-	if r := Inspect(files, contents); r.Source != "detected" || len(r.Verification) != 3 || r.Setup[0].Command[0] != "pnpm" {
+	if r := repoinspect.Inspect(files, contents); r.Source != "detected" || len(r.Verification) != 3 || r.Setup[0].Command[0] != "pnpm" {
 		t.Fatalf("committed inspect %+v", r)
 	}
 }

@@ -26,7 +26,7 @@ test("navigation IA per role: groups, items, the project group, and Admin", asyn
 
     // The project group appears only with a project in the URL, after Work.
     const withProject = navigation({ role: "member", projectId: "p1", projectName: "Billing" });
-    assert.deepEqual(shape(withProject)[2], ["project", ["Overview", "Runs", "Project recipes", "Project connections", "Source & verification", "Settings"]]);
+    assert.deepEqual(shape(withProject)[2], ["project", ["Overview", "Goals", "Runs", "Project recipes", "Project connections", "Source & verification", "Settings"]]);
     assert.equal(withProject[2].label, "Billing");
     assert.equal(projectIdFrom("/projects/p1/runs/r1"), "p1");
     assert.equal(projectIdFrom("/projects/new"), undefined);
@@ -68,6 +68,8 @@ test("navigation IA per role: groups, items, the project group, and Admin", asyn
     assert.equal(detailKind("/admin/connections/github-app"), undefined);
 
     // Switching projects keeps the section, not the detail.
+    assert.equal(switchPath("/projects/a/goals/g1", "b"), "/projects/b/goals");
+    assert.deepEqual(at("/projects/p1/goals/g1"), ["project", "Goals", null]);
     assert.equal(switchPath("/projects/a/runs/r1", "b"), "/projects/b/runs");
     assert.equal(switchPath("/projects/a/settings/source", "b"), "/projects/b/settings/source");
     assert.equal(switchPath("/projects/a/connections/c1", "b"), "/projects/b/connections");

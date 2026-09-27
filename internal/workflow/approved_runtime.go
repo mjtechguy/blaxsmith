@@ -26,30 +26,32 @@ type ProjectModelGrant struct {
 	GranteeID   string
 }
 
-// ResolveModelGrant picks the grant a run's attempt binds for provider/model.
-// A personal (user-owned) grant is honoured only when the run's initiator
-// owns that connection and is its grantee; otherwise the project's workload
-// selection applies, as before. initiator is empty for runs without one.
-func (s *Store) ResolveModelGrant(ctx context.Context, orgID, projectID, initiator, provider, model string) (ProjectModelGrant, error) {
+// One grant predicate is shared by catalog discovery and execution. Project
+// workload selections and owned personal grants are the only candidates.
+const modelGrantCandidates = `FROM access_grants g
+ JOIN access_connections c ON c.organization_id=g.organization_id AND c.id=g.connection_id
+ JOIN access_provider_registrations p ON p.organization_id=c.organization_id AND p.id=c.provider_registration_id
+ LEFT JOIN workflow_project_model_grants w ON w.organization_id::text=g.organization_id AND w.project_id::text=g.project_id AND w.grant_id=g.id AND w.grantee_id=g.grantee_id AND g.resource=w.provider||'/'||w.model AND w.revoked_at IS NULL
+ WHERE g.organization_id=$1 AND g.project_id=$2 AND g.capability='model.invoke'
+ AND g.revoked_at IS NULL AND (g.expires_at IS NULL OR g.expires_at>clock_timestamp()) AND c.state='active' AND p.state='active'
+ AND ((g.grantee_kind='user' AND g.grantee_id=$3 AND c.owner_kind='user' AND c.owner_id=$3)
+ OR (g.grantee_kind='workload' AND w.id IS NOT NULL AND c.owner_kind IN ('organization','project')))`
+
+// A pinned connection never falls back to another billing account. Without a
+// pin, an owned personal grant takes precedence over the project selection.
+func (s *Store) ResolveModelGrant(ctx context.Context, orgID, projectID, initiator, provider, model, connection string) (ProjectModelGrant, error) {
 	ctx = tenant.Org(ctx, orgID)
-	if initiator != "" && ids(initiator) {
-		var grant ProjectModelGrant
-		err := s.pool.QueryRow(ctx, `SELECT g.id,g.grantee_id FROM access_grants g
-			JOIN access_connections c ON c.organization_id=g.organization_id AND c.id=g.connection_id
-			WHERE g.organization_id=$1 AND g.project_id=$2 AND g.capability='model.invoke' AND g.resource=$3
-			AND g.grantee_kind='user' AND g.grantee_id=$4 AND c.owner_kind='user' AND c.owner_id=$4
-			AND g.revoked_at IS NULL AND (g.expires_at IS NULL OR g.expires_at>clock_timestamp()) AND c.state='active'
-			ORDER BY g.created_at DESC,g.id LIMIT 1`, orgID, projectID, provider+"/"+model, initiator).
-			Scan(&grant.GrantID, &grant.GranteeID)
-		if err == nil {
-			grant.GranteeKind = "user"
-			return grant, nil
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return ProjectModelGrant{}, err
-		}
+	if !ids(orgID, projectID) || (initiator != "" && !ids(initiator)) || provider == "" || model == "" || len(connection) > 64 {
+		return ProjectModelGrant{}, ErrInvalid
 	}
-	return s.GetProjectModelGrant(ctx, orgID, projectID, provider, model)
+	var grant ProjectModelGrant
+	err := s.pool.QueryRow(ctx, `SELECT CASE WHEN g.grantee_kind='workload' THEN w.id::text ELSE '' END,g.id,g.grantee_kind,g.grantee_id `+modelGrantCandidates+`
+ AND g.resource=$4 AND p.provider_kind=$5 AND ($6='' OR c.id=$6)
+ ORDER BY g.grantee_kind='user' DESC,g.created_at DESC,g.id LIMIT 1`, orgID, projectID, initiator, provider+"/"+model, provider, connection).Scan(&grant.SelectionID, &grant.GrantID, &grant.GranteeKind, &grant.GranteeID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return grant, ErrNotFound
+	}
+	return grant, err
 }
 
 // RunInitiator returns the principal who launched runID, or "".

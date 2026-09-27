@@ -15,6 +15,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"math/big"
 	"net"
@@ -24,6 +25,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -37,6 +39,7 @@ import (
 	api "github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1"
 	"github.com/mjtechguy/blaxsmith/gen/go/blaxsmith/api/v1/apiv1connect"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
 	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
@@ -175,11 +178,20 @@ func TestServeAppHTTPSPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
+	oauthClients := filepath.Join(dir, "oauth-clients.json")
+	if err := os.WriteFile(oauthClients, []byte(`[{"client_id":"test-mcp","client_name":"E2E MCP","redirect_uris":["https://client.example.test/callback","http://127.0.0.1:8123/callback"]},{"client_id":"other-mcp","client_name":"Other MCP","redirect_uris":["https://other.example.test/callback"]}]`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BLAXSMITH_MCP_OAUTH_CLIENTS_FILE", oauthClients)
 	staticDir := filepath.Join(dir, "web")
 	if err := os.MkdirAll(filepath.Join(staticDir, "assets"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(staticDir, "index.html"), []byte("<title>Blaxsmith</title>"), 0o600); err != nil {
+	if os.Getenv("BLAXSMITH_E2E_BROWSER") == "1" {
+		if err := os.CopyFS(staticDir, os.DirFS("../../frontend/dist")); err != nil {
+			t.Fatalf("build frontend before browser E2E: %v", err)
+		}
+	} else if err := os.WriteFile(filepath.Join(staticDir, "index.html"), []byte("<title>Blaxsmith</title>"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(staticDir, "assets", "app.js"), []byte("export const ready = true;"), 0o600); err != nil {
@@ -444,6 +456,21 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	origin, secondOrigin, csrf string, owner identity.FirstOwner, password, seed []byte) {
 	t.Helper()
 	w := apiv1connect.NewWorkflowServiceClient(client, origin+"/api")
+	capsReq := connect.NewRequest(&api.GetPlatformCapabilitiesRequest{})
+	capsReq.Header().Set("Origin", origin)
+	caps, err := w.GetPlatformCapabilities(ctx, capsReq)
+	if err != nil || !caps.Msg.LaunchPreview || caps.Msg.MaxImplementStages != 1 {
+		t.Fatalf("capabilities: %v %v", caps, err)
+	}
+	previewReq := connect.NewRequest(&api.PreviewRunRequest{RecipePath: "recipe.json", RecipeVersionId: "also-selected", Scope: "."})
+	previewReq.Header().Set("Origin", origin)
+	if _, err := w.PreviewRun(ctx, previewReq); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("preview without CSRF: %v", err)
+	}
+	previewReq.Header().Set("X-Blaxsmith-CSRF", csrf)
+	if _, err := w.PreviewRun(ctx, previewReq); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("ambiguous preview selection: %v", err)
+	}
 	create := func(slug string) *api.Project {
 		t.Helper()
 		req := connect.NewRequest(&api.CreateProjectRequest{Slug: slug, Name: slug})
@@ -466,6 +493,131 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 		t.Fatalf("mutation from another origin allowed: %v", err)
 	}
 	first, second := create("first-project"), create("second-project")
+	goalReq := connect.NewRequest(&api.CreateGoalRequest{ProjectId: first.Id, RequestKey: "browser-goal", Title: "A native goal", Brief: "Preserve existing behavior."})
+	goalReq.Header().Set("Origin", origin)
+	if _, err := w.CreateGoal(ctx, goalReq); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("goal without CSRF: %v", err)
+	}
+	goalReq.Header().Set("X-Blaxsmith-CSRF", csrf)
+	createdGoal, err := w.CreateGoal(ctx, goalReq)
+	if err != nil || createdGoal.Msg.Goal.FactoryId != "anvil" || len(createdGoal.Msg.Goal.Questions) != 4 {
+		t.Fatalf("create goal: %v %v", createdGoal, err)
+	}
+	goalRead := connect.NewRequest(&api.GetGoalRequest{GoalId: createdGoal.Msg.Goal.Id})
+	goalRead.Header().Set("Origin", origin)
+	loadedGoal, err := w.GetGoal(ctx, goalRead)
+	if err != nil || loadedGoal.Msg.Goal.Revision != 1 {
+		t.Fatalf("read goal: %v %v", loadedGoal, err)
+	}
+	goalReply := connect.NewRequest(&api.ReplyGoalRequest{GoalId: createdGoal.Msg.Goal.Id, RequestKey: "browser-reply", ExpectedRevision: 1, Kind: "message", Text: "Use existing conventions."})
+	goalReply.Header().Set("Origin", origin)
+	if _, err := w.ReplyGoal(ctx, goalReply); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("goal reply without CSRF: %v", err)
+	}
+	goalReply.Header().Set("X-Blaxsmith-CSRF", csrf)
+	if _, err := w.ReplyGoal(ctx, goalReply); err != nil {
+		t.Fatal(err)
+	}
+	goalReply.Msg.RequestKey = "late-reply"
+	if _, err := w.ReplyGoal(ctx, goalReply); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("stale goal reply: %v", err)
+	}
+	goalList := connect.NewRequest(&api.ListGoalsRequest{ProjectId: second.Id})
+	goalList.Header().Set("Origin", origin)
+	listedGoals, err := w.ListGoals(ctx, goalList)
+	if err != nil || len(listedGoals.Msg.Goals) != 0 {
+		t.Fatalf("goal list project scope: %v %v", listedGoals, err)
+	}
+	planJSON := `{"schema_version":"anvil.plan/v1alpha1","title":"Preserve behavior","summary":"Follow existing conventions","requirements":[{"id":"R1","description":"Preserve behavior","sources":["brief","message:2"],"examples":["Existing requests still succeed"]}],"phases":[{"id":"P1","title":"Deliver","outcome":"Behavior preserved"}],"tasks":[{"id":"T1","title":"Implement","phase":"P1","reason":"Meet the goal","requirement_ids":["R1"],"instructions":"Use the existing service","acceptance":["Existing behavior works"]}]}`
+	savePlan := connect.NewRequest(&api.SaveGoalPlanRequest{GoalId: createdGoal.Msg.Goal.Id, RequestKey: "save-plan", ExpectedGoalRevision: 2, ContentJson: planJSON})
+	savePlan.Header().Set("Origin", origin)
+	if _, err := w.SaveGoalPlan(ctx, savePlan); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("plan save without CSRF: %v", err)
+	}
+	savePlan.Header().Set("X-Blaxsmith-CSRF", csrf)
+	for range 2 {
+		saved, err := w.SaveGoalPlan(ctx, savePlan)
+		if err != nil || saved.Msg.Version != 1 {
+			t.Fatalf("plan save/retry: %v %v", saved, err)
+		}
+	}
+	savePlan.Msg.RequestKey = "stale-plan"
+	if _, err := w.SaveGoalPlan(ctx, savePlan); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("stale plan overwritten: %v", err)
+	}
+	savePlan.Msg.ExpectedPlanVersion = 1
+	savePlan.Msg.ContentJson = strings.Replace(planJSON, "message:2", "message:999", 1)
+	if _, err := w.SaveGoalPlan(ctx, savePlan); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("fabricated citation accepted: %v", err)
+	}
+	readPlans := connect.NewRequest(&api.GetGoalPlansRequest{GoalId: createdGoal.Msg.Goal.Id})
+	readPlans.Header().Set("Origin", origin)
+	plans, err := w.GetGoalPlans(ctx, readPlans)
+	if err != nil || len(plans.Msg.Plans) != 1 || plans.Msg.Plans[0].GoalRevision != 2 || len(plans.Msg.Runs) != 0 {
+		t.Fatalf("plan readback: %v %v", plans, err)
+	}
+	startPlan := connect.NewRequest(&api.StartGoalPlanningRequest{GoalId: createdGoal.Msg.Goal.Id, ExpectedRevision: 2, RequestKey: "start-plan", Harness: "codex", Model: "test-model", Effort: "medium", Scope: ".", RuntimeSeconds: 900})
+	startPlan.Header().Set("Origin", origin)
+	if _, err := w.StartGoalPlanning(ctx, startPlan); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("planner without CSRF: %v", err)
+	}
+	startPlan.Header().Set("X-Blaxsmith-CSRF", csrf)
+	if _, err := w.StartGoalPlanning(ctx, startPlan); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("planner bypassed offline dispatcher: %v", err)
+	}
+
+	for _, skill := range []bool{false, true} {
+		if skill {
+			startPlan.Msg.SkillFiles = []string{"../outside/SKILL.md"}
+		} else {
+			startPlan.Msg.InstructionFiles = []string{"../outside.md"}
+		}
+		if _, err := w.StartGoalPlanning(ctx, startPlan); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Fatalf("planner ignored invalid rule/skill selection: %v", err)
+		}
+		startPlan.Msg.InstructionFiles, startPlan.Msg.SkillFiles = nil, nil
+	}
+
+	execution := &api.GoalExecutionOptions{GoalId: createdGoal.Msg.Goal.Id, ExpectedGoalRevision: 2, PlanVersion: 1, Harness: "codex", Model: "test-model", Effort: "medium", RuntimeSeconds: 900, Acceptance: "manual"}
+	previewExecution := connect.NewRequest(&api.PreviewRunRequest{ProjectId: first.Id, Scope: ".", GoalExecution: execution})
+	previewExecution.Header().Set("Origin", origin)
+	if _, err := w.PreviewRun(ctx, previewExecution); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("execution preview without CSRF: %v", err)
+	}
+	previewExecution.Header().Set("X-Blaxsmith-CSRF", csrf)
+	previewExecution.Msg.RecipePath = "recipe.json"
+	if _, err := w.PreviewRun(ctx, previewExecution); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("mixed execution sources: %v", err)
+	}
+	previewExecution.Msg.RecipePath = ""
+	previewExecution.Msg.ProjectId = second.Id
+	if _, err := w.PreviewRun(ctx, previewExecution); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("cross-project execution: %v", err)
+	}
+	previewExecution.Msg.ProjectId = first.Id
+	execution.ExpectedGoalRevision = 1
+	if _, err := w.PreviewRun(ctx, previewExecution); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("stale execution context: %v", err)
+	}
+	execution.ExpectedGoalRevision = 2
+	for _, skill := range []bool{false, true} {
+		if skill {
+			execution.SkillFiles = []string{"../outside/SKILL.md"}
+		} else {
+			execution.InstructionFiles = []string{"../outside.md"}
+		}
+		if _, err := w.PreviewRun(ctx, previewExecution); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Fatalf("execution ignored invalid rule/skill selection: %v", err)
+		}
+		execution.InstructionFiles, execution.SkillFiles = nil, nil
+	}
+	launchExecution := connect.NewRequest(&api.LaunchRunRequest{ProjectId: first.Id, LaunchKey: "execution", Scope: ".", GoalExecution: execution})
+	launchExecution.Header().Set("Origin", origin)
+	launchExecution.Header().Set("X-Blaxsmith-CSRF", csrf)
+	if _, err := w.LaunchRun(ctx, launchExecution); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("execution without reviewed hashes: %v", err)
+	}
+
 	var createdAudit int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM identity_audit_events
 		WHERE organization_id=$1 AND actor_id=$2 AND action='workflow.project.created'
@@ -506,8 +658,9 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if err != nil {
 		t.Fatal(err)
 	}
+	bundleJSON, bundleSHA := apiReviewBundle()
 	run, err := store.CreateRun(ctx, workflow.RunInput{OrganizationID: owner.OrganizationID, ProjectID: first.Id,
-		LaunchKey: "api-read", SourceCommit: strings.Repeat("a", 40), BundleSHA256: strings.Repeat("b", 64), VerificationSHA256: strings.Repeat("c", 64)})
+		LaunchKey: "api-read", SourceCommit: strings.Repeat("a", 40), BundleSHA256: bundleSHA, VerificationSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(apiReviewPolicy)))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -688,6 +841,9 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if fetchResponse.StatusCode != http.StatusOK {
 		t.Fatalf("native EventSource metadata denied: HTTP %d", fetchResponse.StatusCode)
 	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workflow_run_bundles(organization_id,run_id,bundle_json,verification_json) VALUES($1,$2,$3::jsonb,$4::jsonb)`, owner.OrganizationID, run.ID, bundleJSON, apiReviewPolicy); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, owner.OrganizationID, run.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -748,6 +904,7 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if state, err := store.FinalizeRun(ctx, owner.OrganizationID, run.ID); err != nil || state != "succeeded" {
 		t.Fatalf("finish review fixture: %s, %v", state, err)
 	}
+	seedAPIReviewProof(t, pool, owner.OrganizationID, run.ID, strings.Repeat("d", 40))
 	currentReview, err := store.PresentForReview(ctx, owner.OrganizationID, run.ID, strings.Repeat("d", 40), strings.Repeat("e", 64), run.VerificationSHA256)
 	if err != nil {
 		t.Fatal(err)
@@ -755,6 +912,19 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if got, err := w.GetCurrentReview(ctx, getReview); err != nil || got.Msg.Package.Id != currentReview.ID ||
 		got.Msg.Package.EvidenceSha256 != currentReview.EvidenceSHA256 || got.Msg.Package.Decision != nil {
 		t.Fatalf("current review package: %+v, %v", got, err)
+	}
+	// Associate the completed fixture with its saved plan, as frozen admission does.
+	if _, err := pool.Exec(ctx, `INSERT INTO workflow_goal_runs(organization_id,goal_id,run_id,goal_revision,plan_version) VALUES($1,$2,$3,2,1)`, owner.OrganizationID, createdGoal.Msg.Goal.Id, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := connect.NewRequest(&api.RecordGoalCheckpointRequest{GoalId: createdGoal.Msg.Goal.Id, RunId: run.ID, PackageId: currentReview.ID, Title: "Behavior preserved", RequestKey: "first-checkpoint", ExpectedGoalRevision: 2})
+	checkpoint.Header().Set("Origin", origin)
+	if _, err := w.RecordGoalCheckpoint(ctx, checkpoint); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("checkpoint without CSRF: %v", err)
+	}
+	checkpoint.Header().Set("X-Blaxsmith-CSRF", csrf)
+	if _, err := w.RecordGoalCheckpoint(ctx, checkpoint); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("checkpoint invented acceptance: %v", err)
 	}
 	decision := connect.NewRequest(&api.DecideReviewRequest{RunId: run.ID, PackageId: currentReview.ID,
 		IdempotencyKey: "browser-approve", Action: "approve"})
@@ -775,6 +945,22 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if got, err := w.DecideReview(ctx, decision); err != nil || got.Msg.Decision.Id != approved.Msg.Decision.Id {
 		t.Fatalf("decision replay: %+v, %v", got, err)
 	}
+	recordedCheckpoint, err := w.RecordGoalCheckpoint(ctx, checkpoint)
+	if err != nil || !recordedCheckpoint.Msg.Checkpoint.CurrentAcceptance || recordedCheckpoint.Msg.Checkpoint.PlanVersion != 1 || recordedCheckpoint.Msg.Checkpoint.CandidateRevision != strings.Repeat("d", 40) {
+		t.Fatalf("record accepted checkpoint: %+v %v", recordedCheckpoint, err)
+	}
+	if replay, err := w.RecordGoalCheckpoint(ctx, checkpoint); err != nil || replay.Msg.Checkpoint.Id != recordedCheckpoint.Msg.Checkpoint.Id {
+		t.Fatalf("checkpoint retry duplicated: %v", err)
+	}
+	checkpoint.Msg.Title = "Changed title"
+	if _, err := w.RecordGoalCheckpoint(ctx, checkpoint); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("changed checkpoint retry: %v", err)
+	}
+	checkpoint.Msg.Title = "Behavior preserved"
+	if _, err := pool.Exec(ctx, `UPDATE workflow_goal_checkpoints SET title='changed' WHERE organization_id=$1 AND id=$2`, owner.OrganizationID, recordedCheckpoint.Msg.Checkpoint.Id); err == nil {
+		t.Fatal("checkpoint history changed")
+	}
+	seedAPIReviewProof(t, pool, owner.OrganizationID, run.ID, strings.Repeat("f", 40))
 	nextReview, err := store.PresentForReview(ctx, owner.OrganizationID, run.ID, strings.Repeat("f", 40), currentReview.EvidenceSHA256, run.VerificationSHA256)
 	if err != nil {
 		t.Fatal(err)
@@ -876,6 +1062,43 @@ func testWorkflowBrowserAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	decision.Header().Set("Cookie", cookie+"; __Host-blaxsmith_csrf="+csrf)
 	if _, err := other.DecideReview(ctx, decision); connect.CodeOf(err) != connect.CodeNotFound {
 		t.Fatalf("cross-tenant review decision: %v", err)
+	}
+	readCheckpoints := connect.NewRequest(&api.ListGoalCheckpointsRequest{GoalId: createdGoal.Msg.Goal.Id})
+	readCheckpoints.Header().Set("Origin", origin)
+	historical, err := w.ListGoalCheckpoints(ctx, readCheckpoints)
+	if err != nil || len(historical.Msg.Checkpoints) != 1 || historical.Msg.Checkpoints[0].CurrentAcceptance || historical.Msg.Checkpoints[0].CandidateRevision != strings.Repeat("d", 40) {
+		t.Fatalf("superseded checkpoint disappeared/stayed current: %+v %v", historical, err)
+	}
+	if replay, err := w.RecordGoalCheckpoint(ctx, checkpoint); err != nil || replay.Msg.Checkpoint.CurrentAcceptance {
+		t.Fatalf("historical checkpoint retry lost receipt: %v", err)
+	}
+	checkpoint.Msg.RequestKey = "new-rejected-checkpoint"
+	if _, err := w.RecordGoalCheckpoint(ctx, checkpoint); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("superseded acceptance checkpoint: %v", err)
+	}
+	testUsageReporting(t, ctx, pool, client, origin, store, attempt)
+	testMachineAPI(t, ctx, pool, client, origin, csrf, first.Id, run.ID, owner)
+	testMCPOAuth(t, ctx, pool, client, origin, csrf, first.Id)
+	if os.Getenv("BLAXSMITH_E2E_BROWSER") == "1" {
+		// Catalog-only fixture: no secret, provider call or runtime approval.
+		for _, statement := range []string{
+			`INSERT INTO access_provider_registrations (organization_id,id,provider_kind,origin,delivery_modes,state) VALUES ($1,'e2e-advice-provider','openai','https://api.openai.com',ARRAY['native_raw'],'active')`,
+			`INSERT INTO access_connections (organization_id,id,owner_kind,owner_id,provider_registration_id,external_account_id,auth_method,state,label,models_checked_at) VALUES ($1,'e2e-advice-connection','organization',$1,'e2e-advice-provider','catalog-only','api_key','active','E2E catalog',clock_timestamp())`,
+			`INSERT INTO access_connection_models (organization_id,connection_id,model_id,display_name,efforts,default_effort) SELECT $1,'e2e-advice-connection',model,model,ARRAY['low','medium','high'],'medium' FROM unnest(ARRAY['gpt-6-luna','gpt-6-sol','gpt-6-astra']) model`,
+		} {
+			if _, err := pool.Exec(ctx, statement, owner.OrganizationID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		browserCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		browser := exec.CommandContext(browserCtx, "node", "../../frontend/e2e/native-factory.mjs")
+		browser.Env = append(os.Environ(), "BLAXSMITH_E2E_ORIGIN="+origin, "BLAXSMITH_E2E_REPORT_RUN="+run.ID, "BLAXSMITH_E2E_REPORT_PROJECT="+first.Id, "BLAXSMITH_E2E_CHECKPOINT_GOAL="+createdGoal.Msg.Goal.Id)
+		if output, err := browser.CombinedOutput(); err != nil {
+			t.Fatalf("browser E2E: %v\n%s", err, output)
+		} else {
+			t.Log(string(output))
+		}
 	}
 	interactionID, interactionAttempt := testInteractionBrowserAPI(t, ctx, pool, client, origin, csrf, owner)
 	testAdminBrowserAPI(t, ctx, client, origin, csrf, true)
@@ -1131,4 +1354,35 @@ func writeAppTestCertificate(t *testing.T, dir string) (string, string, *x509.Ce
 		t.Fatal("failed to trust test certificate")
 	}
 	return certFile, keyFile, roots
+}
+
+const apiReviewPolicy = `{"schema_version":"blaxsmith.verification/v1alpha1","checks":[{"id":"tests","command":["true"]}]}`
+
+func seedAPIReviewProof(t *testing.T, pool *pgxpool.Pool, org, run, revision string) {
+	t.Helper()
+	ctx := tenant.System(t.Context())
+	var task, attempt, policy string
+	var generation int
+	if err := pool.QueryRow(ctx, `SELECT t.id,t.generation,r.verification_sha256 FROM workflow_tasks t JOIN workflow_runs r ON r.organization_id=t.organization_id AND r.id=t.run_id WHERE t.organization_id=$1 AND t.run_id=$2 ORDER BY t.created_at LIMIT 1`, org, run).Scan(&task, &generation, &policy); err != nil {
+		t.Fatal(err)
+	}
+	generation++
+	if err := pool.QueryRow(ctx, `INSERT INTO workflow_attempts(organization_id,run_id,task_id,generation,state) VALUES($1,$2,$3,$4,'succeeded') RETURNING id`, org, run, task, generation).Scan(&attempt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_tasks SET generation=$3,state='succeeded',active_attempt_id=NULL WHERE organization_id=$1 AND id=$2`, org, task, generation); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workflow_evidence(organization_id,run_id,task_id,attempt_id,kind,origin_key,revision,policy_sha256,metadata,sha256)
+ VALUES($1,$2,$3,$4,'verification','tests',$5,$6,'{"check":"tests","exit_code":0,"verdict":"pass"}',$7)`, org, run, task, attempt, revision, policy, fmt.Sprintf("%x", sha256.Sum256(nil))); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func apiReviewBundle() ([]byte, string) {
+	b := recipe.Bundle{SchemaVersion: "blaxsmith.bundle/v1alpha1", Source: recipe.Source{Commit: strings.Repeat("a", 40), Scope: "."}, Recipe: recipe.Recipe{Acceptance: "manual", Profiles: map[string]recipe.Profile{"worker": {Harness: "codex", Model: "gpt-6-sol", Effort: "medium"}}, Stages: []recipe.Stage{{ID: "implement", Kind: "implement", Profile: "worker"}}}}
+	data, _ := json.Marshal(b)
+	b.Digest = fmt.Sprintf("%x", sha256.Sum256(data))
+	data, _ = json.Marshal(b)
+	return data, b.Digest
 }

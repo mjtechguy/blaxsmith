@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mjtechguy/blaxsmith/internal/evidence"
 	"io"
 	"io/fs"
 	"os"
@@ -69,6 +70,18 @@ func Bx(args []string, stdout, stderr io.Writer) int {
 		return s
 	}
 	switch args[0] {
+	case "artifact", "artifacts", "read-artifact", "gate", "gate-receipt", "gate-evidence":
+		if err := bxEvidence(args, stdout); err != nil {
+			code := bxFailed
+			if errors.Is(err, evidence.ErrInvalid) {
+				code = bxInvalid
+			}
+			if errors.Is(err, errEvidenceStopped) {
+				code = bxCancelled
+			}
+			return fail(code, "%v", err)
+		}
+		return bxOK
 	case "ask":
 		object, body, err := jsonArg(args[1:])
 		id := str(object, "id")
@@ -308,6 +321,8 @@ Blaxsmith interaction protocol (applies to every step):
   bx ask --json '{"id":"<unique id [A-Za-z0-9_-]>","kind":"question|approval|escalation|interview_round","title":"...","body_md":"...","options":[{"id":"a","label":"...","description":"...","recommended":true}],"multi_select":false,"allow_free_text":true,"blocking":true}'
   It blocks until answered and prints the Answer JSON. Exit code 3 means cancelled: stop the current step. If your shell tool times out, rerun the identical command; it resumes waiting without asking twice.
 - At each phase or loop boundary run ` + "`bx inbox`" + ` and follow every steering line it prints (instruction, pause, halt, set_max_cycles).
+- Publish review evidence with bx artifact --json '{"id":"report-1","path":"reports/result.md","kind":"report","title":"Result","renderer":"markdown"}'. Files must be regular workspace files of at most 4 MiB; keep them unchanged until the stage ends.
+- Report extension checks with bx gate --json '{"id":"check-1","check":"<declared check>","verdict":"pass|fail|blocked","summary":"...","evidence":[{"path":"reports/result.md","sha256":"<sha256>"}]}'. Commit gate evidence first. Wait for the platform receipt; a reported pass does not replace independent verification.
 - Report progress with bx event --json '{"type":"phase|cycle|handoff|finding|progress", ...}'.
 - A review or verify stage ends with bx event --json '{"type":"verdict","status":"pass|fail"}'; on fail, your final message lists the findings.
 `

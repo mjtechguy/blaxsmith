@@ -26,9 +26,31 @@ type Recipe struct {
 	Stages         []Stage            `json:"stages"`
 	RequiredChecks []string           `json:"required_checks"`
 	Limits         Limits             `json:"limits"`
+	// Acceptance selects human review or acceptance by the frozen policy.
+	Acceptance string      `json:"acceptance,omitempty"`
+	Factory    *Factory    `json:"factory,omitempty"`
+	Documents  []string    `json:"documents,omitempty"`
+	Validation *Validation `json:"validation,omitempty"`
 }
 
+// Validation selects an explicitly installed preflight validator and its named files.
+type Validation struct {
+	ID     string            `json:"id"`
+	Inputs map[string]string `json:"inputs"`
+}
+
+// Factory is attribution, never authorization or an executable plugin selector.
+type Factory struct {
+	ID      string `json:"id"`
+	Version string `json:"version"`
+}
+
+var connectionID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+
 type Profile struct {
+	Connection   string   `json:"connection,omitempty"` // Optional exact billing connection; no fallback.
+	Inputs       string   `json:"inputs,omitempty"`     // Committed stack/rules/agent definitions.
+	Agent        string   `json:"agent,omitempty"`      // Definition ID in inputs; grants no authority.
 	Harness      string   `json:"harness"`
 	Model        string   `json:"model"`
 	Effort       string   `json:"effort"`
@@ -37,16 +59,18 @@ type Profile struct {
 }
 
 type Stage struct {
-	ID        string   `json:"id"`
-	Kind      string   `json:"kind"`
-	Profile   string   `json:"profile,omitempty"`
-	DependsOn []string `json:"depends_on,omitempty"`
-	Prompt    string   `json:"prompt,omitempty"`
-	Loop      *Loop    `json:"loop,omitempty"`
+	ReviewReport string   `json:"review_report,omitempty"` // Artifact ID containing blaxsmith.review/v1alpha1.
+	ID           string   `json:"id"`
+	Kind         string   `json:"kind"`
+	Profile      string   `json:"profile,omitempty"`
+	DependsOn    []string `json:"depends_on,omitempty"`
+	Prompt       string   `json:"prompt,omitempty"`
+	Loop         *Loop    `json:"loop,omitempty"`
 	// Template names an installed extension stage template,
 	// "extension@version/template" (docs/extensions-and-runtimes.md). Freeze
 	// resolves it to one installed version and records its digests.
 	Template string `json:"template,omitempty"`
+	Mode     string `json:"mode,omitempty"` // Review verdict: required (default) or advisory. Omit a stage to turn it off.
 }
 
 // Loop reruns a review/verify stage after a correction attempt on With until
@@ -127,18 +151,37 @@ func (r Recipe) validate() ([]string, error) {
 		}
 		return nil, fieldErr(path, "recipe requires schema_version %q and a valid name", Schema)
 	}
-	if r.Limits.MaxCorrectionCycles < 1 || r.Limits.MaxCorrectionCycles > 10 || r.Limits.TimeoutSeconds < 1 || r.Limits.TimeoutSeconds > 86400 ||
-		r.Limits.MaxRuntimeSeconds < 0 || r.Limits.MaxRuntimeSeconds > MaxRuntimeCap {
-		return nil, fieldErr("limits", "limits require 1–10 correction cycles, a 1–86400 second idle timeout, and a 0–%d second max runtime", MaxRuntimeCap)
+	if r.Acceptance != "manual" && r.Acceptance != "policy" {
+		return nil, fieldErr("acceptance", "recipes require explicit manual or policy acceptance")
 	}
-	if len(r.RequiredChecks) == 0 || len(r.Profiles) == 0 || len(r.Stages) > 64 {
+	if r.Factory != nil && (!identifier.MatchString(r.Factory.ID) || strings.TrimSpace(r.Factory.Version) == "" || len(r.Factory.Version) > 128) {
+		return nil, fieldErr("factory", "factory requires a valid id and a version of 1–128 bytes")
+	}
+	for i, file := range r.Documents {
+		if !validPath(file) {
+			return nil, fieldErr(fmt.Sprintf("documents[%d]", i), "invalid document path")
+		}
+	}
+	if r.Validation != nil {
+		if !identifier.MatchString(r.Validation.ID) || len(r.Validation.Inputs) == 0 || len(r.Validation.Inputs) > 32 {
+			return nil, fieldErr("validation", "validation requires an installed validator id and 1–32 named inputs")
+		}
+		for name, file := range r.Validation.Inputs {
+			if !identifier.MatchString(name) || !validPath(file) {
+				return nil, fieldErr("validation.inputs", "invalid validator input name or file path")
+			}
+		}
+	}
+	if r.Limits.MaxCorrectionCycles < 0 || r.Limits.MaxCorrectionCycles > 10 || r.Limits.TimeoutSeconds < 1 || r.Limits.TimeoutSeconds > 86400 ||
+		r.Limits.MaxRuntimeSeconds < 0 || r.Limits.MaxRuntimeSeconds > MaxRuntimeCap {
+		return nil, fieldErr("limits", "limits require 0–10 correction cycles, a 1–86400 second idle timeout, and a 0–%d second max runtime", MaxRuntimeCap)
+	}
+	if len(r.Profiles) == 0 || len(r.Profiles) > 64 || len(r.Stages) == 0 || len(r.Stages) > 64 {
 		path := "stages"
-		if len(r.RequiredChecks) == 0 {
-			path = "required_checks"
-		} else if len(r.Profiles) == 0 {
+		if len(r.Profiles) == 0 {
 			path = "profiles"
 		}
-		return nil, fieldErr(path, "require checks, profiles, and at most 64 stages")
+		return nil, fieldErr(path, "require 1–64 profiles and 1–64 stages")
 	}
 	seenChecks := map[string]bool{}
 	for i, check := range r.RequiredChecks {
@@ -149,6 +192,12 @@ func (r Recipe) validate() ([]string, error) {
 	}
 	for _, name := range sortedKeys(r.Profiles) {
 		p := r.Profiles[name]
+		if p.Connection != "" && (len(p.Connection) > 64 || !connectionID.MatchString(p.Connection)) {
+			return nil, fieldErr("profiles."+name+".connection", "connection must be an exact connection ID")
+		}
+		if (p.Inputs != "" && !validPath(p.Inputs)) || (p.Agent != "" && (p.Inputs == "" || !identifier.MatchString(p.Agent))) {
+			return nil, fieldErr("profiles."+name, "agent requires an inputs file and a valid definition ID")
+		}
 		if !identifier.MatchString(name) || (p.Harness != "claude-code" && p.Harness != "codex" && p.Harness != "opencode") || strings.TrimSpace(p.Model) == "" || strings.TrimSpace(p.Effort) == "" {
 			return nil, fieldErr("profiles."+name, "profile %q requires an explicit Claude Code/Codex/OpenCode harness, model, and effort", name)
 		}
@@ -173,6 +222,15 @@ func (r Recipe) validate() ([]string, error) {
 	index := map[string]int{}
 	for i, s := range r.Stages {
 		at := fmt.Sprintf("stages[%d]", i)
+		if s.ReviewReport != "" && (!identifier.MatchString(s.ReviewReport) || (s.Kind != "review" && s.Kind != "architect_review" && s.Kind != "ui_review")) {
+			return nil, fieldErr(at+".review_report", "review_report needs a review stage and a valid artifact ID")
+		}
+		if s.Mode != "" && ((s.Mode != "required" && s.Mode != "advisory") || (s.Kind != "review" && s.Kind != "architect_review" && s.Kind != "ui_review")) {
+			return nil, fieldErr(at+".mode", "mode requires a review stage and must be required or advisory")
+		}
+		if s.Mode == "advisory" && s.Loop != nil {
+			return nil, fieldErr(at+".loop", "advisory reviews cannot require correction loops")
+		}
 		if !identifier.MatchString(s.ID) || stages[s.ID].ID != "" {
 			return nil, fieldErr(at+".id", "invalid or duplicate stage ID %q", s.ID)
 		}
@@ -207,14 +265,15 @@ func (r Recipe) validate() ([]string, error) {
 		}
 		kinds[kind] = append(kinds[kind], s.ID)
 	}
-	for _, k := range []string{"plan", "implement", "review", "verify", "architect_review", "human_review"} {
-		if len(kinds[k]) == 0 {
-			return nil, fieldErr("stages", "missing mandatory %s stage", k)
-		}
+	if len(kinds["human_review"]) > 1 || (r.Acceptance == "policy" && len(kinds["human_review"]) != 0) || len(kinds["human_review"]) == len(r.Stages) {
+		return nil, fieldErr("stages", "workflows need an agent stage and at most one final human review, only with manual acceptance")
 	}
-	if len(kinds["human_review"]) != 1 || len(kinds["architect_review"]) != 1 {
-		return nil, fieldErr("stages", "require exactly one final architect review and one human review")
+	// The run branch transport currently owns a single implementation stream.
+	// Refuse graphs it cannot merge rather than silently discarding a branch.
+	if len(kinds["implement"]) > 1 {
+		return nil, fieldErr("stages", "the current run-branch capability supports one implement stage per run")
 	}
+
 	for i, s := range r.Stages {
 		seen := map[string]bool{}
 		for j, dep := range s.DependsOn {
@@ -253,33 +312,20 @@ func (r Recipe) validate() ([]string, error) {
 			return nil, fieldErr("stages", "stage dependencies contain a cycle")
 		}
 	}
-	human, architect := kinds["human_review"][0], kinds["architect_review"][0]
+	human := ""
+	if len(kinds["human_review"]) > 0 {
+		human = kinds["human_review"][0]
+	}
+
 	for _, s := range r.Stages {
 		if s.Loop != nil && (!ancestors[s.ID][s.Loop.With] || stages[s.Loop.With].Kind == "human_review") {
 			return nil, fieldErr(stagePath(index, s.ID)+".loop.with", "stage %q loop target %q must be an upstream agent stage", s.ID, s.Loop.With)
 		}
-		if s.ID != human && !ancestors[human][s.ID] {
+		if human != "" && s.ID != human && !ancestors[human][s.ID] {
 			return nil, fieldErr(stagePath(index, s.ID)+".depends_on", "stage %q must precede final human review", s.ID)
 		}
-		if s.ID != human && s.ID != architect && !ancestors[architect][s.ID] {
-			return nil, fieldErr(stagePath(index, s.ID)+".depends_on", "stage %q must precede final architect review", s.ID)
-		}
-		if s.Kind == "implement" {
-			planned, reviewed, verified := false, false, false
-			for _, id := range kinds["plan"] {
-				planned = planned || ancestors[s.ID][id]
-			}
-			for _, id := range kinds["review"] {
-				reviewed = reviewed || ancestors[id][s.ID]
-			}
-			for _, id := range kinds["verify"] {
-				verified = verified || ancestors[id][s.ID]
-			}
-			if !planned || !reviewed || !verified {
-				return nil, fieldErr(stagePath(index, s.ID)+".depends_on", "implementation %q needs prior planning and subsequent review and verification", s.ID)
-			}
-		}
 	}
+
 	return order, nil
 }
 

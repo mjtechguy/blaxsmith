@@ -260,7 +260,8 @@ func TestCodexSubscriptionRefreshCustodyPostgres(t *testing.T) {
 		leaseID).Scan(&leaseExpiry); err != nil || !leaseExpiry.Equal(announced) {
 		t.Fatalf("lease expiry %v, announced %v: %v", leaseExpiry, announced, err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE access_leases SET expires_at=$2 WHERE organization_id='org-a' AND id=$1`,
+	if _, err := pool.Exec(ctx, `UPDATE access_leases SET expires_at=$2,renewal_generation=1,renewal_pending=true
+		WHERE organization_id='org-a' AND id=$1`,
 		leaseID, results[0].ExpiresAt.Add(-time.Minute)); err != nil {
 		t.Fatal(err)
 	}
@@ -268,6 +269,18 @@ func TestCodexSubscriptionRefreshCustodyPostgres(t *testing.T) {
 		LeaseID: leaseID, DeliveryMode: "oauth_access", ExpiresAt: until}); err != nil ||
 		!capped.Equal(results[0].ExpiresAt.Add(-CodexLeaseMargin).Truncate(time.Microsecond)) {
 		t.Fatalf("lease past the token's expiry was not capped: %v %v", capped, err)
+	}
+	// The cap changes the expiry, but acknowledgement still matches the
+	// original generation and leaves the capped authorization untouched.
+	if err := MarkRenewalDelivered(ctx, pool, RenewedLease{OrganizationID: "org-a", AttemptID: "attempt",
+		LeaseID: leaseID, Generation: 1, ExpiresAt: until}); err != nil {
+		t.Fatal(err)
+	}
+	var pending bool
+	if err := pool.QueryRow(ctx, `SELECT renewal_pending,expires_at FROM access_leases
+		WHERE organization_id='org-a' AND id=$1`, leaseID).Scan(&pending, &leaseExpiry); err != nil || pending ||
+		!leaseExpiry.Equal(results[0].ExpiresAt.Add(-CodexLeaseMargin).Truncate(time.Microsecond)) {
+		t.Fatalf("capped renewal acknowledgement: pending=%t expiry=%v err=%v", pending, leaseExpiry, err)
 	}
 	for _, bad := range []RenewedLease{
 		{OrganizationID: "org-a", AttemptID: "attempt", LeaseID: leaseID, DeliveryMode: "native_raw", ExpiresAt: until},

@@ -377,10 +377,7 @@ func (s *connectionService) ListConnectionModels(ctx context.Context, req *conne
 	}
 	out := &api.ListConnectionModelsResponse{CheckedAt: optionalTime(checked), Error: modelsErr}
 	for _, m := range models {
-		out.Models = append(out.Models, &api.ConnectionModel{Id: m.ID, DisplayName: m.DisplayName, CreatedAt: optionalTime(m.ReleasedAt),
-			ContextTokens: m.ContextTokens, CapabilitiesJson: m.Capabilities, Harnesses: m.Harnesses,
-			IsDefault: m.IsDefault, Legacy: m.Legacy, Badge: m.Badge, Efforts: m.Efforts, DefaultEffort: m.DefaultEffort,
-			Recommended: m.Recommended})
+		out.Models = append(out.Models, connectionModelMessage(m))
 	}
 	return connect.NewResponse(out), nil
 }
@@ -705,4 +702,11 @@ func (s *connectionService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirect(state.ReturnTo, "connected", c.ID)
+}
+
+func connectionModelMessage(m workflow.ConnectionModel) *api.ConnectionModel {
+	return &api.ConnectionModel{Id: m.ID, DisplayName: m.DisplayName, CreatedAt: optionalTime(m.ReleasedAt),
+		ContextTokens: m.ContextTokens, CapabilitiesJson: m.Capabilities, Harnesses: m.Harnesses,
+		IsDefault: m.IsDefault, Legacy: m.Legacy, Badge: m.Badge, Efforts: m.Efforts, DefaultEffort: m.DefaultEffort,
+		Recommended: m.Recommended}
 }

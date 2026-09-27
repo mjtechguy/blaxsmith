@@ -1,6 +1,7 @@
-package recipe
+package recipe_test
 
 import (
+	. "github.com/mjtechguy/blaxsmith/internal/recipe"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,7 +61,7 @@ func TestFreezeLibraryRecipeMatchesCommittedFile(t *testing.T) {
 	if err != nil || labelled.Source.Recipe != library.Recipe || labelled.Digest == fromFile.Digest {
 		t.Fatalf("library label not recorded: %v", err)
 	}
-	library.Recipe = in.Spec
+	library.Recipe = example + "spec.md"
 	if _, err := Freeze(t.Context(), library); err == nil || !strings.Contains(err.Error(), "collides") {
 		t.Fatalf("label collision accepted: %v", err)
 	}

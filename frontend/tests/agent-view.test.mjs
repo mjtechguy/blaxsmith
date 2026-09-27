@@ -115,3 +115,52 @@ test("approval buttons map onto the interaction's own options", () => {
   assert.equal(view.approvalChoices([{ id: "a", label: "Ship it", recommended: true }]).approve.id, "a");
   assert.equal(view.approvalChoices([{ id: "a", label: "Ship it" }]).approve, undefined);
 });
+
+test("factory layers show fan-out and fan-in independently of API order and stop on unresolved dependencies", () => {
+  const tasks = [
+    { key: "accept", dependsOn: ["review", "verify"] },
+    { key: "verify", dependsOn: ["implement"] },
+    { key: "implement", dependsOn: [] },
+    { key: "review", dependsOn: ["implement"] },
+  ];
+  const graph = view.stageLayers(tasks);
+  assert.deepEqual(graph.layers.map((layer) => layer.map((t) => t.key)), [["implement"], ["verify", "review"], ["accept"]]);
+  assert.deepEqual(graph.unresolved, []);
+  assert.equal(tasks[0].key, "accept");
+  const broken = [{ key: "missing", dependsOn: ["absent"] }, { key: "a", dependsOn: ["b"] }, { key: "b", dependsOn: ["a"] }];
+  assert.deepEqual(view.stageLayers(broken), { layers: [], unresolved: broken });
+  assert.deepEqual(view.stageLayers([]), { layers: [], unresolved: [] });
+});
+
+test("native acceptance needs approval even without a human-review stage", () => {
+  const tasks = [{ key: "implement", kind: "implement", state: "succeeded", dependsOn: [] }, { key: "verify", kind: "verify", state: "succeeded", dependsOn: ["implement"] }];
+  assert.equal(view.runStatus("succeeded", tasks, [], true), "needs_approval");
+  assert.equal(view.runStatus("succeeded", tasks, [], false), "done");
+  assert.notEqual(view.runStatus("active", tasks, [], true), "needs_approval");
+});
+
+test("factory map links stages and acceptance without presenting an old package as current acceptance", async (t) => {
+  const previousWindow = globalThis.window;
+  globalThis.window = { location: { origin: "https://blaxsmith.test" } };
+  t.after(() => { globalThis.window = previousWindow; });
+  const { renderFactoryMap } = await server.ssrLoadModule("/tests/render-app.tsx");
+  const pending = await renderFactoryMap(undefined);
+  assert.match(pending, /Awaiting evidence package/);
+  assert.match(pending, /aria-current="step"/);
+  assert.match(pending, /tab=stages.*stage=verify/);
+  assert.match(pending, /1.*\/.*2.*repairs requested/s);
+  assert.match(pending, /Platform checks · no model/);
+  assert.match(pending, /tab=review/);
+  const manual = { acceptanceMode: "manual", integratedCommit: "a".repeat(40) };
+  assert.match(await renderFactoryMap(manual), /Awaiting human decision/);
+  const policy = { ...manual, acceptanceMode: "policy" };
+  assert.match(await renderFactoryMap(policy), /Accepted by policy/);
+  assert.match(await renderFactoryMap({ ...manual, decision: { action: "approve" } }), /Approved by a person/);
+  assert.match(await renderFactoryMap({ ...manual, decision: { action: "request_changes" } }), /Changes requested/);
+  const stale = await renderFactoryMap(policy, "active");
+  assert.doesNotMatch(stale, /Accepted by policy|Candidate a/);
+  assert.match(stale, /After execution and checks/);
+  const unavailable = await renderFactoryMap(policy, "succeeded", true);
+  assert.match(unavailable, /Acceptance unavailable/);
+  assert.doesNotMatch(unavailable, /Accepted by policy/);
+});

@@ -8,6 +8,7 @@
 // docs/interactive-sessions.md. The scenario: a Forge-style interview and an approval gate on
 // `plan`, plus a 3-cycle verify loop that hits its cap and escalates. Answering the
 // escalation moves the run to human review.
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer as createHttp } from "node:http";
 import { WebSocketServer } from "ws";
@@ -18,7 +19,7 @@ const principalId = "p-you";
 const runId = "run-guild";
 const projectId = "proj-demo";
 const task = (key, harness, model, effort, dependsOn, state = "pending", activeAttemptId = "") =>
-  ({ id: `t-${key}`, key, state, generation: activeAttemptId ? "1" : "0", maxAttempts: 3, activeAttemptId, dependsOn, harness, model, effort, instructionFiles: [], skillFiles: [] });
+  ({ id: `t-${key}`, key, state, generation: activeAttemptId ? "1" : "0", maxAttempts: 3, activeAttemptId, dependsOn, kind: key === "human-review" ? "human_review" : key === "architect-review" ? "review" : key, harness, model, effort, instructionFiles: [], skillFiles: [] });
 const tasks = [
   task("plan", "claude-code", "opus", "high", [], "running", "att-plan"),
   task("implement", "codex", "gpt-5.6-luna", "xhigh", ["plan"]),
@@ -77,9 +78,11 @@ open("plan", {
 });
 let cap = 3;
 let cycle = 0;
+Object.assign(byKey("verify"), { loopWith: "implement", maxCycles: cap, loopCycles: 0 });
 const findings = [["TestExportCSV: header row missing `created_at`", "retention job not registered with scheduler"], ["TestExportJSON: timestamps not RFC 3339"], ["TestRetention: flaky under -race (shared clock)"]];
 function nextCycle() {
   cycle += 1;
+  Object.assign(byKey("verify"), { maxCycles: cap, loopCycles: cycle - 1 });
   progress("verify", { type: "cycle", cycle, max_cycles: cap, status: "running" });
   void verifyWork(cycle);
   setTimeout(() => {
@@ -222,6 +225,25 @@ function extensionPreview(source) {
     existingExtensionId: extensions.find((x) => x.key === m.id)?.id || "" };
 }
 
+const goals = new Map();
+const goalCreates = new Map();
+const starterQuestions = () => [
+  { id: "codebase", title: "What are we building on?", bodyMd: "Describe the existing behavior to preserve, or the starting point for a new project.", options: [option("existing", "Existing codebase", "Understand current architecture, conventions, tests, and behavior before changing code."), option("new", "New project", "Establish the stack, boundaries, and a small working foundation.")] },
+  { id: "depth", title: "How thorough should this work be?", bodyMd: "This guides planning depth. You choose the actual required, advisory, or disabled checks before launching.", options: [option("focused", "Focused MVP", "Small scope, direct implementation, and the checks you select."), option("thorough", "Thorough delivery", "Detailed tasks, code review, failure cases, and end-to-end evidence where applicable.")] },
+  { id: "success", title: "What would a successful result look like?", bodyMd: "Give concrete examples: what should a user be able to do, what must stay unchanged, and how should we verify it?", options: [] },
+  { id: "constraints", title: "Which rules and limits should shape the plan?", bodyMd: "Include stack choices, AGENTS.md or other rule files, model preferences, time or spending limits, and anything out of scope.", options: [] },
+].map((q) => ({ ...q, kind: "question", allowFreeText: true, state: "open", sources: [], createdAt: now() }));
+
+// Deterministic native planner fixture; no provider calls.
+const goalPlanRuns = new Map();
+const goalExecutions = new Map();
+const goalPlanVersions = new Map();
+const goalPlanRequests = new Map();
+const demoPlan = (goal) => ({ schema_version: "anvil.plan/v1alpha1", title: goal.title, summary: "Extend the existing service and validate the complete user journey.", assumptions: ["Reuse the current project stack."], out_of_scope: ["Unrelated interface changes"], open_questions: [],
+ requirements: [{ id: "R1", description: goal.brief, sources: ["brief"], examples: ["A saved change survives reload; an invalid request leaves the previous value intact."] }],
+ phases: [{ id: "P1", title: "Deliver the behavior", outcome: "An integrated, observable result" }, { id: "P2", title: "Validate the journey", outcome: "Evidence for success and failure paths" }],
+ tasks: [{ id: "T1", title: "Extend the existing service", phase: "P1", reason: "Keep one source of truth for the new behavior.", depends_on: [], requirement_ids: ["R1"], instructions: "Read existing service and UI callers. Add the smallest change using established patterns. Preserve existing error handling.", acceptance: ["The requested behavior works after reload"], validation: ["Run the focused service checks"] },
+ { id: "T2", title: "Exercise the complete user journey", phase: "P2", reason: "Catch integration and accessibility regressions.", depends_on: ["T1"], requirement_ids: ["R1"], instructions: "Exercise success, invalid input and retry behavior through the UI. Record reproducible evidence.", acceptance: ["Success and failure paths are verified"], validation: ["Browser E2E and keyboard checks"] }] });
 const rpc = {
   GetCsrf: () => ({ token: "A".repeat(43) }),
   CurrentSession: () => ({ session: { organizationId: "org-demo", principalId, role: "owner", accessExpiresAt: new Date(Date.now() + 3_600_000).toISOString() } }),
@@ -229,15 +251,145 @@ const rpc = {
   GetProject: () => ({ project: { id: projectId, slug: "demo", name: "Demo project", createdAt: now() } }),
   GetProjectSource: () => ({ source: { projectId, repositoryUrl: "https://github.com/example/blaxsmith-demo.git", ref: "main" } }),
   GetProjectVerification: () => ({ verification: { projectId, version: "1", checks: [{ id: "go-test", command: ["go", "test", "./..."] }] } }),
+  CreateGoal: ({ projectId, requestKey, title, brief }) => {
+    if (!["owner", "admin", "member"].includes(mockRole)) return connectError(403, "permission_denied", "goal change denied");
+    const signature = JSON.stringify([title.trim(), brief.trim()]);
+    const key = `${projectId}:${requestKey}`;
+    const existing = goalCreates.get(key);
+    if (existing) return existing.signature === signature ? { goal: goals.get(existing.id).goal } : connectError(400, "failed_precondition", "request changed");
+    const id = `goal-${goals.size + 1}`;
+    const goal = { id, projectId, title: title.trim(), brief: brief.trim(), factoryId: "anvil", factoryVersion: "0.1.0", revision: "1", createdBy: principalId, createdAt: now(), updatedAt: now(), questions: starterQuestions() };
+    goals.set(id, { goal, entries: [], requests: new Map() }); goalCreates.set(key, { id, signature }); return { goal };
+  },
+  ListGoals: ({ projectId, beforeId }) => {
+    const all = [...goals.values()].map((g) => g.goal).filter((g) => g.projectId === projectId).reverse();
+    const offset = beforeId ? all.findIndex((g) => g.id === beforeId) + 1 : 0;
+    return { goals: all.slice(offset, offset + 50), nextBeforeId: all.length > offset + 50 ? all[offset + 49].id : "" };
+  },
+  GetProjectModelOptions: () => ({ connections: [] }),
+  ListGoalCheckpoints: () => ({ checkpoints: [] }),
+  GetRunUsage: () => ({ usage: { attempts: "0", reportedAttempts: "0", reports: "0", costReports: "0", inputTokens: "0", outputTokens: "0", costMicrosUsd: "0" } }),
+  GetGoalUsage: () => ({ usage: { attempts: "0", reportedAttempts: "0", reports: "0", costReports: "0", inputTokens: "0", outputTokens: "0", costMicrosUsd: "0" } }),
+  GetGoalControl: ({ goalId }) => ({ control: goals.get(goalId)?.control ?? { state: "active", version: "0", activeRuns: "0", stoppingRuns: "0" } }),
+  ControlGoal: ({ goalId, action, expectedVersion }) => {
+    const goal = goals.get(goalId); if (!goal) return connectError(404, "not_found", "Goal unavailable");
+    const current = goal.control ?? { state: "active", version: "0" };
+    if (String(expectedVersion || "0") !== current.version || current.state === "cancelled") return connectError(409, "aborted", "Goal control changed");
+    goal.control = { state: { pause: "paused", resume: "active", cancel: "cancelled" }[action], version: String(BigInt(current.version) + 1n), activeRuns: "0", stoppingRuns: "0" };
+    return { version: goal.control.version };
+  },
+  GetGoalAllowance: ({ goalId }) => ({ allowance: goals.get(goalId)?.allowance ?? { version: "0", maxRuns: 0, maxAttempts: 0, runs: "0", attempts: "0" } }),
+  SetGoalAllowance: ({ goalId, expectedVersion, maxRuns, maxAttempts, admitUntil }) => {
+ if (!["owner", "admin", "member"].includes(mockRole)) return connectError(403, "permission_denied", "goal change denied");
+    const goal = goals.get(goalId);
+    if (!goal) return connectError(404, "not_found", "Goal not found");
+    if (String(expectedVersion || "0") !== String(goal.allowance?.version || "0")) return connectError(409, "aborted", "goal allowance changed; reload before saving");
+    goal.allowance = { version: String(Number(expectedVersion || 0) + 1), maxRuns, maxAttempts, admitUntil, runs: "0", attempts: "0", updatedAt: new Date().toISOString() };
+    return {};
+  },
+  GetGoal: ({ goalId, beforeSequence = "0" }) => {
+    const g = goals.get(goalId); if (!g) return connectError(404, "not_found", "goal not found");
+    const history = g.entries.filter((e) => !Number(beforeSequence) || Number(e.sequence) < Number(beforeSequence));
+    const entries = history.slice(-50); return { goal: g.goal, entries, nextBeforeSequence: history.length > 50 ? entries[0].sequence : "0" };
+  },
+  ReplyGoal: ({ goalId, requestKey, expectedRevision, kind, questionId = "", optionIds = [], text = "" }) => {
+    if (!["owner", "admin", "member"].includes(mockRole)) return connectError(403, "permission_denied", "goal change denied");
+    const g = goals.get(goalId); if (!g) return connectError(404, "not_found", "goal not found");
+    const signature = JSON.stringify([kind, questionId, optionIds, text.trim()]);
+    if (g.requests.has(requestKey)) return g.requests.get(requestKey) === signature ? {} : connectError(400, "failed_precondition", "request changed");
+    if (String(expectedRevision) !== g.goal.revision) return connectError(400, "failed_precondition", "goal changed");
+    const q = g.goal.questions.find((q) => q.id === questionId);
+    if (kind !== "message" && (!q || (kind === "deferred" && q.blocking))) return connectError(400, "invalid_argument", "invalid question");
+    g.goal.revision = String(Number(g.goal.revision) + 1); g.goal.updatedAt = now();
+    g.entries.push({ sequence: g.goal.revision, kind, questionId, optionIds, text: text.trim(), principalId, createdAt: now() });
+    if (q) { q.state = kind === "deferred" ? "deferred" : "answered"; q.answer = kind === "answer" ? { optionIds, text: text.trim(), answeredBy: principalId, at: now() } : undefined; }
+    g.requests.set(requestKey, signature); return {};
+  },
+  StartGoalPlanning: ({ goalId, expectedRevision, requestKey }) => {
+    const g = goals.get(goalId)?.goal;
+    if (!g) return connectError(404, "not_found", "goal not found");
+    if (g.revision !== expectedRevision) return connectError(400, "failed_precondition", "goal changed");
+    let entry = [...goalPlanRuns.values()].find((r) => r.goalId === goalId && r.requestKey === requestKey);
+    if (!entry) {
+      const id = `planner-${goalPlanRuns.size + 1}`;
+      entry = { id, goalId, requestKey, state: "active", goalRevision: g.revision, content: JSON.stringify(demoPlan(g)), question: { id: `${id}-question`, stage: "plan", kind: "question", title: "Should the first delivery include failure-path E2E coverage?", bodyMd: "The existing workflow supports a focused test alongside implementation.", options: [option("yes", "Include it", "Cover retry and invalid input", true), option("later", "Defer it", "Keep the first delivery smaller")], allowFreeText: true, blocking: true, state: "open", sources: [] } };
+      goalPlanRuns.set(id, entry);
+    }
+    return { run: { ...run, id: entry.id, state: entry.state, projectId: g.projectId } };
+  },
+  GetGoalPlans: ({ goalId, beforeVersion = "0" }) => {
+    const plans = (goalPlanVersions.get(goalId) || []).filter((p) => beforeVersion === "0" || BigInt(p.version) < BigInt(beforeVersion));
+    return { plans: plans.slice(0, 20), nextBeforeVersion: plans.length > 20 ? plans[19].version : "0", runs: [...goalPlanRuns.values(), ...goalExecutions.values()].filter((r) => r.goalId === goalId).reverse().map(({ id, state, goalRevision, planVersion }) => ({ id, state, goalRevision, planVersion })) };
+  },
+  SaveGoalPlan: ({ goalId, requestKey, expectedGoalRevision, expectedPlanVersion = "0", contentJson, evidenceId }) => {
+    const g = goals.get(goalId)?.goal; const plans = goalPlanVersions.get(goalId) || [];
+    const key = `${goalId}:${requestKey}`;
+    if (goalPlanRequests.has(key)) return { version: goalPlanRequests.get(key) };
+    if (g?.revision !== expectedGoalRevision || String(plans.length) !== expectedPlanVersion) return connectError(400, "failed_precondition", "goal or plan changed");
+    const source = [...goalPlanRuns.values()].find((r) => r.goalId === goalId && `${r.id}-artifact` === evidenceId && r.state === "succeeded" && r.goalRevision === g.revision);
+    if (evidenceId && !source) return connectError(400, "failed_precondition", "completed plan artifact required");
+    const content = source?.content || contentJson;
+    try { const p = JSON.parse(content); if (p.schema_version !== "anvil.plan/v1alpha1" || !p.tasks?.length) throw Error(); } catch { return connectError(400, "invalid_argument", "invalid plan"); }
+    const version = String(plans.length + 1);
+    plans.unshift({ version, goalRevision: g.revision, contentJson: content, sha256: createHash("sha256").update(content).digest("hex"), sourceRunId: source?.id || plans[0]?.sourceRunId || "", sourceEvidenceId: evidenceId || plans[0]?.sourceEvidenceId || "", createdAt: now() });
+    goalPlanVersions.set(goalId, plans); goalPlanRequests.set(key, version); return { version };
+  },
   GetLaunchAvailability: () => ({ enabled: true, reason: "" }),
-  LaunchRun: () => ({ run }),
-  ListRuns: () => ({ runs: [run], nextPageToken: "" }),
+  PreviewRun: ({ projectId, recipeVersionId, recipePath, scope, goalExecution }) => {
+    if (goalExecution) {
+      if (!["owner", "admin", "member"].includes(mockRole)) return connectError(403, "permission_denied", "run launch denied");
+      const g = goals.get(goalExecution.goalId)?.goal;
+      const selected = goalPlanVersions.get(goalExecution.goalId)?.find((p) => p.version === goalExecution.planVersion);
+      if (!g || g.projectId !== projectId || !selected) return connectError(404, "not_found", "goal or plan unavailable");
+      if (g.revision !== goalExecution.expectedGoalRevision || selected.goalRevision !== g.revision) return connectError(400, "failed_precondition", "goal context changed");
+      const plan = JSON.parse(selected.contentJson); const ordered = []; const seen = new Set();
+      const visit = (t) => { if (seen.has(t.id)) return; seen.add(t.id); (t.depends_on || []).forEach((id) => visit(plan.tasks.find((t) => t.id === id))); ordered.push(t); }; plan.tasks.forEach(visit);
+      const digest = (text) => createHash("sha256").update(text).digest("hex");
+      const taskPackets = ordered.map((task, i) => { const contentJson = JSON.stringify({ schema_version: "anvil.task/v1alpha1", goal_id: g.id, goal_revision: Number(g.revision), plan_version: Number(selected.version), plan_sha256: selected.sha256, task, phase: plan.phases.find((p) => p.id === task.phase), requirements: plan.requirements.filter((r) => task.requirement_ids.includes(r.id)) }); return { taskId: task.id, title: task.title, dependsOn: task.depends_on || [], path: `.blaxsmith/platform/tasks/${String(i + 1).padStart(3, "0")}.json`, sha256: digest(contentJson), contentJson }; });
+      const profile = { harness: goalExecution.harness, model: goalExecution.model, effort: goalExecution.effort, instructions: goalExecution.instructionFiles || [], skills: goalExecution.skillFiles || [] };
+      const recipeJson = JSON.stringify({ schema_version: "blaxsmith.recipe/v1alpha1", name: "anvil-implementation", factory: { id: "anvil", version: "0.1.0" }, acceptance: goalExecution.acceptance, profiles: { implementer: profile, checker: profile }, stages: [{ id: "implement", kind: "implement", profile: "implementer", prompt: ".blaxsmith/platform/implement.md" }, { id: "verify", kind: "verify", profile: "checker", depends_on: ["implement"], prompt: ".blaxsmith/platform/verify.md", ...(goalExecution.correctionCycles > 0 ? { loop: { with: "implement", until: "pass", max_cycles: goalExecution.correctionCycles } } : {}) }], limits: { max_correction_cycles: goalExecution.correctionCycles || 0, timeout_seconds: goalExecution.runtimeSeconds, max_runtime_seconds: goalExecution.runtimeSeconds } });
+      const checks = rpc.GetProjectVerification({ projectId }).verification.checks;
+      return { sourceCommit: run.sourceCommit, bundleSha256: digest(JSON.stringify([recipeJson, selected.sha256, scope, g.revision])), verificationSha256: digest(JSON.stringify(checks)), recipeJson, stageOrder: ["implement", "verify"], artifacts: [...taskPackets.map(({ path, sha256 }) => ({ path, sha256 })), ...[...new Set([...profile.instructions, ...profile.skills])].map((path) => ({ path, sha256: digest(path) }))], checks, blockers: [], canLaunch: true, taskPackets };
+    }
+    const version = recipes.flatMap((r) => r.versions).find((v) => v.id === recipeVersionId);
+    const recipeJson = version?.recipeJson || readFileSync(new URL(recipePath === "examples/guild/recipe.json" ? "../../examples/guild/recipe.json" : "../../examples/anvil/recipe.json", import.meta.url), "utf8");
+    const doc = JSON.parse(recipeJson);
+    const checks = (rpc.GetProjectVerification({ projectId }).verification?.checks || []);
+    const digest = (data) => createHash("sha256").update(JSON.stringify(data)).digest("hex");
+    const paths = [...new Set([version?.frozenPath || recipePath, ...doc.stages.map((s) => s.prompt).filter(Boolean)])];
+    return { sourceCommit: run.sourceCommit, bundleSha256: digest([recipeJson, scope]), verificationSha256: digest(checks), recipeJson,
+      stageOrder: doc.stages.map((s) => s.id), artifacts: paths.map((path) => ({ path, sha256: digest(path) })), checks, blockers: [], canLaunch: true };
+  },
+  GetPlatformCapabilities: () => ({ recipeSchemas: ["blaxsmith.recipe/v1alpha1"], harnesses: ["codex", "claude-code", "opencode"], acceptanceModes: ["manual", "policy"], checkModes: ["required", "advisory", "off"], maxStages: 64, maxImplementStages: 1, launchPreview: true }),
+  LaunchRun: (input) => {
+    if (!input.goalExecution) return { run };
+    const preview = rpc.PreviewRun(input); if (preview.status) return preview;
+    if (!input.expectedBundleSha256 || !input.expectedVerificationSha256) return connectError(400, "invalid_argument", "preview required");
+    if (preview.bundleSha256 !== input.expectedBundleSha256 || preview.verificationSha256 !== input.expectedVerificationSha256) return connectError(409, "aborted", "preview changed");
+    const old = [...goalExecutions.values()].find((r) => r.run.projectId === input.projectId && r.run.launchKey === input.launchKey);
+    if (old) return old.run.bundleSha256 === preview.bundleSha256 ? { run: old.run } : connectError(400, "failed_precondition", "launch key changed");
+    const id = `execution-${goalExecutions.size + 1}`;
+    const next = { ...run, id, projectId: input.projectId, launchKey: input.launchKey, bundleSha256: preview.bundleSha256, verificationSha256: preview.verificationSha256, state: "queued", createdAt: now() };
+    goalExecutions.set(id, { id, state: next.state, goalId: input.goalExecution.goalId, goalRevision: input.goalExecution.expectedGoalRevision, planVersion: input.goalExecution.planVersion, run: next, preview });
+    return { run: next };
+  },
+  ListRuns: () => ({ runs: [run, ...[...goalExecutions.values()].map((e) => e.run)], nextPageToken: "" }),
   ListProjects: () => ({ projects: [rpc.GetProject().project], nextPageToken: "" }),
-  GetRun: () => ({ run }),
-  ListRunTasks: () => ({ tasks }),
-  EventsAfter: ({ afterId = "0", limit = 100 }) => { const page = events.filter((e) => Number(e.id) > Number(afterId)).slice(0, limit); return { events: page, nextAfterId: page.at(-1)?.id ?? String(afterId) }; },
+  GetRun: ({ runId: requested }) => ({ run: goalExecutions.get(requested)?.run ?? run }),
+  ListRunTasks: ({ runId: requested }) => {
+    if (!goalExecutions.has(requested)) return { tasks };
+    const doc = JSON.parse(goalExecutions.get(requested).preview.recipeJson);
+    return { tasks: doc.stages.map((s) => { const p = doc.profiles[s.profile]; return { ...task(s.id, p.harness, p.model, p.effort, s.depends_on || []), id: `${requested}-${s.id}`, kind: s.kind, instructionFiles: (p.instructions || []).map((path) => ({ path, sha256: createHash("sha256").update(path).digest("hex") })), skillFiles: (p.skills || []).map((path) => ({ path, sha256: createHash("sha256").update(path).digest("hex") })), loopWith: s.loop?.with || "", maxCycles: s.loop?.max_cycles || 0, maxAttempts: doc.limits.max_correction_cycles + 1 }; }) };
+  },
+  EventsAfter: ({ runId: requested, afterId = "0", limit = 100 }) => { if (goalExecutions.has(requested)) return { events: [], nextAfterId: afterId }; const page = events.filter((e) => Number(e.id) > Number(afterId)).slice(0, limit); return { events: page, nextAfterId: page.at(-1)?.id ?? String(afterId) }; },
+  ListRunEvidence: ({ runId: requested }) => goalExecutions.has(requested) ? { evidence: [] } : goalPlanRuns.has(requested) ? { evidence: goalPlanRuns.get(requested).state === "succeeded" ? [{ id: `${requested}-artifact`, stage: "plan", kind: "artifact", key: "anvil-plan", current: true }] : [] } : ({ evidence: [
+    { id: "e-report", attemptId: "att-implement", stage: "implement", kind: "artifact", key: "report", revision: run.sourceCommit, sha256: createHash("sha256").update("# Verification report\n\nThe candidate passes the frozen checks.\n\n- Scope preserved\n- No new dependencies\n").digest("hex"), metadataJson: JSON.stringify({ title: "Implementation report", renderer: "markdown" }), current: true },
+    { id: "e-check", attemptId: "att-verify", stage: "verify", kind: "verification", key: "project-tests", revision: run.sourceCommit, sha256: createHash("sha256").update("ok: 12 checks\n").digest("hex"), metadataJson: JSON.stringify({ check: "project-tests", verdict: "pass", exit_code: 0, summary: "Frozen command completed on the candidate revision." }), current: true },
+    { id: "e-gate", attemptId: "att-implement", stage: "implement", kind: "gate", key: "assay", revision: run.sourceCommit, sha256: createHash("sha256").update("").digest("hex"), metadataJson: JSON.stringify({ check: "foundry-assay", verdict: "fail", accepted: true, required: true, summary: "An acceptance criterion still needs coverage." }), current: false },
+  ] }),
+  GetEvidenceContent: (body) => ({ content: Buffer.from(body.evidenceId === "e-report" ? "# Verification report\n\nThe candidate passes the frozen checks.\n\n- Scope preserved\n- No new dependencies\n" : "ok: 12 checks\n").toString("base64"), contentType: "text/plain; charset=utf-8" }),
   ListCommandExits: () => ({ observations: [], nextAfterEventId: "0" }),
-  GetCurrentReview: () => reviewPackage ? { package: reviewPackage } : connectError(404, "not_found", "no review package"),
+  GetCurrentReview: ({ runId: requested }) => goalExecutions.has(requested) ? connectError(404, "not_found", "no review package") : reviewPackage ? { package: reviewPackage } : connectError(404, "not_found", "no review package"),
   DecideReview: ({ action, feedback }) => {
     if (!reviewPackage || reviewPackage.decision) return connectError(400, "failed_precondition", "package already decided");
     reviewPackage.decision = { id: "dec-1", packageId: reviewPackage.id, principalId, action, feedback: feedback ?? "", decidedAt: now() };
@@ -246,8 +398,10 @@ const rpc = {
     else { setState("human-review", "pending"); setState("implement", "running", "att-implement-2"); }
     return { decision: reviewPackage.decision };
   },
-  ListInteractions: () => ({ interactions }),
+  ListInteractions: ({ runId: requested }) => ({ interactions: goalExecutions.has(requested) ? [] : goalPlanRuns.has(requested) ? [goalPlanRuns.get(requested).question] : interactions }),
   AnswerInteraction: ({ interactionId, optionIds = [], text = "" }) => {
+    const planner = [...goalPlanRuns.values()].find((r) => r.question.id === interactionId);
+    if (planner) { planner.question.state = "answered"; planner.question.answer = { optionIds, text, answeredBy: principalId, at: now() }; planner.state = "succeeded"; return { interaction: planner.question }; }
     const item = interactions.find((i) => i.id === interactionId);
     if (!item) return connectError(404, "not_found", "no such interaction");
     if (item.state !== "open") return connectError(400, "failed_precondition", "already answered");
@@ -278,7 +432,7 @@ const rpc = {
     emit(tasks.find((t) => t.activeAttemptId === attemptId)?.key, "attempt.control");
     return {};
   },
-  // RecipeService: an in-memory library seeded with the Guild recipe. The
+  // RecipeService: an in-memory library seeded with the Anvil recipe. The
   // mock only checks JSON syntax; the real server runs internal/recipe validation.
   ListRecipes: ({ projectId: project = "" }) => ({ recipes: recipes.filter((r) => !r.projectId || r.projectId === project).map(recipeSummary) }),
   GetRecipe: ({ recipeId }) => { const r = recipes.find((x) => x.id === recipeId); return r ? { recipe: recipeSummary(r), versions: [...r.versions].reverse().map(({ recipeJson, ...v }) => v), grants: r.projectId ? [] : r.grants || [] } : connectError(404, "not_found", "workflow resource not found"); },
@@ -317,7 +471,7 @@ const rpc = {
     connections: [{ id: "conn-openai", provider: "openai", account: "platform-team", models: ["gpt-5.6-luna", "gpt-5.6"] }, { id: "conn-anthropic", provider: "anthropic", account: "eng", models: ["opus", "sonnet"] }],
   }),
   ListProjectRecipeFiles: () => ({ commit: run.sourceCommit, skillPaths: ["examples/guild/skills/evidence/SKILL.md", "skills/security/SKILL.md"],
-    promptPaths: ["examples/guild/prompts/plan.md", "examples/guild/prompts/implement.md", "examples/guild/prompts/review.md", "examples/guild/prompts/verify.md", "examples/guild/prompts/architect-review.md"] }),
+    promptPaths: ["docs/engineering-rules.md", "docs/testing.md", "examples/guild/prompts/plan.md", "examples/guild/prompts/implement.md", "examples/guild/prompts/review.md", "examples/guild/prompts/verify.md", "examples/guild/prompts/architect-review.md"] }),
   ListTools: () => ({ tools: ["codex", "claude-code", "opencode"].map((tool) => ({ tool, package: tool, source: "mock", fetchedAt: now(), latestStable: "1.0.0", releases: [] })), stale: false }),
   // AdminService: derived from the scenario above plus a second, stuck run.
   GetAdminOverview: () => {
@@ -459,9 +613,9 @@ function addVersion(r, recipeJson, frozenPath, makeCurrent) {
 const recipeSummary = (r) => ({ id: r.id, projectId: r.projectId, name: r.name, description: r.description, currentVersionId: r.current || "",
   currentVersion: r.versions.find((v) => v.id === r.current)?.version || 0, versionCount: r.versions.length, createdAt: r.createdAt, updatedAt: r.updatedAt || r.createdAt });
 {
-  const seed = { id: "recipe-guild", projectId: "", name: "Guild engineering", description: "Plan, implement, review, verify with a bounded correction loop, architect review, then human review.", createdAt: minutesAgo(60 * 24 * 20), versions: [] };
+  const seed = { id: "recipe-anvil", projectId: "", name: "Anvil starter", description: "Native implementation and user-selected checks.", createdAt: minutesAgo(60 * 24 * 20), versions: [] };
   recipes.push(seed);
-  addVersion(seed, readFileSync(new URL("../../examples/guild/recipe.json", import.meta.url), "utf8"), "examples/guild/recipe.json", true);
+  addVersion(seed, readFileSync(new URL("../../examples/anvil/recipe.json", import.meta.url), "utf8"), "examples/anvil/recipe.json", true);
   seed.versions[0].authorUsername = ""; seed.versions[0].authorPrincipalId = "";
   seed.grants = [{ id: "rgrant-seed", projectId: "", projectName: "", granteeKind: "role", granteeId: "member", granteeName: "", createdAt: seed.createdAt }];
 }
@@ -499,6 +653,7 @@ const projects = [
 ];
 const projectSources = new Map();
 const projectChecks = new Map();
+const projectCheckHistory = new Map();
 const projectName = (id) => projects.find((p) => p.id === id)?.name ?? id;
 const sha = (n) => (n * 2654435761 >>> 0).toString(16).padStart(8, "0").repeat(5);
 const staticRuns = [
@@ -522,7 +677,7 @@ function liveRun() {
   const status = open.some((i) => i.kind === "approval") || (reviewPackage && !reviewPackage.decision) ? "needs_approval" : open.length ? "awaiting_input" : run.state === "active" ? "working" : run.state === "succeeded" ? "done" : stateStatus(run.state);
   return { ...run, projectName: projectName(projectId), status, openInteractions: open.length, reviewWaiting: Boolean(reviewPackage && !reviewPackage.decision), stageCount: tasks.length, stagesSucceeded: tasks.filter((t) => t.state === "succeeded").length };
 }
-const allRuns = () => [liveRun(), ...staticRuns];
+const allRuns = () => [liveRun(), ...[...goalExecutions.values()].map((e) => ({ ...e.run, projectName: projectName(e.run.projectId), status: e.state, stageCount: 2, stagesSucceeded: 0, openInteractions: 0, reviewWaiting: false })), ...staticRuns];
 function inboxItems() {
   const items = interactions.filter((i) => i.state === "open").map((i) => ({ id: i.id, kind: i.kind, runId, projectId, projectName: projectName(projectId), runLaunchKey: run.launchKey, stage: i.stage, title: i.title, blocking: i.blocking, createdAt: i.createdAt, canAct: mayAnswer() }));
   if (reviewPackage && !reviewPackage.decision) items.push({ id: reviewPackage.id, kind: "review", runId, projectId, projectName: projectName(projectId), runLaunchKey: run.launchKey, stage: "", title: "Review package revision 1", blocking: true, createdAt: reviewPackage.presentedAt, canAct: mayDecide() });
@@ -554,8 +709,18 @@ Object.assign(rpc, {
   },
   GetProjectSource: ({ projectId: pid = projectId }) => pid === projectId ? { source: { projectId, repositoryUrl: "https://github.com/example/blaxsmith-demo.git", ref: "main" } } : projectSources.has(pid) ? { source: projectSources.get(pid) } : {},
   SetProjectSource: ({ projectId: pid, repositoryUrl, ref = "", gitConnectionId = "" }) => { const s = { projectId: pid, repositoryUrl, ref, gitConnectionId }; projectSources.set(pid, s); return { source: s }; },
-  GetProjectVerification: ({ projectId: pid = projectId }) => pid === projectId ? { verification: { projectId, version: "1", checks: [{ id: "go-test", command: ["go", "test", "./..."] }] } } : projectChecks.has(pid) ? { verification: projectChecks.get(pid) } : {},
-  SetProjectVerification: ({ projectId: pid, checks }) => { const v = { projectId: pid, version: "1", checks, updatedAt: now() }; projectChecks.set(pid, v); return { verification: v }; },
+  GetProjectVerification: ({ projectId: pid = projectId }) => projectChecks.has(pid) ? { verification: projectChecks.get(pid) } : pid === projectId ? { verification: { projectId, version: "1", checks: [{ id: "go-test", command: ["go", "test", "./..."] }] } } : {},
+  SetProjectVerification: ({ projectId: pid, checks, preset, expectedVersion = "0" }) => {
+    const current = rpc.GetProjectVerification({ projectId: pid }).verification;
+    if (Number(expectedVersion) !== Number(current?.version || 0)) return connectError(409, "aborted", "verification revision changed");
+    const v = { projectId: pid, version: String(Number(expectedVersion) + 1), checks, preset, updatedAt: now() };
+    const history = projectCheckHistory.get(pid) || (current ? [current] : []);
+    projectCheckHistory.set(pid, [v, ...history]); projectChecks.set(pid, v); return { verification: v };
+  },
+  ListProjectVerificationHistory: ({ projectId: pid, beforeVersion = "0" }) => {
+    const revisions = (projectCheckHistory.get(pid) || []).filter((v) => !Number(beforeVersion) || Number(v.version) < Number(beforeVersion)).slice(0, 50);
+    return { revisions, nextBeforeVersion: revisions.length === 50 ? revisions.at(-1).version : "0" };
+  },
   ListProjects: ({ search = "", sortBy = "created_at", sortDirection = "desc" }) => {
     const rows = projects.filter((p) => `${p.name} ${p.slug}`.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => (sortBy === "name" ? a.name.localeCompare(b.name) : a.createdAt.localeCompare(b.createdAt)) * (sortDirection === "asc" ? 1 : -1));
@@ -759,12 +924,13 @@ function mayUseExtension(e, pid) {
 
 const server = createHttp(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
-  if (req.method === "GET" && url.pathname === `/api/runs/${runId}/events`) {
+  const requestedRun = url.pathname.match(/^\/api\/runs\/([^/]+)\/events$/)?.[1];
+  if (req.method === "GET" && (requestedRun === runId || goalExecutions.has(requestedRun))) {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
     res.flushHeaders(); // EventSource opens now, not at the first event
     const after = Number(req.headers["last-event-id"] ?? url.searchParams.get("after") ?? 0);
-    for (const e of events.filter((e) => Number(e.id) > after)) res.write(`id: ${e.id}\ndata: ${JSON.stringify(e)}\n\n`);
-    streams.add(res);
+    for (const e of events.filter((e) => requestedRun === runId && Number(e.id) > after)) res.write(`id: ${e.id}\ndata: ${JSON.stringify(e)}\n\n`);
+    if (requestedRun === runId) streams.add(res);
     const ping = setInterval(() => res.write(": ping\n\n"), 15_000);
     req.on("close", () => { streams.delete(res); clearInterval(ping); });
     return;

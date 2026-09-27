@@ -48,23 +48,22 @@ export async function cloneRecipe(sourceVersionId: string, projectId: string, na
 
 // Recipe JSON shape, as written by the editor. Unknown fields are preserved
 // by editing a parsed copy of the document.
-export type RecipeProfile = { harness: string; model: string; effort: string; instructions?: string[]; skills?: string[] };
+export type RecipeProfile = { connection?: string; inputs?: string; agent?: string; harness: string; model: string; effort: string; instructions?: string[]; skills?: string[] };
 export type RecipeLoop = { with: string; until: string; max_cycles: number };
 // template names an installed extension stage template, "extension@version/template".
-export type RecipeStage = { id: string; kind: string; profile?: string; depends_on?: string[]; prompt?: string; loop?: RecipeLoop; template?: string };
+export type RecipeStage = { id: string; kind: string; profile?: string; depends_on?: string[]; prompt?: string; loop?: RecipeLoop; template?: string; mode?: string; review_report?: string };
 export type RecipeDocument = {
-  schema_version: string; name: string; profiles: Record<string, RecipeProfile>; stages: RecipeStage[];
-  required_checks: string[]; limits: { max_correction_cycles: number; timeout_seconds: number; max_runtime_seconds?: number };
+  schema_version: string; name: string; acceptance?: "manual" | "policy"; factory?: { id: string; version: string }; profiles: Record<string, RecipeProfile>; stages: RecipeStage[];
+  documents?: string[]; validation?: { id: string; inputs: Record<string, string> }; required_checks: string[]; limits: { max_correction_cycles: number; timeout_seconds: number; max_runtime_seconds?: number };
 };
 
 export const emptyRecipe = (): RecipeDocument => ({
-  schema_version: "blaxsmith.recipe/v1alpha1", name: "new-recipe",
+  schema_version: "blaxsmith.recipe/v1alpha1", acceptance: "manual", name: "new-recipe",
   profiles: { architect: { harness: "claude-code", model: "opus", effort: "high" } },
   stages: [
     { id: "plan", kind: "plan", profile: "architect", prompt: "prompts/plan.md" },
-    { id: "human-review", kind: "human_review", depends_on: ["plan"] },
   ],
-  required_checks: ["project-tests"], limits: { max_correction_cycles: 3, timeout_seconds: 1800, max_runtime_seconds: 0 },
+  required_checks: [], limits: { max_correction_cycles: 3, timeout_seconds: 1800, max_runtime_seconds: 0 },
 });
 
 export function parseRecipe(json: string): RecipeDocument | null {
@@ -82,14 +81,14 @@ export function parseRecipe(json: string): RecipeDocument | null {
 export const formatRecipe = (doc: RecipeDocument) => `${JSON.stringify(doc, null, 2)}\n`;
 
 // Stage rows for the read-only DAG view, in server topological order when known.
-export type StageRow = { id: string; kind: string; profile: string; harness: string; model: string; effort: string; dependsOn: string[]; loop: string; template: string };
+export type StageRow = { id: string; kind: string; profile: string; harness: string; model: string; effort: string; dependsOn: string[]; loop: string; template: string; mode: string };
 export function stageRows(doc: RecipeDocument | null, order: string[] = []): StageRow[] {
   if (!doc) return [];
   const rows = doc.stages.map((stage) => {
-    const profile = stage.profile ? doc.profiles?.[stage.profile] : undefined;
-    return { id: stage.id, kind: stage.kind, profile: stage.profile || "", harness: profile?.harness || "", model: profile?.model || "",
+    const profile = stage.kind !== "verify" && stage.profile ? doc.profiles?.[stage.profile] : undefined;
+    return { id: stage.id, kind: stage.kind, profile: stage.kind === "verify" ? "Platform checks · no model invocation" : stage.profile || "", harness: profile?.harness || "", model: profile?.model || "",
       effort: profile?.effort || "", dependsOn: stage.depends_on || [],
-      loop: stage.loop ? `${stage.loop.with} until ${stage.loop.until} · ≤${stage.loop.max_cycles}` : "", template: stage.template || "" };
+      mode: stage.mode || "required", loop: stage.loop ? `${stage.loop.with} until ${stage.loop.until} · ≤${stage.loop.max_cycles}` : "", template: stage.template || "" };
   });
   if (!order.length) return rows;
   const rank = new Map(order.map((id, index) => [id, index]));

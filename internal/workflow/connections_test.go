@@ -156,7 +156,7 @@ func TestConnectionGrantVisibilityAndSecretsNeverReturned(t *testing.T) {
 	if err != nil || use.GranteeKind != "workload" {
 		t.Fatalf("use: %+v %v", use, err)
 	}
-	selection, err := store.ResolveModelGrant(tenant.System(t.Context()), org, granted, member.PrincipalID, "openai", "gpt-5")
+	selection, err := store.ResolveModelGrant(tenant.System(t.Context()), org, granted, member.PrincipalID, "openai", "gpt-5", "")
 	if err != nil || selection.GrantID != use.ID || selection.GranteeKind != "workload" || selection.SelectionID == "" {
 		t.Fatalf("project run did not resolve the use: %+v %v", selection, err)
 	}
@@ -195,7 +195,7 @@ func TestConnectionGrantVisibilityAndSecretsNeverReturned(t *testing.T) {
 	if available("member", granted) != 0 {
 		t.Fatal("revoked project grant stayed visible")
 	}
-	if _, err := store.ResolveModelGrant(tenant.System(t.Context()), org, granted, member.PrincipalID, "openai", "gpt-5"); !errors.Is(err, ErrNotFound) {
+	if _, err := store.ResolveModelGrant(tenant.System(t.Context()), org, granted, member.PrincipalID, "openai", "gpt-5", ""); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("revoking the project grant left the project's use live: %v", err)
 	}
 }
@@ -239,7 +239,7 @@ func TestPersonalGrantHonouredOnlyForItsOwnersRuns(t *testing.T) {
 	}
 	resolve := func(initiator string) ProjectModelGrant {
 		t.Helper()
-		g, err := store.ResolveModelGrant(tenant.System(t.Context()), org, project, initiator, "openai", "gpt-5")
+		g, err := store.ResolveModelGrant(tenant.System(t.Context()), org, project, initiator, "openai", "gpt-5", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -254,10 +254,38 @@ func TestPersonalGrantHonouredOnlyForItsOwnersRuns(t *testing.T) {
 	if g := resolve(""); g.GrantID != companyUse.ID {
 		t.Fatalf("a run without an initiator used a personal grant: %+v", g)
 	}
+	// Catalog metadata uses invocation grants, even for members without
+	// organization connection-management access; only granted models appear.
+	for _, item := range []struct {
+		caller identity.Caller
+		count  int
+	}{{alice, 2}, {bob, 1}} {
+		options, err := store.ProjectModelOptions(tenant.System(t.Context()), item.caller, project, "codex")
+		if err != nil || len(options) != item.count {
+			t.Fatalf("project catalog: %+v %v", options, err)
+		}
+		for _, option := range options {
+			if len(option.Models) != 1 || option.Models[0].ID != "gpt-5" {
+				t.Fatalf("ungranted model listed: %+v", option)
+			}
+		}
+	}
+	if g, err := store.ResolveModelGrant(tenant.System(t.Context()), org, project, alice.PrincipalID, "openai", "gpt-5", company.ID); err != nil || g.GrantID != companyUse.ID {
+		t.Fatalf("explicit company account ignored: %+v %v", g, err)
+	}
+	if _, err := store.ResolveModelGrant(tenant.System(t.Context()), org, project, bob.PrincipalID, "openai", "gpt-5", personal.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("another user's pinned account allowed: %v", err)
+	}
+	if _, err := store.ResolveModelGrant(tenant.System(t.Context()), org, project, alice.PrincipalID, "openai", "gpt-5", "missing-account"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing pin silently fell back: %v", err)
+	}
 	// A grant naming alice on someone else's connection is not personal.
 	if _, err := pool.Exec(tenant.System(t.Context()), `UPDATE access_connections SET owner_id=$3 WHERE organization_id=$1 AND id=$2`,
 		org, personal.ID, bob.PrincipalID); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := store.ResolveModelGrant(tenant.System(t.Context()), org, project, alice.PrincipalID, "openai", "gpt-5", personal.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("changed ownership silently fell back: %v", err)
 	}
 	if g := resolve(alice.PrincipalID); g.GrantID != companyUse.ID {
 		t.Fatalf("a user grant on a connection alice does not own was honoured: %+v", g)

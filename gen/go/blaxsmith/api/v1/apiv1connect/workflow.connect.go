@@ -33,9 +33,83 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// WorkflowServiceListGoalCheckpointsProcedure is the fully-qualified name of the WorkflowService's
+	// ListGoalCheckpoints RPC.
+	WorkflowServiceListGoalCheckpointsProcedure = "/blaxsmith.api.v1.WorkflowService/ListGoalCheckpoints"
+	// WorkflowServiceRecordGoalCheckpointProcedure is the fully-qualified name of the WorkflowService's
+	// RecordGoalCheckpoint RPC.
+	WorkflowServiceRecordGoalCheckpointProcedure = "/blaxsmith.api.v1.WorkflowService/RecordGoalCheckpoint"
+	// WorkflowServiceGetRunUsageProcedure is the fully-qualified name of the WorkflowService's
+	// GetRunUsage RPC.
+	WorkflowServiceGetRunUsageProcedure = "/blaxsmith.api.v1.WorkflowService/GetRunUsage"
+	// WorkflowServiceGetGoalUsageProcedure is the fully-qualified name of the WorkflowService's
+	// GetGoalUsage RPC.
+	WorkflowServiceGetGoalUsageProcedure = "/blaxsmith.api.v1.WorkflowService/GetGoalUsage"
+	// WorkflowServiceCreateServicePrincipalProcedure is the fully-qualified name of the
+	// WorkflowService's CreateServicePrincipal RPC.
+	WorkflowServiceCreateServicePrincipalProcedure = "/blaxsmith.api.v1.WorkflowService/CreateServicePrincipal"
+	// WorkflowServiceListServicePrincipalsProcedure is the fully-qualified name of the
+	// WorkflowService's ListServicePrincipals RPC.
+	WorkflowServiceListServicePrincipalsProcedure = "/blaxsmith.api.v1.WorkflowService/ListServicePrincipals"
+	// WorkflowServiceDisableServicePrincipalProcedure is the fully-qualified name of the
+	// WorkflowService's DisableServicePrincipal RPC.
+	WorkflowServiceDisableServicePrincipalProcedure = "/blaxsmith.api.v1.WorkflowService/DisableServicePrincipal"
+	// WorkflowServiceGetProjectModelOptionsProcedure is the fully-qualified name of the
+	// WorkflowService's GetProjectModelOptions RPC.
+	WorkflowServiceGetProjectModelOptionsProcedure = "/blaxsmith.api.v1.WorkflowService/GetProjectModelOptions"
+	// WorkflowServiceGetGoalControlProcedure is the fully-qualified name of the WorkflowService's
+	// GetGoalControl RPC.
+	WorkflowServiceGetGoalControlProcedure = "/blaxsmith.api.v1.WorkflowService/GetGoalControl"
+	// WorkflowServiceControlGoalProcedure is the fully-qualified name of the WorkflowService's
+	// ControlGoal RPC.
+	WorkflowServiceControlGoalProcedure = "/blaxsmith.api.v1.WorkflowService/ControlGoal"
+	// WorkflowServiceGetGoalAllowanceProcedure is the fully-qualified name of the WorkflowService's
+	// GetGoalAllowance RPC.
+	WorkflowServiceGetGoalAllowanceProcedure = "/blaxsmith.api.v1.WorkflowService/GetGoalAllowance"
+	// WorkflowServiceSetGoalAllowanceProcedure is the fully-qualified name of the WorkflowService's
+	// SetGoalAllowance RPC.
+	WorkflowServiceSetGoalAllowanceProcedure = "/blaxsmith.api.v1.WorkflowService/SetGoalAllowance"
+	// WorkflowServiceDescribeMachineAccessProcedure is the fully-qualified name of the
+	// WorkflowService's DescribeMachineAccess RPC.
+	WorkflowServiceDescribeMachineAccessProcedure = "/blaxsmith.api.v1.WorkflowService/DescribeMachineAccess"
+	// WorkflowServiceCreateApiTokenProcedure is the fully-qualified name of the WorkflowService's
+	// CreateApiToken RPC.
+	WorkflowServiceCreateApiTokenProcedure = "/blaxsmith.api.v1.WorkflowService/CreateApiToken"
+	// WorkflowServiceListApiTokensProcedure is the fully-qualified name of the WorkflowService's
+	// ListApiTokens RPC.
+	WorkflowServiceListApiTokensProcedure = "/blaxsmith.api.v1.WorkflowService/ListApiTokens"
+	// WorkflowServiceRevokeApiTokenProcedure is the fully-qualified name of the WorkflowService's
+	// RevokeApiToken RPC.
+	WorkflowServiceRevokeApiTokenProcedure = "/blaxsmith.api.v1.WorkflowService/RevokeApiToken"
+	// WorkflowServiceListRunEvidenceProcedure is the fully-qualified name of the WorkflowService's
+	// ListRunEvidence RPC.
+	WorkflowServiceListRunEvidenceProcedure = "/blaxsmith.api.v1.WorkflowService/ListRunEvidence"
+	// WorkflowServiceGetEvidenceContentProcedure is the fully-qualified name of the WorkflowService's
+	// GetEvidenceContent RPC.
+	WorkflowServiceGetEvidenceContentProcedure = "/blaxsmith.api.v1.WorkflowService/GetEvidenceContent"
 	// WorkflowServiceCreateProjectProcedure is the fully-qualified name of the WorkflowService's
 	// CreateProject RPC.
 	WorkflowServiceCreateProjectProcedure = "/blaxsmith.api.v1.WorkflowService/CreateProject"
+	// WorkflowServiceStartGoalPlanningProcedure is the fully-qualified name of the WorkflowService's
+	// StartGoalPlanning RPC.
+	WorkflowServiceStartGoalPlanningProcedure = "/blaxsmith.api.v1.WorkflowService/StartGoalPlanning"
+	// WorkflowServiceGetGoalPlansProcedure is the fully-qualified name of the WorkflowService's
+	// GetGoalPlans RPC.
+	WorkflowServiceGetGoalPlansProcedure = "/blaxsmith.api.v1.WorkflowService/GetGoalPlans"
+	// WorkflowServiceSaveGoalPlanProcedure is the fully-qualified name of the WorkflowService's
+	// SaveGoalPlan RPC.
+	WorkflowServiceSaveGoalPlanProcedure = "/blaxsmith.api.v1.WorkflowService/SaveGoalPlan"
+	// WorkflowServiceCreateGoalProcedure is the fully-qualified name of the WorkflowService's
+	// CreateGoal RPC.
+	WorkflowServiceCreateGoalProcedure = "/blaxsmith.api.v1.WorkflowService/CreateGoal"
+	// WorkflowServiceListGoalsProcedure is the fully-qualified name of the WorkflowService's ListGoals
+	// RPC.
+	WorkflowServiceListGoalsProcedure = "/blaxsmith.api.v1.WorkflowService/ListGoals"
+	// WorkflowServiceGetGoalProcedure is the fully-qualified name of the WorkflowService's GetGoal RPC.
+	WorkflowServiceGetGoalProcedure = "/blaxsmith.api.v1.WorkflowService/GetGoal"
+	// WorkflowServiceReplyGoalProcedure is the fully-qualified name of the WorkflowService's ReplyGoal
+	// RPC.
+	WorkflowServiceReplyGoalProcedure = "/blaxsmith.api.v1.WorkflowService/ReplyGoal"
 	// WorkflowServiceGetProjectProcedure is the fully-qualified name of the WorkflowService's
 	// GetProject RPC.
 	WorkflowServiceGetProjectProcedure = "/blaxsmith.api.v1.WorkflowService/GetProject"
@@ -54,6 +128,9 @@ const (
 	// WorkflowServiceGetProjectVerificationProcedure is the fully-qualified name of the
 	// WorkflowService's GetProjectVerification RPC.
 	WorkflowServiceGetProjectVerificationProcedure = "/blaxsmith.api.v1.WorkflowService/GetProjectVerification"
+	// WorkflowServiceListProjectVerificationHistoryProcedure is the fully-qualified name of the
+	// WorkflowService's ListProjectVerificationHistory RPC.
+	WorkflowServiceListProjectVerificationHistoryProcedure = "/blaxsmith.api.v1.WorkflowService/ListProjectVerificationHistory"
 	// WorkflowServiceSetProjectVerificationProcedure is the fully-qualified name of the
 	// WorkflowService's SetProjectVerification RPC.
 	WorkflowServiceSetProjectVerificationProcedure = "/blaxsmith.api.v1.WorkflowService/SetProjectVerification"
@@ -78,8 +155,17 @@ const (
 	// WorkflowServiceListProjectsProcedure is the fully-qualified name of the WorkflowService's
 	// ListProjects RPC.
 	WorkflowServiceListProjectsProcedure = "/blaxsmith.api.v1.WorkflowService/ListProjects"
+	// WorkflowServiceGetDeliveryReportProcedure is the fully-qualified name of the WorkflowService's
+	// GetDeliveryReport RPC.
+	WorkflowServiceGetDeliveryReportProcedure = "/blaxsmith.api.v1.WorkflowService/GetDeliveryReport"
 	// WorkflowServiceGetRunProcedure is the fully-qualified name of the WorkflowService's GetRun RPC.
 	WorkflowServiceGetRunProcedure = "/blaxsmith.api.v1.WorkflowService/GetRun"
+	// WorkflowServiceGetPlatformCapabilitiesProcedure is the fully-qualified name of the
+	// WorkflowService's GetPlatformCapabilities RPC.
+	WorkflowServiceGetPlatformCapabilitiesProcedure = "/blaxsmith.api.v1.WorkflowService/GetPlatformCapabilities"
+	// WorkflowServicePreviewRunProcedure is the fully-qualified name of the WorkflowService's
+	// PreviewRun RPC.
+	WorkflowServicePreviewRunProcedure = "/blaxsmith.api.v1.WorkflowService/PreviewRun"
 	// WorkflowServiceLaunchRunProcedure is the fully-qualified name of the WorkflowService's LaunchRun
 	// RPC.
 	WorkflowServiceLaunchRunProcedure = "/blaxsmith.api.v1.WorkflowService/LaunchRun"
@@ -126,13 +212,39 @@ const (
 
 // WorkflowServiceClient is a client for the blaxsmith.api.v1.WorkflowService service.
 type WorkflowServiceClient interface {
+	ListGoalCheckpoints(context.Context, *connect.Request[v1.ListGoalCheckpointsRequest]) (*connect.Response[v1.ListGoalCheckpointsResponse], error)
+	RecordGoalCheckpoint(context.Context, *connect.Request[v1.RecordGoalCheckpointRequest]) (*connect.Response[v1.RecordGoalCheckpointResponse], error)
+	GetRunUsage(context.Context, *connect.Request[v1.GetRunUsageRequest]) (*connect.Response[v1.GetRunUsageResponse], error)
+	GetGoalUsage(context.Context, *connect.Request[v1.GetGoalUsageRequest]) (*connect.Response[v1.GetGoalUsageResponse], error)
+	CreateServicePrincipal(context.Context, *connect.Request[v1.CreateServicePrincipalRequest]) (*connect.Response[v1.CreateServicePrincipalResponse], error)
+	ListServicePrincipals(context.Context, *connect.Request[v1.ListServicePrincipalsRequest]) (*connect.Response[v1.ListServicePrincipalsResponse], error)
+	DisableServicePrincipal(context.Context, *connect.Request[v1.DisableServicePrincipalRequest]) (*connect.Response[v1.DisableServicePrincipalResponse], error)
+	GetProjectModelOptions(context.Context, *connect.Request[v1.GetProjectModelOptionsRequest]) (*connect.Response[v1.GetProjectModelOptionsResponse], error)
+	GetGoalControl(context.Context, *connect.Request[v1.GetGoalControlRequest]) (*connect.Response[v1.GetGoalControlResponse], error)
+	ControlGoal(context.Context, *connect.Request[v1.ControlGoalRequest]) (*connect.Response[v1.ControlGoalResponse], error)
+	GetGoalAllowance(context.Context, *connect.Request[v1.GetGoalAllowanceRequest]) (*connect.Response[v1.GetGoalAllowanceResponse], error)
+	SetGoalAllowance(context.Context, *connect.Request[v1.SetGoalAllowanceRequest]) (*connect.Response[v1.SetGoalAllowanceResponse], error)
+	DescribeMachineAccess(context.Context, *connect.Request[v1.DescribeMachineAccessRequest]) (*connect.Response[v1.DescribeMachineAccessResponse], error)
+	CreateApiToken(context.Context, *connect.Request[v1.CreateApiTokenRequest]) (*connect.Response[v1.CreateApiTokenResponse], error)
+	ListApiTokens(context.Context, *connect.Request[v1.ListApiTokensRequest]) (*connect.Response[v1.ListApiTokensResponse], error)
+	RevokeApiToken(context.Context, *connect.Request[v1.RevokeApiTokenRequest]) (*connect.Response[v1.RevokeApiTokenResponse], error)
+	ListRunEvidence(context.Context, *connect.Request[v1.ListRunEvidenceRequest]) (*connect.Response[v1.ListRunEvidenceResponse], error)
+	GetEvidenceContent(context.Context, *connect.Request[v1.GetEvidenceContentRequest]) (*connect.Response[v1.GetEvidenceContentResponse], error)
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
+	StartGoalPlanning(context.Context, *connect.Request[v1.StartGoalPlanningRequest]) (*connect.Response[v1.StartGoalPlanningResponse], error)
+	GetGoalPlans(context.Context, *connect.Request[v1.GetGoalPlansRequest]) (*connect.Response[v1.GetGoalPlansResponse], error)
+	SaveGoalPlan(context.Context, *connect.Request[v1.SaveGoalPlanRequest]) (*connect.Response[v1.SaveGoalPlanResponse], error)
+	CreateGoal(context.Context, *connect.Request[v1.CreateGoalRequest]) (*connect.Response[v1.CreateGoalResponse], error)
+	ListGoals(context.Context, *connect.Request[v1.ListGoalsRequest]) (*connect.Response[v1.ListGoalsResponse], error)
+	GetGoal(context.Context, *connect.Request[v1.GetGoalRequest]) (*connect.Response[v1.GetGoalResponse], error)
+	ReplyGoal(context.Context, *connect.Request[v1.ReplyGoalRequest]) (*connect.Response[v1.ReplyGoalResponse], error)
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
 	GetProjectSource(context.Context, *connect.Request[v1.GetProjectSourceRequest]) (*connect.Response[v1.GetProjectSourceResponse], error)
 	SetProjectSource(context.Context, *connect.Request[v1.SetProjectSourceRequest]) (*connect.Response[v1.SetProjectSourceResponse], error)
 	ListGitConnections(context.Context, *connect.Request[v1.ListGitConnectionsRequest]) (*connect.Response[v1.ListGitConnectionsResponse], error)
 	CreateGitConnection(context.Context, *connect.Request[v1.CreateGitConnectionRequest]) (*connect.Response[v1.CreateGitConnectionResponse], error)
 	GetProjectVerification(context.Context, *connect.Request[v1.GetProjectVerificationRequest]) (*connect.Response[v1.GetProjectVerificationResponse], error)
+	ListProjectVerificationHistory(context.Context, *connect.Request[v1.ListProjectVerificationHistoryRequest]) (*connect.Response[v1.ListProjectVerificationHistoryResponse], error)
 	SetProjectVerification(context.Context, *connect.Request[v1.SetProjectVerificationRequest]) (*connect.Response[v1.SetProjectVerificationResponse], error)
 	ListProjectModelAccess(context.Context, *connect.Request[v1.ListProjectModelAccessRequest]) (*connect.Response[v1.ListProjectModelAccessResponse], error)
 	CreateProjectModelAccess(context.Context, *connect.Request[v1.CreateProjectModelAccessRequest]) (*connect.Response[v1.CreateProjectModelAccessResponse], error)
@@ -141,7 +253,10 @@ type WorkflowServiceClient interface {
 	CreateSubscriptionConnection(context.Context, *connect.Request[v1.CreateSubscriptionConnectionRequest]) (*connect.Response[v1.CreateSubscriptionConnectionResponse], error)
 	RevokeSubscriptionConnection(context.Context, *connect.Request[v1.RevokeSubscriptionConnectionRequest]) (*connect.Response[v1.RevokeSubscriptionConnectionResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
+	GetDeliveryReport(context.Context, *connect.Request[v1.GetDeliveryReportRequest]) (*connect.Response[v1.GetDeliveryReportResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
+	GetPlatformCapabilities(context.Context, *connect.Request[v1.GetPlatformCapabilitiesRequest]) (*connect.Response[v1.GetPlatformCapabilitiesResponse], error)
+	PreviewRun(context.Context, *connect.Request[v1.PreviewRunRequest]) (*connect.Response[v1.PreviewRunResponse], error)
 	LaunchRun(context.Context, *connect.Request[v1.LaunchRunRequest]) (*connect.Response[v1.LaunchRunResponse], error)
 	GetLaunchAvailability(context.Context, *connect.Request[v1.GetLaunchAvailabilityRequest]) (*connect.Response[v1.GetLaunchAvailabilityResponse], error)
 	ListRunTasks(context.Context, *connect.Request[v1.ListRunTasksRequest]) (*connect.Response[v1.ListRunTasksResponse], error)
@@ -169,10 +284,160 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 	baseURL = strings.TrimRight(baseURL, "/")
 	workflowServiceMethods := v1.File_blaxsmith_api_v1_workflow_proto.Services().ByName("WorkflowService").Methods()
 	return &workflowServiceClient{
+		listGoalCheckpoints: connect.NewClient[v1.ListGoalCheckpointsRequest, v1.ListGoalCheckpointsResponse](
+			httpClient,
+			baseURL+WorkflowServiceListGoalCheckpointsProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ListGoalCheckpoints")),
+			connect.WithClientOptions(opts...),
+		),
+		recordGoalCheckpoint: connect.NewClient[v1.RecordGoalCheckpointRequest, v1.RecordGoalCheckpointResponse](
+			httpClient,
+			baseURL+WorkflowServiceRecordGoalCheckpointProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("RecordGoalCheckpoint")),
+			connect.WithClientOptions(opts...),
+		),
+		getRunUsage: connect.NewClient[v1.GetRunUsageRequest, v1.GetRunUsageResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetRunUsageProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetRunUsage")),
+			connect.WithClientOptions(opts...),
+		),
+		getGoalUsage: connect.NewClient[v1.GetGoalUsageRequest, v1.GetGoalUsageResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetGoalUsageProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetGoalUsage")),
+			connect.WithClientOptions(opts...),
+		),
+		createServicePrincipal: connect.NewClient[v1.CreateServicePrincipalRequest, v1.CreateServicePrincipalResponse](
+			httpClient,
+			baseURL+WorkflowServiceCreateServicePrincipalProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("CreateServicePrincipal")),
+			connect.WithClientOptions(opts...),
+		),
+		listServicePrincipals: connect.NewClient[v1.ListServicePrincipalsRequest, v1.ListServicePrincipalsResponse](
+			httpClient,
+			baseURL+WorkflowServiceListServicePrincipalsProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ListServicePrincipals")),
+			connect.WithClientOptions(opts...),
+		),
+		disableServicePrincipal: connect.NewClient[v1.DisableServicePrincipalRequest, v1.DisableServicePrincipalResponse](
+			httpClient,
+			baseURL+WorkflowServiceDisableServicePrincipalProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("DisableServicePrincipal")),
+			connect.WithClientOptions(opts...),
+		),
+		getProjectModelOptions: connect.NewClient[v1.GetProjectModelOptionsRequest, v1.GetProjectModelOptionsResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetProjectModelOptionsProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetProjectModelOptions")),
+			connect.WithClientOptions(opts...),
+		),
+		getGoalControl: connect.NewClient[v1.GetGoalControlRequest, v1.GetGoalControlResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetGoalControlProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetGoalControl")),
+			connect.WithClientOptions(opts...),
+		),
+		controlGoal: connect.NewClient[v1.ControlGoalRequest, v1.ControlGoalResponse](
+			httpClient,
+			baseURL+WorkflowServiceControlGoalProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ControlGoal")),
+			connect.WithClientOptions(opts...),
+		),
+		getGoalAllowance: connect.NewClient[v1.GetGoalAllowanceRequest, v1.GetGoalAllowanceResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetGoalAllowanceProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetGoalAllowance")),
+			connect.WithClientOptions(opts...),
+		),
+		setGoalAllowance: connect.NewClient[v1.SetGoalAllowanceRequest, v1.SetGoalAllowanceResponse](
+			httpClient,
+			baseURL+WorkflowServiceSetGoalAllowanceProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("SetGoalAllowance")),
+			connect.WithClientOptions(opts...),
+		),
+		describeMachineAccess: connect.NewClient[v1.DescribeMachineAccessRequest, v1.DescribeMachineAccessResponse](
+			httpClient,
+			baseURL+WorkflowServiceDescribeMachineAccessProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("DescribeMachineAccess")),
+			connect.WithClientOptions(opts...),
+		),
+		createApiToken: connect.NewClient[v1.CreateApiTokenRequest, v1.CreateApiTokenResponse](
+			httpClient,
+			baseURL+WorkflowServiceCreateApiTokenProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("CreateApiToken")),
+			connect.WithClientOptions(opts...),
+		),
+		listApiTokens: connect.NewClient[v1.ListApiTokensRequest, v1.ListApiTokensResponse](
+			httpClient,
+			baseURL+WorkflowServiceListApiTokensProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ListApiTokens")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeApiToken: connect.NewClient[v1.RevokeApiTokenRequest, v1.RevokeApiTokenResponse](
+			httpClient,
+			baseURL+WorkflowServiceRevokeApiTokenProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("RevokeApiToken")),
+			connect.WithClientOptions(opts...),
+		),
+		listRunEvidence: connect.NewClient[v1.ListRunEvidenceRequest, v1.ListRunEvidenceResponse](
+			httpClient,
+			baseURL+WorkflowServiceListRunEvidenceProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ListRunEvidence")),
+			connect.WithClientOptions(opts...),
+		),
+		getEvidenceContent: connect.NewClient[v1.GetEvidenceContentRequest, v1.GetEvidenceContentResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetEvidenceContentProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetEvidenceContent")),
+			connect.WithClientOptions(opts...),
+		),
 		createProject: connect.NewClient[v1.CreateProjectRequest, v1.CreateProjectResponse](
 			httpClient,
 			baseURL+WorkflowServiceCreateProjectProcedure,
 			connect.WithSchema(workflowServiceMethods.ByName("CreateProject")),
+			connect.WithClientOptions(opts...),
+		),
+		startGoalPlanning: connect.NewClient[v1.StartGoalPlanningRequest, v1.StartGoalPlanningResponse](
+			httpClient,
+			baseURL+WorkflowServiceStartGoalPlanningProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("StartGoalPlanning")),
+			connect.WithClientOptions(opts...),
+		),
+		getGoalPlans: connect.NewClient[v1.GetGoalPlansRequest, v1.GetGoalPlansResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetGoalPlansProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetGoalPlans")),
+			connect.WithClientOptions(opts...),
+		),
+		saveGoalPlan: connect.NewClient[v1.SaveGoalPlanRequest, v1.SaveGoalPlanResponse](
+			httpClient,
+			baseURL+WorkflowServiceSaveGoalPlanProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("SaveGoalPlan")),
+			connect.WithClientOptions(opts...),
+		),
+		createGoal: connect.NewClient[v1.CreateGoalRequest, v1.CreateGoalResponse](
+			httpClient,
+			baseURL+WorkflowServiceCreateGoalProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("CreateGoal")),
+			connect.WithClientOptions(opts...),
+		),
+		listGoals: connect.NewClient[v1.ListGoalsRequest, v1.ListGoalsResponse](
+			httpClient,
+			baseURL+WorkflowServiceListGoalsProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ListGoals")),
+			connect.WithClientOptions(opts...),
+		),
+		getGoal: connect.NewClient[v1.GetGoalRequest, v1.GetGoalResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetGoalProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetGoal")),
+			connect.WithClientOptions(opts...),
+		),
+		replyGoal: connect.NewClient[v1.ReplyGoalRequest, v1.ReplyGoalResponse](
+			httpClient,
+			baseURL+WorkflowServiceReplyGoalProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ReplyGoal")),
 			connect.WithClientOptions(opts...),
 		),
 		getProject: connect.NewClient[v1.GetProjectRequest, v1.GetProjectResponse](
@@ -209,6 +474,12 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			httpClient,
 			baseURL+WorkflowServiceGetProjectVerificationProcedure,
 			connect.WithSchema(workflowServiceMethods.ByName("GetProjectVerification")),
+			connect.WithClientOptions(opts...),
+		),
+		listProjectVerificationHistory: connect.NewClient[v1.ListProjectVerificationHistoryRequest, v1.ListProjectVerificationHistoryResponse](
+			httpClient,
+			baseURL+WorkflowServiceListProjectVerificationHistoryProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("ListProjectVerificationHistory")),
 			connect.WithClientOptions(opts...),
 		),
 		setProjectVerification: connect.NewClient[v1.SetProjectVerificationRequest, v1.SetProjectVerificationResponse](
@@ -259,10 +530,28 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(workflowServiceMethods.ByName("ListProjects")),
 			connect.WithClientOptions(opts...),
 		),
+		getDeliveryReport: connect.NewClient[v1.GetDeliveryReportRequest, v1.GetDeliveryReportResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetDeliveryReportProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetDeliveryReport")),
+			connect.WithClientOptions(opts...),
+		),
 		getRun: connect.NewClient[v1.GetRunRequest, v1.GetRunResponse](
 			httpClient,
 			baseURL+WorkflowServiceGetRunProcedure,
 			connect.WithSchema(workflowServiceMethods.ByName("GetRun")),
+			connect.WithClientOptions(opts...),
+		),
+		getPlatformCapabilities: connect.NewClient[v1.GetPlatformCapabilitiesRequest, v1.GetPlatformCapabilitiesResponse](
+			httpClient,
+			baseURL+WorkflowServiceGetPlatformCapabilitiesProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("GetPlatformCapabilities")),
+			connect.WithClientOptions(opts...),
+		),
+		previewRun: connect.NewClient[v1.PreviewRunRequest, v1.PreviewRunResponse](
+			httpClient,
+			baseURL+WorkflowServicePreviewRunProcedure,
+			connect.WithSchema(workflowServiceMethods.ByName("PreviewRun")),
 			connect.WithClientOptions(opts...),
 		),
 		launchRun: connect.NewClient[v1.LaunchRunRequest, v1.LaunchRunResponse](
@@ -354,41 +643,195 @@ func NewWorkflowServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 
 // workflowServiceClient implements WorkflowServiceClient.
 type workflowServiceClient struct {
-	createProject                *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
-	getProject                   *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
-	getProjectSource             *connect.Client[v1.GetProjectSourceRequest, v1.GetProjectSourceResponse]
-	setProjectSource             *connect.Client[v1.SetProjectSourceRequest, v1.SetProjectSourceResponse]
-	listGitConnections           *connect.Client[v1.ListGitConnectionsRequest, v1.ListGitConnectionsResponse]
-	createGitConnection          *connect.Client[v1.CreateGitConnectionRequest, v1.CreateGitConnectionResponse]
-	getProjectVerification       *connect.Client[v1.GetProjectVerificationRequest, v1.GetProjectVerificationResponse]
-	setProjectVerification       *connect.Client[v1.SetProjectVerificationRequest, v1.SetProjectVerificationResponse]
-	listProjectModelAccess       *connect.Client[v1.ListProjectModelAccessRequest, v1.ListProjectModelAccessResponse]
-	createProjectModelAccess     *connect.Client[v1.CreateProjectModelAccessRequest, v1.CreateProjectModelAccessResponse]
-	revokeProjectModelAccess     *connect.Client[v1.RevokeProjectModelAccessRequest, v1.RevokeProjectModelAccessResponse]
-	listSubscriptionConnections  *connect.Client[v1.ListSubscriptionConnectionsRequest, v1.ListSubscriptionConnectionsResponse]
-	createSubscriptionConnection *connect.Client[v1.CreateSubscriptionConnectionRequest, v1.CreateSubscriptionConnectionResponse]
-	revokeSubscriptionConnection *connect.Client[v1.RevokeSubscriptionConnectionRequest, v1.RevokeSubscriptionConnectionResponse]
-	listProjects                 *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
-	getRun                       *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
-	launchRun                    *connect.Client[v1.LaunchRunRequest, v1.LaunchRunResponse]
-	getLaunchAvailability        *connect.Client[v1.GetLaunchAvailabilityRequest, v1.GetLaunchAvailabilityResponse]
-	listRunTasks                 *connect.Client[v1.ListRunTasksRequest, v1.ListRunTasksResponse]
-	listRuns                     *connect.Client[v1.ListRunsRequest, v1.ListRunsResponse]
-	eventsAfter                  *connect.Client[v1.EventsAfterRequest, v1.EventsAfterResponse]
-	listCommandExits             *connect.Client[v1.ListCommandExitsRequest, v1.ListCommandExitsResponse]
-	getCurrentReview             *connect.Client[v1.GetCurrentReviewRequest, v1.GetCurrentReviewResponse]
-	decideReview                 *connect.Client[v1.DecideReviewRequest, v1.DecideReviewResponse]
-	getAttemptControl            *connect.Client[v1.GetAttemptControlRequest, v1.GetAttemptControlResponse]
-	takeOverAttempt              *connect.Client[v1.TakeOverAttemptRequest, v1.TakeOverAttemptResponse]
-	handBackAttempt              *connect.Client[v1.HandBackAttemptRequest, v1.HandBackAttemptResponse]
-	listInteractions             *connect.Client[v1.ListInteractionsRequest, v1.ListInteractionsResponse]
-	answerInteraction            *connect.Client[v1.AnswerInteractionRequest, v1.AnswerInteractionResponse]
-	steerAttempt                 *connect.Client[v1.SteerAttemptRequest, v1.SteerAttemptResponse]
+	listGoalCheckpoints            *connect.Client[v1.ListGoalCheckpointsRequest, v1.ListGoalCheckpointsResponse]
+	recordGoalCheckpoint           *connect.Client[v1.RecordGoalCheckpointRequest, v1.RecordGoalCheckpointResponse]
+	getRunUsage                    *connect.Client[v1.GetRunUsageRequest, v1.GetRunUsageResponse]
+	getGoalUsage                   *connect.Client[v1.GetGoalUsageRequest, v1.GetGoalUsageResponse]
+	createServicePrincipal         *connect.Client[v1.CreateServicePrincipalRequest, v1.CreateServicePrincipalResponse]
+	listServicePrincipals          *connect.Client[v1.ListServicePrincipalsRequest, v1.ListServicePrincipalsResponse]
+	disableServicePrincipal        *connect.Client[v1.DisableServicePrincipalRequest, v1.DisableServicePrincipalResponse]
+	getProjectModelOptions         *connect.Client[v1.GetProjectModelOptionsRequest, v1.GetProjectModelOptionsResponse]
+	getGoalControl                 *connect.Client[v1.GetGoalControlRequest, v1.GetGoalControlResponse]
+	controlGoal                    *connect.Client[v1.ControlGoalRequest, v1.ControlGoalResponse]
+	getGoalAllowance               *connect.Client[v1.GetGoalAllowanceRequest, v1.GetGoalAllowanceResponse]
+	setGoalAllowance               *connect.Client[v1.SetGoalAllowanceRequest, v1.SetGoalAllowanceResponse]
+	describeMachineAccess          *connect.Client[v1.DescribeMachineAccessRequest, v1.DescribeMachineAccessResponse]
+	createApiToken                 *connect.Client[v1.CreateApiTokenRequest, v1.CreateApiTokenResponse]
+	listApiTokens                  *connect.Client[v1.ListApiTokensRequest, v1.ListApiTokensResponse]
+	revokeApiToken                 *connect.Client[v1.RevokeApiTokenRequest, v1.RevokeApiTokenResponse]
+	listRunEvidence                *connect.Client[v1.ListRunEvidenceRequest, v1.ListRunEvidenceResponse]
+	getEvidenceContent             *connect.Client[v1.GetEvidenceContentRequest, v1.GetEvidenceContentResponse]
+	createProject                  *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
+	startGoalPlanning              *connect.Client[v1.StartGoalPlanningRequest, v1.StartGoalPlanningResponse]
+	getGoalPlans                   *connect.Client[v1.GetGoalPlansRequest, v1.GetGoalPlansResponse]
+	saveGoalPlan                   *connect.Client[v1.SaveGoalPlanRequest, v1.SaveGoalPlanResponse]
+	createGoal                     *connect.Client[v1.CreateGoalRequest, v1.CreateGoalResponse]
+	listGoals                      *connect.Client[v1.ListGoalsRequest, v1.ListGoalsResponse]
+	getGoal                        *connect.Client[v1.GetGoalRequest, v1.GetGoalResponse]
+	replyGoal                      *connect.Client[v1.ReplyGoalRequest, v1.ReplyGoalResponse]
+	getProject                     *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
+	getProjectSource               *connect.Client[v1.GetProjectSourceRequest, v1.GetProjectSourceResponse]
+	setProjectSource               *connect.Client[v1.SetProjectSourceRequest, v1.SetProjectSourceResponse]
+	listGitConnections             *connect.Client[v1.ListGitConnectionsRequest, v1.ListGitConnectionsResponse]
+	createGitConnection            *connect.Client[v1.CreateGitConnectionRequest, v1.CreateGitConnectionResponse]
+	getProjectVerification         *connect.Client[v1.GetProjectVerificationRequest, v1.GetProjectVerificationResponse]
+	listProjectVerificationHistory *connect.Client[v1.ListProjectVerificationHistoryRequest, v1.ListProjectVerificationHistoryResponse]
+	setProjectVerification         *connect.Client[v1.SetProjectVerificationRequest, v1.SetProjectVerificationResponse]
+	listProjectModelAccess         *connect.Client[v1.ListProjectModelAccessRequest, v1.ListProjectModelAccessResponse]
+	createProjectModelAccess       *connect.Client[v1.CreateProjectModelAccessRequest, v1.CreateProjectModelAccessResponse]
+	revokeProjectModelAccess       *connect.Client[v1.RevokeProjectModelAccessRequest, v1.RevokeProjectModelAccessResponse]
+	listSubscriptionConnections    *connect.Client[v1.ListSubscriptionConnectionsRequest, v1.ListSubscriptionConnectionsResponse]
+	createSubscriptionConnection   *connect.Client[v1.CreateSubscriptionConnectionRequest, v1.CreateSubscriptionConnectionResponse]
+	revokeSubscriptionConnection   *connect.Client[v1.RevokeSubscriptionConnectionRequest, v1.RevokeSubscriptionConnectionResponse]
+	listProjects                   *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
+	getDeliveryReport              *connect.Client[v1.GetDeliveryReportRequest, v1.GetDeliveryReportResponse]
+	getRun                         *connect.Client[v1.GetRunRequest, v1.GetRunResponse]
+	getPlatformCapabilities        *connect.Client[v1.GetPlatformCapabilitiesRequest, v1.GetPlatformCapabilitiesResponse]
+	previewRun                     *connect.Client[v1.PreviewRunRequest, v1.PreviewRunResponse]
+	launchRun                      *connect.Client[v1.LaunchRunRequest, v1.LaunchRunResponse]
+	getLaunchAvailability          *connect.Client[v1.GetLaunchAvailabilityRequest, v1.GetLaunchAvailabilityResponse]
+	listRunTasks                   *connect.Client[v1.ListRunTasksRequest, v1.ListRunTasksResponse]
+	listRuns                       *connect.Client[v1.ListRunsRequest, v1.ListRunsResponse]
+	eventsAfter                    *connect.Client[v1.EventsAfterRequest, v1.EventsAfterResponse]
+	listCommandExits               *connect.Client[v1.ListCommandExitsRequest, v1.ListCommandExitsResponse]
+	getCurrentReview               *connect.Client[v1.GetCurrentReviewRequest, v1.GetCurrentReviewResponse]
+	decideReview                   *connect.Client[v1.DecideReviewRequest, v1.DecideReviewResponse]
+	getAttemptControl              *connect.Client[v1.GetAttemptControlRequest, v1.GetAttemptControlResponse]
+	takeOverAttempt                *connect.Client[v1.TakeOverAttemptRequest, v1.TakeOverAttemptResponse]
+	handBackAttempt                *connect.Client[v1.HandBackAttemptRequest, v1.HandBackAttemptResponse]
+	listInteractions               *connect.Client[v1.ListInteractionsRequest, v1.ListInteractionsResponse]
+	answerInteraction              *connect.Client[v1.AnswerInteractionRequest, v1.AnswerInteractionResponse]
+	steerAttempt                   *connect.Client[v1.SteerAttemptRequest, v1.SteerAttemptResponse]
+}
+
+// ListGoalCheckpoints calls blaxsmith.api.v1.WorkflowService.ListGoalCheckpoints.
+func (c *workflowServiceClient) ListGoalCheckpoints(ctx context.Context, req *connect.Request[v1.ListGoalCheckpointsRequest]) (*connect.Response[v1.ListGoalCheckpointsResponse], error) {
+	return c.listGoalCheckpoints.CallUnary(ctx, req)
+}
+
+// RecordGoalCheckpoint calls blaxsmith.api.v1.WorkflowService.RecordGoalCheckpoint.
+func (c *workflowServiceClient) RecordGoalCheckpoint(ctx context.Context, req *connect.Request[v1.RecordGoalCheckpointRequest]) (*connect.Response[v1.RecordGoalCheckpointResponse], error) {
+	return c.recordGoalCheckpoint.CallUnary(ctx, req)
+}
+
+// GetRunUsage calls blaxsmith.api.v1.WorkflowService.GetRunUsage.
+func (c *workflowServiceClient) GetRunUsage(ctx context.Context, req *connect.Request[v1.GetRunUsageRequest]) (*connect.Response[v1.GetRunUsageResponse], error) {
+	return c.getRunUsage.CallUnary(ctx, req)
+}
+
+// GetGoalUsage calls blaxsmith.api.v1.WorkflowService.GetGoalUsage.
+func (c *workflowServiceClient) GetGoalUsage(ctx context.Context, req *connect.Request[v1.GetGoalUsageRequest]) (*connect.Response[v1.GetGoalUsageResponse], error) {
+	return c.getGoalUsage.CallUnary(ctx, req)
+}
+
+// CreateServicePrincipal calls blaxsmith.api.v1.WorkflowService.CreateServicePrincipal.
+func (c *workflowServiceClient) CreateServicePrincipal(ctx context.Context, req *connect.Request[v1.CreateServicePrincipalRequest]) (*connect.Response[v1.CreateServicePrincipalResponse], error) {
+	return c.createServicePrincipal.CallUnary(ctx, req)
+}
+
+// ListServicePrincipals calls blaxsmith.api.v1.WorkflowService.ListServicePrincipals.
+func (c *workflowServiceClient) ListServicePrincipals(ctx context.Context, req *connect.Request[v1.ListServicePrincipalsRequest]) (*connect.Response[v1.ListServicePrincipalsResponse], error) {
+	return c.listServicePrincipals.CallUnary(ctx, req)
+}
+
+// DisableServicePrincipal calls blaxsmith.api.v1.WorkflowService.DisableServicePrincipal.
+func (c *workflowServiceClient) DisableServicePrincipal(ctx context.Context, req *connect.Request[v1.DisableServicePrincipalRequest]) (*connect.Response[v1.DisableServicePrincipalResponse], error) {
+	return c.disableServicePrincipal.CallUnary(ctx, req)
+}
+
+// GetProjectModelOptions calls blaxsmith.api.v1.WorkflowService.GetProjectModelOptions.
+func (c *workflowServiceClient) GetProjectModelOptions(ctx context.Context, req *connect.Request[v1.GetProjectModelOptionsRequest]) (*connect.Response[v1.GetProjectModelOptionsResponse], error) {
+	return c.getProjectModelOptions.CallUnary(ctx, req)
+}
+
+// GetGoalControl calls blaxsmith.api.v1.WorkflowService.GetGoalControl.
+func (c *workflowServiceClient) GetGoalControl(ctx context.Context, req *connect.Request[v1.GetGoalControlRequest]) (*connect.Response[v1.GetGoalControlResponse], error) {
+	return c.getGoalControl.CallUnary(ctx, req)
+}
+
+// ControlGoal calls blaxsmith.api.v1.WorkflowService.ControlGoal.
+func (c *workflowServiceClient) ControlGoal(ctx context.Context, req *connect.Request[v1.ControlGoalRequest]) (*connect.Response[v1.ControlGoalResponse], error) {
+	return c.controlGoal.CallUnary(ctx, req)
+}
+
+// GetGoalAllowance calls blaxsmith.api.v1.WorkflowService.GetGoalAllowance.
+func (c *workflowServiceClient) GetGoalAllowance(ctx context.Context, req *connect.Request[v1.GetGoalAllowanceRequest]) (*connect.Response[v1.GetGoalAllowanceResponse], error) {
+	return c.getGoalAllowance.CallUnary(ctx, req)
+}
+
+// SetGoalAllowance calls blaxsmith.api.v1.WorkflowService.SetGoalAllowance.
+func (c *workflowServiceClient) SetGoalAllowance(ctx context.Context, req *connect.Request[v1.SetGoalAllowanceRequest]) (*connect.Response[v1.SetGoalAllowanceResponse], error) {
+	return c.setGoalAllowance.CallUnary(ctx, req)
+}
+
+// DescribeMachineAccess calls blaxsmith.api.v1.WorkflowService.DescribeMachineAccess.
+func (c *workflowServiceClient) DescribeMachineAccess(ctx context.Context, req *connect.Request[v1.DescribeMachineAccessRequest]) (*connect.Response[v1.DescribeMachineAccessResponse], error) {
+	return c.describeMachineAccess.CallUnary(ctx, req)
+}
+
+// CreateApiToken calls blaxsmith.api.v1.WorkflowService.CreateApiToken.
+func (c *workflowServiceClient) CreateApiToken(ctx context.Context, req *connect.Request[v1.CreateApiTokenRequest]) (*connect.Response[v1.CreateApiTokenResponse], error) {
+	return c.createApiToken.CallUnary(ctx, req)
+}
+
+// ListApiTokens calls blaxsmith.api.v1.WorkflowService.ListApiTokens.
+func (c *workflowServiceClient) ListApiTokens(ctx context.Context, req *connect.Request[v1.ListApiTokensRequest]) (*connect.Response[v1.ListApiTokensResponse], error) {
+	return c.listApiTokens.CallUnary(ctx, req)
+}
+
+// RevokeApiToken calls blaxsmith.api.v1.WorkflowService.RevokeApiToken.
+func (c *workflowServiceClient) RevokeApiToken(ctx context.Context, req *connect.Request[v1.RevokeApiTokenRequest]) (*connect.Response[v1.RevokeApiTokenResponse], error) {
+	return c.revokeApiToken.CallUnary(ctx, req)
+}
+
+// ListRunEvidence calls blaxsmith.api.v1.WorkflowService.ListRunEvidence.
+func (c *workflowServiceClient) ListRunEvidence(ctx context.Context, req *connect.Request[v1.ListRunEvidenceRequest]) (*connect.Response[v1.ListRunEvidenceResponse], error) {
+	return c.listRunEvidence.CallUnary(ctx, req)
+}
+
+// GetEvidenceContent calls blaxsmith.api.v1.WorkflowService.GetEvidenceContent.
+func (c *workflowServiceClient) GetEvidenceContent(ctx context.Context, req *connect.Request[v1.GetEvidenceContentRequest]) (*connect.Response[v1.GetEvidenceContentResponse], error) {
+	return c.getEvidenceContent.CallUnary(ctx, req)
 }
 
 // CreateProject calls blaxsmith.api.v1.WorkflowService.CreateProject.
 func (c *workflowServiceClient) CreateProject(ctx context.Context, req *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error) {
 	return c.createProject.CallUnary(ctx, req)
+}
+
+// StartGoalPlanning calls blaxsmith.api.v1.WorkflowService.StartGoalPlanning.
+func (c *workflowServiceClient) StartGoalPlanning(ctx context.Context, req *connect.Request[v1.StartGoalPlanningRequest]) (*connect.Response[v1.StartGoalPlanningResponse], error) {
+	return c.startGoalPlanning.CallUnary(ctx, req)
+}
+
+// GetGoalPlans calls blaxsmith.api.v1.WorkflowService.GetGoalPlans.
+func (c *workflowServiceClient) GetGoalPlans(ctx context.Context, req *connect.Request[v1.GetGoalPlansRequest]) (*connect.Response[v1.GetGoalPlansResponse], error) {
+	return c.getGoalPlans.CallUnary(ctx, req)
+}
+
+// SaveGoalPlan calls blaxsmith.api.v1.WorkflowService.SaveGoalPlan.
+func (c *workflowServiceClient) SaveGoalPlan(ctx context.Context, req *connect.Request[v1.SaveGoalPlanRequest]) (*connect.Response[v1.SaveGoalPlanResponse], error) {
+	return c.saveGoalPlan.CallUnary(ctx, req)
+}
+
+// CreateGoal calls blaxsmith.api.v1.WorkflowService.CreateGoal.
+func (c *workflowServiceClient) CreateGoal(ctx context.Context, req *connect.Request[v1.CreateGoalRequest]) (*connect.Response[v1.CreateGoalResponse], error) {
+	return c.createGoal.CallUnary(ctx, req)
+}
+
+// ListGoals calls blaxsmith.api.v1.WorkflowService.ListGoals.
+func (c *workflowServiceClient) ListGoals(ctx context.Context, req *connect.Request[v1.ListGoalsRequest]) (*connect.Response[v1.ListGoalsResponse], error) {
+	return c.listGoals.CallUnary(ctx, req)
+}
+
+// GetGoal calls blaxsmith.api.v1.WorkflowService.GetGoal.
+func (c *workflowServiceClient) GetGoal(ctx context.Context, req *connect.Request[v1.GetGoalRequest]) (*connect.Response[v1.GetGoalResponse], error) {
+	return c.getGoal.CallUnary(ctx, req)
+}
+
+// ReplyGoal calls blaxsmith.api.v1.WorkflowService.ReplyGoal.
+func (c *workflowServiceClient) ReplyGoal(ctx context.Context, req *connect.Request[v1.ReplyGoalRequest]) (*connect.Response[v1.ReplyGoalResponse], error) {
+	return c.replyGoal.CallUnary(ctx, req)
 }
 
 // GetProject calls blaxsmith.api.v1.WorkflowService.GetProject.
@@ -419,6 +862,12 @@ func (c *workflowServiceClient) CreateGitConnection(ctx context.Context, req *co
 // GetProjectVerification calls blaxsmith.api.v1.WorkflowService.GetProjectVerification.
 func (c *workflowServiceClient) GetProjectVerification(ctx context.Context, req *connect.Request[v1.GetProjectVerificationRequest]) (*connect.Response[v1.GetProjectVerificationResponse], error) {
 	return c.getProjectVerification.CallUnary(ctx, req)
+}
+
+// ListProjectVerificationHistory calls
+// blaxsmith.api.v1.WorkflowService.ListProjectVerificationHistory.
+func (c *workflowServiceClient) ListProjectVerificationHistory(ctx context.Context, req *connect.Request[v1.ListProjectVerificationHistoryRequest]) (*connect.Response[v1.ListProjectVerificationHistoryResponse], error) {
+	return c.listProjectVerificationHistory.CallUnary(ctx, req)
 }
 
 // SetProjectVerification calls blaxsmith.api.v1.WorkflowService.SetProjectVerification.
@@ -461,9 +910,24 @@ func (c *workflowServiceClient) ListProjects(ctx context.Context, req *connect.R
 	return c.listProjects.CallUnary(ctx, req)
 }
 
+// GetDeliveryReport calls blaxsmith.api.v1.WorkflowService.GetDeliveryReport.
+func (c *workflowServiceClient) GetDeliveryReport(ctx context.Context, req *connect.Request[v1.GetDeliveryReportRequest]) (*connect.Response[v1.GetDeliveryReportResponse], error) {
+	return c.getDeliveryReport.CallUnary(ctx, req)
+}
+
 // GetRun calls blaxsmith.api.v1.WorkflowService.GetRun.
 func (c *workflowServiceClient) GetRun(ctx context.Context, req *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error) {
 	return c.getRun.CallUnary(ctx, req)
+}
+
+// GetPlatformCapabilities calls blaxsmith.api.v1.WorkflowService.GetPlatformCapabilities.
+func (c *workflowServiceClient) GetPlatformCapabilities(ctx context.Context, req *connect.Request[v1.GetPlatformCapabilitiesRequest]) (*connect.Response[v1.GetPlatformCapabilitiesResponse], error) {
+	return c.getPlatformCapabilities.CallUnary(ctx, req)
+}
+
+// PreviewRun calls blaxsmith.api.v1.WorkflowService.PreviewRun.
+func (c *workflowServiceClient) PreviewRun(ctx context.Context, req *connect.Request[v1.PreviewRunRequest]) (*connect.Response[v1.PreviewRunResponse], error) {
+	return c.previewRun.CallUnary(ctx, req)
 }
 
 // LaunchRun calls blaxsmith.api.v1.WorkflowService.LaunchRun.
@@ -538,13 +1002,39 @@ func (c *workflowServiceClient) SteerAttempt(ctx context.Context, req *connect.R
 
 // WorkflowServiceHandler is an implementation of the blaxsmith.api.v1.WorkflowService service.
 type WorkflowServiceHandler interface {
+	ListGoalCheckpoints(context.Context, *connect.Request[v1.ListGoalCheckpointsRequest]) (*connect.Response[v1.ListGoalCheckpointsResponse], error)
+	RecordGoalCheckpoint(context.Context, *connect.Request[v1.RecordGoalCheckpointRequest]) (*connect.Response[v1.RecordGoalCheckpointResponse], error)
+	GetRunUsage(context.Context, *connect.Request[v1.GetRunUsageRequest]) (*connect.Response[v1.GetRunUsageResponse], error)
+	GetGoalUsage(context.Context, *connect.Request[v1.GetGoalUsageRequest]) (*connect.Response[v1.GetGoalUsageResponse], error)
+	CreateServicePrincipal(context.Context, *connect.Request[v1.CreateServicePrincipalRequest]) (*connect.Response[v1.CreateServicePrincipalResponse], error)
+	ListServicePrincipals(context.Context, *connect.Request[v1.ListServicePrincipalsRequest]) (*connect.Response[v1.ListServicePrincipalsResponse], error)
+	DisableServicePrincipal(context.Context, *connect.Request[v1.DisableServicePrincipalRequest]) (*connect.Response[v1.DisableServicePrincipalResponse], error)
+	GetProjectModelOptions(context.Context, *connect.Request[v1.GetProjectModelOptionsRequest]) (*connect.Response[v1.GetProjectModelOptionsResponse], error)
+	GetGoalControl(context.Context, *connect.Request[v1.GetGoalControlRequest]) (*connect.Response[v1.GetGoalControlResponse], error)
+	ControlGoal(context.Context, *connect.Request[v1.ControlGoalRequest]) (*connect.Response[v1.ControlGoalResponse], error)
+	GetGoalAllowance(context.Context, *connect.Request[v1.GetGoalAllowanceRequest]) (*connect.Response[v1.GetGoalAllowanceResponse], error)
+	SetGoalAllowance(context.Context, *connect.Request[v1.SetGoalAllowanceRequest]) (*connect.Response[v1.SetGoalAllowanceResponse], error)
+	DescribeMachineAccess(context.Context, *connect.Request[v1.DescribeMachineAccessRequest]) (*connect.Response[v1.DescribeMachineAccessResponse], error)
+	CreateApiToken(context.Context, *connect.Request[v1.CreateApiTokenRequest]) (*connect.Response[v1.CreateApiTokenResponse], error)
+	ListApiTokens(context.Context, *connect.Request[v1.ListApiTokensRequest]) (*connect.Response[v1.ListApiTokensResponse], error)
+	RevokeApiToken(context.Context, *connect.Request[v1.RevokeApiTokenRequest]) (*connect.Response[v1.RevokeApiTokenResponse], error)
+	ListRunEvidence(context.Context, *connect.Request[v1.ListRunEvidenceRequest]) (*connect.Response[v1.ListRunEvidenceResponse], error)
+	GetEvidenceContent(context.Context, *connect.Request[v1.GetEvidenceContentRequest]) (*connect.Response[v1.GetEvidenceContentResponse], error)
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
+	StartGoalPlanning(context.Context, *connect.Request[v1.StartGoalPlanningRequest]) (*connect.Response[v1.StartGoalPlanningResponse], error)
+	GetGoalPlans(context.Context, *connect.Request[v1.GetGoalPlansRequest]) (*connect.Response[v1.GetGoalPlansResponse], error)
+	SaveGoalPlan(context.Context, *connect.Request[v1.SaveGoalPlanRequest]) (*connect.Response[v1.SaveGoalPlanResponse], error)
+	CreateGoal(context.Context, *connect.Request[v1.CreateGoalRequest]) (*connect.Response[v1.CreateGoalResponse], error)
+	ListGoals(context.Context, *connect.Request[v1.ListGoalsRequest]) (*connect.Response[v1.ListGoalsResponse], error)
+	GetGoal(context.Context, *connect.Request[v1.GetGoalRequest]) (*connect.Response[v1.GetGoalResponse], error)
+	ReplyGoal(context.Context, *connect.Request[v1.ReplyGoalRequest]) (*connect.Response[v1.ReplyGoalResponse], error)
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
 	GetProjectSource(context.Context, *connect.Request[v1.GetProjectSourceRequest]) (*connect.Response[v1.GetProjectSourceResponse], error)
 	SetProjectSource(context.Context, *connect.Request[v1.SetProjectSourceRequest]) (*connect.Response[v1.SetProjectSourceResponse], error)
 	ListGitConnections(context.Context, *connect.Request[v1.ListGitConnectionsRequest]) (*connect.Response[v1.ListGitConnectionsResponse], error)
 	CreateGitConnection(context.Context, *connect.Request[v1.CreateGitConnectionRequest]) (*connect.Response[v1.CreateGitConnectionResponse], error)
 	GetProjectVerification(context.Context, *connect.Request[v1.GetProjectVerificationRequest]) (*connect.Response[v1.GetProjectVerificationResponse], error)
+	ListProjectVerificationHistory(context.Context, *connect.Request[v1.ListProjectVerificationHistoryRequest]) (*connect.Response[v1.ListProjectVerificationHistoryResponse], error)
 	SetProjectVerification(context.Context, *connect.Request[v1.SetProjectVerificationRequest]) (*connect.Response[v1.SetProjectVerificationResponse], error)
 	ListProjectModelAccess(context.Context, *connect.Request[v1.ListProjectModelAccessRequest]) (*connect.Response[v1.ListProjectModelAccessResponse], error)
 	CreateProjectModelAccess(context.Context, *connect.Request[v1.CreateProjectModelAccessRequest]) (*connect.Response[v1.CreateProjectModelAccessResponse], error)
@@ -553,7 +1043,10 @@ type WorkflowServiceHandler interface {
 	CreateSubscriptionConnection(context.Context, *connect.Request[v1.CreateSubscriptionConnectionRequest]) (*connect.Response[v1.CreateSubscriptionConnectionResponse], error)
 	RevokeSubscriptionConnection(context.Context, *connect.Request[v1.RevokeSubscriptionConnectionRequest]) (*connect.Response[v1.RevokeSubscriptionConnectionResponse], error)
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
+	GetDeliveryReport(context.Context, *connect.Request[v1.GetDeliveryReportRequest]) (*connect.Response[v1.GetDeliveryReportResponse], error)
 	GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error)
+	GetPlatformCapabilities(context.Context, *connect.Request[v1.GetPlatformCapabilitiesRequest]) (*connect.Response[v1.GetPlatformCapabilitiesResponse], error)
+	PreviewRun(context.Context, *connect.Request[v1.PreviewRunRequest]) (*connect.Response[v1.PreviewRunResponse], error)
 	LaunchRun(context.Context, *connect.Request[v1.LaunchRunRequest]) (*connect.Response[v1.LaunchRunResponse], error)
 	GetLaunchAvailability(context.Context, *connect.Request[v1.GetLaunchAvailabilityRequest]) (*connect.Response[v1.GetLaunchAvailabilityResponse], error)
 	ListRunTasks(context.Context, *connect.Request[v1.ListRunTasksRequest]) (*connect.Response[v1.ListRunTasksResponse], error)
@@ -577,10 +1070,160 @@ type WorkflowServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	workflowServiceMethods := v1.File_blaxsmith_api_v1_workflow_proto.Services().ByName("WorkflowService").Methods()
+	workflowServiceListGoalCheckpointsHandler := connect.NewUnaryHandler(
+		WorkflowServiceListGoalCheckpointsProcedure,
+		svc.ListGoalCheckpoints,
+		connect.WithSchema(workflowServiceMethods.ByName("ListGoalCheckpoints")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceRecordGoalCheckpointHandler := connect.NewUnaryHandler(
+		WorkflowServiceRecordGoalCheckpointProcedure,
+		svc.RecordGoalCheckpoint,
+		connect.WithSchema(workflowServiceMethods.ByName("RecordGoalCheckpoint")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceGetRunUsageHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetRunUsageProcedure,
+		svc.GetRunUsage,
+		connect.WithSchema(workflowServiceMethods.ByName("GetRunUsage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceGetGoalUsageHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetGoalUsageProcedure,
+		svc.GetGoalUsage,
+		connect.WithSchema(workflowServiceMethods.ByName("GetGoalUsage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceCreateServicePrincipalHandler := connect.NewUnaryHandler(
+		WorkflowServiceCreateServicePrincipalProcedure,
+		svc.CreateServicePrincipal,
+		connect.WithSchema(workflowServiceMethods.ByName("CreateServicePrincipal")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceListServicePrincipalsHandler := connect.NewUnaryHandler(
+		WorkflowServiceListServicePrincipalsProcedure,
+		svc.ListServicePrincipals,
+		connect.WithSchema(workflowServiceMethods.ByName("ListServicePrincipals")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceDisableServicePrincipalHandler := connect.NewUnaryHandler(
+		WorkflowServiceDisableServicePrincipalProcedure,
+		svc.DisableServicePrincipal,
+		connect.WithSchema(workflowServiceMethods.ByName("DisableServicePrincipal")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceGetProjectModelOptionsHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetProjectModelOptionsProcedure,
+		svc.GetProjectModelOptions,
+		connect.WithSchema(workflowServiceMethods.ByName("GetProjectModelOptions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceGetGoalControlHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetGoalControlProcedure,
+		svc.GetGoalControl,
+		connect.WithSchema(workflowServiceMethods.ByName("GetGoalControl")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceControlGoalHandler := connect.NewUnaryHandler(
+		WorkflowServiceControlGoalProcedure,
+		svc.ControlGoal,
+		connect.WithSchema(workflowServiceMethods.ByName("ControlGoal")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceGetGoalAllowanceHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetGoalAllowanceProcedure,
+		svc.GetGoalAllowance,
+		connect.WithSchema(workflowServiceMethods.ByName("GetGoalAllowance")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceSetGoalAllowanceHandler := connect.NewUnaryHandler(
+		WorkflowServiceSetGoalAllowanceProcedure,
+		svc.SetGoalAllowance,
+		connect.WithSchema(workflowServiceMethods.ByName("SetGoalAllowance")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceDescribeMachineAccessHandler := connect.NewUnaryHandler(
+		WorkflowServiceDescribeMachineAccessProcedure,
+		svc.DescribeMachineAccess,
+		connect.WithSchema(workflowServiceMethods.ByName("DescribeMachineAccess")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceCreateApiTokenHandler := connect.NewUnaryHandler(
+		WorkflowServiceCreateApiTokenProcedure,
+		svc.CreateApiToken,
+		connect.WithSchema(workflowServiceMethods.ByName("CreateApiToken")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceListApiTokensHandler := connect.NewUnaryHandler(
+		WorkflowServiceListApiTokensProcedure,
+		svc.ListApiTokens,
+		connect.WithSchema(workflowServiceMethods.ByName("ListApiTokens")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceRevokeApiTokenHandler := connect.NewUnaryHandler(
+		WorkflowServiceRevokeApiTokenProcedure,
+		svc.RevokeApiToken,
+		connect.WithSchema(workflowServiceMethods.ByName("RevokeApiToken")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceListRunEvidenceHandler := connect.NewUnaryHandler(
+		WorkflowServiceListRunEvidenceProcedure,
+		svc.ListRunEvidence,
+		connect.WithSchema(workflowServiceMethods.ByName("ListRunEvidence")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceGetEvidenceContentHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetEvidenceContentProcedure,
+		svc.GetEvidenceContent,
+		connect.WithSchema(workflowServiceMethods.ByName("GetEvidenceContent")),
+		connect.WithHandlerOptions(opts...),
+	)
 	workflowServiceCreateProjectHandler := connect.NewUnaryHandler(
 		WorkflowServiceCreateProjectProcedure,
 		svc.CreateProject,
 		connect.WithSchema(workflowServiceMethods.ByName("CreateProject")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceStartGoalPlanningHandler := connect.NewUnaryHandler(
+		WorkflowServiceStartGoalPlanningProcedure,
+		svc.StartGoalPlanning,
+		connect.WithSchema(workflowServiceMethods.ByName("StartGoalPlanning")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceGetGoalPlansHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetGoalPlansProcedure,
+		svc.GetGoalPlans,
+		connect.WithSchema(workflowServiceMethods.ByName("GetGoalPlans")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceSaveGoalPlanHandler := connect.NewUnaryHandler(
+		WorkflowServiceSaveGoalPlanProcedure,
+		svc.SaveGoalPlan,
+		connect.WithSchema(workflowServiceMethods.ByName("SaveGoalPlan")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceCreateGoalHandler := connect.NewUnaryHandler(
+		WorkflowServiceCreateGoalProcedure,
+		svc.CreateGoal,
+		connect.WithSchema(workflowServiceMethods.ByName("CreateGoal")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceListGoalsHandler := connect.NewUnaryHandler(
+		WorkflowServiceListGoalsProcedure,
+		svc.ListGoals,
+		connect.WithSchema(workflowServiceMethods.ByName("ListGoals")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceGetGoalHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetGoalProcedure,
+		svc.GetGoal,
+		connect.WithSchema(workflowServiceMethods.ByName("GetGoal")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceReplyGoalHandler := connect.NewUnaryHandler(
+		WorkflowServiceReplyGoalProcedure,
+		svc.ReplyGoal,
+		connect.WithSchema(workflowServiceMethods.ByName("ReplyGoal")),
 		connect.WithHandlerOptions(opts...),
 	)
 	workflowServiceGetProjectHandler := connect.NewUnaryHandler(
@@ -617,6 +1260,12 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		WorkflowServiceGetProjectVerificationProcedure,
 		svc.GetProjectVerification,
 		connect.WithSchema(workflowServiceMethods.ByName("GetProjectVerification")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceListProjectVerificationHistoryHandler := connect.NewUnaryHandler(
+		WorkflowServiceListProjectVerificationHistoryProcedure,
+		svc.ListProjectVerificationHistory,
+		connect.WithSchema(workflowServiceMethods.ByName("ListProjectVerificationHistory")),
 		connect.WithHandlerOptions(opts...),
 	)
 	workflowServiceSetProjectVerificationHandler := connect.NewUnaryHandler(
@@ -667,10 +1316,28 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 		connect.WithSchema(workflowServiceMethods.ByName("ListProjects")),
 		connect.WithHandlerOptions(opts...),
 	)
+	workflowServiceGetDeliveryReportHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetDeliveryReportProcedure,
+		svc.GetDeliveryReport,
+		connect.WithSchema(workflowServiceMethods.ByName("GetDeliveryReport")),
+		connect.WithHandlerOptions(opts...),
+	)
 	workflowServiceGetRunHandler := connect.NewUnaryHandler(
 		WorkflowServiceGetRunProcedure,
 		svc.GetRun,
 		connect.WithSchema(workflowServiceMethods.ByName("GetRun")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServiceGetPlatformCapabilitiesHandler := connect.NewUnaryHandler(
+		WorkflowServiceGetPlatformCapabilitiesProcedure,
+		svc.GetPlatformCapabilities,
+		connect.WithSchema(workflowServiceMethods.ByName("GetPlatformCapabilities")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workflowServicePreviewRunHandler := connect.NewUnaryHandler(
+		WorkflowServicePreviewRunProcedure,
+		svc.PreviewRun,
+		connect.WithSchema(workflowServiceMethods.ByName("PreviewRun")),
 		connect.WithHandlerOptions(opts...),
 	)
 	workflowServiceLaunchRunHandler := connect.NewUnaryHandler(
@@ -759,8 +1426,58 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 	)
 	return "/blaxsmith.api.v1.WorkflowService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case WorkflowServiceListGoalCheckpointsProcedure:
+			workflowServiceListGoalCheckpointsHandler.ServeHTTP(w, r)
+		case WorkflowServiceRecordGoalCheckpointProcedure:
+			workflowServiceRecordGoalCheckpointHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetRunUsageProcedure:
+			workflowServiceGetRunUsageHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetGoalUsageProcedure:
+			workflowServiceGetGoalUsageHandler.ServeHTTP(w, r)
+		case WorkflowServiceCreateServicePrincipalProcedure:
+			workflowServiceCreateServicePrincipalHandler.ServeHTTP(w, r)
+		case WorkflowServiceListServicePrincipalsProcedure:
+			workflowServiceListServicePrincipalsHandler.ServeHTTP(w, r)
+		case WorkflowServiceDisableServicePrincipalProcedure:
+			workflowServiceDisableServicePrincipalHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetProjectModelOptionsProcedure:
+			workflowServiceGetProjectModelOptionsHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetGoalControlProcedure:
+			workflowServiceGetGoalControlHandler.ServeHTTP(w, r)
+		case WorkflowServiceControlGoalProcedure:
+			workflowServiceControlGoalHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetGoalAllowanceProcedure:
+			workflowServiceGetGoalAllowanceHandler.ServeHTTP(w, r)
+		case WorkflowServiceSetGoalAllowanceProcedure:
+			workflowServiceSetGoalAllowanceHandler.ServeHTTP(w, r)
+		case WorkflowServiceDescribeMachineAccessProcedure:
+			workflowServiceDescribeMachineAccessHandler.ServeHTTP(w, r)
+		case WorkflowServiceCreateApiTokenProcedure:
+			workflowServiceCreateApiTokenHandler.ServeHTTP(w, r)
+		case WorkflowServiceListApiTokensProcedure:
+			workflowServiceListApiTokensHandler.ServeHTTP(w, r)
+		case WorkflowServiceRevokeApiTokenProcedure:
+			workflowServiceRevokeApiTokenHandler.ServeHTTP(w, r)
+		case WorkflowServiceListRunEvidenceProcedure:
+			workflowServiceListRunEvidenceHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetEvidenceContentProcedure:
+			workflowServiceGetEvidenceContentHandler.ServeHTTP(w, r)
 		case WorkflowServiceCreateProjectProcedure:
 			workflowServiceCreateProjectHandler.ServeHTTP(w, r)
+		case WorkflowServiceStartGoalPlanningProcedure:
+			workflowServiceStartGoalPlanningHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetGoalPlansProcedure:
+			workflowServiceGetGoalPlansHandler.ServeHTTP(w, r)
+		case WorkflowServiceSaveGoalPlanProcedure:
+			workflowServiceSaveGoalPlanHandler.ServeHTTP(w, r)
+		case WorkflowServiceCreateGoalProcedure:
+			workflowServiceCreateGoalHandler.ServeHTTP(w, r)
+		case WorkflowServiceListGoalsProcedure:
+			workflowServiceListGoalsHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetGoalProcedure:
+			workflowServiceGetGoalHandler.ServeHTTP(w, r)
+		case WorkflowServiceReplyGoalProcedure:
+			workflowServiceReplyGoalHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetProjectProcedure:
 			workflowServiceGetProjectHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetProjectSourceProcedure:
@@ -773,6 +1490,8 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 			workflowServiceCreateGitConnectionHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetProjectVerificationProcedure:
 			workflowServiceGetProjectVerificationHandler.ServeHTTP(w, r)
+		case WorkflowServiceListProjectVerificationHistoryProcedure:
+			workflowServiceListProjectVerificationHistoryHandler.ServeHTTP(w, r)
 		case WorkflowServiceSetProjectVerificationProcedure:
 			workflowServiceSetProjectVerificationHandler.ServeHTTP(w, r)
 		case WorkflowServiceListProjectModelAccessProcedure:
@@ -789,8 +1508,14 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 			workflowServiceRevokeSubscriptionConnectionHandler.ServeHTTP(w, r)
 		case WorkflowServiceListProjectsProcedure:
 			workflowServiceListProjectsHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetDeliveryReportProcedure:
+			workflowServiceGetDeliveryReportHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetRunProcedure:
 			workflowServiceGetRunHandler.ServeHTTP(w, r)
+		case WorkflowServiceGetPlatformCapabilitiesProcedure:
+			workflowServiceGetPlatformCapabilitiesHandler.ServeHTTP(w, r)
+		case WorkflowServicePreviewRunProcedure:
+			workflowServicePreviewRunHandler.ServeHTTP(w, r)
 		case WorkflowServiceLaunchRunProcedure:
 			workflowServiceLaunchRunHandler.ServeHTTP(w, r)
 		case WorkflowServiceGetLaunchAvailabilityProcedure:
@@ -828,8 +1553,108 @@ func NewWorkflowServiceHandler(svc WorkflowServiceHandler, opts ...connect.Handl
 // UnimplementedWorkflowServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedWorkflowServiceHandler struct{}
 
+func (UnimplementedWorkflowServiceHandler) ListGoalCheckpoints(context.Context, *connect.Request[v1.ListGoalCheckpointsRequest]) (*connect.Response[v1.ListGoalCheckpointsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ListGoalCheckpoints is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) RecordGoalCheckpoint(context.Context, *connect.Request[v1.RecordGoalCheckpointRequest]) (*connect.Response[v1.RecordGoalCheckpointResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.RecordGoalCheckpoint is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetRunUsage(context.Context, *connect.Request[v1.GetRunUsageRequest]) (*connect.Response[v1.GetRunUsageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetRunUsage is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetGoalUsage(context.Context, *connect.Request[v1.GetGoalUsageRequest]) (*connect.Response[v1.GetGoalUsageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetGoalUsage is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) CreateServicePrincipal(context.Context, *connect.Request[v1.CreateServicePrincipalRequest]) (*connect.Response[v1.CreateServicePrincipalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.CreateServicePrincipal is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) ListServicePrincipals(context.Context, *connect.Request[v1.ListServicePrincipalsRequest]) (*connect.Response[v1.ListServicePrincipalsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ListServicePrincipals is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) DisableServicePrincipal(context.Context, *connect.Request[v1.DisableServicePrincipalRequest]) (*connect.Response[v1.DisableServicePrincipalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.DisableServicePrincipal is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetProjectModelOptions(context.Context, *connect.Request[v1.GetProjectModelOptionsRequest]) (*connect.Response[v1.GetProjectModelOptionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetProjectModelOptions is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetGoalControl(context.Context, *connect.Request[v1.GetGoalControlRequest]) (*connect.Response[v1.GetGoalControlResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetGoalControl is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) ControlGoal(context.Context, *connect.Request[v1.ControlGoalRequest]) (*connect.Response[v1.ControlGoalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ControlGoal is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetGoalAllowance(context.Context, *connect.Request[v1.GetGoalAllowanceRequest]) (*connect.Response[v1.GetGoalAllowanceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetGoalAllowance is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) SetGoalAllowance(context.Context, *connect.Request[v1.SetGoalAllowanceRequest]) (*connect.Response[v1.SetGoalAllowanceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.SetGoalAllowance is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) DescribeMachineAccess(context.Context, *connect.Request[v1.DescribeMachineAccessRequest]) (*connect.Response[v1.DescribeMachineAccessResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.DescribeMachineAccess is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) CreateApiToken(context.Context, *connect.Request[v1.CreateApiTokenRequest]) (*connect.Response[v1.CreateApiTokenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.CreateApiToken is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) ListApiTokens(context.Context, *connect.Request[v1.ListApiTokensRequest]) (*connect.Response[v1.ListApiTokensResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ListApiTokens is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) RevokeApiToken(context.Context, *connect.Request[v1.RevokeApiTokenRequest]) (*connect.Response[v1.RevokeApiTokenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.RevokeApiToken is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) ListRunEvidence(context.Context, *connect.Request[v1.ListRunEvidenceRequest]) (*connect.Response[v1.ListRunEvidenceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ListRunEvidence is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetEvidenceContent(context.Context, *connect.Request[v1.GetEvidenceContentRequest]) (*connect.Response[v1.GetEvidenceContentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetEvidenceContent is not implemented"))
+}
+
 func (UnimplementedWorkflowServiceHandler) CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.CreateProject is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) StartGoalPlanning(context.Context, *connect.Request[v1.StartGoalPlanningRequest]) (*connect.Response[v1.StartGoalPlanningResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.StartGoalPlanning is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetGoalPlans(context.Context, *connect.Request[v1.GetGoalPlansRequest]) (*connect.Response[v1.GetGoalPlansResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetGoalPlans is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) SaveGoalPlan(context.Context, *connect.Request[v1.SaveGoalPlanRequest]) (*connect.Response[v1.SaveGoalPlanResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.SaveGoalPlan is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) CreateGoal(context.Context, *connect.Request[v1.CreateGoalRequest]) (*connect.Response[v1.CreateGoalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.CreateGoal is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) ListGoals(context.Context, *connect.Request[v1.ListGoalsRequest]) (*connect.Response[v1.ListGoalsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ListGoals is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetGoal(context.Context, *connect.Request[v1.GetGoalRequest]) (*connect.Response[v1.GetGoalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetGoal is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) ReplyGoal(context.Context, *connect.Request[v1.ReplyGoalRequest]) (*connect.Response[v1.ReplyGoalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ReplyGoal is not implemented"))
 }
 
 func (UnimplementedWorkflowServiceHandler) GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error) {
@@ -854,6 +1679,10 @@ func (UnimplementedWorkflowServiceHandler) CreateGitConnection(context.Context, 
 
 func (UnimplementedWorkflowServiceHandler) GetProjectVerification(context.Context, *connect.Request[v1.GetProjectVerificationRequest]) (*connect.Response[v1.GetProjectVerificationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetProjectVerification is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) ListProjectVerificationHistory(context.Context, *connect.Request[v1.ListProjectVerificationHistoryRequest]) (*connect.Response[v1.ListProjectVerificationHistoryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ListProjectVerificationHistory is not implemented"))
 }
 
 func (UnimplementedWorkflowServiceHandler) SetProjectVerification(context.Context, *connect.Request[v1.SetProjectVerificationRequest]) (*connect.Response[v1.SetProjectVerificationResponse], error) {
@@ -888,8 +1717,20 @@ func (UnimplementedWorkflowServiceHandler) ListProjects(context.Context, *connec
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.ListProjects is not implemented"))
 }
 
+func (UnimplementedWorkflowServiceHandler) GetDeliveryReport(context.Context, *connect.Request[v1.GetDeliveryReportRequest]) (*connect.Response[v1.GetDeliveryReportResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetDeliveryReport is not implemented"))
+}
+
 func (UnimplementedWorkflowServiceHandler) GetRun(context.Context, *connect.Request[v1.GetRunRequest]) (*connect.Response[v1.GetRunResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetRun is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) GetPlatformCapabilities(context.Context, *connect.Request[v1.GetPlatformCapabilitiesRequest]) (*connect.Response[v1.GetPlatformCapabilitiesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.GetPlatformCapabilities is not implemented"))
+}
+
+func (UnimplementedWorkflowServiceHandler) PreviewRun(context.Context, *connect.Request[v1.PreviewRunRequest]) (*connect.Response[v1.PreviewRunResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blaxsmith.api.v1.WorkflowService.PreviewRun is not implemented"))
 }
 
 func (UnimplementedWorkflowServiceHandler) LaunchRun(context.Context, *connect.Request[v1.LaunchRunRequest]) (*connect.Response[v1.LaunchRunResponse], error) {

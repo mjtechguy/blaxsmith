@@ -1019,6 +1019,9 @@ type VerificationCheck struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Command       []string               `protobuf:"bytes,2,rep,name=command,proto3" json:"command,omitempty"`
+	TrustedPaths  []string               `protobuf:"bytes,3,rep,name=trusted_paths,json=trustedPaths,proto3" json:"trusted_paths,omitempty"` // Files or directories that must match the frozen source revision.
+	Mode          string                 `protobuf:"bytes,4,opt,name=mode,proto3" json:"mode,omitempty"`                                     // required (default), advisory, or off.
+	Category      string                 `protobuf:"bytes,5,opt,name=category,proto3" json:"category,omitempty"`                             // build, test, review, e2e, security, performance, or other.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1067,12 +1070,34 @@ func (x *VerificationCheck) GetCommand() []string {
 	return nil
 }
 
+func (x *VerificationCheck) GetTrustedPaths() []string {
+	if x != nil {
+		return x.TrustedPaths
+	}
+	return nil
+}
+
+func (x *VerificationCheck) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *VerificationCheck) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
 type ProjectVerification struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	Version       int64                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
 	Checks        []*VerificationCheck   `protobuf:"bytes,3,rep,name=checks,proto3" json:"checks,omitempty"`
 	UpdatedAt     string                 `protobuf:"bytes,4,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // RFC 3339.
+	Preset        string                 `protobuf:"bytes,5,opt,name=preset,proto3" json:"preset,omitempty"`                        // mvp, balanced, thorough, or custom.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1131,6 +1156,13 @@ func (x *ProjectVerification) GetChecks() []*VerificationCheck {
 func (x *ProjectVerification) GetUpdatedAt() string {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return ""
+}
+
+func (x *ProjectVerification) GetPreset() string {
+	if x != nil {
+		return x.Preset
 	}
 	return ""
 }
@@ -1224,11 +1256,13 @@ func (x *GetProjectVerificationResponse) GetVerification() *ProjectVerification 
 }
 
 type SetProjectVerificationRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Checks        []*VerificationCheck   `protobuf:"bytes,2,rep,name=checks,proto3" json:"checks,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId       string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Checks          []*VerificationCheck   `protobuf:"bytes,2,rep,name=checks,proto3" json:"checks,omitempty"`
+	ExpectedVersion int64                  `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"` // Zero only when creating the first revision.
+	Preset          string                 `protobuf:"bytes,4,opt,name=preset,proto3" json:"preset,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *SetProjectVerificationRequest) Reset() {
@@ -1275,6 +1309,20 @@ func (x *SetProjectVerificationRequest) GetChecks() []*VerificationCheck {
 	return nil
 }
 
+func (x *SetProjectVerificationRequest) GetExpectedVersion() int64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *SetProjectVerificationRequest) GetPreset() string {
+	if x != nil {
+		return x.Preset
+	}
+	return ""
+}
+
 type SetProjectVerificationResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Verification  *ProjectVerification   `protobuf:"bytes,1,opt,name=verification,proto3" json:"verification,omitempty"`
@@ -1319,6 +1367,110 @@ func (x *SetProjectVerificationResponse) GetVerification() *ProjectVerification 
 	return nil
 }
 
+type ListProjectVerificationHistoryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	BeforeVersion int64                  `protobuf:"varint,2,opt,name=before_version,json=beforeVersion,proto3" json:"before_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListProjectVerificationHistoryRequest) Reset() {
+	*x = ListProjectVerificationHistoryRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListProjectVerificationHistoryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListProjectVerificationHistoryRequest) ProtoMessage() {}
+
+func (x *ListProjectVerificationHistoryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListProjectVerificationHistoryRequest.ProtoReflect.Descriptor instead.
+func (*ListProjectVerificationHistoryRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ListProjectVerificationHistoryRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *ListProjectVerificationHistoryRequest) GetBeforeVersion() int64 {
+	if x != nil {
+		return x.BeforeVersion
+	}
+	return 0
+}
+
+type ListProjectVerificationHistoryResponse struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Revisions         []*ProjectVerification `protobuf:"bytes,1,rep,name=revisions,proto3" json:"revisions,omitempty"`
+	NextBeforeVersion int64                  `protobuf:"varint,2,opt,name=next_before_version,json=nextBeforeVersion,proto3" json:"next_before_version,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ListProjectVerificationHistoryResponse) Reset() {
+	*x = ListProjectVerificationHistoryResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListProjectVerificationHistoryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListProjectVerificationHistoryResponse) ProtoMessage() {}
+
+func (x *ListProjectVerificationHistoryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListProjectVerificationHistoryResponse.ProtoReflect.Descriptor instead.
+func (*ListProjectVerificationHistoryResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ListProjectVerificationHistoryResponse) GetRevisions() []*ProjectVerification {
+	if x != nil {
+		return x.Revisions
+	}
+	return nil
+}
+
+func (x *ListProjectVerificationHistoryResponse) GetNextBeforeVersion() int64 {
+	if x != nil {
+		return x.NextBeforeVersion
+	}
+	return 0
+}
+
 // An organization-owned model connection and project grant. Credential bytes
 // are accepted only on creation and are never returned to the browser.
 type ProjectModelAccess struct {
@@ -1336,7 +1488,7 @@ type ProjectModelAccess struct {
 
 func (x *ProjectModelAccess) Reset() {
 	*x = ProjectModelAccess{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[23]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1348,7 +1500,7 @@ func (x *ProjectModelAccess) String() string {
 func (*ProjectModelAccess) ProtoMessage() {}
 
 func (x *ProjectModelAccess) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[23]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1361,7 +1513,7 @@ func (x *ProjectModelAccess) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectModelAccess.ProtoReflect.Descriptor instead.
 func (*ProjectModelAccess) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{23}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ProjectModelAccess) GetId() string {
@@ -1422,7 +1574,7 @@ type ListProjectModelAccessRequest struct {
 
 func (x *ListProjectModelAccessRequest) Reset() {
 	*x = ListProjectModelAccessRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[24]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1434,7 +1586,7 @@ func (x *ListProjectModelAccessRequest) String() string {
 func (*ListProjectModelAccessRequest) ProtoMessage() {}
 
 func (x *ListProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[24]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1447,7 +1599,7 @@ func (x *ListProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectModelAccessRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectModelAccessRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{24}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListProjectModelAccessRequest) GetProjectId() string {
@@ -1466,7 +1618,7 @@ type ListProjectModelAccessResponse struct {
 
 func (x *ListProjectModelAccessResponse) Reset() {
 	*x = ListProjectModelAccessResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[25]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1478,7 +1630,7 @@ func (x *ListProjectModelAccessResponse) String() string {
 func (*ListProjectModelAccessResponse) ProtoMessage() {}
 
 func (x *ListProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[25]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1491,7 +1643,7 @@ func (x *ListProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectModelAccessResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectModelAccessResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{25}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ListProjectModelAccessResponse) GetAccess() []*ProjectModelAccess {
@@ -1513,7 +1665,7 @@ type CreateProjectModelAccessRequest struct {
 
 func (x *CreateProjectModelAccessRequest) Reset() {
 	*x = CreateProjectModelAccessRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[26]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1525,7 +1677,7 @@ func (x *CreateProjectModelAccessRequest) String() string {
 func (*CreateProjectModelAccessRequest) ProtoMessage() {}
 
 func (x *CreateProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[26]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1538,7 +1690,7 @@ func (x *CreateProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectModelAccessRequest.ProtoReflect.Descriptor instead.
 func (*CreateProjectModelAccessRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{26}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *CreateProjectModelAccessRequest) GetProjectId() string {
@@ -1578,7 +1730,7 @@ type CreateProjectModelAccessResponse struct {
 
 func (x *CreateProjectModelAccessResponse) Reset() {
 	*x = CreateProjectModelAccessResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[27]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1590,7 +1742,7 @@ func (x *CreateProjectModelAccessResponse) String() string {
 func (*CreateProjectModelAccessResponse) ProtoMessage() {}
 
 func (x *CreateProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[27]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1603,7 +1755,7 @@ func (x *CreateProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectModelAccessResponse.ProtoReflect.Descriptor instead.
 func (*CreateProjectModelAccessResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{27}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *CreateProjectModelAccessResponse) GetAccess() *ProjectModelAccess {
@@ -1622,7 +1774,7 @@ type RevokeProjectModelAccessRequest struct {
 
 func (x *RevokeProjectModelAccessRequest) Reset() {
 	*x = RevokeProjectModelAccessRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[28]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1634,7 +1786,7 @@ func (x *RevokeProjectModelAccessRequest) String() string {
 func (*RevokeProjectModelAccessRequest) ProtoMessage() {}
 
 func (x *RevokeProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[28]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1647,7 +1799,7 @@ func (x *RevokeProjectModelAccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeProjectModelAccessRequest.ProtoReflect.Descriptor instead.
 func (*RevokeProjectModelAccessRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{28}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *RevokeProjectModelAccessRequest) GetAccessId() string {
@@ -1666,7 +1818,7 @@ type RevokeProjectModelAccessResponse struct {
 
 func (x *RevokeProjectModelAccessResponse) Reset() {
 	*x = RevokeProjectModelAccessResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[29]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1678,7 +1830,7 @@ func (x *RevokeProjectModelAccessResponse) String() string {
 func (*RevokeProjectModelAccessResponse) ProtoMessage() {}
 
 func (x *RevokeProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[29]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1691,7 +1843,7 @@ func (x *RevokeProjectModelAccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeProjectModelAccessResponse.ProtoReflect.Descriptor instead.
 func (*RevokeProjectModelAccessResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{29}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RevokeProjectModelAccessResponse) GetAccessId() string {
@@ -1719,7 +1871,7 @@ type SubscriptionConnection struct {
 
 func (x *SubscriptionConnection) Reset() {
 	*x = SubscriptionConnection{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[30]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1731,7 +1883,7 @@ func (x *SubscriptionConnection) String() string {
 func (*SubscriptionConnection) ProtoMessage() {}
 
 func (x *SubscriptionConnection) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[30]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1744,7 +1896,7 @@ func (x *SubscriptionConnection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscriptionConnection.ProtoReflect.Descriptor instead.
 func (*SubscriptionConnection) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{30}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *SubscriptionConnection) GetConnectionId() string {
@@ -1805,7 +1957,7 @@ type ListSubscriptionConnectionsRequest struct {
 
 func (x *ListSubscriptionConnectionsRequest) Reset() {
 	*x = ListSubscriptionConnectionsRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[31]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1817,7 +1969,7 @@ func (x *ListSubscriptionConnectionsRequest) String() string {
 func (*ListSubscriptionConnectionsRequest) ProtoMessage() {}
 
 func (x *ListSubscriptionConnectionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[31]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1830,7 +1982,7 @@ func (x *ListSubscriptionConnectionsRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ListSubscriptionConnectionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSubscriptionConnectionsRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{31}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ListSubscriptionConnectionsRequest) GetProjectId() string {
@@ -1849,7 +2001,7 @@ type ListSubscriptionConnectionsResponse struct {
 
 func (x *ListSubscriptionConnectionsResponse) Reset() {
 	*x = ListSubscriptionConnectionsResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[32]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1861,7 +2013,7 @@ func (x *ListSubscriptionConnectionsResponse) String() string {
 func (*ListSubscriptionConnectionsResponse) ProtoMessage() {}
 
 func (x *ListSubscriptionConnectionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[32]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1874,7 +2026,7 @@ func (x *ListSubscriptionConnectionsResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ListSubscriptionConnectionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSubscriptionConnectionsResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{32}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ListSubscriptionConnectionsResponse) GetConnections() []*SubscriptionConnection {
@@ -1896,7 +2048,7 @@ type CreateSubscriptionConnectionRequest struct {
 
 func (x *CreateSubscriptionConnectionRequest) Reset() {
 	*x = CreateSubscriptionConnectionRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[33]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1908,7 +2060,7 @@ func (x *CreateSubscriptionConnectionRequest) String() string {
 func (*CreateSubscriptionConnectionRequest) ProtoMessage() {}
 
 func (x *CreateSubscriptionConnectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[33]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1921,7 +2073,7 @@ func (x *CreateSubscriptionConnectionRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use CreateSubscriptionConnectionRequest.ProtoReflect.Descriptor instead.
 func (*CreateSubscriptionConnectionRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{33}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *CreateSubscriptionConnectionRequest) GetProjectId() string {
@@ -1961,7 +2113,7 @@ type CreateSubscriptionConnectionResponse struct {
 
 func (x *CreateSubscriptionConnectionResponse) Reset() {
 	*x = CreateSubscriptionConnectionResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[34]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1973,7 +2125,7 @@ func (x *CreateSubscriptionConnectionResponse) String() string {
 func (*CreateSubscriptionConnectionResponse) ProtoMessage() {}
 
 func (x *CreateSubscriptionConnectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[34]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1986,7 +2138,7 @@ func (x *CreateSubscriptionConnectionResponse) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use CreateSubscriptionConnectionResponse.ProtoReflect.Descriptor instead.
 func (*CreateSubscriptionConnectionResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{34}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *CreateSubscriptionConnectionResponse) GetConnection() *SubscriptionConnection {
@@ -2005,7 +2157,7 @@ type RevokeSubscriptionConnectionRequest struct {
 
 func (x *RevokeSubscriptionConnectionRequest) Reset() {
 	*x = RevokeSubscriptionConnectionRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[35]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2017,7 +2169,7 @@ func (x *RevokeSubscriptionConnectionRequest) String() string {
 func (*RevokeSubscriptionConnectionRequest) ProtoMessage() {}
 
 func (x *RevokeSubscriptionConnectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[35]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2030,7 +2182,7 @@ func (x *RevokeSubscriptionConnectionRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use RevokeSubscriptionConnectionRequest.ProtoReflect.Descriptor instead.
 func (*RevokeSubscriptionConnectionRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{35}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *RevokeSubscriptionConnectionRequest) GetConnectionId() string {
@@ -2049,7 +2201,7 @@ type RevokeSubscriptionConnectionResponse struct {
 
 func (x *RevokeSubscriptionConnectionResponse) Reset() {
 	*x = RevokeSubscriptionConnectionResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[36]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2061,7 +2213,7 @@ func (x *RevokeSubscriptionConnectionResponse) String() string {
 func (*RevokeSubscriptionConnectionResponse) ProtoMessage() {}
 
 func (x *RevokeSubscriptionConnectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[36]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2074,7 +2226,7 @@ func (x *RevokeSubscriptionConnectionResponse) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use RevokeSubscriptionConnectionResponse.ProtoReflect.Descriptor instead.
 func (*RevokeSubscriptionConnectionResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{36}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *RevokeSubscriptionConnectionResponse) GetConnectionId() string {
@@ -2097,7 +2249,7 @@ type ListProjectsRequest struct {
 
 func (x *ListProjectsRequest) Reset() {
 	*x = ListProjectsRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[37]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2109,7 +2261,7 @@ func (x *ListProjectsRequest) String() string {
 func (*ListProjectsRequest) ProtoMessage() {}
 
 func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[37]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2122,7 +2274,7 @@ func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{37}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ListProjectsRequest) GetPageSize() int32 {
@@ -2170,7 +2322,7 @@ type ListProjectsResponse struct {
 
 func (x *ListProjectsResponse) Reset() {
 	*x = ListProjectsResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[38]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2182,7 +2334,7 @@ func (x *ListProjectsResponse) String() string {
 func (*ListProjectsResponse) ProtoMessage() {}
 
 func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[38]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2195,7 +2347,7 @@ func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{38}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ListProjectsResponse) GetProjects() []*Project {
@@ -2212,6 +2364,2336 @@ func (x *ListProjectsResponse) GetNextPageToken() string {
 	return ""
 }
 
+// A goal owns planning context before any run or attempt exists.
+type Goal struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ProjectId      string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Title          string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	Brief          string                 `protobuf:"bytes,4,opt,name=brief,proto3" json:"brief,omitempty"`
+	FactoryId      string                 `protobuf:"bytes,5,opt,name=factory_id,json=factoryId,proto3" json:"factory_id,omitempty"`
+	FactoryVersion string                 `protobuf:"bytes,6,opt,name=factory_version,json=factoryVersion,proto3" json:"factory_version,omitempty"`
+	Revision       int64                  `protobuf:"varint,7,opt,name=revision,proto3" json:"revision,omitempty"`
+	CreatedBy      string                 `protobuf:"bytes,8,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
+	CreatedAt      string                 `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt      string                 `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Questions      []*Interaction         `protobuf:"bytes,11,rep,name=questions,proto3" json:"questions,omitempty"` // Current decisions; history is append-only.
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *Goal) Reset() {
+	*x = Goal{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Goal) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Goal) ProtoMessage() {}
+
+func (x *Goal) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Goal.ProtoReflect.Descriptor instead.
+func (*Goal) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *Goal) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Goal) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *Goal) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *Goal) GetBrief() string {
+	if x != nil {
+		return x.Brief
+	}
+	return ""
+}
+
+func (x *Goal) GetFactoryId() string {
+	if x != nil {
+		return x.FactoryId
+	}
+	return ""
+}
+
+func (x *Goal) GetFactoryVersion() string {
+	if x != nil {
+		return x.FactoryVersion
+	}
+	return ""
+}
+
+func (x *Goal) GetRevision() int64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *Goal) GetCreatedBy() string {
+	if x != nil {
+		return x.CreatedBy
+	}
+	return ""
+}
+
+func (x *Goal) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *Goal) GetUpdatedAt() string {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return ""
+}
+
+func (x *Goal) GetQuestions() []*Interaction {
+	if x != nil {
+		return x.Questions
+	}
+	return nil
+}
+
+type GoalEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sequence      int64                  `protobuf:"varint,1,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // message, answer, deferred. No implicit worker steering.
+	QuestionId    string                 `protobuf:"bytes,3,opt,name=question_id,json=questionId,proto3" json:"question_id,omitempty"`
+	OptionIds     []string               `protobuf:"bytes,4,rep,name=option_ids,json=optionIds,proto3" json:"option_ids,omitempty"`
+	Text          string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
+	PrincipalId   string                 `protobuf:"bytes,6,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GoalEntry) Reset() {
+	*x = GoalEntry{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GoalEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GoalEntry) ProtoMessage() {}
+
+func (x *GoalEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GoalEntry.ProtoReflect.Descriptor instead.
+func (*GoalEntry) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *GoalEntry) GetSequence() int64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
+}
+
+func (x *GoalEntry) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *GoalEntry) GetQuestionId() string {
+	if x != nil {
+		return x.QuestionId
+	}
+	return ""
+}
+
+func (x *GoalEntry) GetOptionIds() []string {
+	if x != nil {
+		return x.OptionIds
+	}
+	return nil
+}
+
+func (x *GoalEntry) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *GoalEntry) GetPrincipalId() string {
+	if x != nil {
+		return x.PrincipalId
+	}
+	return ""
+}
+
+func (x *GoalEntry) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+// Factory intake is data. It grants no tool, runtime or billing authority.
+type GoalQuestion struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	BodyMd        string                 `protobuf:"bytes,3,opt,name=body_md,json=bodyMd,proto3" json:"body_md,omitempty"`
+	Options       []*InteractionOption   `protobuf:"bytes,4,rep,name=options,proto3" json:"options,omitempty"`
+	MultiSelect   bool                   `protobuf:"varint,5,opt,name=multi_select,json=multiSelect,proto3" json:"multi_select,omitempty"`
+	AllowFreeText bool                   `protobuf:"varint,6,opt,name=allow_free_text,json=allowFreeText,proto3" json:"allow_free_text,omitempty"`
+	Blocking      bool                   `protobuf:"varint,7,opt,name=blocking,proto3" json:"blocking,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GoalQuestion) Reset() {
+	*x = GoalQuestion{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GoalQuestion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GoalQuestion) ProtoMessage() {}
+
+func (x *GoalQuestion) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GoalQuestion.ProtoReflect.Descriptor instead.
+func (*GoalQuestion) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *GoalQuestion) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *GoalQuestion) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *GoalQuestion) GetBodyMd() string {
+	if x != nil {
+		return x.BodyMd
+	}
+	return ""
+}
+
+func (x *GoalQuestion) GetOptions() []*InteractionOption {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+func (x *GoalQuestion) GetMultiSelect() bool {
+	if x != nil {
+		return x.MultiSelect
+	}
+	return false
+}
+
+func (x *GoalQuestion) GetAllowFreeText() bool {
+	if x != nil {
+		return x.AllowFreeText
+	}
+	return false
+}
+
+func (x *GoalQuestion) GetBlocking() bool {
+	if x != nil {
+		return x.Blocking
+	}
+	return false
+}
+
+type CreateGoalRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId      string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	RequestKey     string                 `protobuf:"bytes,2,opt,name=request_key,json=requestKey,proto3" json:"request_key,omitempty"`
+	Title          string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	Brief          string                 `protobuf:"bytes,4,opt,name=brief,proto3" json:"brief,omitempty"`
+	FactoryId      string                 `protobuf:"bytes,5,opt,name=factory_id,json=factoryId,proto3" json:"factory_id,omitempty"` // Empty selects shipped Anvil. External factories supply an explicit version.
+	FactoryVersion string                 `protobuf:"bytes,6,opt,name=factory_version,json=factoryVersion,proto3" json:"factory_version,omitempty"`
+	Questions      []*GoalQuestion        `protobuf:"bytes,7,rep,name=questions,proto3" json:"questions,omitempty"` // External factory intake, at most 16. Anvil supplies its own.
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CreateGoalRequest) Reset() {
+	*x = CreateGoalRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateGoalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateGoalRequest) ProtoMessage() {}
+
+func (x *CreateGoalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateGoalRequest.ProtoReflect.Descriptor instead.
+func (*CreateGoalRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *CreateGoalRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *CreateGoalRequest) GetRequestKey() string {
+	if x != nil {
+		return x.RequestKey
+	}
+	return ""
+}
+
+func (x *CreateGoalRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *CreateGoalRequest) GetBrief() string {
+	if x != nil {
+		return x.Brief
+	}
+	return ""
+}
+
+func (x *CreateGoalRequest) GetFactoryId() string {
+	if x != nil {
+		return x.FactoryId
+	}
+	return ""
+}
+
+func (x *CreateGoalRequest) GetFactoryVersion() string {
+	if x != nil {
+		return x.FactoryVersion
+	}
+	return ""
+}
+
+func (x *CreateGoalRequest) GetQuestions() []*GoalQuestion {
+	if x != nil {
+		return x.Questions
+	}
+	return nil
+}
+
+type CreateGoalResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Goal          *Goal                  `protobuf:"bytes,1,opt,name=goal,proto3" json:"goal,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateGoalResponse) Reset() {
+	*x = CreateGoalResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateGoalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateGoalResponse) ProtoMessage() {}
+
+func (x *CreateGoalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateGoalResponse.ProtoReflect.Descriptor instead.
+func (*CreateGoalResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *CreateGoalResponse) GetGoal() *Goal {
+	if x != nil {
+		return x.Goal
+	}
+	return nil
+}
+
+type ListGoalsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	BeforeId      string                 `protobuf:"bytes,2,opt,name=before_id,json=beforeId,proto3" json:"before_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGoalsRequest) Reset() {
+	*x = ListGoalsRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGoalsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGoalsRequest) ProtoMessage() {}
+
+func (x *ListGoalsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGoalsRequest.ProtoReflect.Descriptor instead.
+func (*ListGoalsRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *ListGoalsRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *ListGoalsRequest) GetBeforeId() string {
+	if x != nil {
+		return x.BeforeId
+	}
+	return ""
+}
+
+type ListGoalsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Goals         []*Goal                `protobuf:"bytes,1,rep,name=goals,proto3" json:"goals,omitempty"`
+	NextBeforeId  string                 `protobuf:"bytes,2,opt,name=next_before_id,json=nextBeforeId,proto3" json:"next_before_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGoalsResponse) Reset() {
+	*x = ListGoalsResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGoalsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGoalsResponse) ProtoMessage() {}
+
+func (x *ListGoalsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGoalsResponse.ProtoReflect.Descriptor instead.
+func (*ListGoalsResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *ListGoalsResponse) GetGoals() []*Goal {
+	if x != nil {
+		return x.Goals
+	}
+	return nil
+}
+
+func (x *ListGoalsResponse) GetNextBeforeId() string {
+	if x != nil {
+		return x.NextBeforeId
+	}
+	return ""
+}
+
+type GetGoalRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	GoalId         string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	BeforeSequence int64                  `protobuf:"varint,2,opt,name=before_sequence,json=beforeSequence,proto3" json:"before_sequence,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetGoalRequest) Reset() {
+	*x = GetGoalRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGoalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGoalRequest) ProtoMessage() {}
+
+func (x *GetGoalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGoalRequest.ProtoReflect.Descriptor instead.
+func (*GetGoalRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *GetGoalRequest) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+func (x *GetGoalRequest) GetBeforeSequence() int64 {
+	if x != nil {
+		return x.BeforeSequence
+	}
+	return 0
+}
+
+type GetGoalResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Goal               *Goal                  `protobuf:"bytes,1,opt,name=goal,proto3" json:"goal,omitempty"`
+	Entries            []*GoalEntry           `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"`                                                    // At most 50, in chronological order.
+	NextBeforeSequence int64                  `protobuf:"varint,3,opt,name=next_before_sequence,json=nextBeforeSequence,proto3" json:"next_before_sequence,omitempty"` // Zero means no older entries.
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GetGoalResponse) Reset() {
+	*x = GetGoalResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGoalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGoalResponse) ProtoMessage() {}
+
+func (x *GetGoalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGoalResponse.ProtoReflect.Descriptor instead.
+func (*GetGoalResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *GetGoalResponse) GetGoal() *Goal {
+	if x != nil {
+		return x.Goal
+	}
+	return nil
+}
+
+func (x *GetGoalResponse) GetEntries() []*GoalEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *GetGoalResponse) GetNextBeforeSequence() int64 {
+	if x != nil {
+		return x.NextBeforeSequence
+	}
+	return 0
+}
+
+type ReplyGoalRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	GoalId           string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	RequestKey       string                 `protobuf:"bytes,2,opt,name=request_key,json=requestKey,proto3" json:"request_key,omitempty"`                    // Retry the same payload with the same key.
+	ExpectedRevision int64                  `protobuf:"varint,3,opt,name=expected_revision,json=expectedRevision,proto3" json:"expected_revision,omitempty"` // An old tab cannot replace a newer decision.
+	Kind             string                 `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"`                                                  // message, answer, deferred (optional questions only).
+	QuestionId       string                 `protobuf:"bytes,5,opt,name=question_id,json=questionId,proto3" json:"question_id,omitempty"`
+	OptionIds        []string               `protobuf:"bytes,6,rep,name=option_ids,json=optionIds,proto3" json:"option_ids,omitempty"`
+	Text             string                 `protobuf:"bytes,7,opt,name=text,proto3" json:"text,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ReplyGoalRequest) Reset() {
+	*x = ReplyGoalRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplyGoalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplyGoalRequest) ProtoMessage() {}
+
+func (x *ReplyGoalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplyGoalRequest.ProtoReflect.Descriptor instead.
+func (*ReplyGoalRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *ReplyGoalRequest) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+func (x *ReplyGoalRequest) GetRequestKey() string {
+	if x != nil {
+		return x.RequestKey
+	}
+	return ""
+}
+
+func (x *ReplyGoalRequest) GetExpectedRevision() int64 {
+	if x != nil {
+		return x.ExpectedRevision
+	}
+	return 0
+}
+
+func (x *ReplyGoalRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *ReplyGoalRequest) GetQuestionId() string {
+	if x != nil {
+		return x.QuestionId
+	}
+	return ""
+}
+
+func (x *ReplyGoalRequest) GetOptionIds() []string {
+	if x != nil {
+		return x.OptionIds
+	}
+	return nil
+}
+
+func (x *ReplyGoalRequest) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+type ReplyGoalResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReplyGoalResponse) Reset() {
+	*x = ReplyGoalResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplyGoalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplyGoalResponse) ProtoMessage() {}
+
+func (x *ReplyGoalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplyGoalResponse.ProtoReflect.Descriptor instead.
+func (*ReplyGoalResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{51}
+}
+
+type ProjectModelOption struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ConnectionId  string                 `protobuf:"bytes,1,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	Provider      string                 `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
+	OwnerKind     string                 `protobuf:"bytes,4,opt,name=owner_kind,json=ownerKind,proto3" json:"owner_kind,omitempty"`
+	AuthMethod    string                 `protobuf:"bytes,5,opt,name=auth_method,json=authMethod,proto3" json:"auth_method,omitempty"`
+	Models        []*ConnectionModel     `protobuf:"bytes,6,rep,name=models,proto3" json:"models,omitempty"`
+	CheckedAt     string                 `protobuf:"bytes,7,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
+	CatalogError  string                 `protobuf:"bytes,8,opt,name=catalog_error,json=catalogError,proto3" json:"catalog_error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProjectModelOption) Reset() {
+	*x = ProjectModelOption{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProjectModelOption) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProjectModelOption) ProtoMessage() {}
+
+func (x *ProjectModelOption) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProjectModelOption.ProtoReflect.Descriptor instead.
+func (*ProjectModelOption) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *ProjectModelOption) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *ProjectModelOption) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *ProjectModelOption) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *ProjectModelOption) GetOwnerKind() string {
+	if x != nil {
+		return x.OwnerKind
+	}
+	return ""
+}
+
+func (x *ProjectModelOption) GetAuthMethod() string {
+	if x != nil {
+		return x.AuthMethod
+	}
+	return ""
+}
+
+func (x *ProjectModelOption) GetModels() []*ConnectionModel {
+	if x != nil {
+		return x.Models
+	}
+	return nil
+}
+
+func (x *ProjectModelOption) GetCheckedAt() string {
+	if x != nil {
+		return x.CheckedAt
+	}
+	return ""
+}
+
+func (x *ProjectModelOption) GetCatalogError() string {
+	if x != nil {
+		return x.CatalogError
+	}
+	return ""
+}
+
+type GetProjectModelOptionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Harness       string                 `protobuf:"bytes,2,opt,name=harness,proto3" json:"harness,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetProjectModelOptionsRequest) Reset() {
+	*x = GetProjectModelOptionsRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetProjectModelOptionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetProjectModelOptionsRequest) ProtoMessage() {}
+
+func (x *GetProjectModelOptionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetProjectModelOptionsRequest.ProtoReflect.Descriptor instead.
+func (*GetProjectModelOptionsRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *GetProjectModelOptionsRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *GetProjectModelOptionsRequest) GetHarness() string {
+	if x != nil {
+		return x.Harness
+	}
+	return ""
+}
+
+type GetProjectModelOptionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Connections   []*ProjectModelOption  `protobuf:"bytes,1,rep,name=connections,proto3" json:"connections,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetProjectModelOptionsResponse) Reset() {
+	*x = GetProjectModelOptionsResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetProjectModelOptionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetProjectModelOptionsResponse) ProtoMessage() {}
+
+func (x *GetProjectModelOptionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetProjectModelOptionsResponse.ProtoReflect.Descriptor instead.
+func (*GetProjectModelOptionsResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *GetProjectModelOptionsResponse) GetConnections() []*ProjectModelOption {
+	if x != nil {
+		return x.Connections
+	}
+	return nil
+}
+
+type GoalControl struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         string                 `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"` // active, paused, cancel_requested, or confirmed cancelled.
+	Version       int64                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	ActiveRuns    int64                  `protobuf:"varint,3,opt,name=active_runs,json=activeRuns,proto3" json:"active_runs,omitempty"`
+	StoppingRuns  int64                  `protobuf:"varint,4,opt,name=stopping_runs,json=stoppingRuns,proto3" json:"stopping_runs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GoalControl) Reset() {
+	*x = GoalControl{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GoalControl) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GoalControl) ProtoMessage() {}
+
+func (x *GoalControl) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GoalControl.ProtoReflect.Descriptor instead.
+func (*GoalControl) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *GoalControl) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *GoalControl) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *GoalControl) GetActiveRuns() int64 {
+	if x != nil {
+		return x.ActiveRuns
+	}
+	return 0
+}
+
+func (x *GoalControl) GetStoppingRuns() int64 {
+	if x != nil {
+		return x.StoppingRuns
+	}
+	return 0
+}
+
+type GetGoalControlRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GoalId        string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGoalControlRequest) Reset() {
+	*x = GetGoalControlRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGoalControlRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGoalControlRequest) ProtoMessage() {}
+
+func (x *GetGoalControlRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGoalControlRequest.ProtoReflect.Descriptor instead.
+func (*GetGoalControlRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *GetGoalControlRequest) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+type GetGoalControlResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Control       *GoalControl           `protobuf:"bytes,1,opt,name=control,proto3" json:"control,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGoalControlResponse) Reset() {
+	*x = GetGoalControlResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGoalControlResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGoalControlResponse) ProtoMessage() {}
+
+func (x *GetGoalControlResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGoalControlResponse.ProtoReflect.Descriptor instead.
+func (*GetGoalControlResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *GetGoalControlResponse) GetControl() *GoalControl {
+	if x != nil {
+		return x.Control
+	}
+	return nil
+}
+
+type ControlGoalRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	GoalId          string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	Action          string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"` // pause (drain), resume, or cancel (stop active runs).
+	ExpectedVersion int64                  `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	RequestKey      string                 `protobuf:"bytes,4,opt,name=request_key,json=requestKey,proto3" json:"request_key,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ControlGoalRequest) Reset() {
+	*x = ControlGoalRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ControlGoalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ControlGoalRequest) ProtoMessage() {}
+
+func (x *ControlGoalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ControlGoalRequest.ProtoReflect.Descriptor instead.
+func (*ControlGoalRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *ControlGoalRequest) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+func (x *ControlGoalRequest) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *ControlGoalRequest) GetExpectedVersion() int64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *ControlGoalRequest) GetRequestKey() string {
+	if x != nil {
+		return x.RequestKey
+	}
+	return ""
+}
+
+type ControlGoalResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       int64                  `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ControlGoalResponse) Reset() {
+	*x = ControlGoalResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ControlGoalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ControlGoalResponse) ProtoMessage() {}
+
+func (x *ControlGoalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ControlGoalResponse.ProtoReflect.Descriptor instead.
+func (*ControlGoalResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *ControlGoalResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+type GoalAllowance struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	Version                  int64                  `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	MaxRuns                  int32                  `protobuf:"varint,2,opt,name=max_runs,json=maxRuns,proto3" json:"max_runs,omitempty"`             // Zero means no goal-specific run cap.
+	MaxAttempts              int32                  `protobuf:"varint,3,opt,name=max_attempts,json=maxAttempts,proto3" json:"max_attempts,omitempty"` // Includes all stages/retries; zero means no goal-specific attempt cap.
+	AdmitUntil               string                 `protobuf:"bytes,4,opt,name=admit_until,json=admitUntil,proto3" json:"admit_until,omitempty"`     // RFC3339; empty means no admission deadline. Does not terminate live workers.
+	Runs                     int64                  `protobuf:"varint,5,opt,name=runs,proto3" json:"runs,omitempty"`
+	Attempts                 int64                  `protobuf:"varint,6,opt,name=attempts,proto3" json:"attempts,omitempty"`
+	AdmissionClosed          bool                   `protobuf:"varint,7,opt,name=admission_closed,json=admissionClosed,proto3" json:"admission_closed,omitempty"` // Deadline or stall boundary reached; compare counts to run/attempt caps too.
+	UpdatedAt                string                 `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	PrincipalId              string                 `protobuf:"bytes,9,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"`
+	MaxRepeatedCheckFailures int32                  `protobuf:"varint,10,opt,name=max_repeated_check_failures,json=maxRepeatedCheckFailures,proto3" json:"max_repeated_check_failures,omitempty"` // Zero disables; otherwise 1–100 exact consecutive required-check failures.
+	NoProgressSeconds        int32                  `protobuf:"varint,11,opt,name=no_progress_seconds,json=noProgressSeconds,proto3" json:"no_progress_seconds,omitempty"`                        // Zero disables; otherwise 60–2592000 seconds without new accepted code or passing check evidence.
+	RepeatedCheckFailures    int64                  `protobuf:"varint,12,opt,name=repeated_check_failures,json=repeatedCheckFailures,proto3" json:"repeated_check_failures,omitempty"`
+	LastProgressAt           string                 `protobuf:"bytes,13,opt,name=last_progress_at,json=lastProgressAt,proto3" json:"last_progress_at,omitempty"` // First run starts the timer. Activity/logs do not reset it.
+	StallResetAt             string                 `protobuf:"bytes,15,opt,name=stall_reset_at,json=stallResetAt,proto3" json:"stall_reset_at,omitempty"`       // Explicit human recovery window; counts and history are retained.
+	StallReason              string                 `protobuf:"bytes,14,opt,name=stall_reason,json=stallReason,proto3" json:"stall_reason,omitempty"`            // Advisory read; admission rechecks the persisted policy.
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *GoalAllowance) Reset() {
+	*x = GoalAllowance{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GoalAllowance) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GoalAllowance) ProtoMessage() {}
+
+func (x *GoalAllowance) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GoalAllowance.ProtoReflect.Descriptor instead.
+func (*GoalAllowance) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *GoalAllowance) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *GoalAllowance) GetMaxRuns() int32 {
+	if x != nil {
+		return x.MaxRuns
+	}
+	return 0
+}
+
+func (x *GoalAllowance) GetMaxAttempts() int32 {
+	if x != nil {
+		return x.MaxAttempts
+	}
+	return 0
+}
+
+func (x *GoalAllowance) GetAdmitUntil() string {
+	if x != nil {
+		return x.AdmitUntil
+	}
+	return ""
+}
+
+func (x *GoalAllowance) GetRuns() int64 {
+	if x != nil {
+		return x.Runs
+	}
+	return 0
+}
+
+func (x *GoalAllowance) GetAttempts() int64 {
+	if x != nil {
+		return x.Attempts
+	}
+	return 0
+}
+
+func (x *GoalAllowance) GetAdmissionClosed() bool {
+	if x != nil {
+		return x.AdmissionClosed
+	}
+	return false
+}
+
+func (x *GoalAllowance) GetUpdatedAt() string {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return ""
+}
+
+func (x *GoalAllowance) GetPrincipalId() string {
+	if x != nil {
+		return x.PrincipalId
+	}
+	return ""
+}
+
+func (x *GoalAllowance) GetMaxRepeatedCheckFailures() int32 {
+	if x != nil {
+		return x.MaxRepeatedCheckFailures
+	}
+	return 0
+}
+
+func (x *GoalAllowance) GetNoProgressSeconds() int32 {
+	if x != nil {
+		return x.NoProgressSeconds
+	}
+	return 0
+}
+
+func (x *GoalAllowance) GetRepeatedCheckFailures() int64 {
+	if x != nil {
+		return x.RepeatedCheckFailures
+	}
+	return 0
+}
+
+func (x *GoalAllowance) GetLastProgressAt() string {
+	if x != nil {
+		return x.LastProgressAt
+	}
+	return ""
+}
+
+func (x *GoalAllowance) GetStallResetAt() string {
+	if x != nil {
+		return x.StallResetAt
+	}
+	return ""
+}
+
+func (x *GoalAllowance) GetStallReason() string {
+	if x != nil {
+		return x.StallReason
+	}
+	return ""
+}
+
+type GetGoalAllowanceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GoalId        string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGoalAllowanceRequest) Reset() {
+	*x = GetGoalAllowanceRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGoalAllowanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGoalAllowanceRequest) ProtoMessage() {}
+
+func (x *GetGoalAllowanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGoalAllowanceRequest.ProtoReflect.Descriptor instead.
+func (*GetGoalAllowanceRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *GetGoalAllowanceRequest) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+type GetGoalAllowanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Allowance     *GoalAllowance         `protobuf:"bytes,1,opt,name=allowance,proto3" json:"allowance,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGoalAllowanceResponse) Reset() {
+	*x = GetGoalAllowanceResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGoalAllowanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGoalAllowanceResponse) ProtoMessage() {}
+
+func (x *GetGoalAllowanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGoalAllowanceResponse.ProtoReflect.Descriptor instead.
+func (*GetGoalAllowanceResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *GetGoalAllowanceResponse) GetAllowance() *GoalAllowance {
+	if x != nil {
+		return x.Allowance
+	}
+	return nil
+}
+
+type SetGoalAllowanceRequest struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	GoalId                   string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	ExpectedVersion          int64                  `protobuf:"varint,2,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	MaxRuns                  int32                  `protobuf:"varint,3,opt,name=max_runs,json=maxRuns,proto3" json:"max_runs,omitempty"`
+	MaxAttempts              int32                  `protobuf:"varint,4,opt,name=max_attempts,json=maxAttempts,proto3" json:"max_attempts,omitempty"`
+	AdmitUntil               string                 `protobuf:"bytes,5,opt,name=admit_until,json=admitUntil,proto3" json:"admit_until,omitempty"`
+	MaxRepeatedCheckFailures int32                  `protobuf:"varint,6,opt,name=max_repeated_check_failures,json=maxRepeatedCheckFailures,proto3" json:"max_repeated_check_failures,omitempty"`
+	NoProgressSeconds        int32                  `protobuf:"varint,7,opt,name=no_progress_seconds,json=noProgressSeconds,proto3" json:"no_progress_seconds,omitempty"`
+	ResetStallWindow         bool                   `protobuf:"varint,8,opt,name=reset_stall_window,json=resetStallWindow,proto3" json:"reset_stall_window,omitempty"` // Explicit recovery; does not reset runs, attempts, usage or deadline.
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *SetGoalAllowanceRequest) Reset() {
+	*x = SetGoalAllowanceRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetGoalAllowanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetGoalAllowanceRequest) ProtoMessage() {}
+
+func (x *SetGoalAllowanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetGoalAllowanceRequest.ProtoReflect.Descriptor instead.
+func (*SetGoalAllowanceRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *SetGoalAllowanceRequest) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+func (x *SetGoalAllowanceRequest) GetExpectedVersion() int64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *SetGoalAllowanceRequest) GetMaxRuns() int32 {
+	if x != nil {
+		return x.MaxRuns
+	}
+	return 0
+}
+
+func (x *SetGoalAllowanceRequest) GetMaxAttempts() int32 {
+	if x != nil {
+		return x.MaxAttempts
+	}
+	return 0
+}
+
+func (x *SetGoalAllowanceRequest) GetAdmitUntil() string {
+	if x != nil {
+		return x.AdmitUntil
+	}
+	return ""
+}
+
+func (x *SetGoalAllowanceRequest) GetMaxRepeatedCheckFailures() int32 {
+	if x != nil {
+		return x.MaxRepeatedCheckFailures
+	}
+	return 0
+}
+
+func (x *SetGoalAllowanceRequest) GetNoProgressSeconds() int32 {
+	if x != nil {
+		return x.NoProgressSeconds
+	}
+	return 0
+}
+
+func (x *SetGoalAllowanceRequest) GetResetStallWindow() bool {
+	if x != nil {
+		return x.ResetStallWindow
+	}
+	return false
+}
+
+type SetGoalAllowanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetGoalAllowanceResponse) Reset() {
+	*x = SetGoalAllowanceResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetGoalAllowanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetGoalAllowanceResponse) ProtoMessage() {}
+
+func (x *SetGoalAllowanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetGoalAllowanceResponse.ProtoReflect.Descriptor instead.
+func (*SetGoalAllowanceResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{64}
+}
+
+type StartGoalPlanningRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	GoalId           string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	ExpectedRevision int64                  `protobuf:"varint,2,opt,name=expected_revision,json=expectedRevision,proto3" json:"expected_revision,omitempty"`
+	RequestKey       string                 `protobuf:"bytes,3,opt,name=request_key,json=requestKey,proto3" json:"request_key,omitempty"`
+	Harness          string                 `protobuf:"bytes,4,opt,name=harness,proto3" json:"harness,omitempty"`
+	Model            string                 `protobuf:"bytes,5,opt,name=model,proto3" json:"model,omitempty"`
+	Effort           string                 `protobuf:"bytes,6,opt,name=effort,proto3" json:"effort,omitempty"`
+	Scope            string                 `protobuf:"bytes,7,opt,name=scope,proto3" json:"scope,omitempty"`
+	RuntimeSeconds   int32                  `protobuf:"varint,8,opt,name=runtime_seconds,json=runtimeSeconds,proto3" json:"runtime_seconds,omitempty"`      // 60–3600, per stage; one attempt per stage.
+	InstructionFiles []string               `protobuf:"bytes,9,rep,name=instruction_files,json=instructionFiles,proto3" json:"instruction_files,omitempty"` // Committed repository-relative rules; frozen with the run.
+	SkillFiles       []string               `protobuf:"bytes,10,rep,name=skill_files,json=skillFiles,proto3" json:"skill_files,omitempty"`                  // Committed SKILL.md entry points and explicit support files; not tool grants.
+	InputsFile       string                 `protobuf:"bytes,11,opt,name=inputs_file,json=inputsFile,proto3" json:"inputs_file,omitempty"`                  // Committed blaxsmith.inputs/v1alpha1 configuration.
+	AgentDefinition  string                 `protobuf:"bytes,12,opt,name=agent_definition,json=agentDefinition,proto3" json:"agent_definition,omitempty"`   // Optional definition ID in inputs_file.
+	ConnectionId     string                 `protobuf:"bytes,13,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`            // Optional exact model account; no automatic fallback.
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *StartGoalPlanningRequest) Reset() {
+	*x = StartGoalPlanningRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartGoalPlanningRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartGoalPlanningRequest) ProtoMessage() {}
+
+func (x *StartGoalPlanningRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartGoalPlanningRequest.ProtoReflect.Descriptor instead.
+func (*StartGoalPlanningRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *StartGoalPlanningRequest) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+func (x *StartGoalPlanningRequest) GetExpectedRevision() int64 {
+	if x != nil {
+		return x.ExpectedRevision
+	}
+	return 0
+}
+
+func (x *StartGoalPlanningRequest) GetRequestKey() string {
+	if x != nil {
+		return x.RequestKey
+	}
+	return ""
+}
+
+func (x *StartGoalPlanningRequest) GetHarness() string {
+	if x != nil {
+		return x.Harness
+	}
+	return ""
+}
+
+func (x *StartGoalPlanningRequest) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *StartGoalPlanningRequest) GetEffort() string {
+	if x != nil {
+		return x.Effort
+	}
+	return ""
+}
+
+func (x *StartGoalPlanningRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *StartGoalPlanningRequest) GetRuntimeSeconds() int32 {
+	if x != nil {
+		return x.RuntimeSeconds
+	}
+	return 0
+}
+
+func (x *StartGoalPlanningRequest) GetInstructionFiles() []string {
+	if x != nil {
+		return x.InstructionFiles
+	}
+	return nil
+}
+
+func (x *StartGoalPlanningRequest) GetSkillFiles() []string {
+	if x != nil {
+		return x.SkillFiles
+	}
+	return nil
+}
+
+func (x *StartGoalPlanningRequest) GetInputsFile() string {
+	if x != nil {
+		return x.InputsFile
+	}
+	return ""
+}
+
+func (x *StartGoalPlanningRequest) GetAgentDefinition() string {
+	if x != nil {
+		return x.AgentDefinition
+	}
+	return ""
+}
+
+func (x *StartGoalPlanningRequest) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+type StartGoalPlanningResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Run           *Run                   `protobuf:"bytes,1,opt,name=run,proto3" json:"run,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartGoalPlanningResponse) Reset() {
+	*x = StartGoalPlanningResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartGoalPlanningResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartGoalPlanningResponse) ProtoMessage() {}
+
+func (x *StartGoalPlanningResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartGoalPlanningResponse.ProtoReflect.Descriptor instead.
+func (*StartGoalPlanningResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *StartGoalPlanningResponse) GetRun() *Run {
+	if x != nil {
+		return x.Run
+	}
+	return nil
+}
+
+type GoalRun struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	State         string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	GoalRevision  int64                  `protobuf:"varint,3,opt,name=goal_revision,json=goalRevision,proto3" json:"goal_revision,omitempty"`
+	PlanVersion   int64                  `protobuf:"varint,4,opt,name=plan_version,json=planVersion,proto3" json:"plan_version,omitempty"`
+	CheckpointId  string                 `protobuf:"bytes,5,opt,name=checkpoint_id,json=checkpointId,proto3" json:"checkpoint_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GoalRun) Reset() {
+	*x = GoalRun{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GoalRun) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GoalRun) ProtoMessage() {}
+
+func (x *GoalRun) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GoalRun.ProtoReflect.Descriptor instead.
+func (*GoalRun) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *GoalRun) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *GoalRun) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *GoalRun) GetGoalRevision() int64 {
+	if x != nil {
+		return x.GoalRevision
+	}
+	return 0
+}
+
+func (x *GoalRun) GetPlanVersion() int64 {
+	if x != nil {
+		return x.PlanVersion
+	}
+	return 0
+}
+
+func (x *GoalRun) GetCheckpointId() string {
+	if x != nil {
+		return x.CheckpointId
+	}
+	return ""
+}
+
+type GoalPlan struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Version          int64                  `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	GoalRevision     int64                  `protobuf:"varint,2,opt,name=goal_revision,json=goalRevision,proto3" json:"goal_revision,omitempty"`
+	ContentJson      string                 `protobuf:"bytes,3,opt,name=content_json,json=contentJson,proto3" json:"content_json,omitempty"`
+	Sha256           string                 `protobuf:"bytes,4,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	SourceRunId      string                 `protobuf:"bytes,5,opt,name=source_run_id,json=sourceRunId,proto3" json:"source_run_id,omitempty"`
+	SourceEvidenceId string                 `protobuf:"bytes,6,opt,name=source_evidence_id,json=sourceEvidenceId,proto3" json:"source_evidence_id,omitempty"`
+	CreatedAt        string                 `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GoalPlan) Reset() {
+	*x = GoalPlan{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GoalPlan) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GoalPlan) ProtoMessage() {}
+
+func (x *GoalPlan) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GoalPlan.ProtoReflect.Descriptor instead.
+func (*GoalPlan) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *GoalPlan) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *GoalPlan) GetGoalRevision() int64 {
+	if x != nil {
+		return x.GoalRevision
+	}
+	return 0
+}
+
+func (x *GoalPlan) GetContentJson() string {
+	if x != nil {
+		return x.ContentJson
+	}
+	return ""
+}
+
+func (x *GoalPlan) GetSha256() string {
+	if x != nil {
+		return x.Sha256
+	}
+	return ""
+}
+
+func (x *GoalPlan) GetSourceRunId() string {
+	if x != nil {
+		return x.SourceRunId
+	}
+	return ""
+}
+
+func (x *GoalPlan) GetSourceEvidenceId() string {
+	if x != nil {
+		return x.SourceEvidenceId
+	}
+	return ""
+}
+
+func (x *GoalPlan) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+type GetGoalPlansRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GoalId        string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	BeforeVersion int64                  `protobuf:"varint,2,opt,name=before_version,json=beforeVersion,proto3" json:"before_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGoalPlansRequest) Reset() {
+	*x = GetGoalPlansRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGoalPlansRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGoalPlansRequest) ProtoMessage() {}
+
+func (x *GetGoalPlansRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGoalPlansRequest.ProtoReflect.Descriptor instead.
+func (*GetGoalPlansRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *GetGoalPlansRequest) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+func (x *GetGoalPlansRequest) GetBeforeVersion() int64 {
+	if x != nil {
+		return x.BeforeVersion
+	}
+	return 0
+}
+
+type GetGoalPlansResponse struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Plans             []*GoalPlan            `protobuf:"bytes,1,rep,name=plans,proto3" json:"plans,omitempty"`
+	Runs              []*GoalRun             `protobuf:"bytes,2,rep,name=runs,proto3" json:"runs,omitempty"` // Latest 20; full execution history is in Runs.
+	NextBeforeVersion int64                  `protobuf:"varint,3,opt,name=next_before_version,json=nextBeforeVersion,proto3" json:"next_before_version,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *GetGoalPlansResponse) Reset() {
+	*x = GetGoalPlansResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGoalPlansResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGoalPlansResponse) ProtoMessage() {}
+
+func (x *GetGoalPlansResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGoalPlansResponse.ProtoReflect.Descriptor instead.
+func (*GetGoalPlansResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *GetGoalPlansResponse) GetPlans() []*GoalPlan {
+	if x != nil {
+		return x.Plans
+	}
+	return nil
+}
+
+func (x *GetGoalPlansResponse) GetRuns() []*GoalRun {
+	if x != nil {
+		return x.Runs
+	}
+	return nil
+}
+
+func (x *GetGoalPlansResponse) GetNextBeforeVersion() int64 {
+	if x != nil {
+		return x.NextBeforeVersion
+	}
+	return 0
+}
+
+type SaveGoalPlanRequest struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	GoalId               string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	RequestKey           string                 `protobuf:"bytes,2,opt,name=request_key,json=requestKey,proto3" json:"request_key,omitempty"`
+	ExpectedGoalRevision int64                  `protobuf:"varint,3,opt,name=expected_goal_revision,json=expectedGoalRevision,proto3" json:"expected_goal_revision,omitempty"`
+	ExpectedPlanVersion  int64                  `protobuf:"varint,4,opt,name=expected_plan_version,json=expectedPlanVersion,proto3" json:"expected_plan_version,omitempty"`
+	ContentJson          string                 `protobuf:"bytes,5,opt,name=content_json,json=contentJson,proto3" json:"content_json,omitempty"` // Edited plan; mutually exclusive with evidence_id.
+	EvidenceId           string                 `protobuf:"bytes,6,opt,name=evidence_id,json=evidenceId,proto3" json:"evidence_id,omitempty"`    // Import the completed planner's immutable artifact.
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *SaveGoalPlanRequest) Reset() {
+	*x = SaveGoalPlanRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveGoalPlanRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveGoalPlanRequest) ProtoMessage() {}
+
+func (x *SaveGoalPlanRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveGoalPlanRequest.ProtoReflect.Descriptor instead.
+func (*SaveGoalPlanRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{71}
+}
+
+func (x *SaveGoalPlanRequest) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+func (x *SaveGoalPlanRequest) GetRequestKey() string {
+	if x != nil {
+		return x.RequestKey
+	}
+	return ""
+}
+
+func (x *SaveGoalPlanRequest) GetExpectedGoalRevision() int64 {
+	if x != nil {
+		return x.ExpectedGoalRevision
+	}
+	return 0
+}
+
+func (x *SaveGoalPlanRequest) GetExpectedPlanVersion() int64 {
+	if x != nil {
+		return x.ExpectedPlanVersion
+	}
+	return 0
+}
+
+func (x *SaveGoalPlanRequest) GetContentJson() string {
+	if x != nil {
+		return x.ContentJson
+	}
+	return ""
+}
+
+func (x *SaveGoalPlanRequest) GetEvidenceId() string {
+	if x != nil {
+		return x.EvidenceId
+	}
+	return ""
+}
+
+type SaveGoalPlanResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       int64                  `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveGoalPlanResponse) Reset() {
+	*x = SaveGoalPlanResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[72]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveGoalPlanResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveGoalPlanResponse) ProtoMessage() {}
+
+func (x *SaveGoalPlanResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[72]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveGoalPlanResponse.ProtoReflect.Descriptor instead.
+func (*SaveGoalPlanResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{72}
+}
+
+func (x *SaveGoalPlanResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+type GetDeliveryReportRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDeliveryReportRequest) Reset() {
+	*x = GetDeliveryReportRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[73]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDeliveryReportRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDeliveryReportRequest) ProtoMessage() {}
+
+func (x *GetDeliveryReportRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[73]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDeliveryReportRequest.ProtoReflect.Descriptor instead.
+func (*GetDeliveryReportRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{73}
+}
+
+func (x *GetDeliveryReportRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+type GetDeliveryReportResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Markdown      string                 `protobuf:"bytes,1,opt,name=markdown,proto3" json:"markdown,omitempty"`
+	Sha256        string                 `protobuf:"bytes,2,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	GeneratedAt   string                 `protobuf:"bytes,3,opt,name=generated_at,json=generatedAt,proto3" json:"generated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDeliveryReportResponse) Reset() {
+	*x = GetDeliveryReportResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[74]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDeliveryReportResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDeliveryReportResponse) ProtoMessage() {}
+
+func (x *GetDeliveryReportResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[74]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDeliveryReportResponse.ProtoReflect.Descriptor instead.
+func (*GetDeliveryReportResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{74}
+}
+
+func (x *GetDeliveryReportResponse) GetMarkdown() string {
+	if x != nil {
+		return x.Markdown
+	}
+	return ""
+}
+
+func (x *GetDeliveryReportResponse) GetSha256() string {
+	if x != nil {
+		return x.Sha256
+	}
+	return ""
+}
+
+func (x *GetDeliveryReportResponse) GetGeneratedAt() string {
+	if x != nil {
+		return x.GeneratedAt
+	}
+	return ""
+}
+
 type GetRunRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
@@ -2221,7 +4703,7 @@ type GetRunRequest struct {
 
 func (x *GetRunRequest) Reset() {
 	*x = GetRunRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[39]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2233,7 +4715,7 @@ func (x *GetRunRequest) String() string {
 func (*GetRunRequest) ProtoMessage() {}
 
 func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[39]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2246,7 +4728,7 @@ func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunRequest.ProtoReflect.Descriptor instead.
 func (*GetRunRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{39}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *GetRunRequest) GetRunId() string {
@@ -2265,7 +4747,7 @@ type GetRunResponse struct {
 
 func (x *GetRunResponse) Reset() {
 	*x = GetRunResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[40]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2277,7 +4759,7 @@ func (x *GetRunResponse) String() string {
 func (*GetRunResponse) ProtoMessage() {}
 
 func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[40]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2290,7 +4772,7 @@ func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunResponse.ProtoReflect.Descriptor instead.
 func (*GetRunResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{40}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *GetRunResponse) GetRun() *Run {
@@ -2300,24 +4782,461 @@ func (x *GetRunResponse) GetRun() *Run {
 	return nil
 }
 
+// Anvil compiles this saved plan through the ordinary recipe/dispatch path.
+type GoalReviewOptions struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Mode             string                 `protobuf:"bytes,1,opt,name=mode,proto3" json:"mode,omitempty"` // off (default), advisory, or required.
+	Harness          string                 `protobuf:"bytes,2,opt,name=harness,proto3" json:"harness,omitempty"`
+	Model            string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	Effort           string                 `protobuf:"bytes,4,opt,name=effort,proto3" json:"effort,omitempty"`
+	InstructionFiles []string               `protobuf:"bytes,5,rep,name=instruction_files,json=instructionFiles,proto3" json:"instruction_files,omitempty"`
+	SkillFiles       []string               `protobuf:"bytes,6,rep,name=skill_files,json=skillFiles,proto3" json:"skill_files,omitempty"`
+	InputsFile       string                 `protobuf:"bytes,7,opt,name=inputs_file,json=inputsFile,proto3" json:"inputs_file,omitempty"`
+	AgentDefinition  string                 `protobuf:"bytes,8,opt,name=agent_definition,json=agentDefinition,proto3" json:"agent_definition,omitempty"`
+	ConnectionId     string                 `protobuf:"bytes,9,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GoalReviewOptions) Reset() {
+	*x = GoalReviewOptions{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[77]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GoalReviewOptions) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GoalReviewOptions) ProtoMessage() {}
+
+func (x *GoalReviewOptions) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[77]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GoalReviewOptions.ProtoReflect.Descriptor instead.
+func (*GoalReviewOptions) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{77}
+}
+
+func (x *GoalReviewOptions) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *GoalReviewOptions) GetHarness() string {
+	if x != nil {
+		return x.Harness
+	}
+	return ""
+}
+
+func (x *GoalReviewOptions) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *GoalReviewOptions) GetEffort() string {
+	if x != nil {
+		return x.Effort
+	}
+	return ""
+}
+
+func (x *GoalReviewOptions) GetInstructionFiles() []string {
+	if x != nil {
+		return x.InstructionFiles
+	}
+	return nil
+}
+
+func (x *GoalReviewOptions) GetSkillFiles() []string {
+	if x != nil {
+		return x.SkillFiles
+	}
+	return nil
+}
+
+func (x *GoalReviewOptions) GetInputsFile() string {
+	if x != nil {
+		return x.InputsFile
+	}
+	return ""
+}
+
+func (x *GoalReviewOptions) GetAgentDefinition() string {
+	if x != nil {
+		return x.AgentDefinition
+	}
+	return ""
+}
+
+func (x *GoalReviewOptions) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+type GoalExecutionOptions struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	GoalId               string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	ExpectedGoalRevision int64                  `protobuf:"varint,2,opt,name=expected_goal_revision,json=expectedGoalRevision,proto3" json:"expected_goal_revision,omitempty"`
+	PlanVersion          int64                  `protobuf:"varint,3,opt,name=plan_version,json=planVersion,proto3" json:"plan_version,omitempty"`
+	Harness              string                 `protobuf:"bytes,4,opt,name=harness,proto3" json:"harness,omitempty"`
+	Model                string                 `protobuf:"bytes,5,opt,name=model,proto3" json:"model,omitempty"`
+	Effort               string                 `protobuf:"bytes,6,opt,name=effort,proto3" json:"effort,omitempty"`
+	RuntimeSeconds       int32                  `protobuf:"varint,7,opt,name=runtime_seconds,json=runtimeSeconds,proto3" json:"runtime_seconds,omitempty"`       // 60–3600, per attempt/stage; not a spending cap.
+	CorrectionCycles     int32                  `protobuf:"varint,8,opt,name=correction_cycles,json=correctionCycles,proto3" json:"correction_cycles,omitempty"` // 0–10; 0 permits one attempt per stage.
+	Acceptance           string                 `protobuf:"bytes,9,opt,name=acceptance,proto3" json:"acceptance,omitempty"`                                      // Explicit manual or policy; project checks remain unchanged.
+	InstructionFiles     []string               `protobuf:"bytes,10,rep,name=instruction_files,json=instructionFiles,proto3" json:"instruction_files,omitempty"` // Committed repository-relative rules; frozen with the run.
+	SkillFiles           []string               `protobuf:"bytes,11,rep,name=skill_files,json=skillFiles,proto3" json:"skill_files,omitempty"`                   // Committed SKILL.md entry points and explicit support files; not tool grants.
+	Review               *GoalReviewOptions     `protobuf:"bytes,12,opt,name=review,proto3" json:"review,omitempty"`
+	InputsFile           string                 `protobuf:"bytes,13,opt,name=inputs_file,json=inputsFile,proto3" json:"inputs_file,omitempty"`
+	AgentDefinition      string                 `protobuf:"bytes,14,opt,name=agent_definition,json=agentDefinition,proto3" json:"agent_definition,omitempty"`
+	ConnectionId         string                 `protobuf:"bytes,16,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	CheckpointId         string                 `protobuf:"bytes,17,opt,name=checkpoint_id,json=checkpointId,proto3" json:"checkpoint_id,omitempty"`    // Optional accepted checkpoint from this goal; exact source commit, rechecked at admission.
+	ReadinessMode        string                 `protobuf:"bytes,15,opt,name=readiness_mode,json=readinessMode,proto3" json:"readiness_mode,omitempty"` // off, advisory (default), required; blocks unresolved planning questions only when required.
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *GoalExecutionOptions) Reset() {
+	*x = GoalExecutionOptions{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[78]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GoalExecutionOptions) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GoalExecutionOptions) ProtoMessage() {}
+
+func (x *GoalExecutionOptions) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[78]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GoalExecutionOptions.ProtoReflect.Descriptor instead.
+func (*GoalExecutionOptions) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{78}
+}
+
+func (x *GoalExecutionOptions) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+func (x *GoalExecutionOptions) GetExpectedGoalRevision() int64 {
+	if x != nil {
+		return x.ExpectedGoalRevision
+	}
+	return 0
+}
+
+func (x *GoalExecutionOptions) GetPlanVersion() int64 {
+	if x != nil {
+		return x.PlanVersion
+	}
+	return 0
+}
+
+func (x *GoalExecutionOptions) GetHarness() string {
+	if x != nil {
+		return x.Harness
+	}
+	return ""
+}
+
+func (x *GoalExecutionOptions) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *GoalExecutionOptions) GetEffort() string {
+	if x != nil {
+		return x.Effort
+	}
+	return ""
+}
+
+func (x *GoalExecutionOptions) GetRuntimeSeconds() int32 {
+	if x != nil {
+		return x.RuntimeSeconds
+	}
+	return 0
+}
+
+func (x *GoalExecutionOptions) GetCorrectionCycles() int32 {
+	if x != nil {
+		return x.CorrectionCycles
+	}
+	return 0
+}
+
+func (x *GoalExecutionOptions) GetAcceptance() string {
+	if x != nil {
+		return x.Acceptance
+	}
+	return ""
+}
+
+func (x *GoalExecutionOptions) GetInstructionFiles() []string {
+	if x != nil {
+		return x.InstructionFiles
+	}
+	return nil
+}
+
+func (x *GoalExecutionOptions) GetSkillFiles() []string {
+	if x != nil {
+		return x.SkillFiles
+	}
+	return nil
+}
+
+func (x *GoalExecutionOptions) GetReview() *GoalReviewOptions {
+	if x != nil {
+		return x.Review
+	}
+	return nil
+}
+
+func (x *GoalExecutionOptions) GetInputsFile() string {
+	if x != nil {
+		return x.InputsFile
+	}
+	return ""
+}
+
+func (x *GoalExecutionOptions) GetAgentDefinition() string {
+	if x != nil {
+		return x.AgentDefinition
+	}
+	return ""
+}
+
+func (x *GoalExecutionOptions) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *GoalExecutionOptions) GetCheckpointId() string {
+	if x != nil {
+		return x.CheckpointId
+	}
+	return ""
+}
+
+func (x *GoalExecutionOptions) GetReadinessMode() string {
+	if x != nil {
+		return x.ReadinessMode
+	}
+	return ""
+}
+
+type ExecutionTaskPacket struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	DependsOn     []string               `protobuf:"bytes,3,rep,name=depends_on,json=dependsOn,proto3" json:"depends_on,omitempty"`
+	Path          string                 `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
+	Sha256        string                 `protobuf:"bytes,5,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	ContentJson   string                 `protobuf:"bytes,6,opt,name=content_json,json=contentJson,proto3" json:"content_json,omitempty"` // Exact compiled assignment bytes frozen into the run.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecutionTaskPacket) Reset() {
+	*x = ExecutionTaskPacket{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[79]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecutionTaskPacket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecutionTaskPacket) ProtoMessage() {}
+
+func (x *ExecutionTaskPacket) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[79]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecutionTaskPacket.ProtoReflect.Descriptor instead.
+func (*ExecutionTaskPacket) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{79}
+}
+
+func (x *ExecutionTaskPacket) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *ExecutionTaskPacket) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *ExecutionTaskPacket) GetDependsOn() []string {
+	if x != nil {
+		return x.DependsOn
+	}
+	return nil
+}
+
+func (x *ExecutionTaskPacket) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *ExecutionTaskPacket) GetSha256() string {
+	if x != nil {
+		return x.Sha256
+	}
+	return ""
+}
+
+func (x *ExecutionTaskPacket) GetContentJson() string {
+	if x != nil {
+		return x.ContentJson
+	}
+	return ""
+}
+
+// Bind an ordinary recipe to a factory-owned goal without invoking Anvil.
+type GoalContext struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	GoalId           string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	ExpectedRevision int64                  `protobuf:"varint,2,opt,name=expected_revision,json=expectedRevision,proto3" json:"expected_revision,omitempty"`
+	PlanVersion      int64                  `protobuf:"varint,3,opt,name=plan_version,json=planVersion,proto3" json:"plan_version,omitempty"`   // Zero for planning; a positive revision for execution.
+	CheckpointId     string                 `protobuf:"bytes,4,opt,name=checkpoint_id,json=checkpointId,proto3" json:"checkpoint_id,omitempty"` // Optional accepted checkpoint from this goal; no implicit continuation.
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GoalContext) Reset() {
+	*x = GoalContext{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[80]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GoalContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GoalContext) ProtoMessage() {}
+
+func (x *GoalContext) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[80]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GoalContext.ProtoReflect.Descriptor instead.
+func (*GoalContext) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{80}
+}
+
+func (x *GoalContext) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+func (x *GoalContext) GetExpectedRevision() int64 {
+	if x != nil {
+		return x.ExpectedRevision
+	}
+	return 0
+}
+
+func (x *GoalContext) GetPlanVersion() int64 {
+	if x != nil {
+		return x.PlanVersion
+	}
+	return 0
+}
+
+func (x *GoalContext) GetCheckpointId() string {
+	if x != nil {
+		return x.CheckpointId
+	}
+	return ""
+}
+
 type LaunchRunRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId      string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	LaunchKey      string                 `protobuf:"bytes,2,opt,name=launch_key,json=launchKey,proto3" json:"launch_key,omitempty"`                // Project-scoped idempotency key.
-	RecipePath     string                 `protobuf:"bytes,3,opt,name=recipe_path,json=recipePath,proto3" json:"recipe_path,omitempty"`             // Committed repository path.
-	SpecPath       string                 `protobuf:"bytes,4,opt,name=spec_path,json=specPath,proto3" json:"spec_path,omitempty"`                   // Committed repository path.
-	TranscriptPath string                 `protobuf:"bytes,5,opt,name=transcript_path,json=transcriptPath,proto3" json:"transcript_path,omitempty"` // Committed repository path.
-	Scope          string                 `protobuf:"bytes,6,opt,name=scope,proto3" json:"scope,omitempty"`                                         // Repository-relative code scope.
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId  string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	LaunchKey  string                 `protobuf:"bytes,2,opt,name=launch_key,json=launchKey,proto3" json:"launch_key,omitempty"`    // Project-scoped idempotency key.
+	RecipePath string                 `protobuf:"bytes,3,opt,name=recipe_path,json=recipePath,proto3" json:"recipe_path,omitempty"` // Committed repository path.
+	Scope      string                 `protobuf:"bytes,6,opt,name=scope,proto3" json:"scope,omitempty"`                             // Repository-relative code scope.
 	// Library recipe version to freeze instead of recipe_path. Its bytes are
 	// frozen under the version's path label; prompts and skills come from Git.
 	RecipeVersionId string `protobuf:"bytes,7,opt,name=recipe_version_id,json=recipeVersionId,proto3" json:"recipe_version_id,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Optional pair returned by PreviewRun. Admission rejects changed inputs.
+	ExpectedBundleSha256       string                `protobuf:"bytes,8,opt,name=expected_bundle_sha256,json=expectedBundleSha256,proto3" json:"expected_bundle_sha256,omitempty"`
+	ExpectedVerificationSha256 string                `protobuf:"bytes,9,opt,name=expected_verification_sha256,json=expectedVerificationSha256,proto3" json:"expected_verification_sha256,omitempty"`
+	GoalExecution              *GoalExecutionOptions `protobuf:"bytes,10,opt,name=goal_execution,json=goalExecution,proto3" json:"goal_execution,omitempty"` // Exclusive with recipe path/version; requires both preview hashes.
+	GoalContext                *GoalContext          `protobuf:"bytes,11,opt,name=goal_context,json=goalContext,proto3" json:"goal_context,omitempty"`       // Ordinary recipe binding; exclusive with goal_execution; requires preview hashes.
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *LaunchRunRequest) Reset() {
 	*x = LaunchRunRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[41]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2329,7 +5248,7 @@ func (x *LaunchRunRequest) String() string {
 func (*LaunchRunRequest) ProtoMessage() {}
 
 func (x *LaunchRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[41]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2342,7 +5261,7 @@ func (x *LaunchRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LaunchRunRequest.ProtoReflect.Descriptor instead.
 func (*LaunchRunRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{41}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *LaunchRunRequest) GetProjectId() string {
@@ -2366,20 +5285,6 @@ func (x *LaunchRunRequest) GetRecipePath() string {
 	return ""
 }
 
-func (x *LaunchRunRequest) GetSpecPath() string {
-	if x != nil {
-		return x.SpecPath
-	}
-	return ""
-}
-
-func (x *LaunchRunRequest) GetTranscriptPath() string {
-	if x != nil {
-		return x.TranscriptPath
-	}
-	return ""
-}
-
 func (x *LaunchRunRequest) GetScope() string {
 	if x != nil {
 		return x.Scope
@@ -2394,6 +5299,34 @@ func (x *LaunchRunRequest) GetRecipeVersionId() string {
 	return ""
 }
 
+func (x *LaunchRunRequest) GetExpectedBundleSha256() string {
+	if x != nil {
+		return x.ExpectedBundleSha256
+	}
+	return ""
+}
+
+func (x *LaunchRunRequest) GetExpectedVerificationSha256() string {
+	if x != nil {
+		return x.ExpectedVerificationSha256
+	}
+	return ""
+}
+
+func (x *LaunchRunRequest) GetGoalExecution() *GoalExecutionOptions {
+	if x != nil {
+		return x.GoalExecution
+	}
+	return nil
+}
+
+func (x *LaunchRunRequest) GetGoalContext() *GoalContext {
+	if x != nil {
+		return x.GoalContext
+	}
+	return nil
+}
+
 type LaunchRunResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Run           *Run                   `protobuf:"bytes,1,opt,name=run,proto3" json:"run,omitempty"`
@@ -2403,7 +5336,7 @@ type LaunchRunResponse struct {
 
 func (x *LaunchRunResponse) Reset() {
 	*x = LaunchRunResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[42]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2415,7 +5348,7 @@ func (x *LaunchRunResponse) String() string {
 func (*LaunchRunResponse) ProtoMessage() {}
 
 func (x *LaunchRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[42]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2428,7 +5361,7 @@ func (x *LaunchRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LaunchRunResponse.ProtoReflect.Descriptor instead.
 func (*LaunchRunResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{42}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *LaunchRunResponse) GetRun() *Run {
@@ -2447,7 +5380,7 @@ type GetLaunchAvailabilityRequest struct {
 
 func (x *GetLaunchAvailabilityRequest) Reset() {
 	*x = GetLaunchAvailabilityRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[43]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2459,7 +5392,7 @@ func (x *GetLaunchAvailabilityRequest) String() string {
 func (*GetLaunchAvailabilityRequest) ProtoMessage() {}
 
 func (x *GetLaunchAvailabilityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[43]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2472,7 +5405,7 @@ func (x *GetLaunchAvailabilityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLaunchAvailabilityRequest.ProtoReflect.Descriptor instead.
 func (*GetLaunchAvailabilityRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{43}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *GetLaunchAvailabilityRequest) GetProjectId() string {
@@ -2492,7 +5425,7 @@ type GetLaunchAvailabilityResponse struct {
 
 func (x *GetLaunchAvailabilityResponse) Reset() {
 	*x = GetLaunchAvailabilityResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[44]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2504,7 +5437,7 @@ func (x *GetLaunchAvailabilityResponse) String() string {
 func (*GetLaunchAvailabilityResponse) ProtoMessage() {}
 
 func (x *GetLaunchAvailabilityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[44]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2517,7 +5450,7 @@ func (x *GetLaunchAvailabilityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLaunchAvailabilityResponse.ProtoReflect.Descriptor instead.
 func (*GetLaunchAvailabilityResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{44}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *GetLaunchAvailabilityResponse) GetEnabled() bool {
@@ -2530,6 +5463,384 @@ func (x *GetLaunchAvailabilityResponse) GetEnabled() bool {
 func (x *GetLaunchAvailabilityResponse) GetReason() string {
 	if x != nil {
 		return x.Reason
+	}
+	return ""
+}
+
+// Discovery describes platform support, not caller grants or runtime readiness.
+type GetPlatformCapabilitiesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPlatformCapabilitiesRequest) Reset() {
+	*x = GetPlatformCapabilitiesRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[85]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPlatformCapabilitiesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPlatformCapabilitiesRequest) ProtoMessage() {}
+
+func (x *GetPlatformCapabilitiesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[85]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPlatformCapabilitiesRequest.ProtoReflect.Descriptor instead.
+func (*GetPlatformCapabilitiesRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{85}
+}
+
+type GetPlatformCapabilitiesResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	RecipeSchemas      []string               `protobuf:"bytes,1,rep,name=recipe_schemas,json=recipeSchemas,proto3" json:"recipe_schemas,omitempty"`
+	Harnesses          []string               `protobuf:"bytes,2,rep,name=harnesses,proto3" json:"harnesses,omitempty"`
+	AcceptanceModes    []string               `protobuf:"bytes,3,rep,name=acceptance_modes,json=acceptanceModes,proto3" json:"acceptance_modes,omitempty"`
+	CheckModes         []string               `protobuf:"bytes,4,rep,name=check_modes,json=checkModes,proto3" json:"check_modes,omitempty"`
+	MaxStages          int32                  `protobuf:"varint,5,opt,name=max_stages,json=maxStages,proto3" json:"max_stages,omitempty"`
+	MaxImplementStages int32                  `protobuf:"varint,6,opt,name=max_implement_stages,json=maxImplementStages,proto3" json:"max_implement_stages,omitempty"`
+	LaunchPreview      bool                   `protobuf:"varint,7,opt,name=launch_preview,json=launchPreview,proto3" json:"launch_preview,omitempty"`
+	MachineApi         bool                   `protobuf:"varint,8,opt,name=machine_api,json=machineApi,proto3" json:"machine_api,omitempty"`
+	McpTransports      []string               `protobuf:"bytes,9,rep,name=mcp_transports,json=mcpTransports,proto3" json:"mcp_transports,omitempty"`
+	ApiScopes          []string               `protobuf:"bytes,10,rep,name=api_scopes,json=apiScopes,proto3" json:"api_scopes,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GetPlatformCapabilitiesResponse) Reset() {
+	*x = GetPlatformCapabilitiesResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[86]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPlatformCapabilitiesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPlatformCapabilitiesResponse) ProtoMessage() {}
+
+func (x *GetPlatformCapabilitiesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[86]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPlatformCapabilitiesResponse.ProtoReflect.Descriptor instead.
+func (*GetPlatformCapabilitiesResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{86}
+}
+
+func (x *GetPlatformCapabilitiesResponse) GetRecipeSchemas() []string {
+	if x != nil {
+		return x.RecipeSchemas
+	}
+	return nil
+}
+
+func (x *GetPlatformCapabilitiesResponse) GetHarnesses() []string {
+	if x != nil {
+		return x.Harnesses
+	}
+	return nil
+}
+
+func (x *GetPlatformCapabilitiesResponse) GetAcceptanceModes() []string {
+	if x != nil {
+		return x.AcceptanceModes
+	}
+	return nil
+}
+
+func (x *GetPlatformCapabilitiesResponse) GetCheckModes() []string {
+	if x != nil {
+		return x.CheckModes
+	}
+	return nil
+}
+
+func (x *GetPlatformCapabilitiesResponse) GetMaxStages() int32 {
+	if x != nil {
+		return x.MaxStages
+	}
+	return 0
+}
+
+func (x *GetPlatformCapabilitiesResponse) GetMaxImplementStages() int32 {
+	if x != nil {
+		return x.MaxImplementStages
+	}
+	return 0
+}
+
+func (x *GetPlatformCapabilitiesResponse) GetLaunchPreview() bool {
+	if x != nil {
+		return x.LaunchPreview
+	}
+	return false
+}
+
+func (x *GetPlatformCapabilitiesResponse) GetMachineApi() bool {
+	if x != nil {
+		return x.MachineApi
+	}
+	return false
+}
+
+func (x *GetPlatformCapabilitiesResponse) GetMcpTransports() []string {
+	if x != nil {
+		return x.McpTransports
+	}
+	return nil
+}
+
+func (x *GetPlatformCapabilitiesResponse) GetApiScopes() []string {
+	if x != nil {
+		return x.ApiScopes
+	}
+	return nil
+}
+
+type PreviewRunRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId       string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	RecipePath      string                 `protobuf:"bytes,2,opt,name=recipe_path,json=recipePath,proto3" json:"recipe_path,omitempty"`
+	RecipeVersionId string                 `protobuf:"bytes,3,opt,name=recipe_version_id,json=recipeVersionId,proto3" json:"recipe_version_id,omitempty"`
+	Scope           string                 `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`
+	GoalExecution   *GoalExecutionOptions  `protobuf:"bytes,5,opt,name=goal_execution,json=goalExecution,proto3" json:"goal_execution,omitempty"` // Exclusive with recipe path/version.
+	GoalContext     *GoalContext           `protobuf:"bytes,6,opt,name=goal_context,json=goalContext,proto3" json:"goal_context,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *PreviewRunRequest) Reset() {
+	*x = PreviewRunRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[87]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PreviewRunRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PreviewRunRequest) ProtoMessage() {}
+
+func (x *PreviewRunRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[87]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PreviewRunRequest.ProtoReflect.Descriptor instead.
+func (*PreviewRunRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{87}
+}
+
+func (x *PreviewRunRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *PreviewRunRequest) GetRecipePath() string {
+	if x != nil {
+		return x.RecipePath
+	}
+	return ""
+}
+
+func (x *PreviewRunRequest) GetRecipeVersionId() string {
+	if x != nil {
+		return x.RecipeVersionId
+	}
+	return ""
+}
+
+func (x *PreviewRunRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *PreviewRunRequest) GetGoalExecution() *GoalExecutionOptions {
+	if x != nil {
+		return x.GoalExecution
+	}
+	return nil
+}
+
+func (x *PreviewRunRequest) GetGoalContext() *GoalContext {
+	if x != nil {
+		return x.GoalContext
+	}
+	return nil
+}
+
+type PreviewRunResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	SourceCommit       string                 `protobuf:"bytes,1,opt,name=source_commit,json=sourceCommit,proto3" json:"source_commit,omitempty"`
+	BundleSha256       string                 `protobuf:"bytes,2,opt,name=bundle_sha256,json=bundleSha256,proto3" json:"bundle_sha256,omitempty"`
+	VerificationSha256 string                 `protobuf:"bytes,3,opt,name=verification_sha256,json=verificationSha256,proto3" json:"verification_sha256,omitempty"`
+	// Resolved recipe includes extension stages. No prompt/artifact bytes.
+	RecipeJson             string                 `protobuf:"bytes,4,opt,name=recipe_json,json=recipeJson,proto3" json:"recipe_json,omitempty"`
+	StageOrder             []string               `protobuf:"bytes,5,rep,name=stage_order,json=stageOrder,proto3" json:"stage_order,omitempty"`
+	Artifacts              []*FrozenInputFile     `protobuf:"bytes,6,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
+	Checks                 []*VerificationCheck   `protobuf:"bytes,7,rep,name=checks,proto3" json:"checks,omitempty"`
+	Blockers               []string               `protobuf:"bytes,8,rep,name=blockers,proto3" json:"blockers,omitempty"`
+	CanLaunch              bool                   `protobuf:"varint,9,opt,name=can_launch,json=canLaunch,proto3" json:"can_launch,omitempty"`                                          // Advisory snapshot; admission always rechecks.
+	TaskPackets            []*ExecutionTaskPacket `protobuf:"bytes,10,rep,name=task_packets,json=taskPackets,proto3" json:"task_packets,omitempty"`                                    // Instructions within one implementation stage.
+	EffectiveInputsJson    string                 `protobuf:"bytes,11,opt,name=effective_inputs_json,json=effectiveInputsJson,proto3" json:"effective_inputs_json,omitempty"`          // Scoped, resolved guidance, keyed by profile; not authority.
+	CheckpointId           string                 `protobuf:"bytes,13,opt,name=checkpoint_id,json=checkpointId,proto3" json:"checkpoint_id,omitempty"`                                 // Source lineage included in the frozen bundle digest.
+	RepositoryBaselineJson string                 `protobuf:"bytes,12,opt,name=repository_baseline_json,json=repositoryBaselineJson,proto3" json:"repository_baseline_json,omitempty"` // Observed setup and limitations; never passing test evidence.
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *PreviewRunResponse) Reset() {
+	*x = PreviewRunResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[88]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PreviewRunResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PreviewRunResponse) ProtoMessage() {}
+
+func (x *PreviewRunResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[88]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PreviewRunResponse.ProtoReflect.Descriptor instead.
+func (*PreviewRunResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{88}
+}
+
+func (x *PreviewRunResponse) GetSourceCommit() string {
+	if x != nil {
+		return x.SourceCommit
+	}
+	return ""
+}
+
+func (x *PreviewRunResponse) GetBundleSha256() string {
+	if x != nil {
+		return x.BundleSha256
+	}
+	return ""
+}
+
+func (x *PreviewRunResponse) GetVerificationSha256() string {
+	if x != nil {
+		return x.VerificationSha256
+	}
+	return ""
+}
+
+func (x *PreviewRunResponse) GetRecipeJson() string {
+	if x != nil {
+		return x.RecipeJson
+	}
+	return ""
+}
+
+func (x *PreviewRunResponse) GetStageOrder() []string {
+	if x != nil {
+		return x.StageOrder
+	}
+	return nil
+}
+
+func (x *PreviewRunResponse) GetArtifacts() []*FrozenInputFile {
+	if x != nil {
+		return x.Artifacts
+	}
+	return nil
+}
+
+func (x *PreviewRunResponse) GetChecks() []*VerificationCheck {
+	if x != nil {
+		return x.Checks
+	}
+	return nil
+}
+
+func (x *PreviewRunResponse) GetBlockers() []string {
+	if x != nil {
+		return x.Blockers
+	}
+	return nil
+}
+
+func (x *PreviewRunResponse) GetCanLaunch() bool {
+	if x != nil {
+		return x.CanLaunch
+	}
+	return false
+}
+
+func (x *PreviewRunResponse) GetTaskPackets() []*ExecutionTaskPacket {
+	if x != nil {
+		return x.TaskPackets
+	}
+	return nil
+}
+
+func (x *PreviewRunResponse) GetEffectiveInputsJson() string {
+	if x != nil {
+		return x.EffectiveInputsJson
+	}
+	return ""
+}
+
+func (x *PreviewRunResponse) GetCheckpointId() string {
+	if x != nil {
+		return x.CheckpointId
+	}
+	return ""
+}
+
+func (x *PreviewRunResponse) GetRepositoryBaselineJson() string {
+	if x != nil {
+		return x.RepositoryBaselineJson
 	}
 	return ""
 }
@@ -2552,13 +5863,14 @@ type RunTask struct {
 	LoopWith         string                 `protobuf:"bytes,14,opt,name=loop_with,json=loopWith,proto3" json:"loop_with,omitempty"`        // Correction target when this stage owns a loop.
 	MaxCycles        int32                  `protobuf:"varint,15,opt,name=max_cycles,json=maxCycles,proto3" json:"max_cycles,omitempty"`    // Loop cap before escalation, including granted raises.
 	LoopCycles       int32                  `protobuf:"varint,16,opt,name=loop_cycles,json=loopCycles,proto3" json:"loop_cycles,omitempty"` // Corrections this loop has requested so far.
+	ReviewMode       string                 `protobuf:"bytes,17,opt,name=review_mode,json=reviewMode,proto3" json:"review_mode,omitempty"`  // required (default) or advisory for review stages.
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
 func (x *RunTask) Reset() {
 	*x = RunTask{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[45]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2570,7 +5882,7 @@ func (x *RunTask) String() string {
 func (*RunTask) ProtoMessage() {}
 
 func (x *RunTask) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[45]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2583,7 +5895,7 @@ func (x *RunTask) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunTask.ProtoReflect.Descriptor instead.
 func (*RunTask) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{45}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *RunTask) GetId() string {
@@ -2698,6 +6010,13 @@ func (x *RunTask) GetLoopCycles() int32 {
 	return 0
 }
 
+func (x *RunTask) GetReviewMode() string {
+	if x != nil {
+		return x.ReviewMode
+	}
+	return ""
+}
+
 type FrozenInputFile struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
@@ -2708,7 +6027,7 @@ type FrozenInputFile struct {
 
 func (x *FrozenInputFile) Reset() {
 	*x = FrozenInputFile{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[46]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2720,7 +6039,7 @@ func (x *FrozenInputFile) String() string {
 func (*FrozenInputFile) ProtoMessage() {}
 
 func (x *FrozenInputFile) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[46]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2733,7 +6052,7 @@ func (x *FrozenInputFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrozenInputFile.ProtoReflect.Descriptor instead.
 func (*FrozenInputFile) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{46}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *FrozenInputFile) GetPath() string {
@@ -2759,7 +6078,7 @@ type ListRunTasksRequest struct {
 
 func (x *ListRunTasksRequest) Reset() {
 	*x = ListRunTasksRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[47]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2771,7 +6090,7 @@ func (x *ListRunTasksRequest) String() string {
 func (*ListRunTasksRequest) ProtoMessage() {}
 
 func (x *ListRunTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[47]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2784,7 +6103,7 @@ func (x *ListRunTasksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListRunTasksRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{47}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *ListRunTasksRequest) GetRunId() string {
@@ -2803,7 +6122,7 @@ type ListRunTasksResponse struct {
 
 func (x *ListRunTasksResponse) Reset() {
 	*x = ListRunTasksResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[48]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2815,7 +6134,7 @@ func (x *ListRunTasksResponse) String() string {
 func (*ListRunTasksResponse) ProtoMessage() {}
 
 func (x *ListRunTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[48]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2828,7 +6147,7 @@ func (x *ListRunTasksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunTasksResponse.ProtoReflect.Descriptor instead.
 func (*ListRunTasksResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{48}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *ListRunTasksResponse) GetTasks() []*RunTask {
@@ -2852,7 +6171,7 @@ type ListRunsRequest struct {
 
 func (x *ListRunsRequest) Reset() {
 	*x = ListRunsRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[49]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2864,7 +6183,7 @@ func (x *ListRunsRequest) String() string {
 func (*ListRunsRequest) ProtoMessage() {}
 
 func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[49]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2877,7 +6196,7 @@ func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListRunsRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{49}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *ListRunsRequest) GetProjectId() string {
@@ -2932,7 +6251,7 @@ type ListRunsResponse struct {
 
 func (x *ListRunsResponse) Reset() {
 	*x = ListRunsResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[50]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2944,7 +6263,7 @@ func (x *ListRunsResponse) String() string {
 func (*ListRunsResponse) ProtoMessage() {}
 
 func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[50]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2957,7 +6276,7 @@ func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListRunsResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{50}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *ListRunsResponse) GetRuns() []*Run {
@@ -2985,7 +6304,7 @@ type EventsAfterRequest struct {
 
 func (x *EventsAfterRequest) Reset() {
 	*x = EventsAfterRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[51]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2997,7 +6316,7 @@ func (x *EventsAfterRequest) String() string {
 func (*EventsAfterRequest) ProtoMessage() {}
 
 func (x *EventsAfterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[51]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3010,7 +6329,7 @@ func (x *EventsAfterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventsAfterRequest.ProtoReflect.Descriptor instead.
 func (*EventsAfterRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{51}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *EventsAfterRequest) GetRunId() string {
@@ -3044,7 +6363,7 @@ type EventsAfterResponse struct {
 
 func (x *EventsAfterResponse) Reset() {
 	*x = EventsAfterResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[52]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3056,7 +6375,7 @@ func (x *EventsAfterResponse) String() string {
 func (*EventsAfterResponse) ProtoMessage() {}
 
 func (x *EventsAfterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[52]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3069,7 +6388,7 @@ func (x *EventsAfterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventsAfterResponse.ProtoReflect.Descriptor instead.
 func (*EventsAfterResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{52}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *EventsAfterResponse) GetEvents() []*WorkflowEvent {
@@ -3106,7 +6425,7 @@ type CommandExitObservation struct {
 
 func (x *CommandExitObservation) Reset() {
 	*x = CommandExitObservation{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[53]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3118,7 +6437,7 @@ func (x *CommandExitObservation) String() string {
 func (*CommandExitObservation) ProtoMessage() {}
 
 func (x *CommandExitObservation) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[53]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3131,7 +6450,7 @@ func (x *CommandExitObservation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandExitObservation.ProtoReflect.Descriptor instead.
 func (*CommandExitObservation) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{53}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *CommandExitObservation) GetEventId() int64 {
@@ -3222,7 +6541,7 @@ type ListCommandExitsRequest struct {
 
 func (x *ListCommandExitsRequest) Reset() {
 	*x = ListCommandExitsRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[54]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3234,7 +6553,7 @@ func (x *ListCommandExitsRequest) String() string {
 func (*ListCommandExitsRequest) ProtoMessage() {}
 
 func (x *ListCommandExitsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[54]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3247,7 +6566,7 @@ func (x *ListCommandExitsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCommandExitsRequest.ProtoReflect.Descriptor instead.
 func (*ListCommandExitsRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{54}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *ListCommandExitsRequest) GetRunId() string {
@@ -3281,7 +6600,7 @@ type ListCommandExitsResponse struct {
 
 func (x *ListCommandExitsResponse) Reset() {
 	*x = ListCommandExitsResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[55]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3293,7 +6612,7 @@ func (x *ListCommandExitsResponse) String() string {
 func (*ListCommandExitsResponse) ProtoMessage() {}
 
 func (x *ListCommandExitsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[55]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3306,7 +6625,7 @@ func (x *ListCommandExitsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCommandExitsResponse.ProtoReflect.Descriptor instead.
 func (*ListCommandExitsResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{55}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *ListCommandExitsResponse) GetObservations() []*CommandExitObservation {
@@ -3337,7 +6656,7 @@ type ReviewDecision struct {
 
 func (x *ReviewDecision) Reset() {
 	*x = ReviewDecision{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[56]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3349,7 +6668,7 @@ func (x *ReviewDecision) String() string {
 func (*ReviewDecision) ProtoMessage() {}
 
 func (x *ReviewDecision) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[56]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3362,7 +6681,7 @@ func (x *ReviewDecision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewDecision.ProtoReflect.Descriptor instead.
 func (*ReviewDecision) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{56}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *ReviewDecision) GetId() string {
@@ -3419,13 +6738,14 @@ type ReviewPackage struct {
 	EvidenceSha256     string                 `protobuf:"bytes,8,opt,name=evidence_sha256,json=evidenceSha256,proto3" json:"evidence_sha256,omitempty"`
 	PresentedAt        string                 `protobuf:"bytes,9,opt,name=presented_at,json=presentedAt,proto3" json:"presented_at,omitempty"` // RFC 3339.
 	Decision           *ReviewDecision        `protobuf:"bytes,10,opt,name=decision,proto3" json:"decision,omitempty"`
+	AcceptanceMode     string                 `protobuf:"bytes,11,opt,name=acceptance_mode,json=acceptanceMode,proto3" json:"acceptance_mode,omitempty"` // manual or policy; policy is accepted at presentation, never a human approval.
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ReviewPackage) Reset() {
 	*x = ReviewPackage{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[57]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3437,7 +6757,7 @@ func (x *ReviewPackage) String() string {
 func (*ReviewPackage) ProtoMessage() {}
 
 func (x *ReviewPackage) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[57]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3450,7 +6770,7 @@ func (x *ReviewPackage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewPackage.ProtoReflect.Descriptor instead.
 func (*ReviewPackage) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{57}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *ReviewPackage) GetId() string {
@@ -3523,6 +6843,13 @@ func (x *ReviewPackage) GetDecision() *ReviewDecision {
 	return nil
 }
 
+func (x *ReviewPackage) GetAcceptanceMode() string {
+	if x != nil {
+		return x.AcceptanceMode
+	}
+	return ""
+}
+
 type GetCurrentReviewRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
@@ -3532,7 +6859,7 @@ type GetCurrentReviewRequest struct {
 
 func (x *GetCurrentReviewRequest) Reset() {
 	*x = GetCurrentReviewRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[58]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3544,7 +6871,7 @@ func (x *GetCurrentReviewRequest) String() string {
 func (*GetCurrentReviewRequest) ProtoMessage() {}
 
 func (x *GetCurrentReviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[58]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3557,7 +6884,7 @@ func (x *GetCurrentReviewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCurrentReviewRequest.ProtoReflect.Descriptor instead.
 func (*GetCurrentReviewRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{58}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *GetCurrentReviewRequest) GetRunId() string {
@@ -3576,7 +6903,7 @@ type GetCurrentReviewResponse struct {
 
 func (x *GetCurrentReviewResponse) Reset() {
 	*x = GetCurrentReviewResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[59]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3588,7 +6915,7 @@ func (x *GetCurrentReviewResponse) String() string {
 func (*GetCurrentReviewResponse) ProtoMessage() {}
 
 func (x *GetCurrentReviewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[59]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3601,7 +6928,7 @@ func (x *GetCurrentReviewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCurrentReviewResponse.ProtoReflect.Descriptor instead.
 func (*GetCurrentReviewResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{59}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *GetCurrentReviewResponse) GetPackage() *ReviewPackage {
@@ -3624,7 +6951,7 @@ type DecideReviewRequest struct {
 
 func (x *DecideReviewRequest) Reset() {
 	*x = DecideReviewRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[60]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3636,7 +6963,7 @@ func (x *DecideReviewRequest) String() string {
 func (*DecideReviewRequest) ProtoMessage() {}
 
 func (x *DecideReviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[60]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3649,7 +6976,7 @@ func (x *DecideReviewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecideReviewRequest.ProtoReflect.Descriptor instead.
 func (*DecideReviewRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{60}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *DecideReviewRequest) GetRunId() string {
@@ -3696,7 +7023,7 @@ type DecideReviewResponse struct {
 
 func (x *DecideReviewResponse) Reset() {
 	*x = DecideReviewResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[61]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3708,7 +7035,7 @@ func (x *DecideReviewResponse) String() string {
 func (*DecideReviewResponse) ProtoMessage() {}
 
 func (x *DecideReviewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[61]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3721,7 +7048,7 @@ func (x *DecideReviewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecideReviewResponse.ProtoReflect.Descriptor instead.
 func (*DecideReviewResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{61}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *DecideReviewResponse) GetDecision() *ReviewDecision {
@@ -3745,7 +7072,7 @@ type InteractionOption struct {
 
 func (x *InteractionOption) Reset() {
 	*x = InteractionOption{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[62]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3757,7 +7084,7 @@ func (x *InteractionOption) String() string {
 func (*InteractionOption) ProtoMessage() {}
 
 func (x *InteractionOption) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[62]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3770,7 +7097,7 @@ func (x *InteractionOption) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InteractionOption.ProtoReflect.Descriptor instead.
 func (*InteractionOption) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{62}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *InteractionOption) GetId() string {
@@ -3811,7 +7138,7 @@ type InteractionSource struct {
 
 func (x *InteractionSource) Reset() {
 	*x = InteractionSource{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[63]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3823,7 +7150,7 @@ func (x *InteractionSource) String() string {
 func (*InteractionSource) ProtoMessage() {}
 
 func (x *InteractionSource) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[63]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3836,7 +7163,7 @@ func (x *InteractionSource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InteractionSource.ProtoReflect.Descriptor instead.
 func (*InteractionSource) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{63}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *InteractionSource) GetPath() string {
@@ -3863,7 +7190,7 @@ type InteractionInterview struct {
 
 func (x *InteractionInterview) Reset() {
 	*x = InteractionInterview{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[64]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3875,7 +7202,7 @@ func (x *InteractionInterview) String() string {
 func (*InteractionInterview) ProtoMessage() {}
 
 func (x *InteractionInterview) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[64]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3888,7 +7215,7 @@ func (x *InteractionInterview) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InteractionInterview.ProtoReflect.Descriptor instead.
 func (*InteractionInterview) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{64}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *InteractionInterview) GetRound() int32 {
@@ -3917,7 +7244,7 @@ type InteractionAnswer struct {
 
 func (x *InteractionAnswer) Reset() {
 	*x = InteractionAnswer{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[65]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3929,7 +7256,7 @@ func (x *InteractionAnswer) String() string {
 func (*InteractionAnswer) ProtoMessage() {}
 
 func (x *InteractionAnswer) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[65]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3942,7 +7269,7 @@ func (x *InteractionAnswer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InteractionAnswer.ProtoReflect.Descriptor instead.
 func (*InteractionAnswer) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{65}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *InteractionAnswer) GetOptionIds() []string {
@@ -3996,7 +7323,7 @@ type Interaction struct {
 
 func (x *Interaction) Reset() {
 	*x = Interaction{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[66]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4008,7 +7335,7 @@ func (x *Interaction) String() string {
 func (*Interaction) ProtoMessage() {}
 
 func (x *Interaction) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[66]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4021,7 +7348,7 @@ func (x *Interaction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Interaction.ProtoReflect.Descriptor instead.
 func (*Interaction) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{66}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *Interaction) GetId() string {
@@ -4138,7 +7465,7 @@ type ListInteractionsRequest struct {
 
 func (x *ListInteractionsRequest) Reset() {
 	*x = ListInteractionsRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[67]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4150,7 +7477,7 @@ func (x *ListInteractionsRequest) String() string {
 func (*ListInteractionsRequest) ProtoMessage() {}
 
 func (x *ListInteractionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[67]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4163,7 +7490,7 @@ func (x *ListInteractionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInteractionsRequest.ProtoReflect.Descriptor instead.
 func (*ListInteractionsRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{67}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *ListInteractionsRequest) GetRunId() string {
@@ -4182,7 +7509,7 @@ type ListInteractionsResponse struct {
 
 func (x *ListInteractionsResponse) Reset() {
 	*x = ListInteractionsResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[68]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4194,7 +7521,7 @@ func (x *ListInteractionsResponse) String() string {
 func (*ListInteractionsResponse) ProtoMessage() {}
 
 func (x *ListInteractionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[68]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4207,7 +7534,7 @@ func (x *ListInteractionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInteractionsResponse.ProtoReflect.Descriptor instead.
 func (*ListInteractionsResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{68}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *ListInteractionsResponse) GetInteractions() []*Interaction {
@@ -4228,7 +7555,7 @@ type AnswerInteractionRequest struct {
 
 func (x *AnswerInteractionRequest) Reset() {
 	*x = AnswerInteractionRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[69]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4240,7 +7567,7 @@ func (x *AnswerInteractionRequest) String() string {
 func (*AnswerInteractionRequest) ProtoMessage() {}
 
 func (x *AnswerInteractionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[69]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4253,7 +7580,7 @@ func (x *AnswerInteractionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnswerInteractionRequest.ProtoReflect.Descriptor instead.
 func (*AnswerInteractionRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{69}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *AnswerInteractionRequest) GetInteractionId() string {
@@ -4286,7 +7613,7 @@ type AnswerInteractionResponse struct {
 
 func (x *AnswerInteractionResponse) Reset() {
 	*x = AnswerInteractionResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[70]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4298,7 +7625,7 @@ func (x *AnswerInteractionResponse) String() string {
 func (*AnswerInteractionResponse) ProtoMessage() {}
 
 func (x *AnswerInteractionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[70]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4311,7 +7638,7 @@ func (x *AnswerInteractionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnswerInteractionResponse.ProtoReflect.Descriptor instead.
 func (*AnswerInteractionResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{70}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *AnswerInteractionResponse) GetInteraction() *Interaction {
@@ -4334,7 +7661,7 @@ type SteerAttemptRequest struct {
 
 func (x *SteerAttemptRequest) Reset() {
 	*x = SteerAttemptRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[71]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4346,7 +7673,7 @@ func (x *SteerAttemptRequest) String() string {
 func (*SteerAttemptRequest) ProtoMessage() {}
 
 func (x *SteerAttemptRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[71]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4359,7 +7686,7 @@ func (x *SteerAttemptRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SteerAttemptRequest.ProtoReflect.Descriptor instead.
 func (*SteerAttemptRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{71}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *SteerAttemptRequest) GetAttemptId() string {
@@ -4406,7 +7733,7 @@ type SteerAttemptResponse struct {
 
 func (x *SteerAttemptResponse) Reset() {
 	*x = SteerAttemptResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[72]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4418,7 +7745,7 @@ func (x *SteerAttemptResponse) String() string {
 func (*SteerAttemptResponse) ProtoMessage() {}
 
 func (x *SteerAttemptResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[72]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4431,7 +7758,7 @@ func (x *SteerAttemptResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SteerAttemptResponse.ProtoReflect.Descriptor instead.
 func (*SteerAttemptResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{72}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *SteerAttemptResponse) GetSteerId() string {
@@ -4458,7 +7785,7 @@ type AttemptControl struct {
 
 func (x *AttemptControl) Reset() {
 	*x = AttemptControl{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[73]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4470,7 +7797,7 @@ func (x *AttemptControl) String() string {
 func (*AttemptControl) ProtoMessage() {}
 
 func (x *AttemptControl) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[73]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4483,7 +7810,7 @@ func (x *AttemptControl) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttemptControl.ProtoReflect.Descriptor instead.
 func (*AttemptControl) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{73}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *AttemptControl) GetAttemptId() string {
@@ -4537,7 +7864,7 @@ type GetAttemptControlRequest struct {
 
 func (x *GetAttemptControlRequest) Reset() {
 	*x = GetAttemptControlRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[74]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4549,7 +7876,7 @@ func (x *GetAttemptControlRequest) String() string {
 func (*GetAttemptControlRequest) ProtoMessage() {}
 
 func (x *GetAttemptControlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[74]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4562,7 +7889,7 @@ func (x *GetAttemptControlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAttemptControlRequest.ProtoReflect.Descriptor instead.
 func (*GetAttemptControlRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{74}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{118}
 }
 
 func (x *GetAttemptControlRequest) GetAttemptId() string {
@@ -4584,7 +7911,7 @@ type GetAttemptControlResponse struct {
 
 func (x *GetAttemptControlResponse) Reset() {
 	*x = GetAttemptControlResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[75]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4596,7 +7923,7 @@ func (x *GetAttemptControlResponse) String() string {
 func (*GetAttemptControlResponse) ProtoMessage() {}
 
 func (x *GetAttemptControlResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[75]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4609,7 +7936,7 @@ func (x *GetAttemptControlResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAttemptControlResponse.ProtoReflect.Descriptor instead.
 func (*GetAttemptControlResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{75}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *GetAttemptControlResponse) GetControl() *AttemptControl {
@@ -4635,7 +7962,7 @@ type TakeOverAttemptRequest struct {
 
 func (x *TakeOverAttemptRequest) Reset() {
 	*x = TakeOverAttemptRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[76]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4647,7 +7974,7 @@ func (x *TakeOverAttemptRequest) String() string {
 func (*TakeOverAttemptRequest) ProtoMessage() {}
 
 func (x *TakeOverAttemptRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[76]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4660,7 +7987,7 @@ func (x *TakeOverAttemptRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TakeOverAttemptRequest.ProtoReflect.Descriptor instead.
 func (*TakeOverAttemptRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{76}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *TakeOverAttemptRequest) GetAttemptId() string {
@@ -4679,7 +8006,7 @@ type TakeOverAttemptResponse struct {
 
 func (x *TakeOverAttemptResponse) Reset() {
 	*x = TakeOverAttemptResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[77]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4691,7 +8018,7 @@ func (x *TakeOverAttemptResponse) String() string {
 func (*TakeOverAttemptResponse) ProtoMessage() {}
 
 func (x *TakeOverAttemptResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[77]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4704,7 +8031,7 @@ func (x *TakeOverAttemptResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TakeOverAttemptResponse.ProtoReflect.Descriptor instead.
 func (*TakeOverAttemptResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{77}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *TakeOverAttemptResponse) GetControl() *AttemptControl {
@@ -4723,7 +8050,7 @@ type HandBackAttemptRequest struct {
 
 func (x *HandBackAttemptRequest) Reset() {
 	*x = HandBackAttemptRequest{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[78]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4735,7 +8062,7 @@ func (x *HandBackAttemptRequest) String() string {
 func (*HandBackAttemptRequest) ProtoMessage() {}
 
 func (x *HandBackAttemptRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[78]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4748,7 +8075,7 @@ func (x *HandBackAttemptRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HandBackAttemptRequest.ProtoReflect.Descriptor instead.
 func (*HandBackAttemptRequest) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{78}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *HandBackAttemptRequest) GetAttemptId() string {
@@ -4767,7 +8094,7 @@ type HandBackAttemptResponse struct {
 
 func (x *HandBackAttemptResponse) Reset() {
 	*x = HandBackAttemptResponse{}
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[79]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4779,7 +8106,7 @@ func (x *HandBackAttemptResponse) String() string {
 func (*HandBackAttemptResponse) ProtoMessage() {}
 
 func (x *HandBackAttemptResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[79]
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4792,7 +8119,7 @@ func (x *HandBackAttemptResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HandBackAttemptResponse.ProtoReflect.Descriptor instead.
 func (*HandBackAttemptResponse) Descriptor() ([]byte, []int) {
-	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{79}
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *HandBackAttemptResponse) GetControl() *AttemptControl {
@@ -4802,11 +8129,1810 @@ func (x *HandBackAttemptResponse) GetControl() *AttemptControl {
 	return nil
 }
 
+type RunEvidence struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	AttemptId     string                 `protobuf:"bytes,2,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	Stage         string                 `protobuf:"bytes,3,opt,name=stage,proto3" json:"stage,omitempty"`
+	Kind          string                 `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"` // artifact, gate, or verification.
+	Key           string                 `protobuf:"bytes,5,opt,name=key,proto3" json:"key,omitempty"`
+	Revision      string                 `protobuf:"bytes,6,opt,name=revision,proto3" json:"revision,omitempty"`
+	Sha256        string                 `protobuf:"bytes,7,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	MetadataJson  string                 `protobuf:"bytes,8,opt,name=metadata_json,json=metadataJson,proto3" json:"metadata_json,omitempty"`
+	Current       bool                   `protobuf:"varint,9,opt,name=current,proto3" json:"current,omitempty"` // Belongs to the current running/succeeded stage attempt.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunEvidence) Reset() {
+	*x = RunEvidence{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[124]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunEvidence) ProtoMessage() {}
+
+func (x *RunEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[124]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunEvidence.ProtoReflect.Descriptor instead.
+func (*RunEvidence) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{124}
+}
+
+func (x *RunEvidence) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *RunEvidence) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+func (x *RunEvidence) GetStage() string {
+	if x != nil {
+		return x.Stage
+	}
+	return ""
+}
+
+func (x *RunEvidence) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *RunEvidence) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *RunEvidence) GetRevision() string {
+	if x != nil {
+		return x.Revision
+	}
+	return ""
+}
+
+func (x *RunEvidence) GetSha256() string {
+	if x != nil {
+		return x.Sha256
+	}
+	return ""
+}
+
+func (x *RunEvidence) GetMetadataJson() string {
+	if x != nil {
+		return x.MetadataJson
+	}
+	return ""
+}
+
+func (x *RunEvidence) GetCurrent() bool {
+	if x != nil {
+		return x.Current
+	}
+	return false
+}
+
+type ListRunEvidenceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	AfterId       string                 `protobuf:"bytes,2,opt,name=after_id,json=afterId,proto3" json:"after_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRunEvidenceRequest) Reset() {
+	*x = ListRunEvidenceRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[125]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRunEvidenceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRunEvidenceRequest) ProtoMessage() {}
+
+func (x *ListRunEvidenceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[125]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRunEvidenceRequest.ProtoReflect.Descriptor instead.
+func (*ListRunEvidenceRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{125}
+}
+
+func (x *ListRunEvidenceRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *ListRunEvidenceRequest) GetAfterId() string {
+	if x != nil {
+		return x.AfterId
+	}
+	return ""
+}
+
+type ListRunEvidenceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Evidence      []*RunEvidence         `protobuf:"bytes,1,rep,name=evidence,proto3" json:"evidence,omitempty"`
+	NextAfterId   string                 `protobuf:"bytes,2,opt,name=next_after_id,json=nextAfterId,proto3" json:"next_after_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRunEvidenceResponse) Reset() {
+	*x = ListRunEvidenceResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[126]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRunEvidenceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRunEvidenceResponse) ProtoMessage() {}
+
+func (x *ListRunEvidenceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[126]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRunEvidenceResponse.ProtoReflect.Descriptor instead.
+func (*ListRunEvidenceResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{126}
+}
+
+func (x *ListRunEvidenceResponse) GetEvidence() []*RunEvidence {
+	if x != nil {
+		return x.Evidence
+	}
+	return nil
+}
+
+func (x *ListRunEvidenceResponse) GetNextAfterId() string {
+	if x != nil {
+		return x.NextAfterId
+	}
+	return ""
+}
+
+type GetEvidenceContentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	EvidenceId    string                 `protobuf:"bytes,2,opt,name=evidence_id,json=evidenceId,proto3" json:"evidence_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetEvidenceContentRequest) Reset() {
+	*x = GetEvidenceContentRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[127]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetEvidenceContentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetEvidenceContentRequest) ProtoMessage() {}
+
+func (x *GetEvidenceContentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[127]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetEvidenceContentRequest.ProtoReflect.Descriptor instead.
+func (*GetEvidenceContentRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{127}
+}
+
+func (x *GetEvidenceContentRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *GetEvidenceContentRequest) GetEvidenceId() string {
+	if x != nil {
+		return x.EvidenceId
+	}
+	return ""
+}
+
+type GetEvidenceContentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Content       []byte                 `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetEvidenceContentResponse) Reset() {
+	*x = GetEvidenceContentResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[128]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetEvidenceContentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetEvidenceContentResponse) ProtoMessage() {}
+
+func (x *GetEvidenceContentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[128]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetEvidenceContentResponse.ProtoReflect.Descriptor instead.
+func (*GetEvidenceContentResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{128}
+}
+
+func (x *GetEvidenceContentResponse) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *GetEvidenceContentResponse) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+type ServicePrincipal struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Label         string                 `protobuf:"bytes,3,opt,name=label,proto3" json:"label,omitempty"`
+	State         string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
+	CreatedBy     string                 `protobuf:"bytes,5,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServicePrincipal) Reset() {
+	*x = ServicePrincipal{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[129]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServicePrincipal) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServicePrincipal) ProtoMessage() {}
+
+func (x *ServicePrincipal) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[129]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServicePrincipal.ProtoReflect.Descriptor instead.
+func (*ServicePrincipal) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{129}
+}
+
+func (x *ServicePrincipal) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ServicePrincipal) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *ServicePrincipal) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *ServicePrincipal) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *ServicePrincipal) GetCreatedBy() string {
+	if x != nil {
+		return x.CreatedBy
+	}
+	return ""
+}
+
+func (x *ServicePrincipal) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+type CreateServicePrincipalRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	RequestKey    string                 `protobuf:"bytes,3,opt,name=request_key,json=requestKey,proto3" json:"request_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateServicePrincipalRequest) Reset() {
+	*x = CreateServicePrincipalRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[130]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateServicePrincipalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateServicePrincipalRequest) ProtoMessage() {}
+
+func (x *CreateServicePrincipalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[130]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateServicePrincipalRequest.ProtoReflect.Descriptor instead.
+func (*CreateServicePrincipalRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{130}
+}
+
+func (x *CreateServicePrincipalRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *CreateServicePrincipalRequest) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *CreateServicePrincipalRequest) GetRequestKey() string {
+	if x != nil {
+		return x.RequestKey
+	}
+	return ""
+}
+
+type CreateServicePrincipalResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Principal     *ServicePrincipal      `protobuf:"bytes,1,opt,name=principal,proto3" json:"principal,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateServicePrincipalResponse) Reset() {
+	*x = CreateServicePrincipalResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[131]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateServicePrincipalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateServicePrincipalResponse) ProtoMessage() {}
+
+func (x *CreateServicePrincipalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[131]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateServicePrincipalResponse.ProtoReflect.Descriptor instead.
+func (*CreateServicePrincipalResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{131}
+}
+
+func (x *CreateServicePrincipalResponse) GetPrincipal() *ServicePrincipal {
+	if x != nil {
+		return x.Principal
+	}
+	return nil
+}
+
+type ListServicePrincipalsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListServicePrincipalsRequest) Reset() {
+	*x = ListServicePrincipalsRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[132]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListServicePrincipalsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListServicePrincipalsRequest) ProtoMessage() {}
+
+func (x *ListServicePrincipalsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[132]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListServicePrincipalsRequest.ProtoReflect.Descriptor instead.
+func (*ListServicePrincipalsRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{132}
+}
+
+func (x *ListServicePrincipalsRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+type ListServicePrincipalsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Principals    []*ServicePrincipal    `protobuf:"bytes,1,rep,name=principals,proto3" json:"principals,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListServicePrincipalsResponse) Reset() {
+	*x = ListServicePrincipalsResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[133]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListServicePrincipalsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListServicePrincipalsResponse) ProtoMessage() {}
+
+func (x *ListServicePrincipalsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[133]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListServicePrincipalsResponse.ProtoReflect.Descriptor instead.
+func (*ListServicePrincipalsResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{133}
+}
+
+func (x *ListServicePrincipalsResponse) GetPrincipals() []*ServicePrincipal {
+	if x != nil {
+		return x.Principals
+	}
+	return nil
+}
+
+type DisableServicePrincipalRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PrincipalId   string                 `protobuf:"bytes,1,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisableServicePrincipalRequest) Reset() {
+	*x = DisableServicePrincipalRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[134]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisableServicePrincipalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisableServicePrincipalRequest) ProtoMessage() {}
+
+func (x *DisableServicePrincipalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[134]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisableServicePrincipalRequest.ProtoReflect.Descriptor instead.
+func (*DisableServicePrincipalRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{134}
+}
+
+func (x *DisableServicePrincipalRequest) GetPrincipalId() string {
+	if x != nil {
+		return x.PrincipalId
+	}
+	return ""
+}
+
+type DisableServicePrincipalResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisableServicePrincipalResponse) Reset() {
+	*x = DisableServicePrincipalResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[135]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisableServicePrincipalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisableServicePrincipalResponse) ProtoMessage() {}
+
+func (x *DisableServicePrincipalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[135]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisableServicePrincipalResponse.ProtoReflect.Descriptor instead.
+func (*DisableServicePrincipalResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{135}
+}
+
+type ApiToken struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Label         string                 `protobuf:"bytes,3,opt,name=label,proto3" json:"label,omitempty"`
+	Scopes        []string               `protobuf:"bytes,4,rep,name=scopes,proto3" json:"scopes,omitempty"`
+	ExpiresAt     string                 `protobuf:"bytes,5,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	RevokedAt     string                 `protobuf:"bytes,6,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
+	PrincipalId   string                 `protobuf:"bytes,7,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"`
+	Kind          string                 `protobuf:"bytes,8,opt,name=kind,proto3" json:"kind,omitempty"`         // api (delegated user) or service.
+	Resource      string                 `protobuf:"bytes,9,opt,name=resource,proto3" json:"resource,omitempty"` // Nonempty for an OAuth credential restricted to this resource.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApiToken) Reset() {
+	*x = ApiToken{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[136]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApiToken) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApiToken) ProtoMessage() {}
+
+func (x *ApiToken) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[136]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApiToken.ProtoReflect.Descriptor instead.
+func (*ApiToken) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{136}
+}
+
+func (x *ApiToken) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ApiToken) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *ApiToken) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *ApiToken) GetScopes() []string {
+	if x != nil {
+		return x.Scopes
+	}
+	return nil
+}
+
+func (x *ApiToken) GetExpiresAt() string {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return ""
+}
+
+func (x *ApiToken) GetRevokedAt() string {
+	if x != nil {
+		return x.RevokedAt
+	}
+	return ""
+}
+
+func (x *ApiToken) GetPrincipalId() string {
+	if x != nil {
+		return x.PrincipalId
+	}
+	return ""
+}
+
+func (x *ApiToken) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *ApiToken) GetResource() string {
+	if x != nil {
+		return x.Resource
+	}
+	return ""
+}
+
+type CreateApiTokenRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId          string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Label              string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	Scopes             []string               `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty"`
+	LifetimeSeconds    int32                  `protobuf:"varint,4,opt,name=lifetime_seconds,json=lifetimeSeconds,proto3" json:"lifetime_seconds,omitempty"`           // 3600 to 2592000.
+	ServicePrincipalId string                 `protobuf:"bytes,5,opt,name=service_principal_id,json=servicePrincipalId,proto3" json:"service_principal_id,omitempty"` // Browser owner/admin only; empty delegates the caller.
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *CreateApiTokenRequest) Reset() {
+	*x = CreateApiTokenRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[137]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateApiTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateApiTokenRequest) ProtoMessage() {}
+
+func (x *CreateApiTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[137]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateApiTokenRequest.ProtoReflect.Descriptor instead.
+func (*CreateApiTokenRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{137}
+}
+
+func (x *CreateApiTokenRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *CreateApiTokenRequest) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *CreateApiTokenRequest) GetScopes() []string {
+	if x != nil {
+		return x.Scopes
+	}
+	return nil
+}
+
+func (x *CreateApiTokenRequest) GetLifetimeSeconds() int32 {
+	if x != nil {
+		return x.LifetimeSeconds
+	}
+	return 0
+}
+
+func (x *CreateApiTokenRequest) GetServicePrincipalId() string {
+	if x != nil {
+		return x.ServicePrincipalId
+	}
+	return ""
+}
+
+type CreateApiTokenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Credential    *ApiToken              `protobuf:"bytes,1,opt,name=credential,proto3" json:"credential,omitempty"`
+	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"` // Returned once; only its digest is stored.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateApiTokenResponse) Reset() {
+	*x = CreateApiTokenResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[138]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateApiTokenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateApiTokenResponse) ProtoMessage() {}
+
+func (x *CreateApiTokenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[138]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateApiTokenResponse.ProtoReflect.Descriptor instead.
+func (*CreateApiTokenResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{138}
+}
+
+func (x *CreateApiTokenResponse) GetCredential() *ApiToken {
+	if x != nil {
+		return x.Credential
+	}
+	return nil
+}
+
+func (x *CreateApiTokenResponse) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+type ListApiTokensRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId          string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	ServicePrincipalId string                 `protobuf:"bytes,2,opt,name=service_principal_id,json=servicePrincipalId,proto3" json:"service_principal_id,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *ListApiTokensRequest) Reset() {
+	*x = ListApiTokensRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[139]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListApiTokensRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListApiTokensRequest) ProtoMessage() {}
+
+func (x *ListApiTokensRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[139]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListApiTokensRequest.ProtoReflect.Descriptor instead.
+func (*ListApiTokensRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{139}
+}
+
+func (x *ListApiTokensRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *ListApiTokensRequest) GetServicePrincipalId() string {
+	if x != nil {
+		return x.ServicePrincipalId
+	}
+	return ""
+}
+
+type ListApiTokensResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Credentials   []*ApiToken            `protobuf:"bytes,1,rep,name=credentials,proto3" json:"credentials,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListApiTokensResponse) Reset() {
+	*x = ListApiTokensResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[140]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListApiTokensResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListApiTokensResponse) ProtoMessage() {}
+
+func (x *ListApiTokensResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[140]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListApiTokensResponse.ProtoReflect.Descriptor instead.
+func (*ListApiTokensResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{140}
+}
+
+func (x *ListApiTokensResponse) GetCredentials() []*ApiToken {
+	if x != nil {
+		return x.Credentials
+	}
+	return nil
+}
+
+type RevokeApiTokenRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TokenId       string                 `protobuf:"bytes,1,opt,name=token_id,json=tokenId,proto3" json:"token_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeApiTokenRequest) Reset() {
+	*x = RevokeApiTokenRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[141]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeApiTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeApiTokenRequest) ProtoMessage() {}
+
+func (x *RevokeApiTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[141]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeApiTokenRequest.ProtoReflect.Descriptor instead.
+func (*RevokeApiTokenRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{141}
+}
+
+func (x *RevokeApiTokenRequest) GetTokenId() string {
+	if x != nil {
+		return x.TokenId
+	}
+	return ""
+}
+
+type RevokeApiTokenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeApiTokenResponse) Reset() {
+	*x = RevokeApiTokenResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[142]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeApiTokenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeApiTokenResponse) ProtoMessage() {}
+
+func (x *RevokeApiTokenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[142]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeApiTokenResponse.ProtoReflect.Descriptor instead.
+func (*RevokeApiTokenResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{142}
+}
+
+type DescribeMachineAccessRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DescribeMachineAccessRequest) Reset() {
+	*x = DescribeMachineAccessRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[143]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DescribeMachineAccessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DescribeMachineAccessRequest) ProtoMessage() {}
+
+func (x *DescribeMachineAccessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[143]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DescribeMachineAccessRequest.ProtoReflect.Descriptor instead.
+func (*DescribeMachineAccessRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{143}
+}
+
+type DescribeMachineAccessResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Credential    *ApiToken              `protobuf:"bytes,1,opt,name=credential,proto3" json:"credential,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DescribeMachineAccessResponse) Reset() {
+	*x = DescribeMachineAccessResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[144]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DescribeMachineAccessResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DescribeMachineAccessResponse) ProtoMessage() {}
+
+func (x *DescribeMachineAccessResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[144]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DescribeMachineAccessResponse.ProtoReflect.Descriptor instead.
+func (*DescribeMachineAccessResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{144}
+}
+
+func (x *DescribeMachineAccessResponse) GetCredential() *ApiToken {
+	if x != nil {
+		return x.Credential
+	}
+	return nil
+}
+
+// Browser and scoped machine requests resolve an authenticated caller.
+// Harness-reported subtotals. All attempts include retries and cancelled work.
+// Coverage is not proof of complete measurement. No provider billing/quota claim.
+type UsageSummary struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Attempts         int64                  `protobuf:"varint,1,opt,name=attempts,proto3" json:"attempts,omitempty"`
+	ReportedAttempts int64                  `protobuf:"varint,2,opt,name=reported_attempts,json=reportedAttempts,proto3" json:"reported_attempts,omitempty"`
+	Reports          int64                  `protobuf:"varint,3,opt,name=reports,proto3" json:"reports,omitempty"`
+	CostReports      int64                  `protobuf:"varint,4,opt,name=cost_reports,json=costReports,proto3" json:"cost_reports,omitempty"`
+	InputTokens      string                 `protobuf:"bytes,5,opt,name=input_tokens,json=inputTokens,proto3" json:"input_tokens,omitempty"`         // Exact nonnegative decimal sum, includes cache.
+	OutputTokens     string                 `protobuf:"bytes,6,opt,name=output_tokens,json=outputTokens,proto3" json:"output_tokens,omitempty"`      // Exact nonnegative decimal sum, includes reasoning.
+	CostMicrosUsd    string                 `protobuf:"bytes,7,opt,name=cost_micros_usd,json=costMicrosUsd,proto3" json:"cost_micros_usd,omitempty"` // Reported estimate only; cost_reports=0 means unknown.
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *UsageSummary) Reset() {
+	*x = UsageSummary{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[145]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UsageSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UsageSummary) ProtoMessage() {}
+
+func (x *UsageSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[145]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UsageSummary.ProtoReflect.Descriptor instead.
+func (*UsageSummary) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{145}
+}
+
+func (x *UsageSummary) GetAttempts() int64 {
+	if x != nil {
+		return x.Attempts
+	}
+	return 0
+}
+
+func (x *UsageSummary) GetReportedAttempts() int64 {
+	if x != nil {
+		return x.ReportedAttempts
+	}
+	return 0
+}
+
+func (x *UsageSummary) GetReports() int64 {
+	if x != nil {
+		return x.Reports
+	}
+	return 0
+}
+
+func (x *UsageSummary) GetCostReports() int64 {
+	if x != nil {
+		return x.CostReports
+	}
+	return 0
+}
+
+func (x *UsageSummary) GetInputTokens() string {
+	if x != nil {
+		return x.InputTokens
+	}
+	return ""
+}
+
+func (x *UsageSummary) GetOutputTokens() string {
+	if x != nil {
+		return x.OutputTokens
+	}
+	return ""
+}
+
+func (x *UsageSummary) GetCostMicrosUsd() string {
+	if x != nil {
+		return x.CostMicrosUsd
+	}
+	return ""
+}
+
+type GetRunUsageRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRunUsageRequest) Reset() {
+	*x = GetRunUsageRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[146]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRunUsageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRunUsageRequest) ProtoMessage() {}
+
+func (x *GetRunUsageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[146]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRunUsageRequest.ProtoReflect.Descriptor instead.
+func (*GetRunUsageRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{146}
+}
+
+func (x *GetRunUsageRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+type GetRunUsageResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Usage         *UsageSummary          `protobuf:"bytes,1,opt,name=usage,proto3" json:"usage,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRunUsageResponse) Reset() {
+	*x = GetRunUsageResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[147]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRunUsageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRunUsageResponse) ProtoMessage() {}
+
+func (x *GetRunUsageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[147]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRunUsageResponse.ProtoReflect.Descriptor instead.
+func (*GetRunUsageResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{147}
+}
+
+func (x *GetRunUsageResponse) GetUsage() *UsageSummary {
+	if x != nil {
+		return x.Usage
+	}
+	return nil
+}
+
+type GetGoalUsageRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GoalId        string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGoalUsageRequest) Reset() {
+	*x = GetGoalUsageRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[148]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGoalUsageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGoalUsageRequest) ProtoMessage() {}
+
+func (x *GetGoalUsageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[148]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGoalUsageRequest.ProtoReflect.Descriptor instead.
+func (*GetGoalUsageRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{148}
+}
+
+func (x *GetGoalUsageRequest) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+type GetGoalUsageResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Usage         *UsageSummary          `protobuf:"bytes,1,opt,name=usage,proto3" json:"usage,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGoalUsageResponse) Reset() {
+	*x = GetGoalUsageResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[149]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGoalUsageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGoalUsageResponse) ProtoMessage() {}
+
+func (x *GetGoalUsageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[149]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGoalUsageResponse.ProtoReflect.Descriptor instead.
+func (*GetGoalUsageResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{149}
+}
+
+func (x *GetGoalUsageResponse) GetUsage() *UsageSummary {
+	if x != nil {
+		return x.Usage
+	}
+	return nil
+}
+
+type GoalCheckpoint struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	GoalId            string                 `protobuf:"bytes,2,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	RunId             string                 `protobuf:"bytes,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	PackageId         string                 `protobuf:"bytes,4,opt,name=package_id,json=packageId,proto3" json:"package_id,omitempty"`
+	CandidateRevision string                 `protobuf:"bytes,5,opt,name=candidate_revision,json=candidateRevision,proto3" json:"candidate_revision,omitempty"`
+	Title             string                 `protobuf:"bytes,6,opt,name=title,proto3" json:"title,omitempty"`
+	PrincipalId       string                 `protobuf:"bytes,7,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"`
+	Sequence          int64                  `protobuf:"varint,8,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	PlanVersion       int64                  `protobuf:"varint,9,opt,name=plan_version,json=planVersion,proto3" json:"plan_version,omitempty"`
+	GoalRevision      int64                  `protobuf:"varint,10,opt,name=goal_revision,json=goalRevision,proto3" json:"goal_revision,omitempty"`
+	CreatedAt         string                 `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CurrentAcceptance bool                   `protobuf:"varint,12,opt,name=current_acceptance,json=currentAcceptance,proto3" json:"current_acceptance,omitempty"` // False after the recorded package is superseded.
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *GoalCheckpoint) Reset() {
+	*x = GoalCheckpoint{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[150]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GoalCheckpoint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GoalCheckpoint) ProtoMessage() {}
+
+func (x *GoalCheckpoint) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[150]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GoalCheckpoint.ProtoReflect.Descriptor instead.
+func (*GoalCheckpoint) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{150}
+}
+
+func (x *GoalCheckpoint) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *GoalCheckpoint) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+func (x *GoalCheckpoint) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *GoalCheckpoint) GetPackageId() string {
+	if x != nil {
+		return x.PackageId
+	}
+	return ""
+}
+
+func (x *GoalCheckpoint) GetCandidateRevision() string {
+	if x != nil {
+		return x.CandidateRevision
+	}
+	return ""
+}
+
+func (x *GoalCheckpoint) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *GoalCheckpoint) GetPrincipalId() string {
+	if x != nil {
+		return x.PrincipalId
+	}
+	return ""
+}
+
+func (x *GoalCheckpoint) GetSequence() int64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
+}
+
+func (x *GoalCheckpoint) GetPlanVersion() int64 {
+	if x != nil {
+		return x.PlanVersion
+	}
+	return 0
+}
+
+func (x *GoalCheckpoint) GetGoalRevision() int64 {
+	if x != nil {
+		return x.GoalRevision
+	}
+	return 0
+}
+
+func (x *GoalCheckpoint) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *GoalCheckpoint) GetCurrentAcceptance() bool {
+	if x != nil {
+		return x.CurrentAcceptance
+	}
+	return false
+}
+
+type ListGoalCheckpointsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	GoalId         string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	BeforeSequence int64                  `protobuf:"varint,2,opt,name=before_sequence,json=beforeSequence,proto3" json:"before_sequence,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ListGoalCheckpointsRequest) Reset() {
+	*x = ListGoalCheckpointsRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[151]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGoalCheckpointsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGoalCheckpointsRequest) ProtoMessage() {}
+
+func (x *ListGoalCheckpointsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[151]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGoalCheckpointsRequest.ProtoReflect.Descriptor instead.
+func (*ListGoalCheckpointsRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{151}
+}
+
+func (x *ListGoalCheckpointsRequest) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+func (x *ListGoalCheckpointsRequest) GetBeforeSequence() int64 {
+	if x != nil {
+		return x.BeforeSequence
+	}
+	return 0
+}
+
+type ListGoalCheckpointsResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Checkpoints        []*GoalCheckpoint      `protobuf:"bytes,1,rep,name=checkpoints,proto3" json:"checkpoints,omitempty"`
+	NextBeforeSequence int64                  `protobuf:"varint,2,opt,name=next_before_sequence,json=nextBeforeSequence,proto3" json:"next_before_sequence,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *ListGoalCheckpointsResponse) Reset() {
+	*x = ListGoalCheckpointsResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[152]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGoalCheckpointsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGoalCheckpointsResponse) ProtoMessage() {}
+
+func (x *ListGoalCheckpointsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[152]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGoalCheckpointsResponse.ProtoReflect.Descriptor instead.
+func (*ListGoalCheckpointsResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{152}
+}
+
+func (x *ListGoalCheckpointsResponse) GetCheckpoints() []*GoalCheckpoint {
+	if x != nil {
+		return x.Checkpoints
+	}
+	return nil
+}
+
+func (x *ListGoalCheckpointsResponse) GetNextBeforeSequence() int64 {
+	if x != nil {
+		return x.NextBeforeSequence
+	}
+	return 0
+}
+
+type RecordGoalCheckpointRequest struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	GoalId               string                 `protobuf:"bytes,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	RunId                string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	PackageId            string                 `protobuf:"bytes,3,opt,name=package_id,json=packageId,proto3" json:"package_id,omitempty"` // Exact observed accepted package; cannot approve work.
+	Title                string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	RequestKey           string                 `protobuf:"bytes,5,opt,name=request_key,json=requestKey,proto3" json:"request_key,omitempty"`
+	ExpectedGoalRevision int64                  `protobuf:"varint,6,opt,name=expected_goal_revision,json=expectedGoalRevision,proto3" json:"expected_goal_revision,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *RecordGoalCheckpointRequest) Reset() {
+	*x = RecordGoalCheckpointRequest{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[153]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordGoalCheckpointRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordGoalCheckpointRequest) ProtoMessage() {}
+
+func (x *RecordGoalCheckpointRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[153]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordGoalCheckpointRequest.ProtoReflect.Descriptor instead.
+func (*RecordGoalCheckpointRequest) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{153}
+}
+
+func (x *RecordGoalCheckpointRequest) GetGoalId() string {
+	if x != nil {
+		return x.GoalId
+	}
+	return ""
+}
+
+func (x *RecordGoalCheckpointRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *RecordGoalCheckpointRequest) GetPackageId() string {
+	if x != nil {
+		return x.PackageId
+	}
+	return ""
+}
+
+func (x *RecordGoalCheckpointRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *RecordGoalCheckpointRequest) GetRequestKey() string {
+	if x != nil {
+		return x.RequestKey
+	}
+	return ""
+}
+
+func (x *RecordGoalCheckpointRequest) GetExpectedGoalRevision() int64 {
+	if x != nil {
+		return x.ExpectedGoalRevision
+	}
+	return 0
+}
+
+type RecordGoalCheckpointResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Checkpoint    *GoalCheckpoint        `protobuf:"bytes,1,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecordGoalCheckpointResponse) Reset() {
+	*x = RecordGoalCheckpointResponse{}
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[154]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordGoalCheckpointResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordGoalCheckpointResponse) ProtoMessage() {}
+
+func (x *RecordGoalCheckpointResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blaxsmith_api_v1_workflow_proto_msgTypes[154]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordGoalCheckpointResponse.ProtoReflect.Descriptor instead.
+func (*RecordGoalCheckpointResponse) Descriptor() ([]byte, []int) {
+	return file_blaxsmith_api_v1_workflow_proto_rawDescGZIP(), []int{154}
+}
+
+func (x *RecordGoalCheckpointResponse) GetCheckpoint() *GoalCheckpoint {
+	if x != nil {
+		return x.Checkpoint
+	}
+	return nil
+}
+
 var File_blaxsmith_api_v1_workflow_proto protoreflect.FileDescriptor
 
 const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\n" +
-	"\x1fblaxsmith/api/v1/workflow.proto\x12\x10blaxsmith.api.v1\"`\n" +
+	"\x1fblaxsmith/api/v1/workflow.proto\x12\x10blaxsmith.api.v1\x1a\"blaxsmith/api/v1/connections.proto\"`\n" +
 	"\aProject\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04slug\x18\x02 \x01(\tR\x04slug\x12\x12\n" +
@@ -4885,28 +10011,41 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"connection\x18\x01 \x01(\v2\x1f.blaxsmith.api.v1.GitConnectionR\n" +
 	"connection\"S\n" +
 	"\x18SetProjectSourceResponse\x127\n" +
-	"\x06source\x18\x01 \x01(\v2\x1f.blaxsmith.api.v1.ProjectSourceR\x06source\"=\n" +
+	"\x06source\x18\x01 \x01(\v2\x1f.blaxsmith.api.v1.ProjectSourceR\x06source\"\x92\x01\n" +
 	"\x11VerificationCheck\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
-	"\acommand\x18\x02 \x03(\tR\acommand\"\xaa\x01\n" +
+	"\acommand\x18\x02 \x03(\tR\acommand\x12#\n" +
+	"\rtrusted_paths\x18\x03 \x03(\tR\ftrustedPaths\x12\x12\n" +
+	"\x04mode\x18\x04 \x01(\tR\x04mode\x12\x1a\n" +
+	"\bcategory\x18\x05 \x01(\tR\bcategory\"\xc2\x01\n" +
 	"\x13ProjectVerification\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12;\n" +
 	"\x06checks\x18\x03 \x03(\v2#.blaxsmith.api.v1.VerificationCheckR\x06checks\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\x04 \x01(\tR\tupdatedAt\">\n" +
+	"updated_at\x18\x04 \x01(\tR\tupdatedAt\x12\x16\n" +
+	"\x06preset\x18\x05 \x01(\tR\x06preset\">\n" +
 	"\x1dGetProjectVerificationRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\"k\n" +
 	"\x1eGetProjectVerificationResponse\x12I\n" +
-	"\fverification\x18\x01 \x01(\v2%.blaxsmith.api.v1.ProjectVerificationR\fverification\"{\n" +
+	"\fverification\x18\x01 \x01(\v2%.blaxsmith.api.v1.ProjectVerificationR\fverification\"\xbe\x01\n" +
 	"\x1dSetProjectVerificationRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12;\n" +
-	"\x06checks\x18\x02 \x03(\v2#.blaxsmith.api.v1.VerificationCheckR\x06checks\"k\n" +
+	"\x06checks\x18\x02 \x03(\v2#.blaxsmith.api.v1.VerificationCheckR\x06checks\x12)\n" +
+	"\x10expected_version\x18\x03 \x01(\x03R\x0fexpectedVersion\x12\x16\n" +
+	"\x06preset\x18\x04 \x01(\tR\x06preset\"k\n" +
 	"\x1eSetProjectVerificationResponse\x12I\n" +
-	"\fverification\x18\x01 \x01(\v2%.blaxsmith.api.v1.ProjectVerificationR\fverification\"\xd4\x01\n" +
+	"\fverification\x18\x01 \x01(\v2%.blaxsmith.api.v1.ProjectVerificationR\fverification\"m\n" +
+	"%ListProjectVerificationHistoryRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12%\n" +
+	"\x0ebefore_version\x18\x02 \x01(\x03R\rbeforeVersion\"\x9d\x01\n" +
+	"&ListProjectVerificationHistoryResponse\x12C\n" +
+	"\trevisions\x18\x01 \x03(\v2%.blaxsmith.api.v1.ProjectVerificationR\trevisions\x12.\n" +
+	"\x13next_before_version\x18\x02 \x01(\x03R\x11nextBeforeVersion\"\xd4\x01\n" +
 	"\x12ProjectModelAccess\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -4975,22 +10114,278 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\x0esort_direction\x18\x05 \x01(\tR\rsortDirection\"u\n" +
 	"\x14ListProjectsResponse\x125\n" +
 	"\bprojects\x18\x01 \x03(\v2\x19.blaxsmith.api.v1.ProjectR\bprojects\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xdf\x02\n" +
+	"\x04Goal\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x12\x14\n" +
+	"\x05brief\x18\x04 \x01(\tR\x05brief\x12\x1d\n" +
+	"\n" +
+	"factory_id\x18\x05 \x01(\tR\tfactoryId\x12'\n" +
+	"\x0ffactory_version\x18\x06 \x01(\tR\x0efactoryVersion\x12\x1a\n" +
+	"\brevision\x18\a \x01(\x03R\brevision\x12\x1d\n" +
+	"\n" +
+	"created_by\x18\b \x01(\tR\tcreatedBy\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\t \x01(\tR\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\n" +
+	" \x01(\tR\tupdatedAt\x12;\n" +
+	"\tquestions\x18\v \x03(\v2\x1d.blaxsmith.api.v1.InteractionR\tquestions\"\xd1\x01\n" +
+	"\tGoalEntry\x12\x1a\n" +
+	"\bsequence\x18\x01 \x01(\x03R\bsequence\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x1f\n" +
+	"\vquestion_id\x18\x03 \x01(\tR\n" +
+	"questionId\x12\x1d\n" +
+	"\n" +
+	"option_ids\x18\x04 \x03(\tR\toptionIds\x12\x12\n" +
+	"\x04text\x18\x05 \x01(\tR\x04text\x12!\n" +
+	"\fprincipal_id\x18\x06 \x01(\tR\vprincipalId\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\a \x01(\tR\tcreatedAt\"\xf3\x01\n" +
+	"\fGoalQuestion\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x17\n" +
+	"\abody_md\x18\x03 \x01(\tR\x06bodyMd\x12=\n" +
+	"\aoptions\x18\x04 \x03(\v2#.blaxsmith.api.v1.InteractionOptionR\aoptions\x12!\n" +
+	"\fmulti_select\x18\x05 \x01(\bR\vmultiSelect\x12&\n" +
+	"\x0fallow_free_text\x18\x06 \x01(\bR\rallowFreeText\x12\x1a\n" +
+	"\bblocking\x18\a \x01(\bR\bblocking\"\x85\x02\n" +
+	"\x11CreateGoalRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1f\n" +
+	"\vrequest_key\x18\x02 \x01(\tR\n" +
+	"requestKey\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x12\x14\n" +
+	"\x05brief\x18\x04 \x01(\tR\x05brief\x12\x1d\n" +
+	"\n" +
+	"factory_id\x18\x05 \x01(\tR\tfactoryId\x12'\n" +
+	"\x0ffactory_version\x18\x06 \x01(\tR\x0efactoryVersion\x12<\n" +
+	"\tquestions\x18\a \x03(\v2\x1e.blaxsmith.api.v1.GoalQuestionR\tquestions\"@\n" +
+	"\x12CreateGoalResponse\x12*\n" +
+	"\x04goal\x18\x01 \x01(\v2\x16.blaxsmith.api.v1.GoalR\x04goal\"N\n" +
+	"\x10ListGoalsRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1b\n" +
+	"\tbefore_id\x18\x02 \x01(\tR\bbeforeId\"g\n" +
+	"\x11ListGoalsResponse\x12,\n" +
+	"\x05goals\x18\x01 \x03(\v2\x16.blaxsmith.api.v1.GoalR\x05goals\x12$\n" +
+	"\x0enext_before_id\x18\x02 \x01(\tR\fnextBeforeId\"R\n" +
+	"\x0eGetGoalRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\x12'\n" +
+	"\x0fbefore_sequence\x18\x02 \x01(\x03R\x0ebeforeSequence\"\xa6\x01\n" +
+	"\x0fGetGoalResponse\x12*\n" +
+	"\x04goal\x18\x01 \x01(\v2\x16.blaxsmith.api.v1.GoalR\x04goal\x125\n" +
+	"\aentries\x18\x02 \x03(\v2\x1b.blaxsmith.api.v1.GoalEntryR\aentries\x120\n" +
+	"\x14next_before_sequence\x18\x03 \x01(\x03R\x12nextBeforeSequence\"\xe1\x01\n" +
+	"\x10ReplyGoalRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\x12\x1f\n" +
+	"\vrequest_key\x18\x02 \x01(\tR\n" +
+	"requestKey\x12+\n" +
+	"\x11expected_revision\x18\x03 \x01(\x03R\x10expectedRevision\x12\x12\n" +
+	"\x04kind\x18\x04 \x01(\tR\x04kind\x12\x1f\n" +
+	"\vquestion_id\x18\x05 \x01(\tR\n" +
+	"questionId\x12\x1d\n" +
+	"\n" +
+	"option_ids\x18\x06 \x03(\tR\toptionIds\x12\x12\n" +
+	"\x04text\x18\a \x01(\tR\x04text\"\x13\n" +
+	"\x11ReplyGoalResponse\"\xaa\x02\n" +
+	"\x12ProjectModelOption\x12#\n" +
+	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12\x1a\n" +
+	"\bprovider\x18\x03 \x01(\tR\bprovider\x12\x1d\n" +
+	"\n" +
+	"owner_kind\x18\x04 \x01(\tR\townerKind\x12\x1f\n" +
+	"\vauth_method\x18\x05 \x01(\tR\n" +
+	"authMethod\x129\n" +
+	"\x06models\x18\x06 \x03(\v2!.blaxsmith.api.v1.ConnectionModelR\x06models\x12\x1d\n" +
+	"\n" +
+	"checked_at\x18\a \x01(\tR\tcheckedAt\x12#\n" +
+	"\rcatalog_error\x18\b \x01(\tR\fcatalogError\"X\n" +
+	"\x1dGetProjectModelOptionsRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x18\n" +
+	"\aharness\x18\x02 \x01(\tR\aharness\"h\n" +
+	"\x1eGetProjectModelOptionsResponse\x12F\n" +
+	"\vconnections\x18\x01 \x03(\v2$.blaxsmith.api.v1.ProjectModelOptionR\vconnections\"\x83\x01\n" +
+	"\vGoalControl\x12\x14\n" +
+	"\x05state\x18\x01 \x01(\tR\x05state\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x1f\n" +
+	"\vactive_runs\x18\x03 \x01(\x03R\n" +
+	"activeRuns\x12#\n" +
+	"\rstopping_runs\x18\x04 \x01(\x03R\fstoppingRuns\"0\n" +
+	"\x15GetGoalControlRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\"Q\n" +
+	"\x16GetGoalControlResponse\x127\n" +
+	"\acontrol\x18\x01 \x01(\v2\x1d.blaxsmith.api.v1.GoalControlR\acontrol\"\x91\x01\n" +
+	"\x12ControlGoalRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\x12\x16\n" +
+	"\x06action\x18\x02 \x01(\tR\x06action\x12)\n" +
+	"\x10expected_version\x18\x03 \x01(\x03R\x0fexpectedVersion\x12\x1f\n" +
+	"\vrequest_key\x18\x04 \x01(\tR\n" +
+	"requestKey\"/\n" +
+	"\x13ControlGoalResponse\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\x03R\aversion\"\xbf\x04\n" +
+	"\rGoalAllowance\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\x03R\aversion\x12\x19\n" +
+	"\bmax_runs\x18\x02 \x01(\x05R\amaxRuns\x12!\n" +
+	"\fmax_attempts\x18\x03 \x01(\x05R\vmaxAttempts\x12\x1f\n" +
+	"\vadmit_until\x18\x04 \x01(\tR\n" +
+	"admitUntil\x12\x12\n" +
+	"\x04runs\x18\x05 \x01(\x03R\x04runs\x12\x1a\n" +
+	"\battempts\x18\x06 \x01(\x03R\battempts\x12)\n" +
+	"\x10admission_closed\x18\a \x01(\bR\x0fadmissionClosed\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\b \x01(\tR\tupdatedAt\x12!\n" +
+	"\fprincipal_id\x18\t \x01(\tR\vprincipalId\x12=\n" +
+	"\x1bmax_repeated_check_failures\x18\n" +
+	" \x01(\x05R\x18maxRepeatedCheckFailures\x12.\n" +
+	"\x13no_progress_seconds\x18\v \x01(\x05R\x11noProgressSeconds\x126\n" +
+	"\x17repeated_check_failures\x18\f \x01(\x03R\x15repeatedCheckFailures\x12(\n" +
+	"\x10last_progress_at\x18\r \x01(\tR\x0elastProgressAt\x12$\n" +
+	"\x0estall_reset_at\x18\x0f \x01(\tR\fstallResetAt\x12!\n" +
+	"\fstall_reason\x18\x0e \x01(\tR\vstallReason\"2\n" +
+	"\x17GetGoalAllowanceRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\"Y\n" +
+	"\x18GetGoalAllowanceResponse\x12=\n" +
+	"\tallowance\x18\x01 \x01(\v2\x1f.blaxsmith.api.v1.GoalAllowanceR\tallowance\"\xd9\x02\n" +
+	"\x17SetGoalAllowanceRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\x12)\n" +
+	"\x10expected_version\x18\x02 \x01(\x03R\x0fexpectedVersion\x12\x19\n" +
+	"\bmax_runs\x18\x03 \x01(\x05R\amaxRuns\x12!\n" +
+	"\fmax_attempts\x18\x04 \x01(\x05R\vmaxAttempts\x12\x1f\n" +
+	"\vadmit_until\x18\x05 \x01(\tR\n" +
+	"admitUntil\x12=\n" +
+	"\x1bmax_repeated_check_failures\x18\x06 \x01(\x05R\x18maxRepeatedCheckFailures\x12.\n" +
+	"\x13no_progress_seconds\x18\a \x01(\x05R\x11noProgressSeconds\x12,\n" +
+	"\x12reset_stall_window\x18\b \x01(\bR\x10resetStallWindow\"\x1a\n" +
+	"\x18SetGoalAllowanceResponse\"\xc7\x03\n" +
+	"\x18StartGoalPlanningRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\x12+\n" +
+	"\x11expected_revision\x18\x02 \x01(\x03R\x10expectedRevision\x12\x1f\n" +
+	"\vrequest_key\x18\x03 \x01(\tR\n" +
+	"requestKey\x12\x18\n" +
+	"\aharness\x18\x04 \x01(\tR\aharness\x12\x14\n" +
+	"\x05model\x18\x05 \x01(\tR\x05model\x12\x16\n" +
+	"\x06effort\x18\x06 \x01(\tR\x06effort\x12\x14\n" +
+	"\x05scope\x18\a \x01(\tR\x05scope\x12'\n" +
+	"\x0fruntime_seconds\x18\b \x01(\x05R\x0eruntimeSeconds\x12+\n" +
+	"\x11instruction_files\x18\t \x03(\tR\x10instructionFiles\x12\x1f\n" +
+	"\vskill_files\x18\n" +
+	" \x03(\tR\n" +
+	"skillFiles\x12\x1f\n" +
+	"\vinputs_file\x18\v \x01(\tR\n" +
+	"inputsFile\x12)\n" +
+	"\x10agent_definition\x18\f \x01(\tR\x0fagentDefinition\x12#\n" +
+	"\rconnection_id\x18\r \x01(\tR\fconnectionId\"D\n" +
+	"\x19StartGoalPlanningResponse\x12'\n" +
+	"\x03run\x18\x01 \x01(\v2\x15.blaxsmith.api.v1.RunR\x03run\"\x9c\x01\n" +
+	"\aGoalRun\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05state\x18\x02 \x01(\tR\x05state\x12#\n" +
+	"\rgoal_revision\x18\x03 \x01(\x03R\fgoalRevision\x12!\n" +
+	"\fplan_version\x18\x04 \x01(\x03R\vplanVersion\x12#\n" +
+	"\rcheckpoint_id\x18\x05 \x01(\tR\fcheckpointId\"\xf5\x01\n" +
+	"\bGoalPlan\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\x03R\aversion\x12#\n" +
+	"\rgoal_revision\x18\x02 \x01(\x03R\fgoalRevision\x12!\n" +
+	"\fcontent_json\x18\x03 \x01(\tR\vcontentJson\x12\x16\n" +
+	"\x06sha256\x18\x04 \x01(\tR\x06sha256\x12\"\n" +
+	"\rsource_run_id\x18\x05 \x01(\tR\vsourceRunId\x12,\n" +
+	"\x12source_evidence_id\x18\x06 \x01(\tR\x10sourceEvidenceId\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\a \x01(\tR\tcreatedAt\"U\n" +
+	"\x13GetGoalPlansRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\x12%\n" +
+	"\x0ebefore_version\x18\x02 \x01(\x03R\rbeforeVersion\"\xa7\x01\n" +
+	"\x14GetGoalPlansResponse\x120\n" +
+	"\x05plans\x18\x01 \x03(\v2\x1a.blaxsmith.api.v1.GoalPlanR\x05plans\x12-\n" +
+	"\x04runs\x18\x02 \x03(\v2\x19.blaxsmith.api.v1.GoalRunR\x04runs\x12.\n" +
+	"\x13next_before_version\x18\x03 \x01(\x03R\x11nextBeforeVersion\"\xfd\x01\n" +
+	"\x13SaveGoalPlanRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\x12\x1f\n" +
+	"\vrequest_key\x18\x02 \x01(\tR\n" +
+	"requestKey\x124\n" +
+	"\x16expected_goal_revision\x18\x03 \x01(\x03R\x14expectedGoalRevision\x122\n" +
+	"\x15expected_plan_version\x18\x04 \x01(\x03R\x13expectedPlanVersion\x12!\n" +
+	"\fcontent_json\x18\x05 \x01(\tR\vcontentJson\x12\x1f\n" +
+	"\vevidence_id\x18\x06 \x01(\tR\n" +
+	"evidenceId\"0\n" +
+	"\x14SaveGoalPlanResponse\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\x03R\aversion\"1\n" +
+	"\x18GetDeliveryReportRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\"r\n" +
+	"\x19GetDeliveryReportResponse\x12\x1a\n" +
+	"\bmarkdown\x18\x01 \x01(\tR\bmarkdown\x12\x16\n" +
+	"\x06sha256\x18\x02 \x01(\tR\x06sha256\x12!\n" +
+	"\fgenerated_at\x18\x03 \x01(\tR\vgeneratedAt\"&\n" +
 	"\rGetRunRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\"9\n" +
 	"\x0eGetRunResponse\x12'\n" +
-	"\x03run\x18\x01 \x01(\v2\x15.blaxsmith.api.v1.RunR\x03run\"\xf9\x01\n" +
+	"\x03run\x18\x01 \x01(\v2\x15.blaxsmith.api.v1.RunR\x03run\"\xae\x02\n" +
+	"\x11GoalReviewOptions\x12\x12\n" +
+	"\x04mode\x18\x01 \x01(\tR\x04mode\x12\x18\n" +
+	"\aharness\x18\x02 \x01(\tR\aharness\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12\x16\n" +
+	"\x06effort\x18\x04 \x01(\tR\x06effort\x12+\n" +
+	"\x11instruction_files\x18\x05 \x03(\tR\x10instructionFiles\x12\x1f\n" +
+	"\vskill_files\x18\x06 \x03(\tR\n" +
+	"skillFiles\x12\x1f\n" +
+	"\vinputs_file\x18\a \x01(\tR\n" +
+	"inputsFile\x12)\n" +
+	"\x10agent_definition\x18\b \x01(\tR\x0fagentDefinition\x12#\n" +
+	"\rconnection_id\x18\t \x01(\tR\fconnectionId\"\x8e\x05\n" +
+	"\x14GoalExecutionOptions\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\x124\n" +
+	"\x16expected_goal_revision\x18\x02 \x01(\x03R\x14expectedGoalRevision\x12!\n" +
+	"\fplan_version\x18\x03 \x01(\x03R\vplanVersion\x12\x18\n" +
+	"\aharness\x18\x04 \x01(\tR\aharness\x12\x14\n" +
+	"\x05model\x18\x05 \x01(\tR\x05model\x12\x16\n" +
+	"\x06effort\x18\x06 \x01(\tR\x06effort\x12'\n" +
+	"\x0fruntime_seconds\x18\a \x01(\x05R\x0eruntimeSeconds\x12+\n" +
+	"\x11correction_cycles\x18\b \x01(\x05R\x10correctionCycles\x12\x1e\n" +
+	"\n" +
+	"acceptance\x18\t \x01(\tR\n" +
+	"acceptance\x12+\n" +
+	"\x11instruction_files\x18\n" +
+	" \x03(\tR\x10instructionFiles\x12\x1f\n" +
+	"\vskill_files\x18\v \x03(\tR\n" +
+	"skillFiles\x12;\n" +
+	"\x06review\x18\f \x01(\v2#.blaxsmith.api.v1.GoalReviewOptionsR\x06review\x12\x1f\n" +
+	"\vinputs_file\x18\r \x01(\tR\n" +
+	"inputsFile\x12)\n" +
+	"\x10agent_definition\x18\x0e \x01(\tR\x0fagentDefinition\x12#\n" +
+	"\rconnection_id\x18\x10 \x01(\tR\fconnectionId\x12#\n" +
+	"\rcheckpoint_id\x18\x11 \x01(\tR\fcheckpointId\x12%\n" +
+	"\x0ereadiness_mode\x18\x0f \x01(\tR\rreadinessMode\"\xb2\x01\n" +
+	"\x13ExecutionTaskPacket\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x1d\n" +
+	"\n" +
+	"depends_on\x18\x03 \x03(\tR\tdependsOn\x12\x12\n" +
+	"\x04path\x18\x04 \x01(\tR\x04path\x12\x16\n" +
+	"\x06sha256\x18\x05 \x01(\tR\x06sha256\x12!\n" +
+	"\fcontent_json\x18\x06 \x01(\tR\vcontentJson\"\x9b\x01\n" +
+	"\vGoalContext\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\x12+\n" +
+	"\x11expected_revision\x18\x02 \x01(\x03R\x10expectedRevision\x12!\n" +
+	"\fplan_version\x18\x03 \x01(\x03R\vplanVersion\x12#\n" +
+	"\rcheckpoint_id\x18\x04 \x01(\tR\fcheckpointId\"\xbc\x03\n" +
 	"\x10LaunchRunRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1d\n" +
 	"\n" +
 	"launch_key\x18\x02 \x01(\tR\tlaunchKey\x12\x1f\n" +
 	"\vrecipe_path\x18\x03 \x01(\tR\n" +
-	"recipePath\x12\x1b\n" +
-	"\tspec_path\x18\x04 \x01(\tR\bspecPath\x12'\n" +
-	"\x0ftranscript_path\x18\x05 \x01(\tR\x0etranscriptPath\x12\x14\n" +
+	"recipePath\x12\x14\n" +
 	"\x05scope\x18\x06 \x01(\tR\x05scope\x12*\n" +
-	"\x11recipe_version_id\x18\a \x01(\tR\x0frecipeVersionId\"<\n" +
+	"\x11recipe_version_id\x18\a \x01(\tR\x0frecipeVersionId\x124\n" +
+	"\x16expected_bundle_sha256\x18\b \x01(\tR\x14expectedBundleSha256\x12@\n" +
+	"\x1cexpected_verification_sha256\x18\t \x01(\tR\x1aexpectedVerificationSha256\x12M\n" +
+	"\x0egoal_execution\x18\n" +
+	" \x01(\v2&.blaxsmith.api.v1.GoalExecutionOptionsR\rgoalExecution\x12@\n" +
+	"\fgoal_context\x18\v \x01(\v2\x1d.blaxsmith.api.v1.GoalContextR\vgoalContext\"<\n" +
 	"\x11LaunchRunResponse\x12'\n" +
 	"\x03run\x18\x01 \x01(\v2\x15.blaxsmith.api.v1.RunR\x03run\"=\n" +
 	"\x1cGetLaunchAvailabilityRequest\x12\x1d\n" +
@@ -4998,7 +10393,51 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\"Q\n" +
 	"\x1dGetLaunchAvailabilityResponse\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xc7\x04\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\" \n" +
+	"\x1eGetPlatformCapabilitiesRequest\"\x91\x03\n" +
+	"\x1fGetPlatformCapabilitiesResponse\x12%\n" +
+	"\x0erecipe_schemas\x18\x01 \x03(\tR\rrecipeSchemas\x12\x1c\n" +
+	"\tharnesses\x18\x02 \x03(\tR\tharnesses\x12)\n" +
+	"\x10acceptance_modes\x18\x03 \x03(\tR\x0facceptanceModes\x12\x1f\n" +
+	"\vcheck_modes\x18\x04 \x03(\tR\n" +
+	"checkModes\x12\x1d\n" +
+	"\n" +
+	"max_stages\x18\x05 \x01(\x05R\tmaxStages\x120\n" +
+	"\x14max_implement_stages\x18\x06 \x01(\x05R\x12maxImplementStages\x12%\n" +
+	"\x0elaunch_preview\x18\a \x01(\bR\rlaunchPreview\x12\x1f\n" +
+	"\vmachine_api\x18\b \x01(\bR\n" +
+	"machineApi\x12%\n" +
+	"\x0emcp_transports\x18\t \x03(\tR\rmcpTransports\x12\x1d\n" +
+	"\n" +
+	"api_scopes\x18\n" +
+	" \x03(\tR\tapiScopes\"\xa6\x02\n" +
+	"\x11PreviewRunRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1f\n" +
+	"\vrecipe_path\x18\x02 \x01(\tR\n" +
+	"recipePath\x12*\n" +
+	"\x11recipe_version_id\x18\x03 \x01(\tR\x0frecipeVersionId\x12\x14\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\x12M\n" +
+	"\x0egoal_execution\x18\x05 \x01(\v2&.blaxsmith.api.v1.GoalExecutionOptionsR\rgoalExecution\x12@\n" +
+	"\fgoal_context\x18\x06 \x01(\v2\x1d.blaxsmith.api.v1.GoalContextR\vgoalContext\"\xe7\x04\n" +
+	"\x12PreviewRunResponse\x12#\n" +
+	"\rsource_commit\x18\x01 \x01(\tR\fsourceCommit\x12#\n" +
+	"\rbundle_sha256\x18\x02 \x01(\tR\fbundleSha256\x12/\n" +
+	"\x13verification_sha256\x18\x03 \x01(\tR\x12verificationSha256\x12\x1f\n" +
+	"\vrecipe_json\x18\x04 \x01(\tR\n" +
+	"recipeJson\x12\x1f\n" +
+	"\vstage_order\x18\x05 \x03(\tR\n" +
+	"stageOrder\x12?\n" +
+	"\tartifacts\x18\x06 \x03(\v2!.blaxsmith.api.v1.FrozenInputFileR\tartifacts\x12;\n" +
+	"\x06checks\x18\a \x03(\v2#.blaxsmith.api.v1.VerificationCheckR\x06checks\x12\x1a\n" +
+	"\bblockers\x18\b \x03(\tR\bblockers\x12\x1d\n" +
+	"\n" +
+	"can_launch\x18\t \x01(\bR\tcanLaunch\x12H\n" +
+	"\ftask_packets\x18\n" +
+	" \x03(\v2%.blaxsmith.api.v1.ExecutionTaskPacketR\vtaskPackets\x122\n" +
+	"\x15effective_inputs_json\x18\v \x01(\tR\x13effectiveInputsJson\x12#\n" +
+	"\rcheckpoint_id\x18\r \x01(\tR\fcheckpointId\x128\n" +
+	"\x18repository_baseline_json\x18\f \x01(\tR\x16repositoryBaselineJson\"\xe8\x04\n" +
 	"\aRunTask\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
@@ -5022,7 +10461,9 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\n" +
 	"max_cycles\x18\x0f \x01(\x05R\tmaxCycles\x12\x1f\n" +
 	"\vloop_cycles\x18\x10 \x01(\x05R\n" +
-	"loopCyclesJ\x04\b\x1e\x10\x1fJ\x04\b\x1f\x10 R\fpaced_reasonR\x0fpaced_resets_at\"=\n" +
+	"loopCycles\x12\x1f\n" +
+	"\vreview_mode\x18\x11 \x01(\tR\n" +
+	"reviewModeJ\x04\b\x1e\x10\x1fJ\x04\b\x1f\x10 R\fpaced_reasonR\x0fpaced_resets_at\"=\n" +
 	"\x0fFrozenInputFile\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
 	"\x06sha256\x18\x02 \x01(\tR\x06sha256\",\n" +
@@ -5079,7 +10520,7 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\x06action\x18\x04 \x01(\tR\x06action\x12\x1d\n" +
 	"\n" +
 	"decided_at\x18\x05 \x01(\tR\tdecidedAt\x12\x1a\n" +
-	"\bfeedback\x18\x06 \x01(\tR\bfeedback\"\x84\x03\n" +
+	"\bfeedback\x18\x06 \x01(\tR\bfeedback\"\xad\x03\n" +
 	"\rReviewPackage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1a\n" +
@@ -5091,7 +10532,8 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\x0fevidence_sha256\x18\b \x01(\tR\x0eevidenceSha256\x12!\n" +
 	"\fpresented_at\x18\t \x01(\tR\vpresentedAt\x12<\n" +
 	"\bdecision\x18\n" +
-	" \x01(\v2 .blaxsmith.api.v1.ReviewDecisionR\bdecision\"0\n" +
+	" \x01(\v2 .blaxsmith.api.v1.ReviewDecisionR\bdecision\x12'\n" +
+	"\x0facceptance_mode\x18\v \x01(\tR\x0eacceptanceMode\"0\n" +
 	"\x17GetCurrentReviewRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\"U\n" +
 	"\x18GetCurrentReviewResponse\x129\n" +
@@ -5187,16 +10629,185 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\n" +
 	"attempt_id\x18\x01 \x01(\tR\tattemptId\"U\n" +
 	"\x17HandBackAttemptResponse\x12:\n" +
-	"\acontrol\x18\x01 \x01(\v2 .blaxsmith.api.v1.AttemptControlR\acontrol2\xe8\x19\n" +
-	"\x0fWorkflowService\x12`\n" +
-	"\rCreateProject\x12&.blaxsmith.api.v1.CreateProjectRequest\x1a'.blaxsmith.api.v1.CreateProjectResponse\x12W\n" +
+	"\acontrol\x18\x01 \x01(\v2 .blaxsmith.api.v1.AttemptControlR\acontrol\"\xeb\x01\n" +
+	"\vRunEvidence\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x02 \x01(\tR\tattemptId\x12\x14\n" +
+	"\x05stage\x18\x03 \x01(\tR\x05stage\x12\x12\n" +
+	"\x04kind\x18\x04 \x01(\tR\x04kind\x12\x10\n" +
+	"\x03key\x18\x05 \x01(\tR\x03key\x12\x1a\n" +
+	"\brevision\x18\x06 \x01(\tR\brevision\x12\x16\n" +
+	"\x06sha256\x18\a \x01(\tR\x06sha256\x12#\n" +
+	"\rmetadata_json\x18\b \x01(\tR\fmetadataJson\x12\x18\n" +
+	"\acurrent\x18\t \x01(\bR\acurrent\"J\n" +
+	"\x16ListRunEvidenceRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x19\n" +
+	"\bafter_id\x18\x02 \x01(\tR\aafterId\"x\n" +
+	"\x17ListRunEvidenceResponse\x129\n" +
+	"\bevidence\x18\x01 \x03(\v2\x1d.blaxsmith.api.v1.RunEvidenceR\bevidence\x12\"\n" +
+	"\rnext_after_id\x18\x02 \x01(\tR\vnextAfterId\"S\n" +
+	"\x19GetEvidenceContentRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1f\n" +
+	"\vevidence_id\x18\x02 \x01(\tR\n" +
+	"evidenceId\"Y\n" +
+	"\x1aGetEvidenceContentResponse\x12\x18\n" +
+	"\acontent\x18\x01 \x01(\fR\acontent\x12!\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\"\xab\x01\n" +
+	"\x10ServicePrincipal\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x14\n" +
+	"\x05label\x18\x03 \x01(\tR\x05label\x12\x14\n" +
+	"\x05state\x18\x04 \x01(\tR\x05state\x12\x1d\n" +
+	"\n" +
+	"created_by\x18\x05 \x01(\tR\tcreatedBy\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\tR\tcreatedAt\"u\n" +
+	"\x1dCreateServicePrincipalRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12\x1f\n" +
+	"\vrequest_key\x18\x03 \x01(\tR\n" +
+	"requestKey\"b\n" +
+	"\x1eCreateServicePrincipalResponse\x12@\n" +
+	"\tprincipal\x18\x01 \x01(\v2\".blaxsmith.api.v1.ServicePrincipalR\tprincipal\"=\n" +
+	"\x1cListServicePrincipalsRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\"c\n" +
+	"\x1dListServicePrincipalsResponse\x12B\n" +
+	"\n" +
+	"principals\x18\x01 \x03(\v2\".blaxsmith.api.v1.ServicePrincipalR\n" +
+	"principals\"C\n" +
+	"\x1eDisableServicePrincipalRequest\x12!\n" +
+	"\fprincipal_id\x18\x01 \x01(\tR\vprincipalId\"!\n" +
+	"\x1fDisableServicePrincipalResponse\"\xf8\x01\n" +
+	"\bApiToken\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x14\n" +
+	"\x05label\x18\x03 \x01(\tR\x05label\x12\x16\n" +
+	"\x06scopes\x18\x04 \x03(\tR\x06scopes\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x05 \x01(\tR\texpiresAt\x12\x1d\n" +
+	"\n" +
+	"revoked_at\x18\x06 \x01(\tR\trevokedAt\x12!\n" +
+	"\fprincipal_id\x18\a \x01(\tR\vprincipalId\x12\x12\n" +
+	"\x04kind\x18\b \x01(\tR\x04kind\x12\x1a\n" +
+	"\bresource\x18\t \x01(\tR\bresource\"\xc1\x01\n" +
+	"\x15CreateApiTokenRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12\x16\n" +
+	"\x06scopes\x18\x03 \x03(\tR\x06scopes\x12)\n" +
+	"\x10lifetime_seconds\x18\x04 \x01(\x05R\x0flifetimeSeconds\x120\n" +
+	"\x14service_principal_id\x18\x05 \x01(\tR\x12servicePrincipalId\"j\n" +
+	"\x16CreateApiTokenResponse\x12:\n" +
+	"\n" +
+	"credential\x18\x01 \x01(\v2\x1a.blaxsmith.api.v1.ApiTokenR\n" +
+	"credential\x12\x14\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\"g\n" +
+	"\x14ListApiTokensRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x120\n" +
+	"\x14service_principal_id\x18\x02 \x01(\tR\x12servicePrincipalId\"U\n" +
+	"\x15ListApiTokensResponse\x12<\n" +
+	"\vcredentials\x18\x01 \x03(\v2\x1a.blaxsmith.api.v1.ApiTokenR\vcredentials\"2\n" +
+	"\x15RevokeApiTokenRequest\x12\x19\n" +
+	"\btoken_id\x18\x01 \x01(\tR\atokenId\"\x18\n" +
+	"\x16RevokeApiTokenResponse\"\x1e\n" +
+	"\x1cDescribeMachineAccessRequest\"[\n" +
+	"\x1dDescribeMachineAccessResponse\x12:\n" +
+	"\n" +
+	"credential\x18\x01 \x01(\v2\x1a.blaxsmith.api.v1.ApiTokenR\n" +
+	"credential\"\x84\x02\n" +
+	"\fUsageSummary\x12\x1a\n" +
+	"\battempts\x18\x01 \x01(\x03R\battempts\x12+\n" +
+	"\x11reported_attempts\x18\x02 \x01(\x03R\x10reportedAttempts\x12\x18\n" +
+	"\areports\x18\x03 \x01(\x03R\areports\x12!\n" +
+	"\fcost_reports\x18\x04 \x01(\x03R\vcostReports\x12!\n" +
+	"\finput_tokens\x18\x05 \x01(\tR\vinputTokens\x12#\n" +
+	"\routput_tokens\x18\x06 \x01(\tR\foutputTokens\x12&\n" +
+	"\x0fcost_micros_usd\x18\a \x01(\tR\rcostMicrosUsd\"+\n" +
+	"\x12GetRunUsageRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\"K\n" +
+	"\x13GetRunUsageResponse\x124\n" +
+	"\x05usage\x18\x01 \x01(\v2\x1e.blaxsmith.api.v1.UsageSummaryR\x05usage\".\n" +
+	"\x13GetGoalUsageRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\"L\n" +
+	"\x14GetGoalUsageResponse\x124\n" +
+	"\x05usage\x18\x01 \x01(\v2\x1e.blaxsmith.api.v1.UsageSummaryR\x05usage\"\x89\x03\n" +
+	"\x0eGoalCheckpoint\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\agoal_id\x18\x02 \x01(\tR\x06goalId\x12\x15\n" +
+	"\x06run_id\x18\x03 \x01(\tR\x05runId\x12\x1d\n" +
+	"\n" +
+	"package_id\x18\x04 \x01(\tR\tpackageId\x12-\n" +
+	"\x12candidate_revision\x18\x05 \x01(\tR\x11candidateRevision\x12\x14\n" +
+	"\x05title\x18\x06 \x01(\tR\x05title\x12!\n" +
+	"\fprincipal_id\x18\a \x01(\tR\vprincipalId\x12\x1a\n" +
+	"\bsequence\x18\b \x01(\x03R\bsequence\x12!\n" +
+	"\fplan_version\x18\t \x01(\x03R\vplanVersion\x12#\n" +
+	"\rgoal_revision\x18\n" +
+	" \x01(\x03R\fgoalRevision\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\v \x01(\tR\tcreatedAt\x12-\n" +
+	"\x12current_acceptance\x18\f \x01(\bR\x11currentAcceptance\"^\n" +
+	"\x1aListGoalCheckpointsRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\x12'\n" +
+	"\x0fbefore_sequence\x18\x02 \x01(\x03R\x0ebeforeSequence\"\x93\x01\n" +
+	"\x1bListGoalCheckpointsResponse\x12B\n" +
+	"\vcheckpoints\x18\x01 \x03(\v2 .blaxsmith.api.v1.GoalCheckpointR\vcheckpoints\x120\n" +
+	"\x14next_before_sequence\x18\x02 \x01(\x03R\x12nextBeforeSequence\"\xd9\x01\n" +
+	"\x1bRecordGoalCheckpointRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\tR\x06goalId\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1d\n" +
+	"\n" +
+	"package_id\x18\x03 \x01(\tR\tpackageId\x12\x14\n" +
+	"\x05title\x18\x04 \x01(\tR\x05title\x12\x1f\n" +
+	"\vrequest_key\x18\x05 \x01(\tR\n" +
+	"requestKey\x124\n" +
+	"\x16expected_goal_revision\x18\x06 \x01(\x03R\x14expectedGoalRevision\"`\n" +
+	"\x1cRecordGoalCheckpointResponse\x12@\n" +
+	"\n" +
+	"checkpoint\x18\x01 \x01(\v2 .blaxsmith.api.v1.GoalCheckpointR\n" +
+	"checkpoint2\xf61\n" +
+	"\x0fWorkflowService\x12r\n" +
+	"\x13ListGoalCheckpoints\x12,.blaxsmith.api.v1.ListGoalCheckpointsRequest\x1a-.blaxsmith.api.v1.ListGoalCheckpointsResponse\x12u\n" +
+	"\x14RecordGoalCheckpoint\x12-.blaxsmith.api.v1.RecordGoalCheckpointRequest\x1a..blaxsmith.api.v1.RecordGoalCheckpointResponse\x12Z\n" +
+	"\vGetRunUsage\x12$.blaxsmith.api.v1.GetRunUsageRequest\x1a%.blaxsmith.api.v1.GetRunUsageResponse\x12]\n" +
+	"\fGetGoalUsage\x12%.blaxsmith.api.v1.GetGoalUsageRequest\x1a&.blaxsmith.api.v1.GetGoalUsageResponse\x12{\n" +
+	"\x16CreateServicePrincipal\x12/.blaxsmith.api.v1.CreateServicePrincipalRequest\x1a0.blaxsmith.api.v1.CreateServicePrincipalResponse\x12x\n" +
+	"\x15ListServicePrincipals\x12..blaxsmith.api.v1.ListServicePrincipalsRequest\x1a/.blaxsmith.api.v1.ListServicePrincipalsResponse\x12~\n" +
+	"\x17DisableServicePrincipal\x120.blaxsmith.api.v1.DisableServicePrincipalRequest\x1a1.blaxsmith.api.v1.DisableServicePrincipalResponse\x12{\n" +
+	"\x16GetProjectModelOptions\x12/.blaxsmith.api.v1.GetProjectModelOptionsRequest\x1a0.blaxsmith.api.v1.GetProjectModelOptionsResponse\x12c\n" +
+	"\x0eGetGoalControl\x12'.blaxsmith.api.v1.GetGoalControlRequest\x1a(.blaxsmith.api.v1.GetGoalControlResponse\x12Z\n" +
+	"\vControlGoal\x12$.blaxsmith.api.v1.ControlGoalRequest\x1a%.blaxsmith.api.v1.ControlGoalResponse\x12i\n" +
+	"\x10GetGoalAllowance\x12).blaxsmith.api.v1.GetGoalAllowanceRequest\x1a*.blaxsmith.api.v1.GetGoalAllowanceResponse\x12i\n" +
+	"\x10SetGoalAllowance\x12).blaxsmith.api.v1.SetGoalAllowanceRequest\x1a*.blaxsmith.api.v1.SetGoalAllowanceResponse\x12x\n" +
+	"\x15DescribeMachineAccess\x12..blaxsmith.api.v1.DescribeMachineAccessRequest\x1a/.blaxsmith.api.v1.DescribeMachineAccessResponse\x12c\n" +
+	"\x0eCreateApiToken\x12'.blaxsmith.api.v1.CreateApiTokenRequest\x1a(.blaxsmith.api.v1.CreateApiTokenResponse\x12`\n" +
+	"\rListApiTokens\x12&.blaxsmith.api.v1.ListApiTokensRequest\x1a'.blaxsmith.api.v1.ListApiTokensResponse\x12c\n" +
+	"\x0eRevokeApiToken\x12'.blaxsmith.api.v1.RevokeApiTokenRequest\x1a(.blaxsmith.api.v1.RevokeApiTokenResponse\x12f\n" +
+	"\x0fListRunEvidence\x12(.blaxsmith.api.v1.ListRunEvidenceRequest\x1a).blaxsmith.api.v1.ListRunEvidenceResponse\x12o\n" +
+	"\x12GetEvidenceContent\x12+.blaxsmith.api.v1.GetEvidenceContentRequest\x1a,.blaxsmith.api.v1.GetEvidenceContentResponse\x12`\n" +
+	"\rCreateProject\x12&.blaxsmith.api.v1.CreateProjectRequest\x1a'.blaxsmith.api.v1.CreateProjectResponse\x12l\n" +
+	"\x11StartGoalPlanning\x12*.blaxsmith.api.v1.StartGoalPlanningRequest\x1a+.blaxsmith.api.v1.StartGoalPlanningResponse\x12]\n" +
+	"\fGetGoalPlans\x12%.blaxsmith.api.v1.GetGoalPlansRequest\x1a&.blaxsmith.api.v1.GetGoalPlansResponse\x12]\n" +
+	"\fSaveGoalPlan\x12%.blaxsmith.api.v1.SaveGoalPlanRequest\x1a&.blaxsmith.api.v1.SaveGoalPlanResponse\x12W\n" +
+	"\n" +
+	"CreateGoal\x12#.blaxsmith.api.v1.CreateGoalRequest\x1a$.blaxsmith.api.v1.CreateGoalResponse\x12T\n" +
+	"\tListGoals\x12\".blaxsmith.api.v1.ListGoalsRequest\x1a#.blaxsmith.api.v1.ListGoalsResponse\x12N\n" +
+	"\aGetGoal\x12 .blaxsmith.api.v1.GetGoalRequest\x1a!.blaxsmith.api.v1.GetGoalResponse\x12T\n" +
+	"\tReplyGoal\x12\".blaxsmith.api.v1.ReplyGoalRequest\x1a#.blaxsmith.api.v1.ReplyGoalResponse\x12W\n" +
 	"\n" +
 	"GetProject\x12#.blaxsmith.api.v1.GetProjectRequest\x1a$.blaxsmith.api.v1.GetProjectResponse\x12i\n" +
 	"\x10GetProjectSource\x12).blaxsmith.api.v1.GetProjectSourceRequest\x1a*.blaxsmith.api.v1.GetProjectSourceResponse\x12i\n" +
 	"\x10SetProjectSource\x12).blaxsmith.api.v1.SetProjectSourceRequest\x1a*.blaxsmith.api.v1.SetProjectSourceResponse\x12o\n" +
 	"\x12ListGitConnections\x12+.blaxsmith.api.v1.ListGitConnectionsRequest\x1a,.blaxsmith.api.v1.ListGitConnectionsResponse\x12r\n" +
 	"\x13CreateGitConnection\x12,.blaxsmith.api.v1.CreateGitConnectionRequest\x1a-.blaxsmith.api.v1.CreateGitConnectionResponse\x12{\n" +
-	"\x16GetProjectVerification\x12/.blaxsmith.api.v1.GetProjectVerificationRequest\x1a0.blaxsmith.api.v1.GetProjectVerificationResponse\x12{\n" +
+	"\x16GetProjectVerification\x12/.blaxsmith.api.v1.GetProjectVerificationRequest\x1a0.blaxsmith.api.v1.GetProjectVerificationResponse\x12\x93\x01\n" +
+	"\x1eListProjectVerificationHistory\x127.blaxsmith.api.v1.ListProjectVerificationHistoryRequest\x1a8.blaxsmith.api.v1.ListProjectVerificationHistoryResponse\x12{\n" +
 	"\x16SetProjectVerification\x12/.blaxsmith.api.v1.SetProjectVerificationRequest\x1a0.blaxsmith.api.v1.SetProjectVerificationResponse\x12{\n" +
 	"\x16ListProjectModelAccess\x12/.blaxsmith.api.v1.ListProjectModelAccessRequest\x1a0.blaxsmith.api.v1.ListProjectModelAccessResponse\x12\x81\x01\n" +
 	"\x18CreateProjectModelAccess\x121.blaxsmith.api.v1.CreateProjectModelAccessRequest\x1a2.blaxsmith.api.v1.CreateProjectModelAccessResponse\x12\x81\x01\n" +
@@ -5204,8 +10815,12 @@ const file_blaxsmith_api_v1_workflow_proto_rawDesc = "" +
 	"\x1bListSubscriptionConnections\x124.blaxsmith.api.v1.ListSubscriptionConnectionsRequest\x1a5.blaxsmith.api.v1.ListSubscriptionConnectionsResponse\x12\x8d\x01\n" +
 	"\x1cCreateSubscriptionConnection\x125.blaxsmith.api.v1.CreateSubscriptionConnectionRequest\x1a6.blaxsmith.api.v1.CreateSubscriptionConnectionResponse\x12\x8d\x01\n" +
 	"\x1cRevokeSubscriptionConnection\x125.blaxsmith.api.v1.RevokeSubscriptionConnectionRequest\x1a6.blaxsmith.api.v1.RevokeSubscriptionConnectionResponse\x12]\n" +
-	"\fListProjects\x12%.blaxsmith.api.v1.ListProjectsRequest\x1a&.blaxsmith.api.v1.ListProjectsResponse\x12K\n" +
-	"\x06GetRun\x12\x1f.blaxsmith.api.v1.GetRunRequest\x1a .blaxsmith.api.v1.GetRunResponse\x12T\n" +
+	"\fListProjects\x12%.blaxsmith.api.v1.ListProjectsRequest\x1a&.blaxsmith.api.v1.ListProjectsResponse\x12l\n" +
+	"\x11GetDeliveryReport\x12*.blaxsmith.api.v1.GetDeliveryReportRequest\x1a+.blaxsmith.api.v1.GetDeliveryReportResponse\x12K\n" +
+	"\x06GetRun\x12\x1f.blaxsmith.api.v1.GetRunRequest\x1a .blaxsmith.api.v1.GetRunResponse\x12~\n" +
+	"\x17GetPlatformCapabilities\x120.blaxsmith.api.v1.GetPlatformCapabilitiesRequest\x1a1.blaxsmith.api.v1.GetPlatformCapabilitiesResponse\x12W\n" +
+	"\n" +
+	"PreviewRun\x12#.blaxsmith.api.v1.PreviewRunRequest\x1a$.blaxsmith.api.v1.PreviewRunResponse\x12T\n" +
 	"\tLaunchRun\x12\".blaxsmith.api.v1.LaunchRunRequest\x1a#.blaxsmith.api.v1.LaunchRunResponse\x12x\n" +
 	"\x15GetLaunchAvailability\x12..blaxsmith.api.v1.GetLaunchAvailabilityRequest\x1a/.blaxsmith.api.v1.GetLaunchAvailabilityResponse\x12]\n" +
 	"\fListRunTasks\x12%.blaxsmith.api.v1.ListRunTasksRequest\x1a&.blaxsmith.api.v1.ListRunTasksResponse\x12Q\n" +
@@ -5234,190 +10849,357 @@ func file_blaxsmith_api_v1_workflow_proto_rawDescGZIP() []byte {
 	return file_blaxsmith_api_v1_workflow_proto_rawDescData
 }
 
-var file_blaxsmith_api_v1_workflow_proto_msgTypes = make([]protoimpl.MessageInfo, 80)
+var file_blaxsmith_api_v1_workflow_proto_msgTypes = make([]protoimpl.MessageInfo, 155)
 var file_blaxsmith_api_v1_workflow_proto_goTypes = []any{
-	(*Project)(nil),                              // 0: blaxsmith.api.v1.Project
-	(*Run)(nil),                                  // 1: blaxsmith.api.v1.Run
-	(*WorkflowEvent)(nil),                        // 2: blaxsmith.api.v1.WorkflowEvent
-	(*CreateProjectRequest)(nil),                 // 3: blaxsmith.api.v1.CreateProjectRequest
-	(*CreateProjectResponse)(nil),                // 4: blaxsmith.api.v1.CreateProjectResponse
-	(*GetProjectRequest)(nil),                    // 5: blaxsmith.api.v1.GetProjectRequest
-	(*GetProjectResponse)(nil),                   // 6: blaxsmith.api.v1.GetProjectResponse
-	(*ProjectSource)(nil),                        // 7: blaxsmith.api.v1.ProjectSource
-	(*GetProjectSourceRequest)(nil),              // 8: blaxsmith.api.v1.GetProjectSourceRequest
-	(*GetProjectSourceResponse)(nil),             // 9: blaxsmith.api.v1.GetProjectSourceResponse
-	(*SetProjectSourceRequest)(nil),              // 10: blaxsmith.api.v1.SetProjectSourceRequest
-	(*GitConnection)(nil),                        // 11: blaxsmith.api.v1.GitConnection
-	(*ListGitConnectionsRequest)(nil),            // 12: blaxsmith.api.v1.ListGitConnectionsRequest
-	(*ListGitConnectionsResponse)(nil),           // 13: blaxsmith.api.v1.ListGitConnectionsResponse
-	(*CreateGitConnectionRequest)(nil),           // 14: blaxsmith.api.v1.CreateGitConnectionRequest
-	(*CreateGitConnectionResponse)(nil),          // 15: blaxsmith.api.v1.CreateGitConnectionResponse
-	(*SetProjectSourceResponse)(nil),             // 16: blaxsmith.api.v1.SetProjectSourceResponse
-	(*VerificationCheck)(nil),                    // 17: blaxsmith.api.v1.VerificationCheck
-	(*ProjectVerification)(nil),                  // 18: blaxsmith.api.v1.ProjectVerification
-	(*GetProjectVerificationRequest)(nil),        // 19: blaxsmith.api.v1.GetProjectVerificationRequest
-	(*GetProjectVerificationResponse)(nil),       // 20: blaxsmith.api.v1.GetProjectVerificationResponse
-	(*SetProjectVerificationRequest)(nil),        // 21: blaxsmith.api.v1.SetProjectVerificationRequest
-	(*SetProjectVerificationResponse)(nil),       // 22: blaxsmith.api.v1.SetProjectVerificationResponse
-	(*ProjectModelAccess)(nil),                   // 23: blaxsmith.api.v1.ProjectModelAccess
-	(*ListProjectModelAccessRequest)(nil),        // 24: blaxsmith.api.v1.ListProjectModelAccessRequest
-	(*ListProjectModelAccessResponse)(nil),       // 25: blaxsmith.api.v1.ListProjectModelAccessResponse
-	(*CreateProjectModelAccessRequest)(nil),      // 26: blaxsmith.api.v1.CreateProjectModelAccessRequest
-	(*CreateProjectModelAccessResponse)(nil),     // 27: blaxsmith.api.v1.CreateProjectModelAccessResponse
-	(*RevokeProjectModelAccessRequest)(nil),      // 28: blaxsmith.api.v1.RevokeProjectModelAccessRequest
-	(*RevokeProjectModelAccessResponse)(nil),     // 29: blaxsmith.api.v1.RevokeProjectModelAccessResponse
-	(*SubscriptionConnection)(nil),               // 30: blaxsmith.api.v1.SubscriptionConnection
-	(*ListSubscriptionConnectionsRequest)(nil),   // 31: blaxsmith.api.v1.ListSubscriptionConnectionsRequest
-	(*ListSubscriptionConnectionsResponse)(nil),  // 32: blaxsmith.api.v1.ListSubscriptionConnectionsResponse
-	(*CreateSubscriptionConnectionRequest)(nil),  // 33: blaxsmith.api.v1.CreateSubscriptionConnectionRequest
-	(*CreateSubscriptionConnectionResponse)(nil), // 34: blaxsmith.api.v1.CreateSubscriptionConnectionResponse
-	(*RevokeSubscriptionConnectionRequest)(nil),  // 35: blaxsmith.api.v1.RevokeSubscriptionConnectionRequest
-	(*RevokeSubscriptionConnectionResponse)(nil), // 36: blaxsmith.api.v1.RevokeSubscriptionConnectionResponse
-	(*ListProjectsRequest)(nil),                  // 37: blaxsmith.api.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),                 // 38: blaxsmith.api.v1.ListProjectsResponse
-	(*GetRunRequest)(nil),                        // 39: blaxsmith.api.v1.GetRunRequest
-	(*GetRunResponse)(nil),                       // 40: blaxsmith.api.v1.GetRunResponse
-	(*LaunchRunRequest)(nil),                     // 41: blaxsmith.api.v1.LaunchRunRequest
-	(*LaunchRunResponse)(nil),                    // 42: blaxsmith.api.v1.LaunchRunResponse
-	(*GetLaunchAvailabilityRequest)(nil),         // 43: blaxsmith.api.v1.GetLaunchAvailabilityRequest
-	(*GetLaunchAvailabilityResponse)(nil),        // 44: blaxsmith.api.v1.GetLaunchAvailabilityResponse
-	(*RunTask)(nil),                              // 45: blaxsmith.api.v1.RunTask
-	(*FrozenInputFile)(nil),                      // 46: blaxsmith.api.v1.FrozenInputFile
-	(*ListRunTasksRequest)(nil),                  // 47: blaxsmith.api.v1.ListRunTasksRequest
-	(*ListRunTasksResponse)(nil),                 // 48: blaxsmith.api.v1.ListRunTasksResponse
-	(*ListRunsRequest)(nil),                      // 49: blaxsmith.api.v1.ListRunsRequest
-	(*ListRunsResponse)(nil),                     // 50: blaxsmith.api.v1.ListRunsResponse
-	(*EventsAfterRequest)(nil),                   // 51: blaxsmith.api.v1.EventsAfterRequest
-	(*EventsAfterResponse)(nil),                  // 52: blaxsmith.api.v1.EventsAfterResponse
-	(*CommandExitObservation)(nil),               // 53: blaxsmith.api.v1.CommandExitObservation
-	(*ListCommandExitsRequest)(nil),              // 54: blaxsmith.api.v1.ListCommandExitsRequest
-	(*ListCommandExitsResponse)(nil),             // 55: blaxsmith.api.v1.ListCommandExitsResponse
-	(*ReviewDecision)(nil),                       // 56: blaxsmith.api.v1.ReviewDecision
-	(*ReviewPackage)(nil),                        // 57: blaxsmith.api.v1.ReviewPackage
-	(*GetCurrentReviewRequest)(nil),              // 58: blaxsmith.api.v1.GetCurrentReviewRequest
-	(*GetCurrentReviewResponse)(nil),             // 59: blaxsmith.api.v1.GetCurrentReviewResponse
-	(*DecideReviewRequest)(nil),                  // 60: blaxsmith.api.v1.DecideReviewRequest
-	(*DecideReviewResponse)(nil),                 // 61: blaxsmith.api.v1.DecideReviewResponse
-	(*InteractionOption)(nil),                    // 62: blaxsmith.api.v1.InteractionOption
-	(*InteractionSource)(nil),                    // 63: blaxsmith.api.v1.InteractionSource
-	(*InteractionInterview)(nil),                 // 64: blaxsmith.api.v1.InteractionInterview
-	(*InteractionAnswer)(nil),                    // 65: blaxsmith.api.v1.InteractionAnswer
-	(*Interaction)(nil),                          // 66: blaxsmith.api.v1.Interaction
-	(*ListInteractionsRequest)(nil),              // 67: blaxsmith.api.v1.ListInteractionsRequest
-	(*ListInteractionsResponse)(nil),             // 68: blaxsmith.api.v1.ListInteractionsResponse
-	(*AnswerInteractionRequest)(nil),             // 69: blaxsmith.api.v1.AnswerInteractionRequest
-	(*AnswerInteractionResponse)(nil),            // 70: blaxsmith.api.v1.AnswerInteractionResponse
-	(*SteerAttemptRequest)(nil),                  // 71: blaxsmith.api.v1.SteerAttemptRequest
-	(*SteerAttemptResponse)(nil),                 // 72: blaxsmith.api.v1.SteerAttemptResponse
-	(*AttemptControl)(nil),                       // 73: blaxsmith.api.v1.AttemptControl
-	(*GetAttemptControlRequest)(nil),             // 74: blaxsmith.api.v1.GetAttemptControlRequest
-	(*GetAttemptControlResponse)(nil),            // 75: blaxsmith.api.v1.GetAttemptControlResponse
-	(*TakeOverAttemptRequest)(nil),               // 76: blaxsmith.api.v1.TakeOverAttemptRequest
-	(*TakeOverAttemptResponse)(nil),              // 77: blaxsmith.api.v1.TakeOverAttemptResponse
-	(*HandBackAttemptRequest)(nil),               // 78: blaxsmith.api.v1.HandBackAttemptRequest
-	(*HandBackAttemptResponse)(nil),              // 79: blaxsmith.api.v1.HandBackAttemptResponse
+	(*Project)(nil),                                // 0: blaxsmith.api.v1.Project
+	(*Run)(nil),                                    // 1: blaxsmith.api.v1.Run
+	(*WorkflowEvent)(nil),                          // 2: blaxsmith.api.v1.WorkflowEvent
+	(*CreateProjectRequest)(nil),                   // 3: blaxsmith.api.v1.CreateProjectRequest
+	(*CreateProjectResponse)(nil),                  // 4: blaxsmith.api.v1.CreateProjectResponse
+	(*GetProjectRequest)(nil),                      // 5: blaxsmith.api.v1.GetProjectRequest
+	(*GetProjectResponse)(nil),                     // 6: blaxsmith.api.v1.GetProjectResponse
+	(*ProjectSource)(nil),                          // 7: blaxsmith.api.v1.ProjectSource
+	(*GetProjectSourceRequest)(nil),                // 8: blaxsmith.api.v1.GetProjectSourceRequest
+	(*GetProjectSourceResponse)(nil),               // 9: blaxsmith.api.v1.GetProjectSourceResponse
+	(*SetProjectSourceRequest)(nil),                // 10: blaxsmith.api.v1.SetProjectSourceRequest
+	(*GitConnection)(nil),                          // 11: blaxsmith.api.v1.GitConnection
+	(*ListGitConnectionsRequest)(nil),              // 12: blaxsmith.api.v1.ListGitConnectionsRequest
+	(*ListGitConnectionsResponse)(nil),             // 13: blaxsmith.api.v1.ListGitConnectionsResponse
+	(*CreateGitConnectionRequest)(nil),             // 14: blaxsmith.api.v1.CreateGitConnectionRequest
+	(*CreateGitConnectionResponse)(nil),            // 15: blaxsmith.api.v1.CreateGitConnectionResponse
+	(*SetProjectSourceResponse)(nil),               // 16: blaxsmith.api.v1.SetProjectSourceResponse
+	(*VerificationCheck)(nil),                      // 17: blaxsmith.api.v1.VerificationCheck
+	(*ProjectVerification)(nil),                    // 18: blaxsmith.api.v1.ProjectVerification
+	(*GetProjectVerificationRequest)(nil),          // 19: blaxsmith.api.v1.GetProjectVerificationRequest
+	(*GetProjectVerificationResponse)(nil),         // 20: blaxsmith.api.v1.GetProjectVerificationResponse
+	(*SetProjectVerificationRequest)(nil),          // 21: blaxsmith.api.v1.SetProjectVerificationRequest
+	(*SetProjectVerificationResponse)(nil),         // 22: blaxsmith.api.v1.SetProjectVerificationResponse
+	(*ListProjectVerificationHistoryRequest)(nil),  // 23: blaxsmith.api.v1.ListProjectVerificationHistoryRequest
+	(*ListProjectVerificationHistoryResponse)(nil), // 24: blaxsmith.api.v1.ListProjectVerificationHistoryResponse
+	(*ProjectModelAccess)(nil),                     // 25: blaxsmith.api.v1.ProjectModelAccess
+	(*ListProjectModelAccessRequest)(nil),          // 26: blaxsmith.api.v1.ListProjectModelAccessRequest
+	(*ListProjectModelAccessResponse)(nil),         // 27: blaxsmith.api.v1.ListProjectModelAccessResponse
+	(*CreateProjectModelAccessRequest)(nil),        // 28: blaxsmith.api.v1.CreateProjectModelAccessRequest
+	(*CreateProjectModelAccessResponse)(nil),       // 29: blaxsmith.api.v1.CreateProjectModelAccessResponse
+	(*RevokeProjectModelAccessRequest)(nil),        // 30: blaxsmith.api.v1.RevokeProjectModelAccessRequest
+	(*RevokeProjectModelAccessResponse)(nil),       // 31: blaxsmith.api.v1.RevokeProjectModelAccessResponse
+	(*SubscriptionConnection)(nil),                 // 32: blaxsmith.api.v1.SubscriptionConnection
+	(*ListSubscriptionConnectionsRequest)(nil),     // 33: blaxsmith.api.v1.ListSubscriptionConnectionsRequest
+	(*ListSubscriptionConnectionsResponse)(nil),    // 34: blaxsmith.api.v1.ListSubscriptionConnectionsResponse
+	(*CreateSubscriptionConnectionRequest)(nil),    // 35: blaxsmith.api.v1.CreateSubscriptionConnectionRequest
+	(*CreateSubscriptionConnectionResponse)(nil),   // 36: blaxsmith.api.v1.CreateSubscriptionConnectionResponse
+	(*RevokeSubscriptionConnectionRequest)(nil),    // 37: blaxsmith.api.v1.RevokeSubscriptionConnectionRequest
+	(*RevokeSubscriptionConnectionResponse)(nil),   // 38: blaxsmith.api.v1.RevokeSubscriptionConnectionResponse
+	(*ListProjectsRequest)(nil),                    // 39: blaxsmith.api.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),                   // 40: blaxsmith.api.v1.ListProjectsResponse
+	(*Goal)(nil),                                   // 41: blaxsmith.api.v1.Goal
+	(*GoalEntry)(nil),                              // 42: blaxsmith.api.v1.GoalEntry
+	(*GoalQuestion)(nil),                           // 43: blaxsmith.api.v1.GoalQuestion
+	(*CreateGoalRequest)(nil),                      // 44: blaxsmith.api.v1.CreateGoalRequest
+	(*CreateGoalResponse)(nil),                     // 45: blaxsmith.api.v1.CreateGoalResponse
+	(*ListGoalsRequest)(nil),                       // 46: blaxsmith.api.v1.ListGoalsRequest
+	(*ListGoalsResponse)(nil),                      // 47: blaxsmith.api.v1.ListGoalsResponse
+	(*GetGoalRequest)(nil),                         // 48: blaxsmith.api.v1.GetGoalRequest
+	(*GetGoalResponse)(nil),                        // 49: blaxsmith.api.v1.GetGoalResponse
+	(*ReplyGoalRequest)(nil),                       // 50: blaxsmith.api.v1.ReplyGoalRequest
+	(*ReplyGoalResponse)(nil),                      // 51: blaxsmith.api.v1.ReplyGoalResponse
+	(*ProjectModelOption)(nil),                     // 52: blaxsmith.api.v1.ProjectModelOption
+	(*GetProjectModelOptionsRequest)(nil),          // 53: blaxsmith.api.v1.GetProjectModelOptionsRequest
+	(*GetProjectModelOptionsResponse)(nil),         // 54: blaxsmith.api.v1.GetProjectModelOptionsResponse
+	(*GoalControl)(nil),                            // 55: blaxsmith.api.v1.GoalControl
+	(*GetGoalControlRequest)(nil),                  // 56: blaxsmith.api.v1.GetGoalControlRequest
+	(*GetGoalControlResponse)(nil),                 // 57: blaxsmith.api.v1.GetGoalControlResponse
+	(*ControlGoalRequest)(nil),                     // 58: blaxsmith.api.v1.ControlGoalRequest
+	(*ControlGoalResponse)(nil),                    // 59: blaxsmith.api.v1.ControlGoalResponse
+	(*GoalAllowance)(nil),                          // 60: blaxsmith.api.v1.GoalAllowance
+	(*GetGoalAllowanceRequest)(nil),                // 61: blaxsmith.api.v1.GetGoalAllowanceRequest
+	(*GetGoalAllowanceResponse)(nil),               // 62: blaxsmith.api.v1.GetGoalAllowanceResponse
+	(*SetGoalAllowanceRequest)(nil),                // 63: blaxsmith.api.v1.SetGoalAllowanceRequest
+	(*SetGoalAllowanceResponse)(nil),               // 64: blaxsmith.api.v1.SetGoalAllowanceResponse
+	(*StartGoalPlanningRequest)(nil),               // 65: blaxsmith.api.v1.StartGoalPlanningRequest
+	(*StartGoalPlanningResponse)(nil),              // 66: blaxsmith.api.v1.StartGoalPlanningResponse
+	(*GoalRun)(nil),                                // 67: blaxsmith.api.v1.GoalRun
+	(*GoalPlan)(nil),                               // 68: blaxsmith.api.v1.GoalPlan
+	(*GetGoalPlansRequest)(nil),                    // 69: blaxsmith.api.v1.GetGoalPlansRequest
+	(*GetGoalPlansResponse)(nil),                   // 70: blaxsmith.api.v1.GetGoalPlansResponse
+	(*SaveGoalPlanRequest)(nil),                    // 71: blaxsmith.api.v1.SaveGoalPlanRequest
+	(*SaveGoalPlanResponse)(nil),                   // 72: blaxsmith.api.v1.SaveGoalPlanResponse
+	(*GetDeliveryReportRequest)(nil),               // 73: blaxsmith.api.v1.GetDeliveryReportRequest
+	(*GetDeliveryReportResponse)(nil),              // 74: blaxsmith.api.v1.GetDeliveryReportResponse
+	(*GetRunRequest)(nil),                          // 75: blaxsmith.api.v1.GetRunRequest
+	(*GetRunResponse)(nil),                         // 76: blaxsmith.api.v1.GetRunResponse
+	(*GoalReviewOptions)(nil),                      // 77: blaxsmith.api.v1.GoalReviewOptions
+	(*GoalExecutionOptions)(nil),                   // 78: blaxsmith.api.v1.GoalExecutionOptions
+	(*ExecutionTaskPacket)(nil),                    // 79: blaxsmith.api.v1.ExecutionTaskPacket
+	(*GoalContext)(nil),                            // 80: blaxsmith.api.v1.GoalContext
+	(*LaunchRunRequest)(nil),                       // 81: blaxsmith.api.v1.LaunchRunRequest
+	(*LaunchRunResponse)(nil),                      // 82: blaxsmith.api.v1.LaunchRunResponse
+	(*GetLaunchAvailabilityRequest)(nil),           // 83: blaxsmith.api.v1.GetLaunchAvailabilityRequest
+	(*GetLaunchAvailabilityResponse)(nil),          // 84: blaxsmith.api.v1.GetLaunchAvailabilityResponse
+	(*GetPlatformCapabilitiesRequest)(nil),         // 85: blaxsmith.api.v1.GetPlatformCapabilitiesRequest
+	(*GetPlatformCapabilitiesResponse)(nil),        // 86: blaxsmith.api.v1.GetPlatformCapabilitiesResponse
+	(*PreviewRunRequest)(nil),                      // 87: blaxsmith.api.v1.PreviewRunRequest
+	(*PreviewRunResponse)(nil),                     // 88: blaxsmith.api.v1.PreviewRunResponse
+	(*RunTask)(nil),                                // 89: blaxsmith.api.v1.RunTask
+	(*FrozenInputFile)(nil),                        // 90: blaxsmith.api.v1.FrozenInputFile
+	(*ListRunTasksRequest)(nil),                    // 91: blaxsmith.api.v1.ListRunTasksRequest
+	(*ListRunTasksResponse)(nil),                   // 92: blaxsmith.api.v1.ListRunTasksResponse
+	(*ListRunsRequest)(nil),                        // 93: blaxsmith.api.v1.ListRunsRequest
+	(*ListRunsResponse)(nil),                       // 94: blaxsmith.api.v1.ListRunsResponse
+	(*EventsAfterRequest)(nil),                     // 95: blaxsmith.api.v1.EventsAfterRequest
+	(*EventsAfterResponse)(nil),                    // 96: blaxsmith.api.v1.EventsAfterResponse
+	(*CommandExitObservation)(nil),                 // 97: blaxsmith.api.v1.CommandExitObservation
+	(*ListCommandExitsRequest)(nil),                // 98: blaxsmith.api.v1.ListCommandExitsRequest
+	(*ListCommandExitsResponse)(nil),               // 99: blaxsmith.api.v1.ListCommandExitsResponse
+	(*ReviewDecision)(nil),                         // 100: blaxsmith.api.v1.ReviewDecision
+	(*ReviewPackage)(nil),                          // 101: blaxsmith.api.v1.ReviewPackage
+	(*GetCurrentReviewRequest)(nil),                // 102: blaxsmith.api.v1.GetCurrentReviewRequest
+	(*GetCurrentReviewResponse)(nil),               // 103: blaxsmith.api.v1.GetCurrentReviewResponse
+	(*DecideReviewRequest)(nil),                    // 104: blaxsmith.api.v1.DecideReviewRequest
+	(*DecideReviewResponse)(nil),                   // 105: blaxsmith.api.v1.DecideReviewResponse
+	(*InteractionOption)(nil),                      // 106: blaxsmith.api.v1.InteractionOption
+	(*InteractionSource)(nil),                      // 107: blaxsmith.api.v1.InteractionSource
+	(*InteractionInterview)(nil),                   // 108: blaxsmith.api.v1.InteractionInterview
+	(*InteractionAnswer)(nil),                      // 109: blaxsmith.api.v1.InteractionAnswer
+	(*Interaction)(nil),                            // 110: blaxsmith.api.v1.Interaction
+	(*ListInteractionsRequest)(nil),                // 111: blaxsmith.api.v1.ListInteractionsRequest
+	(*ListInteractionsResponse)(nil),               // 112: blaxsmith.api.v1.ListInteractionsResponse
+	(*AnswerInteractionRequest)(nil),               // 113: blaxsmith.api.v1.AnswerInteractionRequest
+	(*AnswerInteractionResponse)(nil),              // 114: blaxsmith.api.v1.AnswerInteractionResponse
+	(*SteerAttemptRequest)(nil),                    // 115: blaxsmith.api.v1.SteerAttemptRequest
+	(*SteerAttemptResponse)(nil),                   // 116: blaxsmith.api.v1.SteerAttemptResponse
+	(*AttemptControl)(nil),                         // 117: blaxsmith.api.v1.AttemptControl
+	(*GetAttemptControlRequest)(nil),               // 118: blaxsmith.api.v1.GetAttemptControlRequest
+	(*GetAttemptControlResponse)(nil),              // 119: blaxsmith.api.v1.GetAttemptControlResponse
+	(*TakeOverAttemptRequest)(nil),                 // 120: blaxsmith.api.v1.TakeOverAttemptRequest
+	(*TakeOverAttemptResponse)(nil),                // 121: blaxsmith.api.v1.TakeOverAttemptResponse
+	(*HandBackAttemptRequest)(nil),                 // 122: blaxsmith.api.v1.HandBackAttemptRequest
+	(*HandBackAttemptResponse)(nil),                // 123: blaxsmith.api.v1.HandBackAttemptResponse
+	(*RunEvidence)(nil),                            // 124: blaxsmith.api.v1.RunEvidence
+	(*ListRunEvidenceRequest)(nil),                 // 125: blaxsmith.api.v1.ListRunEvidenceRequest
+	(*ListRunEvidenceResponse)(nil),                // 126: blaxsmith.api.v1.ListRunEvidenceResponse
+	(*GetEvidenceContentRequest)(nil),              // 127: blaxsmith.api.v1.GetEvidenceContentRequest
+	(*GetEvidenceContentResponse)(nil),             // 128: blaxsmith.api.v1.GetEvidenceContentResponse
+	(*ServicePrincipal)(nil),                       // 129: blaxsmith.api.v1.ServicePrincipal
+	(*CreateServicePrincipalRequest)(nil),          // 130: blaxsmith.api.v1.CreateServicePrincipalRequest
+	(*CreateServicePrincipalResponse)(nil),         // 131: blaxsmith.api.v1.CreateServicePrincipalResponse
+	(*ListServicePrincipalsRequest)(nil),           // 132: blaxsmith.api.v1.ListServicePrincipalsRequest
+	(*ListServicePrincipalsResponse)(nil),          // 133: blaxsmith.api.v1.ListServicePrincipalsResponse
+	(*DisableServicePrincipalRequest)(nil),         // 134: blaxsmith.api.v1.DisableServicePrincipalRequest
+	(*DisableServicePrincipalResponse)(nil),        // 135: blaxsmith.api.v1.DisableServicePrincipalResponse
+	(*ApiToken)(nil),                               // 136: blaxsmith.api.v1.ApiToken
+	(*CreateApiTokenRequest)(nil),                  // 137: blaxsmith.api.v1.CreateApiTokenRequest
+	(*CreateApiTokenResponse)(nil),                 // 138: blaxsmith.api.v1.CreateApiTokenResponse
+	(*ListApiTokensRequest)(nil),                   // 139: blaxsmith.api.v1.ListApiTokensRequest
+	(*ListApiTokensResponse)(nil),                  // 140: blaxsmith.api.v1.ListApiTokensResponse
+	(*RevokeApiTokenRequest)(nil),                  // 141: blaxsmith.api.v1.RevokeApiTokenRequest
+	(*RevokeApiTokenResponse)(nil),                 // 142: blaxsmith.api.v1.RevokeApiTokenResponse
+	(*DescribeMachineAccessRequest)(nil),           // 143: blaxsmith.api.v1.DescribeMachineAccessRequest
+	(*DescribeMachineAccessResponse)(nil),          // 144: blaxsmith.api.v1.DescribeMachineAccessResponse
+	(*UsageSummary)(nil),                           // 145: blaxsmith.api.v1.UsageSummary
+	(*GetRunUsageRequest)(nil),                     // 146: blaxsmith.api.v1.GetRunUsageRequest
+	(*GetRunUsageResponse)(nil),                    // 147: blaxsmith.api.v1.GetRunUsageResponse
+	(*GetGoalUsageRequest)(nil),                    // 148: blaxsmith.api.v1.GetGoalUsageRequest
+	(*GetGoalUsageResponse)(nil),                   // 149: blaxsmith.api.v1.GetGoalUsageResponse
+	(*GoalCheckpoint)(nil),                         // 150: blaxsmith.api.v1.GoalCheckpoint
+	(*ListGoalCheckpointsRequest)(nil),             // 151: blaxsmith.api.v1.ListGoalCheckpointsRequest
+	(*ListGoalCheckpointsResponse)(nil),            // 152: blaxsmith.api.v1.ListGoalCheckpointsResponse
+	(*RecordGoalCheckpointRequest)(nil),            // 153: blaxsmith.api.v1.RecordGoalCheckpointRequest
+	(*RecordGoalCheckpointResponse)(nil),           // 154: blaxsmith.api.v1.RecordGoalCheckpointResponse
+	(*ConnectionModel)(nil),                        // 155: blaxsmith.api.v1.ConnectionModel
 }
 var file_blaxsmith_api_v1_workflow_proto_depIdxs = []int32{
-	0,  // 0: blaxsmith.api.v1.CreateProjectResponse.project:type_name -> blaxsmith.api.v1.Project
-	0,  // 1: blaxsmith.api.v1.GetProjectResponse.project:type_name -> blaxsmith.api.v1.Project
-	7,  // 2: blaxsmith.api.v1.GetProjectSourceResponse.source:type_name -> blaxsmith.api.v1.ProjectSource
-	11, // 3: blaxsmith.api.v1.ListGitConnectionsResponse.connections:type_name -> blaxsmith.api.v1.GitConnection
-	11, // 4: blaxsmith.api.v1.CreateGitConnectionResponse.connection:type_name -> blaxsmith.api.v1.GitConnection
-	7,  // 5: blaxsmith.api.v1.SetProjectSourceResponse.source:type_name -> blaxsmith.api.v1.ProjectSource
-	17, // 6: blaxsmith.api.v1.ProjectVerification.checks:type_name -> blaxsmith.api.v1.VerificationCheck
-	18, // 7: blaxsmith.api.v1.GetProjectVerificationResponse.verification:type_name -> blaxsmith.api.v1.ProjectVerification
-	17, // 8: blaxsmith.api.v1.SetProjectVerificationRequest.checks:type_name -> blaxsmith.api.v1.VerificationCheck
-	18, // 9: blaxsmith.api.v1.SetProjectVerificationResponse.verification:type_name -> blaxsmith.api.v1.ProjectVerification
-	23, // 10: blaxsmith.api.v1.ListProjectModelAccessResponse.access:type_name -> blaxsmith.api.v1.ProjectModelAccess
-	23, // 11: blaxsmith.api.v1.CreateProjectModelAccessResponse.access:type_name -> blaxsmith.api.v1.ProjectModelAccess
-	30, // 12: blaxsmith.api.v1.ListSubscriptionConnectionsResponse.connections:type_name -> blaxsmith.api.v1.SubscriptionConnection
-	30, // 13: blaxsmith.api.v1.CreateSubscriptionConnectionResponse.connection:type_name -> blaxsmith.api.v1.SubscriptionConnection
-	0,  // 14: blaxsmith.api.v1.ListProjectsResponse.projects:type_name -> blaxsmith.api.v1.Project
-	1,  // 15: blaxsmith.api.v1.GetRunResponse.run:type_name -> blaxsmith.api.v1.Run
-	1,  // 16: blaxsmith.api.v1.LaunchRunResponse.run:type_name -> blaxsmith.api.v1.Run
-	46, // 17: blaxsmith.api.v1.RunTask.instruction_files:type_name -> blaxsmith.api.v1.FrozenInputFile
-	46, // 18: blaxsmith.api.v1.RunTask.skill_files:type_name -> blaxsmith.api.v1.FrozenInputFile
-	45, // 19: blaxsmith.api.v1.ListRunTasksResponse.tasks:type_name -> blaxsmith.api.v1.RunTask
-	1,  // 20: blaxsmith.api.v1.ListRunsResponse.runs:type_name -> blaxsmith.api.v1.Run
-	2,  // 21: blaxsmith.api.v1.EventsAfterResponse.events:type_name -> blaxsmith.api.v1.WorkflowEvent
-	53, // 22: blaxsmith.api.v1.ListCommandExitsResponse.observations:type_name -> blaxsmith.api.v1.CommandExitObservation
-	56, // 23: blaxsmith.api.v1.ReviewPackage.decision:type_name -> blaxsmith.api.v1.ReviewDecision
-	57, // 24: blaxsmith.api.v1.GetCurrentReviewResponse.package:type_name -> blaxsmith.api.v1.ReviewPackage
-	56, // 25: blaxsmith.api.v1.DecideReviewResponse.decision:type_name -> blaxsmith.api.v1.ReviewDecision
-	62, // 26: blaxsmith.api.v1.Interaction.options:type_name -> blaxsmith.api.v1.InteractionOption
-	63, // 27: blaxsmith.api.v1.Interaction.sources:type_name -> blaxsmith.api.v1.InteractionSource
-	64, // 28: blaxsmith.api.v1.Interaction.interview:type_name -> blaxsmith.api.v1.InteractionInterview
-	65, // 29: blaxsmith.api.v1.Interaction.answer:type_name -> blaxsmith.api.v1.InteractionAnswer
-	66, // 30: blaxsmith.api.v1.ListInteractionsResponse.interactions:type_name -> blaxsmith.api.v1.Interaction
-	66, // 31: blaxsmith.api.v1.AnswerInteractionResponse.interaction:type_name -> blaxsmith.api.v1.Interaction
-	73, // 32: blaxsmith.api.v1.GetAttemptControlResponse.control:type_name -> blaxsmith.api.v1.AttemptControl
-	73, // 33: blaxsmith.api.v1.TakeOverAttemptResponse.control:type_name -> blaxsmith.api.v1.AttemptControl
-	73, // 34: blaxsmith.api.v1.HandBackAttemptResponse.control:type_name -> blaxsmith.api.v1.AttemptControl
-	3,  // 35: blaxsmith.api.v1.WorkflowService.CreateProject:input_type -> blaxsmith.api.v1.CreateProjectRequest
-	5,  // 36: blaxsmith.api.v1.WorkflowService.GetProject:input_type -> blaxsmith.api.v1.GetProjectRequest
-	8,  // 37: blaxsmith.api.v1.WorkflowService.GetProjectSource:input_type -> blaxsmith.api.v1.GetProjectSourceRequest
-	10, // 38: blaxsmith.api.v1.WorkflowService.SetProjectSource:input_type -> blaxsmith.api.v1.SetProjectSourceRequest
-	12, // 39: blaxsmith.api.v1.WorkflowService.ListGitConnections:input_type -> blaxsmith.api.v1.ListGitConnectionsRequest
-	14, // 40: blaxsmith.api.v1.WorkflowService.CreateGitConnection:input_type -> blaxsmith.api.v1.CreateGitConnectionRequest
-	19, // 41: blaxsmith.api.v1.WorkflowService.GetProjectVerification:input_type -> blaxsmith.api.v1.GetProjectVerificationRequest
-	21, // 42: blaxsmith.api.v1.WorkflowService.SetProjectVerification:input_type -> blaxsmith.api.v1.SetProjectVerificationRequest
-	24, // 43: blaxsmith.api.v1.WorkflowService.ListProjectModelAccess:input_type -> blaxsmith.api.v1.ListProjectModelAccessRequest
-	26, // 44: blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess:input_type -> blaxsmith.api.v1.CreateProjectModelAccessRequest
-	28, // 45: blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess:input_type -> blaxsmith.api.v1.RevokeProjectModelAccessRequest
-	31, // 46: blaxsmith.api.v1.WorkflowService.ListSubscriptionConnections:input_type -> blaxsmith.api.v1.ListSubscriptionConnectionsRequest
-	33, // 47: blaxsmith.api.v1.WorkflowService.CreateSubscriptionConnection:input_type -> blaxsmith.api.v1.CreateSubscriptionConnectionRequest
-	35, // 48: blaxsmith.api.v1.WorkflowService.RevokeSubscriptionConnection:input_type -> blaxsmith.api.v1.RevokeSubscriptionConnectionRequest
-	37, // 49: blaxsmith.api.v1.WorkflowService.ListProjects:input_type -> blaxsmith.api.v1.ListProjectsRequest
-	39, // 50: blaxsmith.api.v1.WorkflowService.GetRun:input_type -> blaxsmith.api.v1.GetRunRequest
-	41, // 51: blaxsmith.api.v1.WorkflowService.LaunchRun:input_type -> blaxsmith.api.v1.LaunchRunRequest
-	43, // 52: blaxsmith.api.v1.WorkflowService.GetLaunchAvailability:input_type -> blaxsmith.api.v1.GetLaunchAvailabilityRequest
-	47, // 53: blaxsmith.api.v1.WorkflowService.ListRunTasks:input_type -> blaxsmith.api.v1.ListRunTasksRequest
-	49, // 54: blaxsmith.api.v1.WorkflowService.ListRuns:input_type -> blaxsmith.api.v1.ListRunsRequest
-	51, // 55: blaxsmith.api.v1.WorkflowService.EventsAfter:input_type -> blaxsmith.api.v1.EventsAfterRequest
-	54, // 56: blaxsmith.api.v1.WorkflowService.ListCommandExits:input_type -> blaxsmith.api.v1.ListCommandExitsRequest
-	58, // 57: blaxsmith.api.v1.WorkflowService.GetCurrentReview:input_type -> blaxsmith.api.v1.GetCurrentReviewRequest
-	60, // 58: blaxsmith.api.v1.WorkflowService.DecideReview:input_type -> blaxsmith.api.v1.DecideReviewRequest
-	74, // 59: blaxsmith.api.v1.WorkflowService.GetAttemptControl:input_type -> blaxsmith.api.v1.GetAttemptControlRequest
-	76, // 60: blaxsmith.api.v1.WorkflowService.TakeOverAttempt:input_type -> blaxsmith.api.v1.TakeOverAttemptRequest
-	78, // 61: blaxsmith.api.v1.WorkflowService.HandBackAttempt:input_type -> blaxsmith.api.v1.HandBackAttemptRequest
-	67, // 62: blaxsmith.api.v1.WorkflowService.ListInteractions:input_type -> blaxsmith.api.v1.ListInteractionsRequest
-	69, // 63: blaxsmith.api.v1.WorkflowService.AnswerInteraction:input_type -> blaxsmith.api.v1.AnswerInteractionRequest
-	71, // 64: blaxsmith.api.v1.WorkflowService.SteerAttempt:input_type -> blaxsmith.api.v1.SteerAttemptRequest
-	4,  // 65: blaxsmith.api.v1.WorkflowService.CreateProject:output_type -> blaxsmith.api.v1.CreateProjectResponse
-	6,  // 66: blaxsmith.api.v1.WorkflowService.GetProject:output_type -> blaxsmith.api.v1.GetProjectResponse
-	9,  // 67: blaxsmith.api.v1.WorkflowService.GetProjectSource:output_type -> blaxsmith.api.v1.GetProjectSourceResponse
-	16, // 68: blaxsmith.api.v1.WorkflowService.SetProjectSource:output_type -> blaxsmith.api.v1.SetProjectSourceResponse
-	13, // 69: blaxsmith.api.v1.WorkflowService.ListGitConnections:output_type -> blaxsmith.api.v1.ListGitConnectionsResponse
-	15, // 70: blaxsmith.api.v1.WorkflowService.CreateGitConnection:output_type -> blaxsmith.api.v1.CreateGitConnectionResponse
-	20, // 71: blaxsmith.api.v1.WorkflowService.GetProjectVerification:output_type -> blaxsmith.api.v1.GetProjectVerificationResponse
-	22, // 72: blaxsmith.api.v1.WorkflowService.SetProjectVerification:output_type -> blaxsmith.api.v1.SetProjectVerificationResponse
-	25, // 73: blaxsmith.api.v1.WorkflowService.ListProjectModelAccess:output_type -> blaxsmith.api.v1.ListProjectModelAccessResponse
-	27, // 74: blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess:output_type -> blaxsmith.api.v1.CreateProjectModelAccessResponse
-	29, // 75: blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess:output_type -> blaxsmith.api.v1.RevokeProjectModelAccessResponse
-	32, // 76: blaxsmith.api.v1.WorkflowService.ListSubscriptionConnections:output_type -> blaxsmith.api.v1.ListSubscriptionConnectionsResponse
-	34, // 77: blaxsmith.api.v1.WorkflowService.CreateSubscriptionConnection:output_type -> blaxsmith.api.v1.CreateSubscriptionConnectionResponse
-	36, // 78: blaxsmith.api.v1.WorkflowService.RevokeSubscriptionConnection:output_type -> blaxsmith.api.v1.RevokeSubscriptionConnectionResponse
-	38, // 79: blaxsmith.api.v1.WorkflowService.ListProjects:output_type -> blaxsmith.api.v1.ListProjectsResponse
-	40, // 80: blaxsmith.api.v1.WorkflowService.GetRun:output_type -> blaxsmith.api.v1.GetRunResponse
-	42, // 81: blaxsmith.api.v1.WorkflowService.LaunchRun:output_type -> blaxsmith.api.v1.LaunchRunResponse
-	44, // 82: blaxsmith.api.v1.WorkflowService.GetLaunchAvailability:output_type -> blaxsmith.api.v1.GetLaunchAvailabilityResponse
-	48, // 83: blaxsmith.api.v1.WorkflowService.ListRunTasks:output_type -> blaxsmith.api.v1.ListRunTasksResponse
-	50, // 84: blaxsmith.api.v1.WorkflowService.ListRuns:output_type -> blaxsmith.api.v1.ListRunsResponse
-	52, // 85: blaxsmith.api.v1.WorkflowService.EventsAfter:output_type -> blaxsmith.api.v1.EventsAfterResponse
-	55, // 86: blaxsmith.api.v1.WorkflowService.ListCommandExits:output_type -> blaxsmith.api.v1.ListCommandExitsResponse
-	59, // 87: blaxsmith.api.v1.WorkflowService.GetCurrentReview:output_type -> blaxsmith.api.v1.GetCurrentReviewResponse
-	61, // 88: blaxsmith.api.v1.WorkflowService.DecideReview:output_type -> blaxsmith.api.v1.DecideReviewResponse
-	75, // 89: blaxsmith.api.v1.WorkflowService.GetAttemptControl:output_type -> blaxsmith.api.v1.GetAttemptControlResponse
-	77, // 90: blaxsmith.api.v1.WorkflowService.TakeOverAttempt:output_type -> blaxsmith.api.v1.TakeOverAttemptResponse
-	79, // 91: blaxsmith.api.v1.WorkflowService.HandBackAttempt:output_type -> blaxsmith.api.v1.HandBackAttemptResponse
-	68, // 92: blaxsmith.api.v1.WorkflowService.ListInteractions:output_type -> blaxsmith.api.v1.ListInteractionsResponse
-	70, // 93: blaxsmith.api.v1.WorkflowService.AnswerInteraction:output_type -> blaxsmith.api.v1.AnswerInteractionResponse
-	72, // 94: blaxsmith.api.v1.WorkflowService.SteerAttempt:output_type -> blaxsmith.api.v1.SteerAttemptResponse
-	65, // [65:95] is the sub-list for method output_type
-	35, // [35:65] is the sub-list for method input_type
-	35, // [35:35] is the sub-list for extension type_name
-	35, // [35:35] is the sub-list for extension extendee
-	0,  // [0:35] is the sub-list for field type_name
+	0,   // 0: blaxsmith.api.v1.CreateProjectResponse.project:type_name -> blaxsmith.api.v1.Project
+	0,   // 1: blaxsmith.api.v1.GetProjectResponse.project:type_name -> blaxsmith.api.v1.Project
+	7,   // 2: blaxsmith.api.v1.GetProjectSourceResponse.source:type_name -> blaxsmith.api.v1.ProjectSource
+	11,  // 3: blaxsmith.api.v1.ListGitConnectionsResponse.connections:type_name -> blaxsmith.api.v1.GitConnection
+	11,  // 4: blaxsmith.api.v1.CreateGitConnectionResponse.connection:type_name -> blaxsmith.api.v1.GitConnection
+	7,   // 5: blaxsmith.api.v1.SetProjectSourceResponse.source:type_name -> blaxsmith.api.v1.ProjectSource
+	17,  // 6: blaxsmith.api.v1.ProjectVerification.checks:type_name -> blaxsmith.api.v1.VerificationCheck
+	18,  // 7: blaxsmith.api.v1.GetProjectVerificationResponse.verification:type_name -> blaxsmith.api.v1.ProjectVerification
+	17,  // 8: blaxsmith.api.v1.SetProjectVerificationRequest.checks:type_name -> blaxsmith.api.v1.VerificationCheck
+	18,  // 9: blaxsmith.api.v1.SetProjectVerificationResponse.verification:type_name -> blaxsmith.api.v1.ProjectVerification
+	18,  // 10: blaxsmith.api.v1.ListProjectVerificationHistoryResponse.revisions:type_name -> blaxsmith.api.v1.ProjectVerification
+	25,  // 11: blaxsmith.api.v1.ListProjectModelAccessResponse.access:type_name -> blaxsmith.api.v1.ProjectModelAccess
+	25,  // 12: blaxsmith.api.v1.CreateProjectModelAccessResponse.access:type_name -> blaxsmith.api.v1.ProjectModelAccess
+	32,  // 13: blaxsmith.api.v1.ListSubscriptionConnectionsResponse.connections:type_name -> blaxsmith.api.v1.SubscriptionConnection
+	32,  // 14: blaxsmith.api.v1.CreateSubscriptionConnectionResponse.connection:type_name -> blaxsmith.api.v1.SubscriptionConnection
+	0,   // 15: blaxsmith.api.v1.ListProjectsResponse.projects:type_name -> blaxsmith.api.v1.Project
+	110, // 16: blaxsmith.api.v1.Goal.questions:type_name -> blaxsmith.api.v1.Interaction
+	106, // 17: blaxsmith.api.v1.GoalQuestion.options:type_name -> blaxsmith.api.v1.InteractionOption
+	43,  // 18: blaxsmith.api.v1.CreateGoalRequest.questions:type_name -> blaxsmith.api.v1.GoalQuestion
+	41,  // 19: blaxsmith.api.v1.CreateGoalResponse.goal:type_name -> blaxsmith.api.v1.Goal
+	41,  // 20: blaxsmith.api.v1.ListGoalsResponse.goals:type_name -> blaxsmith.api.v1.Goal
+	41,  // 21: blaxsmith.api.v1.GetGoalResponse.goal:type_name -> blaxsmith.api.v1.Goal
+	42,  // 22: blaxsmith.api.v1.GetGoalResponse.entries:type_name -> blaxsmith.api.v1.GoalEntry
+	155, // 23: blaxsmith.api.v1.ProjectModelOption.models:type_name -> blaxsmith.api.v1.ConnectionModel
+	52,  // 24: blaxsmith.api.v1.GetProjectModelOptionsResponse.connections:type_name -> blaxsmith.api.v1.ProjectModelOption
+	55,  // 25: blaxsmith.api.v1.GetGoalControlResponse.control:type_name -> blaxsmith.api.v1.GoalControl
+	60,  // 26: blaxsmith.api.v1.GetGoalAllowanceResponse.allowance:type_name -> blaxsmith.api.v1.GoalAllowance
+	1,   // 27: blaxsmith.api.v1.StartGoalPlanningResponse.run:type_name -> blaxsmith.api.v1.Run
+	68,  // 28: blaxsmith.api.v1.GetGoalPlansResponse.plans:type_name -> blaxsmith.api.v1.GoalPlan
+	67,  // 29: blaxsmith.api.v1.GetGoalPlansResponse.runs:type_name -> blaxsmith.api.v1.GoalRun
+	1,   // 30: blaxsmith.api.v1.GetRunResponse.run:type_name -> blaxsmith.api.v1.Run
+	77,  // 31: blaxsmith.api.v1.GoalExecutionOptions.review:type_name -> blaxsmith.api.v1.GoalReviewOptions
+	78,  // 32: blaxsmith.api.v1.LaunchRunRequest.goal_execution:type_name -> blaxsmith.api.v1.GoalExecutionOptions
+	80,  // 33: blaxsmith.api.v1.LaunchRunRequest.goal_context:type_name -> blaxsmith.api.v1.GoalContext
+	1,   // 34: blaxsmith.api.v1.LaunchRunResponse.run:type_name -> blaxsmith.api.v1.Run
+	78,  // 35: blaxsmith.api.v1.PreviewRunRequest.goal_execution:type_name -> blaxsmith.api.v1.GoalExecutionOptions
+	80,  // 36: blaxsmith.api.v1.PreviewRunRequest.goal_context:type_name -> blaxsmith.api.v1.GoalContext
+	90,  // 37: blaxsmith.api.v1.PreviewRunResponse.artifacts:type_name -> blaxsmith.api.v1.FrozenInputFile
+	17,  // 38: blaxsmith.api.v1.PreviewRunResponse.checks:type_name -> blaxsmith.api.v1.VerificationCheck
+	79,  // 39: blaxsmith.api.v1.PreviewRunResponse.task_packets:type_name -> blaxsmith.api.v1.ExecutionTaskPacket
+	90,  // 40: blaxsmith.api.v1.RunTask.instruction_files:type_name -> blaxsmith.api.v1.FrozenInputFile
+	90,  // 41: blaxsmith.api.v1.RunTask.skill_files:type_name -> blaxsmith.api.v1.FrozenInputFile
+	89,  // 42: blaxsmith.api.v1.ListRunTasksResponse.tasks:type_name -> blaxsmith.api.v1.RunTask
+	1,   // 43: blaxsmith.api.v1.ListRunsResponse.runs:type_name -> blaxsmith.api.v1.Run
+	2,   // 44: blaxsmith.api.v1.EventsAfterResponse.events:type_name -> blaxsmith.api.v1.WorkflowEvent
+	97,  // 45: blaxsmith.api.v1.ListCommandExitsResponse.observations:type_name -> blaxsmith.api.v1.CommandExitObservation
+	100, // 46: blaxsmith.api.v1.ReviewPackage.decision:type_name -> blaxsmith.api.v1.ReviewDecision
+	101, // 47: blaxsmith.api.v1.GetCurrentReviewResponse.package:type_name -> blaxsmith.api.v1.ReviewPackage
+	100, // 48: blaxsmith.api.v1.DecideReviewResponse.decision:type_name -> blaxsmith.api.v1.ReviewDecision
+	106, // 49: blaxsmith.api.v1.Interaction.options:type_name -> blaxsmith.api.v1.InteractionOption
+	107, // 50: blaxsmith.api.v1.Interaction.sources:type_name -> blaxsmith.api.v1.InteractionSource
+	108, // 51: blaxsmith.api.v1.Interaction.interview:type_name -> blaxsmith.api.v1.InteractionInterview
+	109, // 52: blaxsmith.api.v1.Interaction.answer:type_name -> blaxsmith.api.v1.InteractionAnswer
+	110, // 53: blaxsmith.api.v1.ListInteractionsResponse.interactions:type_name -> blaxsmith.api.v1.Interaction
+	110, // 54: blaxsmith.api.v1.AnswerInteractionResponse.interaction:type_name -> blaxsmith.api.v1.Interaction
+	117, // 55: blaxsmith.api.v1.GetAttemptControlResponse.control:type_name -> blaxsmith.api.v1.AttemptControl
+	117, // 56: blaxsmith.api.v1.TakeOverAttemptResponse.control:type_name -> blaxsmith.api.v1.AttemptControl
+	117, // 57: blaxsmith.api.v1.HandBackAttemptResponse.control:type_name -> blaxsmith.api.v1.AttemptControl
+	124, // 58: blaxsmith.api.v1.ListRunEvidenceResponse.evidence:type_name -> blaxsmith.api.v1.RunEvidence
+	129, // 59: blaxsmith.api.v1.CreateServicePrincipalResponse.principal:type_name -> blaxsmith.api.v1.ServicePrincipal
+	129, // 60: blaxsmith.api.v1.ListServicePrincipalsResponse.principals:type_name -> blaxsmith.api.v1.ServicePrincipal
+	136, // 61: blaxsmith.api.v1.CreateApiTokenResponse.credential:type_name -> blaxsmith.api.v1.ApiToken
+	136, // 62: blaxsmith.api.v1.ListApiTokensResponse.credentials:type_name -> blaxsmith.api.v1.ApiToken
+	136, // 63: blaxsmith.api.v1.DescribeMachineAccessResponse.credential:type_name -> blaxsmith.api.v1.ApiToken
+	145, // 64: blaxsmith.api.v1.GetRunUsageResponse.usage:type_name -> blaxsmith.api.v1.UsageSummary
+	145, // 65: blaxsmith.api.v1.GetGoalUsageResponse.usage:type_name -> blaxsmith.api.v1.UsageSummary
+	150, // 66: blaxsmith.api.v1.ListGoalCheckpointsResponse.checkpoints:type_name -> blaxsmith.api.v1.GoalCheckpoint
+	150, // 67: blaxsmith.api.v1.RecordGoalCheckpointResponse.checkpoint:type_name -> blaxsmith.api.v1.GoalCheckpoint
+	151, // 68: blaxsmith.api.v1.WorkflowService.ListGoalCheckpoints:input_type -> blaxsmith.api.v1.ListGoalCheckpointsRequest
+	153, // 69: blaxsmith.api.v1.WorkflowService.RecordGoalCheckpoint:input_type -> blaxsmith.api.v1.RecordGoalCheckpointRequest
+	146, // 70: blaxsmith.api.v1.WorkflowService.GetRunUsage:input_type -> blaxsmith.api.v1.GetRunUsageRequest
+	148, // 71: blaxsmith.api.v1.WorkflowService.GetGoalUsage:input_type -> blaxsmith.api.v1.GetGoalUsageRequest
+	130, // 72: blaxsmith.api.v1.WorkflowService.CreateServicePrincipal:input_type -> blaxsmith.api.v1.CreateServicePrincipalRequest
+	132, // 73: blaxsmith.api.v1.WorkflowService.ListServicePrincipals:input_type -> blaxsmith.api.v1.ListServicePrincipalsRequest
+	134, // 74: blaxsmith.api.v1.WorkflowService.DisableServicePrincipal:input_type -> blaxsmith.api.v1.DisableServicePrincipalRequest
+	53,  // 75: blaxsmith.api.v1.WorkflowService.GetProjectModelOptions:input_type -> blaxsmith.api.v1.GetProjectModelOptionsRequest
+	56,  // 76: blaxsmith.api.v1.WorkflowService.GetGoalControl:input_type -> blaxsmith.api.v1.GetGoalControlRequest
+	58,  // 77: blaxsmith.api.v1.WorkflowService.ControlGoal:input_type -> blaxsmith.api.v1.ControlGoalRequest
+	61,  // 78: blaxsmith.api.v1.WorkflowService.GetGoalAllowance:input_type -> blaxsmith.api.v1.GetGoalAllowanceRequest
+	63,  // 79: blaxsmith.api.v1.WorkflowService.SetGoalAllowance:input_type -> blaxsmith.api.v1.SetGoalAllowanceRequest
+	143, // 80: blaxsmith.api.v1.WorkflowService.DescribeMachineAccess:input_type -> blaxsmith.api.v1.DescribeMachineAccessRequest
+	137, // 81: blaxsmith.api.v1.WorkflowService.CreateApiToken:input_type -> blaxsmith.api.v1.CreateApiTokenRequest
+	139, // 82: blaxsmith.api.v1.WorkflowService.ListApiTokens:input_type -> blaxsmith.api.v1.ListApiTokensRequest
+	141, // 83: blaxsmith.api.v1.WorkflowService.RevokeApiToken:input_type -> blaxsmith.api.v1.RevokeApiTokenRequest
+	125, // 84: blaxsmith.api.v1.WorkflowService.ListRunEvidence:input_type -> blaxsmith.api.v1.ListRunEvidenceRequest
+	127, // 85: blaxsmith.api.v1.WorkflowService.GetEvidenceContent:input_type -> blaxsmith.api.v1.GetEvidenceContentRequest
+	3,   // 86: blaxsmith.api.v1.WorkflowService.CreateProject:input_type -> blaxsmith.api.v1.CreateProjectRequest
+	65,  // 87: blaxsmith.api.v1.WorkflowService.StartGoalPlanning:input_type -> blaxsmith.api.v1.StartGoalPlanningRequest
+	69,  // 88: blaxsmith.api.v1.WorkflowService.GetGoalPlans:input_type -> blaxsmith.api.v1.GetGoalPlansRequest
+	71,  // 89: blaxsmith.api.v1.WorkflowService.SaveGoalPlan:input_type -> blaxsmith.api.v1.SaveGoalPlanRequest
+	44,  // 90: blaxsmith.api.v1.WorkflowService.CreateGoal:input_type -> blaxsmith.api.v1.CreateGoalRequest
+	46,  // 91: blaxsmith.api.v1.WorkflowService.ListGoals:input_type -> blaxsmith.api.v1.ListGoalsRequest
+	48,  // 92: blaxsmith.api.v1.WorkflowService.GetGoal:input_type -> blaxsmith.api.v1.GetGoalRequest
+	50,  // 93: blaxsmith.api.v1.WorkflowService.ReplyGoal:input_type -> blaxsmith.api.v1.ReplyGoalRequest
+	5,   // 94: blaxsmith.api.v1.WorkflowService.GetProject:input_type -> blaxsmith.api.v1.GetProjectRequest
+	8,   // 95: blaxsmith.api.v1.WorkflowService.GetProjectSource:input_type -> blaxsmith.api.v1.GetProjectSourceRequest
+	10,  // 96: blaxsmith.api.v1.WorkflowService.SetProjectSource:input_type -> blaxsmith.api.v1.SetProjectSourceRequest
+	12,  // 97: blaxsmith.api.v1.WorkflowService.ListGitConnections:input_type -> blaxsmith.api.v1.ListGitConnectionsRequest
+	14,  // 98: blaxsmith.api.v1.WorkflowService.CreateGitConnection:input_type -> blaxsmith.api.v1.CreateGitConnectionRequest
+	19,  // 99: blaxsmith.api.v1.WorkflowService.GetProjectVerification:input_type -> blaxsmith.api.v1.GetProjectVerificationRequest
+	23,  // 100: blaxsmith.api.v1.WorkflowService.ListProjectVerificationHistory:input_type -> blaxsmith.api.v1.ListProjectVerificationHistoryRequest
+	21,  // 101: blaxsmith.api.v1.WorkflowService.SetProjectVerification:input_type -> blaxsmith.api.v1.SetProjectVerificationRequest
+	26,  // 102: blaxsmith.api.v1.WorkflowService.ListProjectModelAccess:input_type -> blaxsmith.api.v1.ListProjectModelAccessRequest
+	28,  // 103: blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess:input_type -> blaxsmith.api.v1.CreateProjectModelAccessRequest
+	30,  // 104: blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess:input_type -> blaxsmith.api.v1.RevokeProjectModelAccessRequest
+	33,  // 105: blaxsmith.api.v1.WorkflowService.ListSubscriptionConnections:input_type -> blaxsmith.api.v1.ListSubscriptionConnectionsRequest
+	35,  // 106: blaxsmith.api.v1.WorkflowService.CreateSubscriptionConnection:input_type -> blaxsmith.api.v1.CreateSubscriptionConnectionRequest
+	37,  // 107: blaxsmith.api.v1.WorkflowService.RevokeSubscriptionConnection:input_type -> blaxsmith.api.v1.RevokeSubscriptionConnectionRequest
+	39,  // 108: blaxsmith.api.v1.WorkflowService.ListProjects:input_type -> blaxsmith.api.v1.ListProjectsRequest
+	73,  // 109: blaxsmith.api.v1.WorkflowService.GetDeliveryReport:input_type -> blaxsmith.api.v1.GetDeliveryReportRequest
+	75,  // 110: blaxsmith.api.v1.WorkflowService.GetRun:input_type -> blaxsmith.api.v1.GetRunRequest
+	85,  // 111: blaxsmith.api.v1.WorkflowService.GetPlatformCapabilities:input_type -> blaxsmith.api.v1.GetPlatformCapabilitiesRequest
+	87,  // 112: blaxsmith.api.v1.WorkflowService.PreviewRun:input_type -> blaxsmith.api.v1.PreviewRunRequest
+	81,  // 113: blaxsmith.api.v1.WorkflowService.LaunchRun:input_type -> blaxsmith.api.v1.LaunchRunRequest
+	83,  // 114: blaxsmith.api.v1.WorkflowService.GetLaunchAvailability:input_type -> blaxsmith.api.v1.GetLaunchAvailabilityRequest
+	91,  // 115: blaxsmith.api.v1.WorkflowService.ListRunTasks:input_type -> blaxsmith.api.v1.ListRunTasksRequest
+	93,  // 116: blaxsmith.api.v1.WorkflowService.ListRuns:input_type -> blaxsmith.api.v1.ListRunsRequest
+	95,  // 117: blaxsmith.api.v1.WorkflowService.EventsAfter:input_type -> blaxsmith.api.v1.EventsAfterRequest
+	98,  // 118: blaxsmith.api.v1.WorkflowService.ListCommandExits:input_type -> blaxsmith.api.v1.ListCommandExitsRequest
+	102, // 119: blaxsmith.api.v1.WorkflowService.GetCurrentReview:input_type -> blaxsmith.api.v1.GetCurrentReviewRequest
+	104, // 120: blaxsmith.api.v1.WorkflowService.DecideReview:input_type -> blaxsmith.api.v1.DecideReviewRequest
+	118, // 121: blaxsmith.api.v1.WorkflowService.GetAttemptControl:input_type -> blaxsmith.api.v1.GetAttemptControlRequest
+	120, // 122: blaxsmith.api.v1.WorkflowService.TakeOverAttempt:input_type -> blaxsmith.api.v1.TakeOverAttemptRequest
+	122, // 123: blaxsmith.api.v1.WorkflowService.HandBackAttempt:input_type -> blaxsmith.api.v1.HandBackAttemptRequest
+	111, // 124: blaxsmith.api.v1.WorkflowService.ListInteractions:input_type -> blaxsmith.api.v1.ListInteractionsRequest
+	113, // 125: blaxsmith.api.v1.WorkflowService.AnswerInteraction:input_type -> blaxsmith.api.v1.AnswerInteractionRequest
+	115, // 126: blaxsmith.api.v1.WorkflowService.SteerAttempt:input_type -> blaxsmith.api.v1.SteerAttemptRequest
+	152, // 127: blaxsmith.api.v1.WorkflowService.ListGoalCheckpoints:output_type -> blaxsmith.api.v1.ListGoalCheckpointsResponse
+	154, // 128: blaxsmith.api.v1.WorkflowService.RecordGoalCheckpoint:output_type -> blaxsmith.api.v1.RecordGoalCheckpointResponse
+	147, // 129: blaxsmith.api.v1.WorkflowService.GetRunUsage:output_type -> blaxsmith.api.v1.GetRunUsageResponse
+	149, // 130: blaxsmith.api.v1.WorkflowService.GetGoalUsage:output_type -> blaxsmith.api.v1.GetGoalUsageResponse
+	131, // 131: blaxsmith.api.v1.WorkflowService.CreateServicePrincipal:output_type -> blaxsmith.api.v1.CreateServicePrincipalResponse
+	133, // 132: blaxsmith.api.v1.WorkflowService.ListServicePrincipals:output_type -> blaxsmith.api.v1.ListServicePrincipalsResponse
+	135, // 133: blaxsmith.api.v1.WorkflowService.DisableServicePrincipal:output_type -> blaxsmith.api.v1.DisableServicePrincipalResponse
+	54,  // 134: blaxsmith.api.v1.WorkflowService.GetProjectModelOptions:output_type -> blaxsmith.api.v1.GetProjectModelOptionsResponse
+	57,  // 135: blaxsmith.api.v1.WorkflowService.GetGoalControl:output_type -> blaxsmith.api.v1.GetGoalControlResponse
+	59,  // 136: blaxsmith.api.v1.WorkflowService.ControlGoal:output_type -> blaxsmith.api.v1.ControlGoalResponse
+	62,  // 137: blaxsmith.api.v1.WorkflowService.GetGoalAllowance:output_type -> blaxsmith.api.v1.GetGoalAllowanceResponse
+	64,  // 138: blaxsmith.api.v1.WorkflowService.SetGoalAllowance:output_type -> blaxsmith.api.v1.SetGoalAllowanceResponse
+	144, // 139: blaxsmith.api.v1.WorkflowService.DescribeMachineAccess:output_type -> blaxsmith.api.v1.DescribeMachineAccessResponse
+	138, // 140: blaxsmith.api.v1.WorkflowService.CreateApiToken:output_type -> blaxsmith.api.v1.CreateApiTokenResponse
+	140, // 141: blaxsmith.api.v1.WorkflowService.ListApiTokens:output_type -> blaxsmith.api.v1.ListApiTokensResponse
+	142, // 142: blaxsmith.api.v1.WorkflowService.RevokeApiToken:output_type -> blaxsmith.api.v1.RevokeApiTokenResponse
+	126, // 143: blaxsmith.api.v1.WorkflowService.ListRunEvidence:output_type -> blaxsmith.api.v1.ListRunEvidenceResponse
+	128, // 144: blaxsmith.api.v1.WorkflowService.GetEvidenceContent:output_type -> blaxsmith.api.v1.GetEvidenceContentResponse
+	4,   // 145: blaxsmith.api.v1.WorkflowService.CreateProject:output_type -> blaxsmith.api.v1.CreateProjectResponse
+	66,  // 146: blaxsmith.api.v1.WorkflowService.StartGoalPlanning:output_type -> blaxsmith.api.v1.StartGoalPlanningResponse
+	70,  // 147: blaxsmith.api.v1.WorkflowService.GetGoalPlans:output_type -> blaxsmith.api.v1.GetGoalPlansResponse
+	72,  // 148: blaxsmith.api.v1.WorkflowService.SaveGoalPlan:output_type -> blaxsmith.api.v1.SaveGoalPlanResponse
+	45,  // 149: blaxsmith.api.v1.WorkflowService.CreateGoal:output_type -> blaxsmith.api.v1.CreateGoalResponse
+	47,  // 150: blaxsmith.api.v1.WorkflowService.ListGoals:output_type -> blaxsmith.api.v1.ListGoalsResponse
+	49,  // 151: blaxsmith.api.v1.WorkflowService.GetGoal:output_type -> blaxsmith.api.v1.GetGoalResponse
+	51,  // 152: blaxsmith.api.v1.WorkflowService.ReplyGoal:output_type -> blaxsmith.api.v1.ReplyGoalResponse
+	6,   // 153: blaxsmith.api.v1.WorkflowService.GetProject:output_type -> blaxsmith.api.v1.GetProjectResponse
+	9,   // 154: blaxsmith.api.v1.WorkflowService.GetProjectSource:output_type -> blaxsmith.api.v1.GetProjectSourceResponse
+	16,  // 155: blaxsmith.api.v1.WorkflowService.SetProjectSource:output_type -> blaxsmith.api.v1.SetProjectSourceResponse
+	13,  // 156: blaxsmith.api.v1.WorkflowService.ListGitConnections:output_type -> blaxsmith.api.v1.ListGitConnectionsResponse
+	15,  // 157: blaxsmith.api.v1.WorkflowService.CreateGitConnection:output_type -> blaxsmith.api.v1.CreateGitConnectionResponse
+	20,  // 158: blaxsmith.api.v1.WorkflowService.GetProjectVerification:output_type -> blaxsmith.api.v1.GetProjectVerificationResponse
+	24,  // 159: blaxsmith.api.v1.WorkflowService.ListProjectVerificationHistory:output_type -> blaxsmith.api.v1.ListProjectVerificationHistoryResponse
+	22,  // 160: blaxsmith.api.v1.WorkflowService.SetProjectVerification:output_type -> blaxsmith.api.v1.SetProjectVerificationResponse
+	27,  // 161: blaxsmith.api.v1.WorkflowService.ListProjectModelAccess:output_type -> blaxsmith.api.v1.ListProjectModelAccessResponse
+	29,  // 162: blaxsmith.api.v1.WorkflowService.CreateProjectModelAccess:output_type -> blaxsmith.api.v1.CreateProjectModelAccessResponse
+	31,  // 163: blaxsmith.api.v1.WorkflowService.RevokeProjectModelAccess:output_type -> blaxsmith.api.v1.RevokeProjectModelAccessResponse
+	34,  // 164: blaxsmith.api.v1.WorkflowService.ListSubscriptionConnections:output_type -> blaxsmith.api.v1.ListSubscriptionConnectionsResponse
+	36,  // 165: blaxsmith.api.v1.WorkflowService.CreateSubscriptionConnection:output_type -> blaxsmith.api.v1.CreateSubscriptionConnectionResponse
+	38,  // 166: blaxsmith.api.v1.WorkflowService.RevokeSubscriptionConnection:output_type -> blaxsmith.api.v1.RevokeSubscriptionConnectionResponse
+	40,  // 167: blaxsmith.api.v1.WorkflowService.ListProjects:output_type -> blaxsmith.api.v1.ListProjectsResponse
+	74,  // 168: blaxsmith.api.v1.WorkflowService.GetDeliveryReport:output_type -> blaxsmith.api.v1.GetDeliveryReportResponse
+	76,  // 169: blaxsmith.api.v1.WorkflowService.GetRun:output_type -> blaxsmith.api.v1.GetRunResponse
+	86,  // 170: blaxsmith.api.v1.WorkflowService.GetPlatformCapabilities:output_type -> blaxsmith.api.v1.GetPlatformCapabilitiesResponse
+	88,  // 171: blaxsmith.api.v1.WorkflowService.PreviewRun:output_type -> blaxsmith.api.v1.PreviewRunResponse
+	82,  // 172: blaxsmith.api.v1.WorkflowService.LaunchRun:output_type -> blaxsmith.api.v1.LaunchRunResponse
+	84,  // 173: blaxsmith.api.v1.WorkflowService.GetLaunchAvailability:output_type -> blaxsmith.api.v1.GetLaunchAvailabilityResponse
+	92,  // 174: blaxsmith.api.v1.WorkflowService.ListRunTasks:output_type -> blaxsmith.api.v1.ListRunTasksResponse
+	94,  // 175: blaxsmith.api.v1.WorkflowService.ListRuns:output_type -> blaxsmith.api.v1.ListRunsResponse
+	96,  // 176: blaxsmith.api.v1.WorkflowService.EventsAfter:output_type -> blaxsmith.api.v1.EventsAfterResponse
+	99,  // 177: blaxsmith.api.v1.WorkflowService.ListCommandExits:output_type -> blaxsmith.api.v1.ListCommandExitsResponse
+	103, // 178: blaxsmith.api.v1.WorkflowService.GetCurrentReview:output_type -> blaxsmith.api.v1.GetCurrentReviewResponse
+	105, // 179: blaxsmith.api.v1.WorkflowService.DecideReview:output_type -> blaxsmith.api.v1.DecideReviewResponse
+	119, // 180: blaxsmith.api.v1.WorkflowService.GetAttemptControl:output_type -> blaxsmith.api.v1.GetAttemptControlResponse
+	121, // 181: blaxsmith.api.v1.WorkflowService.TakeOverAttempt:output_type -> blaxsmith.api.v1.TakeOverAttemptResponse
+	123, // 182: blaxsmith.api.v1.WorkflowService.HandBackAttempt:output_type -> blaxsmith.api.v1.HandBackAttemptResponse
+	112, // 183: blaxsmith.api.v1.WorkflowService.ListInteractions:output_type -> blaxsmith.api.v1.ListInteractionsResponse
+	114, // 184: blaxsmith.api.v1.WorkflowService.AnswerInteraction:output_type -> blaxsmith.api.v1.AnswerInteractionResponse
+	116, // 185: blaxsmith.api.v1.WorkflowService.SteerAttempt:output_type -> blaxsmith.api.v1.SteerAttemptResponse
+	127, // [127:186] is the sub-list for method output_type
+	68,  // [68:127] is the sub-list for method input_type
+	68,  // [68:68] is the sub-list for extension type_name
+	68,  // [68:68] is the sub-list for extension extendee
+	0,   // [0:68] is the sub-list for field type_name
 }
 
 func init() { file_blaxsmith_api_v1_workflow_proto_init() }
@@ -5425,13 +11207,14 @@ func file_blaxsmith_api_v1_workflow_proto_init() {
 	if File_blaxsmith_api_v1_workflow_proto != nil {
 		return
 	}
+	file_blaxsmith_api_v1_connections_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blaxsmith_api_v1_workflow_proto_rawDesc), len(file_blaxsmith_api_v1_workflow_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   80,
+			NumMessages:   155,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

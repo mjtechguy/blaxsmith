@@ -1,16 +1,20 @@
+import { UsageSummary } from "../usage-summary";
+import { RunStageMap } from "../run-stage-map";
+import { RunEvidencePanel } from "../run-evidence";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { ArrowRight, Check, GitCommitHorizontal, RefreshCw, Terminal, TerminalSquare } from "lucide-react";
+import { Check, GitCommitHorizontal, RefreshCw, Terminal, TerminalSquare } from "lucide-react";
 import { currentSession, sessionQueryKey } from "../auth";
 import { openLiveStream } from "../live";
 import { DataTable } from "../data-table";
-import type { RunTask } from "../gen/blaxsmith/api/v1/workflow_pb";
+import { eventPayload } from "../run-control";
+import type { RunTask, WorkflowEvent } from "../gen/blaxsmith/api/v1/workflow_pb";
 import { DetailLayout } from "../layouts";
 import { isMissing, NotFoundPage } from "../page";
-import { Card, CopyValue, Disclosure, sentence, ShowMore, StatePanel, Timestamp, type TabSpec } from "../ui";
+import { CopyValue, Disclosure, sentence, ShowMore, StatePanel, Timestamp, type TabSpec } from "../ui";
 import { Inbox, interactionsKey, StagePanel, useInteractions } from "../run-live";
 import { needsYou, runStatus, stageStatus, type AgentStatus } from "../agent-view";
 import { StatusPill, useAttentionTitle } from "../work-log";
@@ -31,6 +35,7 @@ const activityLabels: Record<string, string> = {
   "run.cancel_requested": "Cancellation requested",
   "run.cancelled": "Run cancelled",
   "task.created": "Stage created",
+  "task.blocked": "Stage blocked by a failed dependency",
   "attempt.reserved": "Worker attempt reserved",
   "attempt.starting": "Worker starting",
   "attempt.started": "Worker started",
@@ -39,6 +44,9 @@ const activityLabels: Record<string, string> = {
   "attempt.result": "Worker result recorded",
   "attempt.stopped": "Worker attempt stopped",
   "attempt.command_exited": "Tool command exited",
+  "artifact.recorded": "Review artifact collected",
+  "gate.recorded": "Agent check recorded",
+  "verification.recorded": "Platform check recorded",
   "review.presented": "Evidence presented for human review",
   "review.superseded": "Review package superseded",
   "review.approved": "Review approved",
@@ -55,14 +63,19 @@ function StageStatusCell({ taskKey }: { taskKey: string }) {
   return <StatusPill status={useContext(StageStatuses).get(taskKey) ?? null} />;
 }
 
-function activityLabel(kind: string) {
+function activityLabel(event: WorkflowEvent) {
+  const kind = event.kind;
+  if (kind === "task.blocked") {
+    const cause = eventPayload(event).blocked_by;
+    if (typeof cause === "string" && cause) return `Stage blocked by ${cause}`;
+  }
   return activityLabels[kind] ?? sentence(kind.split(".").map((part) => part.replaceAll("_", " ")).join(" · "));
 }
 
 const taskColumns: ColumnDef<typeof taskFeatures, RunTask>[] = [
   { id: "stage", accessorKey: "key", header: "Stage", cell: ({ row }) => <span className="task-stage"><strong>{row.original.key}</strong><small title={row.original.id}>Task {row.original.id.slice(0, 8)}</small></span> },
-  { id: "profile", header: "Selected runtime", cell: ({ row }) => row.original.kind === "human_review" ? "Human review"
-    : <span className="task-stage"><strong>{row.original.harness}</strong><small>{[row.original.kind.replaceAll("_", " "), row.original.model, row.original.effort,
+  { id: "profile", header: "Selected runtime", cell: ({ row }) => row.original.kind === "human_review" ? "Human review" : row.original.kind === "verify" ? "Platform checks"
+    : <span className="task-stage"><strong>{row.original.harness}</strong><small>{[row.original.kind.replaceAll("_", " "), row.original.reviewMode === "advisory" ? "advisory" : "", row.original.model, row.original.effort,
       row.original.loopWith ? `loop ${row.original.loopCycles}/${row.original.maxCycles} with ${row.original.loopWith}` : ""].filter(Boolean).join(" · ")}</small></span> },
   { id: "inputs", header: "Frozen skills and instructions", cell: ({ row }) => {
     const task = row.original;
@@ -120,7 +133,7 @@ function RunDetail() {
   const selectedTask = tasks.data?.tasks.find((task) => task.key === selectedKey);
   const mayOperate = session.data?.role === "owner" || session.data?.role === "admin" || session.data?.role === "member";
   const review = useQuery({ queryKey: reviewKey, queryFn: ({ signal }) => getCurrentReview(runId, signal), enabled: !!scope && run.data?.run?.projectId === projectId });
-  const reviewWaiting = !!review.data && !review.data.decision;
+  const reviewWaiting = run.data?.run?.state === "succeeded" && !!review.data && review.data.acceptanceMode !== "policy" && !review.data.decision;
   const statuses = useMemo(() => new Map((tasks.data?.tasks || []).map((task) =>
     [task.key, stageStatus(task, interactions.data ?? [], tasks.data!.tasks, reviewWaiting)] as const)), [tasks.data, interactions.data, reviewWaiting]);
   const overall = run.data?.run ? runStatus(run.data.run.state, tasks.data?.tasks || [], interactions.data ?? [], reviewWaiting) : null;
@@ -144,7 +157,9 @@ function RunDetail() {
       try {
         more = await recoverRunEventBatch((after) => eventsAfter(runId, after), cursor,
           (event) => { if (!closed) queryClient.setQueryData<RunEventPages>(key, (old) => appendRunEvent(old, event).data); });
-        if (!closed && cursor() !== before) void queryClient.invalidateQueries({ queryKey: ["run-tasks", scope, runId] });
+        if (!closed && cursor() !== before) {
+          for (const name of ["run", "run-tasks", "run-review", "run-interactions", "run-evidence"]) void queryClient.invalidateQueries({ queryKey: [name, scope, runId] });
+        }
       } catch {
         if (!closed) retryRecovery = window.setTimeout(() => void recover(), 5_000);
       } finally {
@@ -168,6 +183,7 @@ function RunDetail() {
         if (gap) void recover();
         if (event.kind.startsWith("run.")) void queryClient.invalidateQueries({ queryKey: ["run", scope, runId] });
         if (event.kind.startsWith("task.") || event.kind.startsWith("attempt.")) void queryClient.invalidateQueries({ queryKey: ["run-tasks", scope, runId] });
+        if (["artifact.recorded", "gate.recorded", "verification.recorded", "attempt.result", "task.correction", "run.reopened"].includes(event.kind)) void queryClient.invalidateQueries({ queryKey: ["run-evidence", scope, runId] });
         if (event.kind.startsWith("review.")) void queryClient.invalidateQueries({ queryKey: ["run-review", scope, runId] });
         if (event.kind.startsWith("interaction.")) void queryClient.invalidateQueries({ queryKey: interactionsKey(scope, runId) });
         if (event.kind === "attempt.command_exited") void queryClient.invalidateQueries({ queryKey: ["run-command-exits", scope, runId] });
@@ -200,10 +216,7 @@ function RunDetail() {
   ];
   const tab = search.tab ?? (search.stage ? "stages" : "overview");
   const openItems = (interactions.data ?? []).filter((item) => item.state === "open");
-  const stageCounts = new Map<string, number>();
-  for (const status of statuses.values()) if (status) stageCounts.set(status, (stageCounts.get(status) ?? 0) + 1);
   const refresh = () => { void run.refetch(); void tasks.refetch(); void activity.refetch(); void commandExits.refetch(); void queryClient.invalidateQueries({ queryKey: reviewKey }); };
-  const tabLink = (target: string, label: string) => <Link from={Route.fullPath} to={Route.fullPath} search={{ tab: target }} className="text-action">{label} <ArrowRight size={13} aria-hidden="true" /></Link>;
 
   if (run.isPending) return <StatePanel kind="loading" title="Loading run" />;
   if (run.isError && isMissing(run.error)) return <NotFoundPage title="Run not found" back={{ to: `/projects/${projectId}/runs`, label: "Project runs" }}>
@@ -215,7 +228,7 @@ function RunDetail() {
     {activity.isPending ? <div className="table-empty" role="status">Loading activity…</div> : null}
     {activity.isError ? <div className="table-empty" role="alert">Activity is unavailable. <button type="button" className="text-action" onClick={() => void activity.refetch()}>Try again</button></div> : null}
     {activity.data && events.length === 0 ? <div className="table-empty">No activity has been recorded yet.</div> : null}
-    {events.length > 0 ? <ol className="event-list"><ShowMore items={events.slice().reverse()} initial={12} noun="older events" render={(event) => <li key={event.id.toString()}><span className="event-mark"><GitCommitHorizontal size={15} aria-hidden="true" /></span><div><strong>{activityLabel(event.kind)}</strong><small>{[event.taskId ? (taskNames.has(event.taskId) ? `Stage ${taskNames.get(event.taskId)}` : `Task ${event.taskId.slice(0, 8)}`) : "", event.attemptId ? `Attempt ${event.attemptId.slice(0, 8)}` : ""].filter(Boolean).join(" · ")}</small></div><Timestamp value={event.occurredAt} /></li>} /></ol> : null}
+    {events.length > 0 ? <ol className="event-list"><ShowMore items={events.slice().reverse()} initial={12} noun="older events" render={(event) => <li key={event.id.toString()}><span className="event-mark"><GitCommitHorizontal size={15} aria-hidden="true" /></span><div><strong>{activityLabel(event)}</strong><small>{[event.taskId ? (taskNames.has(event.taskId) ? `Stage ${taskNames.get(event.taskId)}` : `Task ${event.taskId.slice(0, 8)}`) : "", event.attemptId ? `Attempt ${event.attemptId.slice(0, 8)}` : ""].filter(Boolean).join(" · ")}</small></div><Timestamp value={event.occurredAt} /></li>} /></ol> : null}
     {activity.hasNextPage ? <div className="table-footer"><span>More activity may be available</span><button type="button" className="secondary-button" disabled={activity.isFetchingNextPage} onClick={() => void activity.fetchNextPage()}>{activity.isFetchingNextPage ? "Loading…" : "Load more"}</button></div> : null}
   </section>;
 
@@ -232,20 +245,14 @@ function RunDetail() {
     tabs={tabs} current={tab} tabsLabel="Run sections">
     {tab === "overview" ? <>
       {interactions.data ? <Inbox items={interactions.data} mayAnswer={mayOperate} scope={scope} runId={runId} projectId={projectId} /> : null}
-      <div className="dash-grid">
-        <Card title="Stages" className="dash-main" description={tasks.data ? `${tasks.data.tasks.length} frozen stages. Attempts count reservations, not verified results.` : "Loading stages…"} actions={tabLink("stages", "Open stages")}>
-          {tasks.data ? <ul className="stage-strip card-body">{tasks.data.tasks.map((task) => <li key={task.id}>
-            <Link from={Route.fullPath} to={Route.fullPath} search={{ tab: "stages", stage: task.key }} className="stage-chip"><strong>{task.key}</strong>
-              <StatusPill status={statuses.get(task.key) ?? null} /><small>{task.state.replaceAll("_", " ")}</small></Link></li>)}</ul> : null}
-          {tasks.isError ? <p className="card-body" role="alert">Stages are unavailable. <button type="button" className="text-action" onClick={() => void tasks.refetch()}>Try again</button></p> : null}
-          {stageCounts.size ? <p className="card-note">{[...stageCounts].map(([status, count]) => `${count} ${status.replaceAll("_", " ")}`).join(" · ")}</p> : null}
-        </Card>
-        <Card title="Final review" className="dash-side" description={review.data ? review.data.decision ? `Decided: ${review.data.decision.action === "approve" ? "approved" : "changes requested"}.` : `Revision ${review.data.revision.toString()} is awaiting a decision.` : runData.state === "succeeded" ? "Execution finished; no verified package yet." : "Available after execution and verification."}
-          actions={tabLink("review", "Open review")} />
-      </div>
+      {tasks.data ? <RunStageMap tasks={tasks.data.tasks} statuses={statuses} projectId={projectId} runId={runId} state={runData.state} review={review.data} reviewError={review.isError} /> : null}
+      {tasks.isPending ? <p role="status">Loading factory map…</p> : null}
+      {tasks.isError ? <p role="alert">Stages are unavailable. <button type="button" className="text-action" onClick={() => void tasks.refetch()}>Try again</button></p> : null}
       {activityCard}
+      <UsageSummary scope={scope} runId={runId} />
     </> : null}
     {tab === "stages" ? <>
+      {tasks.data ? <RunStageMap tasks={tasks.data.tasks} statuses={statuses} projectId={projectId} runId={runId} selected={selectedTask?.key} state={runData.state} review={review.data} reviewError={review.isError} /> : null}
       <section className="table-section" aria-labelledby="run-tasks-heading">
         <div className="table-heading"><div><h2 id="run-tasks-heading">Execution plan</h2><p>Frozen stages run after their dependencies. Open a stage to watch its work log or terminal.</p></div><span className="fetched-time">{tasks.data?.tasks.length ?? 0} stages</span></div>
         {tasks.isPending ? <div className="table-empty" role="status">Loading stages…</div> : null}
@@ -275,7 +282,7 @@ function RunDetail() {
         {commandExits.hasNextPage ? <div className="table-footer"><span>More observations may be available</span><button type="button" className="secondary-button" disabled={commandExits.isFetchingNextPage} onClick={() => void commandExits.fetchNextPage()}>{commandExits.isFetchingNextPage ? "Loading…" : "Load more"}</button></div> : null}
       </section>
     </> : null}
-    {tab === "review" ? <FinalReview runId={runId} scope={scope} state={runData.state} /> : null}
+    {tab === "review" ? <><RunEvidencePanel runId={runId} scope={scope} /><FinalReview runId={runId} scope={scope} state={runData.state} /></> : null}
   </DetailLayout>;
 }
 
@@ -319,9 +326,9 @@ function FinalReview({ runId, scope, state }: { runId: string; scope: string; st
   }, [confirmation]);
 
   return <section className="review-card" aria-labelledby="review-heading">
-    <div className="review-heading"><div><h2 id="review-heading">Human review</h2><p>A person makes the final decision on the current, verified package.</p></div>
-      {current ? <span className={`state-badge ${current.decision?.action === "approve" ? "state-succeeded" : current.decision ? "state-failed" : "state-active"}`}>
-        {current.decision?.action === "approve" ? "Approved" : current.decision ? "Changes requested" : "Awaiting decision"}</span> : null}</div>
+    <div className="review-heading"><div><h2 id="review-heading">Acceptance</h2><p>{current?.acceptanceMode === "policy" ? "Accepted by the frozen policy; no human decision was required." : "A person makes the final decision on the current evidence package."}</p></div>
+      {current ? <span className={`state-badge ${current.acceptanceMode === "policy" || current.decision?.action === "approve" ? "state-succeeded" : current.decision ? "state-failed" : "state-active"}`}>
+        {current.acceptanceMode === "policy" ? "Policy accepted" : current.decision?.action === "approve" ? "Approved" : current.decision ? "Changes requested" : "Awaiting decision"}</span> : null}</div>
     {review.isPending ? <p className="review-message" role="status">Checking for a review package…</p> : null}
     {review.isError ? <p className="review-message" role="alert">Review is unavailable. <button type="button" className="text-action" onClick={() => void review.refetch()}>Try again</button></p> : null}
     {review.isSuccess && !current ? <p className="review-message">{state === "succeeded" ? "Execution finished, but a verified evidence package has not been presented yet." : "Final review becomes available after execution and evidence verification."}</p> : null}
@@ -340,7 +347,7 @@ function FinalReview({ runId, scope, state }: { runId: string; scope: string; st
         <p><Check size={16} aria-hidden="true" /> {current.decision.action === "approve" ? "Approved" : "Changes requested"} by {current.decision.principalId === session.data?.principalId ? "you" : `principal ${current.decision.principalId}`} on <time dateTime={current.decision.decidedAt}>{new Date(current.decision.decidedAt).toLocaleString()}</time>.</p>
         {current.decision.feedback ? <p className="review-feedback">{current.decision.feedback}</p> : null}
       </div> : null}
-      {!current.decision && mayDecide ? <div className="review-actions">
+      {current.acceptanceMode !== "policy" && !current.decision && mayDecide ? <div className="review-actions">
         {error ? <p className="auth-alert" role="alert">{error}</p> : null}
         <button type="button" className="secondary-button" disabled={decide.isPending} onClick={() => { setError(""); setFeedback(""); setConfirmation({ action: "request_changes", packageId: current.id }); }}>Request changes</button>
         <button type="button" className="primary-button" disabled={decide.isPending} onClick={() => { setError(""); setFeedback(""); setConfirmation({ action: "approve", packageId: current.id }); }}>Approve package</button>
@@ -362,7 +369,7 @@ function FinalReview({ runId, scope, state }: { runId: string; scope: string; st
           </div>
         </> : null}
       </dialog>
-      {!current.decision && !mayDecide && session.data ? <p className="review-message">Only organization owners and admins can make the final decision.</p> : null}
+      {current.acceptanceMode !== "policy" && !current.decision && !mayDecide && session.data ? <p className="review-message">Only organization owners and admins can make the final decision.</p> : null}
     </> : null}
   </section>;
 }

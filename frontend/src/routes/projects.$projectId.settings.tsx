@@ -13,7 +13,7 @@ function ProjectSettings() {
   const pathname = useLocation({ select: (l) => l.pathname.replace(/\/+$/, "") });
   const project = useQuery({ queryKey: ["project", org, projectId], enabled: Boolean(org), queryFn: ({ signal }) => getProject(projectId, signal) });
   const base = `/projects/${projectId}/settings`;
-  const current = pathname.endsWith("/source") ? "source" : pathname.endsWith("/verification") ? "verification" : "general";
+  const current = pathname.endsWith("/source") ? "source" : pathname.endsWith("/verification") ? "verification" : pathname.endsWith("/agents") ? "agents" : "general";
   if (project.isError && isMissing(project.error)) return <NotFoundPage title="Project not found" back={{ to: "/projects", label: "All projects" }}>
     This project does not exist or is not in your organization.</NotFoundPage>;
   return <SettingsLayout title="Settings" description={project.data?.project ? `Configuration for ${project.data.project.name}. Each section saves on its own.` : "Project configuration."} current={current}
@@ -21,6 +21,7 @@ function ProjectSettings() {
       { id: "general", label: "General", href: base },
       { id: "source", label: "Git source", href: `${base}/source` },
       { id: "verification", label: "Verification", href: `${base}/verification` },
+      { id: "agents", label: "Agent access", href: `${base}/agents` },
     ]}>
     <Outlet />
   </SettingsLayout>;

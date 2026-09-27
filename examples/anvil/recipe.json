@@ -1,0 +1,39 @@
+{
+  "schema_version": "blaxsmith.recipe/v1alpha1",
+  "name": "anvil-starter",
+  "profiles": {
+    "implementer": {
+      "harness": "codex",
+      "model": "gpt-5.6-luna",
+      "effort": "xhigh"
+    }
+  },
+  "stages": [
+    {
+      "id": "implement",
+      "kind": "implement",
+      "profile": "implementer",
+      "prompt": "examples/anvil/implement.md"
+    },
+    {
+      "id": "verify",
+      "kind": "verify",
+      "profile": "implementer",
+      "prompt": "examples/anvil/verify.md",
+      "depends_on": [
+        "implement"
+      ]
+    }
+  ],
+  "required_checks": [],
+  "limits": {
+    "max_correction_cycles": 3,
+    "timeout_seconds": 1800,
+    "max_runtime_seconds": 0
+  },
+  "acceptance": "manual",
+  "factory": {
+    "id": "anvil",
+    "version": "0.1.0"
+  }
+}

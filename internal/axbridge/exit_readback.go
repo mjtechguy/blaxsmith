@@ -112,6 +112,8 @@ type CommandExitConnector struct {
 	ClusterID string
 	Signer    ed25519.PrivateKey
 	Collector workflow.CommandExitCollector
+	// ObserveExit is best-effort telemetry after a signed exit, before guest disposal.
+	ObserveExit func(context.Context, workflow.Attempt)
 }
 
 func (c *CommandExitConnector) Collect(ctx context.Context, a workflow.Attempt) error {
@@ -161,6 +163,9 @@ func (c *CommandExitConnector) Reconcile(ctx context.Context, a workflow.Attempt
 	}
 	if err != nil {
 		return err
+	}
+	if c.ObserveExit != nil {
+		c.ObserveExit(ctx, a)
 	}
 	if report.ExitCode == 0 && report.Signal == 0 && !report.Interrupted {
 		return ErrVerificationPending

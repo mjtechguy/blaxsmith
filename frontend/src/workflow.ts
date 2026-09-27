@@ -17,6 +17,10 @@ export async function listProjects(pageToken = "", search = "", sortBy = "create
   return client.listProjects({ pageSize: 20, pageToken, search, sortBy, sortDirection }, { signal });
 }
 
+export async function getDeliveryReport(runId: string) {
+ return client.getDeliveryReport({ runId });
+}
+
 export async function getProject(projectId: string, signal?: AbortSignal) {
   return client.getProject({ projectId }, { signal });
 }
@@ -56,9 +60,13 @@ export async function getProjectVerification(projectId: string, signal?: AbortSi
   }
 }
 
-export async function setProjectVerification(projectId: string, checks: Array<{ id: string; command: string[] }>) {
+export async function setProjectVerification(projectId: string, checks: Array<{ id: string; command: string[]; trustedPaths?: string[]; mode: string; category: string }>, expectedVersion: bigint, preset: string) {
   const token = await csrfToken();
-  return client.setProjectVerification({ projectId, checks }, { headers: { "X-Blaxsmith-CSRF": token } });
+  return client.setProjectVerification({ projectId, checks, expectedVersion, preset }, { headers: { "X-Blaxsmith-CSRF": token } });
+}
+
+export async function listProjectVerificationHistory(projectId: string, beforeVersion = 0n, signal?: AbortSignal) {
+  return client.listProjectVerificationHistory({ projectId, beforeVersion }, { signal });
 }
 
 export async function listProjectModelAccess(projectId: string, signal?: AbortSignal) {
@@ -92,10 +100,17 @@ export async function revokeSubscriptionConnection(connectionId: string) {
 }
 
 // A library recipeVersionId replaces recipePath; send exactly one of them.
-export async function launchRun(projectId: string, launchKey: string, recipePath: string, specPath: string, transcriptPath: string, scope: string, recipeVersionId = "") {
+export async function launchRun(projectId: string, launchKey: string, recipePath: string, scope: string, recipeVersionId = "", preview?: { bundleSha256: string; verificationSha256: string }) {
   const token = await csrfToken();
-  return client.launchRun({ projectId, launchKey, recipePath, specPath, transcriptPath, scope, recipeVersionId }, { headers: { "X-Blaxsmith-CSRF": token } });
+  return client.launchRun({ projectId, launchKey, recipePath, scope, recipeVersionId, expectedBundleSha256: preview?.bundleSha256, expectedVerificationSha256: preview?.verificationSha256 }, { headers: { "X-Blaxsmith-CSRF": token } });
 }
+
+export async function previewRun(projectId: string, recipePath: string, scope: string, recipeVersionId = "") {
+  const token = await csrfToken();
+  return client.previewRun({ projectId, recipePath, scope, recipeVersionId }, { headers: { "X-Blaxsmith-CSRF": token } });
+}
+
+export const getPlatformCapabilities = (signal?: AbortSignal) => client.getPlatformCapabilities({}, { signal });
 
 export async function getLaunchAvailability(projectId: string, signal?: AbortSignal) {
   return client.getLaunchAvailability({ projectId }, { signal });
@@ -178,4 +193,11 @@ export async function decideReview(runId: string, packageId: string, action: "ap
   const token = await csrfToken();
   return client.decideReview({ runId, packageId, action, feedback: feedback.trim(), idempotencyKey: crypto.randomUUID() },
     { headers: { "X-Blaxsmith-CSRF": token } });
+}
+
+export async function listRunEvidence(runId: string, afterId = "", signal?: AbortSignal) {
+ return client.listRunEvidence({ runId, afterId }, { signal });
+}
+export async function getEvidenceContent(runId: string, evidenceId: string, signal?: AbortSignal) {
+ return client.getEvidenceContent({ runId, evidenceId }, { signal });
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/bootstrap"
 	"github.com/mjtechguy/blaxsmith/internal/dispatch"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
+	"github.com/mjtechguy/blaxsmith/internal/interact"
 	"github.com/mjtechguy/blaxsmith/internal/terminal"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
 	"google.golang.org/grpc/codes"
@@ -248,6 +249,15 @@ func newProductDispatch(ctx context.Context, config dispatchConfig, pool *pgxpoo
 	reader := &axbridge.CommandExitReader{Client: client, RouterURL: config.routerURL,
 		Token: func(context.Context) (string, error) { return dispatchToken(config.bootstrapTokenFile) }}
 	ledger := bootstrap.NewLedger(pool)
+	var observeUsage func(context.Context, workflow.Attempt)
+	if guests != nil {
+		ix, err := interact.New(pool)
+		if err != nil {
+			return nil, err
+		}
+		guestExec := &interact.AteGuest{Router: guests}
+		observeUsage = func(ctx context.Context, a workflow.Attempt) { collectExitUsage(ctx, store, guestExec, ix, a) }
+	}
 	completion := &axbridge.CompletionSweep{Workflow: store,
 		Connector: func(ctx context.Context, attempt workflow.Attempt) (*axbridge.CommandExitConnector, error) {
 			bridge, err := d.AttemptBridge(ctx, attempt)
@@ -255,7 +265,7 @@ func newProductDispatch(ctx context.Context, config dispatchConfig, pool *pgxpoo
 				return nil, err
 			}
 			return &axbridge.CommandExitConnector{Bridge: bridge, Reader: reader, Activation: ledger,
-				ClusterID: config.clusterID, Signer: signer,
+				ClusterID: config.clusterID, Signer: signer, ObserveExit: observeUsage,
 				Collector: workflow.CommandExitCollector{Store: store, SignerID: bridge.Pool + "/connector",
 					PublicKey: signer.Public().(ed25519.PublicKey), WorkerPool: bridge.Pool}}, nil
 		}}
@@ -267,8 +277,15 @@ func newProductDispatch(ctx context.Context, config dispatchConfig, pool *pgxpoo
 			}
 			return data, err
 		}
-		completion.Deliver = (&runBranchDelivery{store: store, readBundle: guestBundleReader(store, guests),
-			remote: gitWriteRemote(pool, secrets)}).Deliver
+		delivery := &runBranchDelivery{store: store, readBundle: guestBundleReader(store, guests), remote: gitWriteRemote(pool, secrets)}
+		guestExec := &interact.AteGuest{Router: guests}
+		completion.Verify = independentVerifier(store, guests)
+		completion.Deliver = func(ctx context.Context, a workflow.Attempt, r *workflow.AttemptResult) error {
+			if err := delivery.Deliver(ctx, a, r); err != nil {
+				return err
+			}
+			return collectArtifacts(ctx, store, guestExec, a, r.Revision)
+		}
 	}
 	result := &productDispatch{Dispatcher: d, Activator: activator, ax: ax, Workflow: store, Completion: completion,
 		Recovery: &axbridge.RecoverySweep{Workflow: store, Bridge: d.AttemptBridge}}

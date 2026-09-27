@@ -102,7 +102,7 @@ func TestPaneRunsHarnessUnderTmuxAndRecordsSession(t *testing.T) {
 	requireTmux(t)
 	events := `{"type":"thread.started","thread_id":"0199-thread"}
 {"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"All done"}}
-{"type":"turn.completed","usage":{}}`
+{"type":"turn.completed","usage":{"input_tokens":300,"output_tokens":40}}`
 	runtime := fakeHarness(t, "codex", "codex-cli 0.156.1", "printf '%s\\n' '"+strings.ReplaceAll(events, "\n", "' '")+"'\necho oops >&2\nexit 3\n")
 	in, err := Prepare(runtime, recipe.Profile{Harness: "codex", Model: "gpt-6-luna", Effort: "high"}, "Do the work", time.Minute, 4096)
 	if err != nil {
@@ -123,6 +123,10 @@ func TestPaneRunsHarnessUnderTmuxAndRecordsSession(t *testing.T) {
 	if err := json.Unmarshal([]byte(readState(t, "result.json")), &result); err != nil || result["summary"] != "All done" ||
 		result["schema"] != "blaxsmith.attempt-result/v1alpha1" || result["revision"] != "" {
 		t.Fatalf("result.json: %v %v", result, err)
+	}
+	var usageLog strings.Builder
+	if code := Bx([]string{"watch", "--once"}, &usageLog, &usageLog); code != 0 || !strings.Contains(usageLog.String(), `"usage":{"key":"session","harness":"codex","input_tokens":300,"output_tokens":40}`) {
+		t.Fatalf("failed command lost reported usage: %s", usageLog.String())
 	}
 	argv, err := ResumeArgv()
 	want := []string{runtime.Binary, "resume", "--disable", "multi_agent", "--disable", "apps", "--disable", "plugins", "--sandbox", "workspace-write",

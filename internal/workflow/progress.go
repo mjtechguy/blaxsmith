@@ -59,6 +59,11 @@ func (s *Store) Progress(ctx context.Context, afterOrgID, afterRunID string, lim
 		WHERE (r.organization_id,r.id)>($1::uuid,$2::uuid) AND r.graph_sealed AND (
 		(r.state='active' AND NOT EXISTS (SELECT 1 FROM workflow_tasks t WHERE t.organization_id=r.organization_id
 			AND t.run_id=r.id AND t.state NOT IN ('succeeded','blocked')))
+		OR (r.state='active' AND EXISTS (SELECT 1 FROM workflow_tasks t
+			JOIN workflow_task_dependencies d ON d.organization_id=t.organization_id AND d.run_id=t.run_id AND d.task_id=t.id
+			JOIN workflow_tasks parent ON parent.organization_id=d.organization_id AND parent.id=d.depends_on_task_id
+			WHERE t.organization_id=r.organization_id AND t.run_id=r.id AND t.state='pending'
+			AND parent.state='blocked' AND parent.active_attempt_id IS NULL))
 		OR (r.state='cancel_requested' AND NOT EXISTS (SELECT 1 FROM workflow_tasks t
 			WHERE t.organization_id=r.organization_id AND t.run_id=r.id AND t.active_attempt_id IS NOT NULL))
 		OR (r.state='succeeded' AND r.review_package_id IS NULL)
@@ -117,6 +122,9 @@ func (s *Store) progressRun(ctx context.Context, orgID, runID string, sink Escal
 	if state == "succeeded" {
 		if _, err := s.GetCurrentReview(ctx, orgID, runID); errors.Is(err, ErrNotFound) {
 			if err := s.presentRun(ctx, run); err != nil {
+				if errors.Is(err, ErrEvidencePending) {
+					return nil
+				}
 				return err
 			}
 			batch.Presented++
@@ -140,8 +148,7 @@ func (s *Store) progressRun(ctx context.Context, orgID, runID string, sink Escal
 }
 
 // presentRun binds review to the latest accepted revision and the accepted
-// result digests. ponytail: the platform does not yet run the frozen checks
-// independently; this evidence digest covers guest-reported results only.
+// result digests plus immutable gate, artifact, and platform check records.
 func (s *Store) presentRun(ctx context.Context, run Run) error {
 	rows, err := s.pool.Query(ctx, `SELECT t.task_key,a.id,a.result_sha256,COALESCE(res.revision,'')
 		FROM workflow_tasks t JOIN LATERAL (SELECT id,result_sha256,finished_at FROM workflow_attempts
@@ -171,7 +178,14 @@ func (s *Store) presentRun(ctx context.Context, run Run) error {
 			commit = a.Revision // Latest accepted revision wins.
 		}
 	}
-	evidence, err := json.Marshal(results)
+	records, err := s.evidenceDigest(ctx, run.OrganizationID, run.ID)
+	if err != nil {
+		return err
+	}
+	evidence, err := json.Marshal(struct {
+		Results  any
+		Evidence string
+	}{results, records})
 	if err != nil {
 		return err
 	}
@@ -192,6 +206,11 @@ func (s *Store) ApplyReviewDecision(ctx context.Context, orgID, runID string) (b
 		return false, err
 	}
 	defer tx.Rollback(ctx)
+	if err := checkRunGoalControl(ctx, tx, orgID, runID); errors.Is(err, ErrGoalStopped) {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
 	var state string
 	var decisionID, action, feedback *string
 	err = tx.QueryRow(ctx, `SELECT r.state,d.id::text,d.action,d.feedback FROM workflow_runs r
@@ -220,7 +239,7 @@ func (s *Store) ApplyReviewDecision(ctx context.Context, orgID, runID string) (b
 	if err != nil {
 		return false, err
 	}
-	var human string
+	human := "acceptance"
 	for _, stage := range bundle.Recipe.Stages {
 		if stage.Kind == "human_review" {
 			human = stage.ID
@@ -306,6 +325,9 @@ func (s *Store) ResolveEscalation(ctx context.Context, orgID, runID, key, action
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if err := checkRunGoalControl(ctx, tx, orgID, runID); err != nil {
+		return err
+	}
 	var runState string
 	if err := tx.QueryRow(ctx, `SELECT state FROM workflow_runs WHERE organization_id=$1 AND id=$2 FOR UPDATE`,
 		orgID, runID).Scan(&runState); err != nil {

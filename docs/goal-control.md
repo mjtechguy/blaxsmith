@@ -1,0 +1,13 @@
+# Durable goal control
+
+The goal workspace exposes **Pause new work**, **Resume goal**, and **Cancel goal and stop active runs**. The goal creator or an organization owner/admin can control it. Browser, machine API and MCP use the same operation; machine callers additionally need project-scoped `run.control`. Reads need `project.read`.
+
+`ControlGoal` takes `goal_id`, `action` (`pause`, `resume`, `cancel`), `expected_version`, and a stable `request_key`. `GetGoalControl` returns the version, admission state, active/queued run count and count awaiting termination. Replaying an identical request returns its original version; changing its contents or submitting a stale version fails with `aborted`. Refetch state after uncertain delivery. Immutable control history and actor-attributed audit records are committed with the transition.
+
+Pause stops new goal runs and new attempts, including retries and checks. Already reserved attempts may run and publish evidence. This is a drain, not a suspended process or proof that provider usage has stopped. Resume retains frozen work, accepted evidence and resource counts. Reopening a run for a review correction also observes the goal control fence.
+
+Cancel closes admission permanently and requests cancellation for every attached queued/active run in the same transaction. The existing connector termination and reconciliation path must confirm each run has stopped. The API reports `cancel_requested` until all affected runs have left active/queued/cancelling states, then derives `cancelled`. Completed runs, review packages and evidence are retained. Cancellation is not goal completion; start a new goal to perform further work. A completed run cannot reopen for corrections under a cancelled goal.
+
+All transitions and admissions lock the same goal row before run rows. Durable pause/cancellation survives coordinator replacement. Scheduler discovery excludes stopped goals and exhausted attempt allowances so they cannot occupy a bounded ready queue. Admission repeats these checks under locks; a previously issued preview is not permission to bypass a later pause.
+
+Local HTTPS/PostgreSQL/browser/MCP E2E exercises scope denial, stable retries, stale edits, pause across store/browser replacement, queued run/attempt blocking, retained launch receipts, resume, cancellation request versus confirmation, and terminal cancellation. Connector stop evidence in that fixture is simulated; live AX interruption and recovery qualification remains required. Automated multi-milestone continuation and durable task completion checkpoints remain separate work.

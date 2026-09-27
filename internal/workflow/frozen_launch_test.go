@@ -8,13 +8,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/mjtechguy/blaxsmith/internal/guild"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/runnerexit"
 	"github.com/mjtechguy/blaxsmith/internal/tenant"
@@ -31,15 +30,10 @@ func TestFrozenLaunchPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
 	in := FrozenRunInput{
 		OrganizationID: org, ProjectID: project, LaunchKey: "same-request",
-		Source: recipe.Input{Repo: filepath.Join(wd, "../.."), Ref: "HEAD",
-			Recipe: "examples/guild/recipe.json", Spec: "examples/guild/spec.md",
-			Transcript: "examples/guild/transcript.md", Scope: "examples/guild"},
+		Source: recipe.Input{Validators: map[string]recipe.Validator{"guild-forge": guild.ValidateInputs}, Repo: guildRepo(t), Ref: "HEAD",
+			Recipe: "examples/guild/recipe.json", Scope: "examples/guild"},
 		Verification: VerificationPolicy{SchemaVersion: "blaxsmith.verification/v1alpha1", Checks: []VerificationCheck{
 			{ID: "project-tests", Command: []string{"go", "test", "./..."}},
 			{ID: "requirement-coverage", Command: []string{"verify-coverage"}},

@@ -12,54 +12,72 @@ import (
 	"unicode/utf8"
 
 	"github.com/mjtechguy/blaxsmith/internal/extension"
-	"github.com/mjtechguy/blaxsmith/internal/guild"
 )
 
 // Input selects committed content. Repo is local transport, never provenance.
 // Scope is a directory containing the code an assignment may touch.
+// PlatformFile is supplied by trusted application code, never a repository.
+// Source identifies the immutable origin (for example goal:<id>@<revision>).
+type PlatformFile struct {
+	Data   []byte
+	Source string
+}
+
 type Input struct {
-	Repo       string
-	Ref        string
-	Recipe     string
-	Spec       string
-	Transcript string
-	Scope      string
+	CheckpointID  string // Trusted platform provenance, never a repository claim.
+	PlatformFiles map[string]PlatformFile
+	Validators    map[string]Validator
+	Repo          string
+	Ref           string
+	Recipe        string
+	Scope         string
 	// RecipeData, when set, is a library recipe version frozen under the
 	// Recipe path label instead of reading that path from the commit. Its
-	// prompts, skills, spec, transcript, and AGENTS.md still come from Git.
+	// prompts, skills, documents, and AGENTS.md still come from Git.
 	RecipeData []byte
 	// ResolveExtension returns the installed version for a stage template
 	// reference. Nil refuses every template stage.
 	ResolveExtension func(ctx context.Context, id, version string) (extension.Pin, error)
 }
 
+type Validator func(context.Context, map[string][]byte) (ValidationResult, error)
+
+type ValidationResult struct {
+	ID              string `json:"id"`
+	Revision        string `json:"revision"`
+	ValidatorSHA256 string `json:"validator_sha256"`
+	Report          string `json:"report"`
+}
+
 type Source struct {
-	Commit     string `json:"commit"`
-	Recipe     string `json:"recipe"`
-	Spec       string `json:"spec"`
-	Transcript string `json:"transcript"`
-	Scope      string `json:"scope"`
+	CheckpointID string `json:"checkpoint_id,omitempty"`
+	Commit       string `json:"commit"`
+	Recipe       string `json:"recipe"`
+	Scope        string `json:"scope"`
 }
 
 type Artifact struct {
+	Source string `json:"source,omitempty"` // Empty = committed Git; otherwise a platform-owned input.
 	Path   string `json:"path"`
 	SHA256 string `json:"sha256"`
 	Data   []byte `json:"data"` // JSON base64 preserves the exact Git bytes.
 }
 
 type Bundle struct {
-	SchemaVersion string       `json:"schema_version"`
-	Source        Source       `json:"source"`
-	Recipe        Recipe       `json:"recipe"`
-	StageOrder    []string     `json:"stage_order"`
-	Artifacts     []Artifact   `json:"artifacts"`
-	Guild         guild.Result `json:"guild"`
+	Baseline      *RepositoryBaseline       `json:"repository_baseline,omitempty"`
+	ProfileInputs map[string]ResolvedInputs `json:"profile_inputs,omitempty"`
+	SchemaVersion string                    `json:"schema_version"`
+	Source        Source                    `json:"source"`
+	Recipe        Recipe                    `json:"recipe"`
+	StageOrder    []string                  `json:"stage_order"`
+	Artifacts     []Artifact                `json:"artifacts"`
+	Validation    *ValidationResult         `json:"validation,omitempty"`
 	// Extensions are the extension versions template stages use, sorted.
 	Extensions []extension.Frozen `json:"extensions,omitempty"`
 	Digest     string             `json:"digest,omitempty"`
 }
 
-// Freeze resolves a ref once, validates the selected recipe and Forge spec,
+// Freeze resolves a ref once, validates the selected recipe and optional integration inputs,
 // and snapshots all declared instruction files plus applicable AGENTS.md files.
 // It is a compilation result, not a signed or authorized execution request.
 func Freeze(ctx context.Context, in Input) (*Bundle, error) {
@@ -82,15 +100,29 @@ func Freeze(ctx context.Context, in Input) (*Bundle, error) {
 	if !foundScope {
 		return nil, fmt.Errorf("scope %q contains no committed files", in.Scope)
 	}
+	for name, file := range in.PlatformFiles {
+		if !validPath(name) || !strings.HasPrefix(name, ".blaxsmith/platform/") || name == in.Recipe || len(file.Data) == 0 || len(file.Data) > maxArtifactBytes || len(file.Source) < 1 || len(file.Source) > 256 || strings.ContainsAny(file.Source, "\r\n\x00") {
+			return nil, fmt.Errorf("invalid platform input")
+		}
+		if _, exists := g.files[name]; exists {
+			return nil, fmt.Errorf("platform input %q collides with Git", name)
+		}
+	}
 	files := map[string][]byte{}
 	total := 0
 	add := func(name string) error {
 		if _, ok := files[name]; ok {
 			return nil
 		}
-		data, err := g.read(ctx, name)
-		if err != nil {
-			return err
+		var data []byte
+		if supplied, ok := in.PlatformFiles[name]; ok {
+			data = slices.Clone(supplied.Data)
+		} else {
+			var err error
+			data, err = g.read(ctx, name)
+			if err != nil {
+				return err
+			}
 		}
 		if !utf8.Valid(data) || strings.ContainsRune(string(data), 0) {
 			return fmt.Errorf("artifact %q must be UTF-8 text without NUL bytes", name)
@@ -120,7 +152,16 @@ func Freeze(ctx context.Context, in Input) (*Bundle, error) {
 	if err != nil {
 		return nil, err
 	}
-	paths := []string{in.Spec, in.Transcript}
+	resolvedInputs, err := resolveInputs(ctx, g, &r, in.Scope, add, files)
+	if err != nil {
+		return nil, err
+	}
+	paths := slices.Clone(r.Documents)
+	if r.Validation != nil {
+		for _, file := range r.Validation.Inputs {
+			paths = append(paths, file)
+		}
+	}
 	for _, s := range r.Stages {
 		if s.Prompt != "" {
 			paths = append(paths, s.Prompt)
@@ -145,21 +186,42 @@ func Freeze(ctx context.Context, in Input) (*Bundle, error) {
 			return nil, err
 		}
 	}
-	validation, err := guild.Validate(ctx, files[in.Spec], files[in.Transcript])
-	if err != nil {
-		return nil, err
+	for name := range in.PlatformFiles {
+		if _, used := files[name]; !used {
+			return nil, fmt.Errorf("unused platform input %q", name)
+		}
+	}
+	var validation *ValidationResult
+	if r.Validation != nil {
+		validate := in.Validators[r.Validation.ID]
+		if validate == nil {
+			return nil, fmt.Errorf("validator %q is not installed", r.Validation.ID)
+		}
+		inputs := map[string][]byte{}
+		for name, file := range r.Validation.Inputs {
+			inputs[name] = slices.Clone(files[file])
+		}
+		result, err := validate(ctx, inputs)
+		if err != nil {
+			return nil, err
+		}
+		if result.ID != r.Validation.ID {
+			return nil, fmt.Errorf("validator identity mismatch")
+		}
+		validation = &result
 	}
 	extensions, err := freezeExtensions(ctx, r, in.ResolveExtension)
 	if err != nil {
 		return nil, err
 	}
-	b := &Bundle{
-		SchemaVersion: "blaxsmith.bundle/v1alpha1",
-		Source:        Source{g.commit, in.Recipe, in.Spec, in.Transcript, in.Scope},
-		Recipe:        r, StageOrder: order, Guild: validation, Extensions: extensions,
+	baseline := repositoryBaseline(ctx, g, in.Scope)
+	b := &Bundle{Baseline: &baseline,
+		SchemaVersion: "blaxsmith.bundle/v1alpha1", ProfileInputs: resolvedInputs,
+		Source: Source{Commit: g.commit, Recipe: in.Recipe, Scope: in.Scope, CheckpointID: in.CheckpointID},
+		Recipe: r, StageOrder: order, Validation: validation, Extensions: extensions,
 	}
 	for _, name := range sortedKeys(files) {
-		b.Artifacts = append(b.Artifacts, Artifact{name, digest(files[name]), files[name]})
+		b.Artifacts = append(b.Artifacts, Artifact{Path: name, SHA256: digest(files[name]), Data: files[name], Source: in.PlatformFiles[name].Source})
 	}
 	canonical, err := json.Marshal(b)
 	if err != nil {

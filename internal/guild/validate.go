@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mjtechguy/blaxsmith/internal/limit"
+	"github.com/mjtechguy/blaxsmith/internal/recipe"
 )
 
 const Revision = "dda615434dfb4624e1ab6328851afc91ef58e5e1"
@@ -21,14 +22,10 @@ const Revision = "dda615434dfb4624e1ab6328851afc91ef58e5e1"
 //go:embed upstream/validate-spec.py
 var validator []byte
 
-type Result struct {
-	Revision        string `json:"revision"`
-	ValidatorSHA256 string `json:"validator_sha256"`
-	Report          string `json:"report"`
-}
+type Result = recipe.ValidationResult
 
 func Validate(ctx context.Context, spec, transcript []byte) (Result, error) {
-	result := Result{Revision: Revision, ValidatorSHA256: fmt.Sprintf("%x", sha256.Sum256(validator))}
+	result := Result{ID: "guild-forge", Revision: Revision, ValidatorSHA256: fmt.Sprintf("%x", sha256.Sum256(validator))}
 	dir, err := os.MkdirTemp("", "blaxsmith-forge-")
 	if err != nil {
 		return result, err
@@ -51,4 +48,12 @@ func Validate(ctx context.Context, spec, transcript []byte) (Result, error) {
 		return result, fmt.Errorf("Guild Forge gate failed: %w\n%s", err, result.Report)
 	}
 	return result, nil
+}
+
+// ValidateInputs adapts Forge's named documents to the platform validator contract.
+func ValidateInputs(ctx context.Context, inputs map[string][]byte) (Result, error) {
+	if len(inputs) != 2 || len(inputs["spec"]) == 0 || len(inputs["transcript"]) == 0 {
+		return Result{}, fmt.Errorf("Guild Forge requires spec and transcript inputs")
+	}
+	return Validate(ctx, inputs["spec"], inputs["transcript"])
 }

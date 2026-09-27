@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/evidence"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/tenant"
@@ -21,19 +22,132 @@ import (
 type VerificationPolicy struct {
 	SchemaVersion string              `json:"schema_version"`
 	Checks        []VerificationCheck `json:"checks"`
+	Preset        string              `json:"preset,omitempty"`
 }
 
 type VerificationCheck struct {
-	ID      string   `json:"id"`
-	Command []string `json:"command"`
+	ID           string   `json:"id"`
+	Category     string   `json:"category,omitempty"`
+	Command      []string `json:"command"`
+	TrustedPaths []string `json:"trusted_paths,omitempty"`
+	Mode         string   `json:"mode,omitempty"` // Empty means required.
+}
+
+func (c VerificationCheck) Required() bool { return c.Mode == "" || c.Mode == "required" }
+
+func (p VerificationPolicy) ActiveChecks() []VerificationCheck {
+	checks := make([]VerificationCheck, 0, len(p.Checks))
+	for _, c := range p.Checks {
+		if c.Mode != "off" {
+			checks = append(checks, c)
+		}
+	}
+	return checks
+}
+
+// PreviewSource compiles the same inputs as admission and checks extension grants.
+// It persists nothing and confers no authority to launch later.
+func (s *Store) PreviewSource(ctx context.Context, caller identity.Caller, projectID string, source recipe.Input) (*recipe.Bundle, error) {
+	if !CanLaunch(caller) {
+		return nil, ErrProjectDenied
+	}
+	ctx = tenant.Org(ctx, caller.OrganizationID)
+	if _, err := s.GetProject(ctx, caller.OrganizationID, projectID); err != nil {
+		return nil, err
+	}
+	resolver := s.extensionResolver(caller.OrganizationID)
+	source.ResolveExtension = resolver.Resolve
+	bundle, err := recipe.Freeze(ctx, source)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRecipe, err)
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if err := resolver.recordRunExtensions(ctx, tx, &caller, projectID, "", bundle.Extensions); err != nil {
+		return nil, err
+	}
+	return bundle, nil
+}
+
+var ErrPreviewChanged = errors.New("launch inputs changed since preview; refresh the preview")
+
+// CheckPreview allows an unpreviewed launch, or requires both exact digests.
+func CheckPreview(expectedBundle, expectedPolicy, bundle, policy string) error {
+	if expectedBundle == "" && expectedPolicy == "" {
+		return nil
+	}
+	for _, digest := range []string{expectedBundle, expectedPolicy} {
+		decoded, err := hex.DecodeString(digest)
+		if err != nil || len(decoded) != sha256.Size || digest != strings.ToLower(digest) {
+			return ErrInvalid
+		}
+	}
+	if expectedBundle != bundle || expectedPolicy != policy {
+		return ErrPreviewChanged
+	}
+	return nil
+}
+
+// PreviewVerification validates the effective checks against the frozen graph.
+func PreviewVerification(bundle *recipe.Bundle, policy VerificationPolicy) (string, error) {
+	data, err := launchVerification(bundle, policy)
+	if err != nil {
+		return "", err
+	}
+	return sha(data), nil
+}
+
+func launchVerification(bundle *recipe.Bundle, policy VerificationPolicy) ([]byte, error) {
+	policyJSON, err := validateVerification(policy, platformRequiredChecks(bundle))
+	if err != nil {
+		return nil, err
+	}
+	if len(policy.ActiveChecks()) > 0 {
+		ancestors := map[string]map[string]bool{}
+		implement := ""
+		for _, stage := range bundle.Recipe.Stages {
+			if stage.Kind == "implement" {
+				implement = stage.ID
+			}
+		}
+		verified := false
+		for _, key := range bundle.StageOrder {
+			stage, _ := findStage(bundle, key)
+			before := map[string]bool{}
+			for _, dep := range stage.DependsOn {
+				before[dep] = true
+				for id := range ancestors[dep] {
+					before[id] = true
+				}
+			}
+			ancestors[key] = before
+			if stage.Kind == "verify" && (implement == "" || before[implement]) {
+				verified = true
+			}
+		}
+		if !verified {
+			return nil, fmt.Errorf("%w: selected project checks require a verify stage after implementation", ErrRecipe)
+		}
+	}
+	return policyJSON, nil
 }
 
 type FrozenRunInput struct {
-	OrganizationID string
-	ProjectID      string
-	LaunchKey      string
-	Source         recipe.Input // Repo must be selected by the authorized server, not the browser.
-	Verification   VerificationPolicy
+	CheckpointID               string
+	GoalID                     string
+	GoalRevision               int64
+	GoalPlanVersion            int64
+	GoalPlanSHA256             string
+	ExpectedBundleSHA256       string
+	ExpectedVerificationSHA256 string
+	OrganizationID             string
+	ProjectID                  string
+	LaunchKey                  string
+	Source                     recipe.Input // Repo must be selected by the authorized server, not the browser.
+	Verification               VerificationPolicy
 	// Browser admission rechecks these against the live session and the
 	// project settings after Git preparation, in the run creation transaction.
 	Caller              *identity.Caller
@@ -51,6 +165,9 @@ type FrozenRunInput struct {
 func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, error) {
 	ctx = tenant.Org(ctx, in.OrganizationID)
 	if !ids(in.OrganizationID, in.ProjectID) || len(in.LaunchKey) < 1 || len(in.LaunchKey) > 128 ||
+		(in.CheckpointID != "" && (in.GoalID == "" || !ids(in.CheckpointID))) ||
+		(in.GoalPlanVersion < 0 || (in.GoalPlanVersion > 0 && (in.GoalID == "" || !hashPattern.MatchString(in.GoalPlanSHA256)))) ||
+		(in.GoalID != "" && (!ids(in.GoalID) || in.GoalRevision < 1 || in.Caller == nil)) ||
 		(in.RecipeVersionID != "" && (!ids(in.RecipeVersionID) || in.Caller == nil || in.Source.RecipeData == nil)) {
 		return Run{}, ErrInvalid
 	}
@@ -58,13 +175,17 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 	// versions; the caller's grant is checked in the creation transaction.
 	extensions := s.extensionResolver(in.OrganizationID)
 	source := in.Source
+	source.CheckpointID = in.CheckpointID
 	source.ResolveExtension = extensions.Resolve
 	bundle, err := recipe.Freeze(ctx, source)
 	if err != nil {
 		return Run{}, fmt.Errorf("%w: %v", ErrRecipe, err)
 	}
-	policyJSON, err := validateVerification(in.Verification, bundle.Recipe.RequiredChecks)
+	policyJSON, err := launchVerification(bundle, in.Verification)
 	if err != nil {
+		return Run{}, err
+	}
+	if err := CheckPreview(in.ExpectedBundleSHA256, in.ExpectedVerificationSHA256, bundle.Digest, sha(policyJSON)); err != nil {
 		return Run{}, err
 	}
 	bundleJSON, err := json.Marshal(bundle)
@@ -95,7 +216,7 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 			AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
 			AND m.state='active' AND p.state='active'
 			AND (s.auth_method<>'local' OR o.login_policy IN ('local','mixed'))
-			AND (o.mfa_policy<>'required' OR s.mfa_level='totp')
+			AND (s.credential_kind='service' OR o.mfa_policy<>'required' OR s.mfa_level='totp')
 			FOR SHARE OF s,m,p,o`, caller.OrganizationID, caller.SessionID, caller.PrincipalID,
 			caller.Role, caller.AccessExpires).Scan(&role)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -143,6 +264,37 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 			}
 		}
 	}
+	if in.GoalID != "" {
+		var revision int64
+		if err := tx.QueryRow(ctx, `SELECT revision FROM workflow_goals WHERE organization_id=$1 AND project_id=$2 AND id=$3 FOR UPDATE`, in.OrganizationID, in.ProjectID, in.GoalID).Scan(&revision); errors.Is(err, pgx.ErrNoRows) {
+			return Run{}, ErrNotFound
+		} else if err != nil {
+			return Run{}, err
+		}
+		if revision != in.GoalRevision {
+			return Run{}, ErrConflict
+		}
+		if in.GoalPlanVersion > 0 {
+			var matches bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM workflow_goal_plans WHERE organization_id=$1 AND goal_id=$2 AND version=$3 AND goal_revision=$4 AND sha256=$5)`, in.OrganizationID, in.GoalID, in.GoalPlanVersion, in.GoalRevision, in.GoalPlanSHA256).Scan(&matches); err != nil {
+				return Run{}, err
+			}
+			if !matches {
+				return Run{}, ErrConflict
+			}
+		}
+	}
+	checkoutRef := in.SourceRef
+	if in.CheckpointID != "" {
+		commit, err := checkpointSource(ctx, tx, in.OrganizationID, in.GoalID, in.CheckpointID, in.SourceRepositoryURL, true)
+		if err != nil {
+			return Run{}, err
+		}
+		if commit != bundle.Source.Commit {
+			return Run{}, ErrConflict
+		}
+		checkoutRef = commit
+	}
 	var runID, initiator string
 	if in.Caller != nil {
 		initiator = in.Caller.PrincipalID
@@ -163,7 +315,24 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 	if run.SourceCommit != bundle.Source.Commit || run.BundleSHA256 != bundle.Digest || run.VerificationSHA256 != policySHA {
 		return Run{}, ErrConflict
 	}
+	if created && in.GoalID != "" {
+		if err := checkGoalAllowance(ctx, tx, in.OrganizationID, in.GoalID, false); err != nil {
+			return Run{}, err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO workflow_goal_runs(organization_id,goal_id,run_id,goal_revision,plan_version,checkpoint_id) VALUES($1,$2,$3,$4,NULLIF($5,0),NULLIF($6,'')::uuid)`, in.OrganizationID, in.GoalID, run.ID, in.GoalRevision, in.GoalPlanVersion, in.CheckpointID); err != nil {
+			return Run{}, err
+		}
+	}
 	if !created {
+		if in.GoalID != "" {
+			var associated bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM workflow_goal_runs WHERE organization_id=$1 AND run_id=$2 AND goal_id=$3 AND goal_revision=$4 AND COALESCE(plan_version,0)=$5 AND COALESCE(checkpoint_id::text,'')=$6)`, in.OrganizationID, run.ID, in.GoalID, in.GoalRevision, in.GoalPlanVersion, in.CheckpointID).Scan(&associated); err != nil {
+				return Run{}, err
+			}
+			if !associated {
+				return Run{}, ErrConflict
+			}
+		}
 		var sealed bool
 		if err := tx.QueryRow(ctx, `SELECT graph_sealed FROM workflow_runs
 			WHERE organization_id=$1 AND id=$2`, in.OrganizationID, run.ID).Scan(&sealed); err != nil {
@@ -178,9 +347,9 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 		return Run{}, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO workflow_run_bundles
-		(organization_id,run_id,bundle_json,verification_json,repository_url,git_ref,git_connection_id)
-		VALUES ($1,$2,$3,$4,NULLIF($5,''),CASE WHEN $5='' THEN NULL ELSE $6 END,NULLIF($7,''))`,
-		in.OrganizationID, run.ID, bundleJSON, policyJSON, in.SourceRepositoryURL, in.SourceRef, gitConnectionID); err != nil {
+		(organization_id,run_id,bundle_json,verification_json,repository_url,git_ref,git_connection_id,configured_git_ref)
+		VALUES ($1,$2,$3,$4,NULLIF($5,''),CASE WHEN $5='' THEN NULL ELSE $6 END,NULLIF($7,''),CASE WHEN $5='' THEN NULL ELSE $8 END)`,
+		in.OrganizationID, run.ID, bundleJSON, policyJSON, in.SourceRepositoryURL, checkoutRef, gitConnectionID, in.SourceRef); err != nil {
 		return Run{}, err
 	}
 	if err := extensions.recordRunExtensions(ctx, tx, in.Caller, in.ProjectID, run.ID, bundle.Extensions); err != nil {
@@ -242,15 +411,56 @@ func (s *Store) CreateFrozenRun(ctx context.Context, in FrozenRunInput) (Run, er
 }
 
 func validateVerification(policy VerificationPolicy, required []string) ([]byte, error) {
-	if policy.SchemaVersion != "blaxsmith.verification/v1alpha1" || len(policy.Checks) == 0 || len(policy.Checks) > 64 {
+	if policy.SchemaVersion != "blaxsmith.verification/v1alpha1" || len(policy.Checks) > 64 {
+		return nil, ErrInvalid
+	}
+	if policy.Preset != "" && policy.Preset != "custom" && policy.Preset != "mvp" && policy.Preset != "balanced" && policy.Preset != "thorough" {
 		return nil, ErrInvalid
 	}
 	seen := make(map[string]bool, len(policy.Checks))
+	requiredChecks := map[string]bool{}
 	for _, check := range policy.Checks {
+		switch check.Category {
+		case "", "build", "test", "review", "e2e", "security", "performance", "other":
+		default:
+			return nil, ErrInvalid
+		}
+		if policy.Preset != "" && policy.Preset != "custom" {
+			mode := "required"
+			if policy.Preset == "mvp" {
+				if check.Category == "test" || check.Category == "other" || check.Category == "" {
+					mode = "advisory"
+				} else if check.Category != "build" {
+					mode = "off"
+				}
+			}
+			if policy.Preset == "balanced" && (check.Category == "review" || check.Category == "e2e" || check.Category == "security" || check.Category == "performance") {
+				mode = "advisory"
+			}
+			actual := check.Mode
+			if actual == "" {
+				actual = "required"
+			}
+			if actual != mode {
+				return nil, ErrInvalid
+			}
+		}
+		if check.Mode != "" && check.Mode != "required" && check.Mode != "advisory" && check.Mode != "off" {
+			return nil, ErrInvalid
+		}
 		if !keyPattern.MatchString(check.ID) || seen[check.ID] || len(check.Command) == 0 || len(check.Command) > 32 {
 			return nil, ErrInvalid
 		}
 		seen[check.ID] = true
+		requiredChecks[check.ID] = check.Required()
+		if len(check.TrustedPaths) > 128 {
+			return nil, ErrInvalid
+		}
+		for _, name := range check.TrustedPaths {
+			if !evidence.Path(name) {
+				return nil, ErrInvalid
+			}
+		}
 		for _, part := range check.Command {
 			if part == "" || len(part) > 4096 || strings.ContainsRune(part, 0) {
 				return nil, ErrInvalid
@@ -258,7 +468,7 @@ func validateVerification(policy VerificationPolicy, required []string) ([]byte,
 		}
 	}
 	for _, id := range required {
-		if !seen[id] {
+		if !requiredChecks[id] {
 			return nil, ErrInvalid
 		}
 	}

@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/evidence"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/tenant"
 )
@@ -100,6 +101,44 @@ func (s *Store) RecordAttemptResult(ctx context.Context, a Attempt, result Attem
 	}
 	if !clean {
 		return ErrConflict
+	}
+	bundle, bundleErr := runBundle(ctx, tx, a.OrganizationID, a.RunID)
+	if bundleErr != nil && !errors.Is(bundleErr, ErrNotFound) {
+		return bundleErr
+	}
+	if bundleErr == nil {
+		var key, input string
+		if err := tx.QueryRow(ctx, `SELECT t.task_key,COALESCE(a.input_commit,r.source_commit) FROM workflow_tasks t JOIN workflow_attempts a ON a.organization_id=t.organization_id AND a.task_id=t.id JOIN workflow_runs r ON r.organization_id=t.organization_id AND r.id=t.run_id WHERE t.organization_id=$1 AND a.id=$2`, a.OrganizationID, a.ID).Scan(&key, &input); err != nil {
+			return err
+		}
+		stage, ok := findStage(bundle, key)
+		if ok && (stage.Kind == "review" || stage.Kind == "architect_review" || stage.Kind == "ui_review") {
+			if result.Revision != input {
+				return ErrConflict
+			}
+			if result.Verdict == "" {
+				result.Verdict = "fail"
+				result.Summary = truncateUTF8("Reviewer did not report a verdict.\n"+result.Summary, maxSummaryBytes)
+			}
+			if stage.ReviewReport != "" {
+				var data []byte
+				err := tx.QueryRow(ctx, `SELECT content FROM workflow_evidence WHERE organization_id=$1 AND attempt_id=$2 AND kind='artifact' AND origin_key=$3 AND revision=$4`, a.OrganizationID, a.ID, stage.ReviewReport, input).Scan(&data)
+				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					return err
+				}
+				if _, parseErr := evidence.ParseReview(data, input, result.Verdict); parseErr != nil {
+					result.Verdict = "fail"
+					result.Summary = truncateUTF8("Required review report is missing, invalid or contradicts the candidate/verdict.\n"+result.Summary, maxSummaryBytes)
+				}
+			}
+		}
+	}
+	if err := requiredGates(ctx, tx, a, result.Revision); err != nil {
+		if !errors.Is(err, ErrEvidencePending) {
+			return err
+		}
+		result.Verdict = "fail"
+		result.Summary = truncateUTF8(err.Error()+"\n"+result.Summary, maxSummaryBytes)
 	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
@@ -191,6 +230,17 @@ func (s *Store) acceptStopped(ctx context.Context, tx pgx.Tx, a Attempt) (bool, 
 	if !ok {
 		return false, ErrConflict
 	}
+	if stage.Mode == "advisory" {
+		if err := requiredGates(ctx, tx, a, result.Revision); err == nil {
+			return true, readyEvents(ctx, tx, a.OrganizationID, a.RunID, a.TaskID)
+		} else if !errors.Is(err, ErrEvidencePending) {
+			return false, err
+		}
+	}
+	if stage.Loop == nil && result.Verdict == "fail" {
+		_, err := tx.Exec(ctx, `UPDATE workflow_tasks SET state='blocked' WHERE organization_id=$1 AND id=$2`, a.OrganizationID, a.TaskID)
+		return true, err
+	}
 	if stage.Loop == nil || result.Verdict == "pass" {
 		return true, readyEvents(ctx, tx, a.OrganizationID, a.RunID, a.TaskID)
 	}
@@ -278,6 +328,41 @@ func escalate(ctx context.Context, tx pgx.Tx, orgID, runID, stageKey, taskID, de
 	return event(ctx, tx, orgID, runID, taskID, "", "task.escalated")
 }
 
+// blockDependents propagates permanent failure through the DAG under the run
+// lock. Live owners and escalations retain their normal stop/decision paths.
+func blockDependents(ctx context.Context, tx pgx.Tx, orgID, runID string) error {
+	rows, err := tx.Query(ctx, `WITH RECURSIVE blocked(id,cause) AS (
+ SELECT id,task_key FROM workflow_tasks WHERE organization_id=$1 AND run_id=$2
+ AND state='blocked' AND active_attempt_id IS NULL
+ UNION SELECT d.task_id,b.cause FROM workflow_task_dependencies d JOIN blocked b ON d.depends_on_task_id=b.id
+ WHERE d.organization_id=$1 AND d.run_id=$2
+ ), causes AS (SELECT id,min(cause) AS cause FROM blocked GROUP BY id)
+ UPDATE workflow_tasks t SET state='blocked' FROM causes b
+ WHERE t.organization_id=$1 AND t.run_id=$2 AND t.id=b.id AND t.state='pending' AND t.active_attempt_id IS NULL
+ RETURNING t.id,b.cause`, orgID, runID)
+	if err != nil {
+		return err
+	}
+	type blockedTask struct{ id, cause string }
+	tasks, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (blockedTask, error) {
+		var task blockedTask
+		return task, r.Scan(&task.id, &task.cause)
+	})
+	if err != nil {
+		return err
+	}
+	for _, task := range tasks {
+		payload, err := json.Marshal(map[string]string{"blocked_by": task.cause})
+		if err != nil {
+			return err
+		}
+		if err := AppendEvent(ctx, tx, orgID, runID, task.id, "", "task.blocked", payload); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func readyEvents(ctx context.Context, tx pgx.Tx, orgID, runID, parentID string) error {
 	rows, err := tx.Query(ctx, `SELECT t.id FROM workflow_task_dependencies d
 		JOIN workflow_tasks t ON t.organization_id=d.organization_id AND t.id=d.task_id
@@ -329,7 +414,8 @@ func findStage(bundle *recipe.Bundle, id string) (recipe.Stage, bool) {
 
 // BuildHandoff renders the bounded upstream context for a task's next
 // attempt: each direct upstream stage's accepted summary and revision, plus
-// unconsumed correction requests. RecordHandoff freezes it with the attempt.
+// outstanding correction requests (including retries). RecordHandoff freezes
+// it with the attempt.
 func (s *Store) BuildHandoff(ctx context.Context, orgID, runID, taskID string) (string, []string, error) {
 	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID, taskID) {
@@ -355,23 +441,38 @@ func (s *Store) BuildHandoff(ctx context.Context, orgID, runID, taskID string) (
 	if err != nil {
 		return "", nil, err
 	}
-	rows, err = s.pool.Query(ctx, `SELECT id,source_stage,message FROM workflow_corrections
-		WHERE organization_id=$1 AND run_id=$2 AND task_id=$3 AND consumed_attempt_id IS NULL
+	rows, err = s.pool.Query(ctx, `SELECT id,source_stage,message FROM workflow_corrections c
+		WHERE organization_id=$1 AND run_id=$2 AND task_id=$3 AND `+retryableCorrection+`
 		ORDER BY created_at,id`, orgID, runID, taskID)
 	if err != nil {
 		return "", nil, err
 	}
 	corrections := []string{}
+	var requests strings.Builder
 	var id, source, message string
 	_, err = pgx.ForEachRow(rows, []any{&id, &source, &message}, func() error {
 		corrections = append(corrections, id)
-		fmt.Fprintf(&b, "\n### Correction requested by %s\n%s\n", source, message)
+		fmt.Fprintf(&requests, "\n### Correction requested by %s\n%s\n", source, message)
+		if requests.Len() > maxHandoffBytes {
+			return fmt.Errorf("%w: correction requests exceed the handoff limit", ErrInvalid)
+		}
 		return nil
 	})
 	if err != nil {
 		return "", nil, err
 	}
-	return truncateUTF8(b.String(), maxHandoffBytes), corrections, nil
+	// Corrections take priority. Never mark a request consumed if it was cut
+	// out of the prompt by a long upstream summary.
+	const omitted = "\n[Upstream context truncated to preserve correction requests.]\n"
+	remaining := maxHandoffBytes - requests.Len()
+	upstream := b.String()
+	if len(upstream) > remaining {
+		upstream = ""
+		if remaining >= len(omitted) {
+			upstream = truncateUTF8(b.String(), remaining-len(omitted)) + omitted
+		}
+	}
+	return requests.String() + upstream, corrections, nil
 }
 
 func orDefault(value, fallback string) string {
@@ -381,8 +482,14 @@ func orDefault(value, fallback string) string {
 	return value
 }
 
+// A correction belongs to one live attempt at a time. Terminal failures have
+// not applied it; reassigning it preserves the original frozen handoff for audit.
+const retryableCorrection = `(c.consumed_attempt_id IS NULL OR EXISTS (
+ SELECT 1 FROM workflow_attempts previous WHERE previous.organization_id=c.organization_id
+ AND previous.id=c.consumed_attempt_id AND previous.state IN ('stopped','failed')))`
+
 // RecordHandoff runs inside the reservation transaction so a correction is
-// consumed by exactly one attempt.
+// assigned to exactly one attempt; stopped/failed owners may be retried.
 func RecordHandoff(ctx context.Context, tx pgx.Tx, a Attempt, handoff string, corrections []string) error {
 	if handoff == "" && len(corrections) == 0 {
 		return nil
@@ -395,8 +502,8 @@ func RecordHandoff(ctx context.Context, tx pgx.Tx, a Attempt, handoff string, co
 		a.OrganizationID, a.ID, a.RunID, a.TaskID, handoff, sha([]byte(handoff))); err != nil {
 		return err
 	}
-	tag, err := tx.Exec(ctx, `UPDATE workflow_corrections SET consumed_attempt_id=$3
-		WHERE organization_id=$1 AND task_id=$2 AND id=ANY($4::uuid[]) AND consumed_attempt_id IS NULL`,
+	tag, err := tx.Exec(ctx, `UPDATE workflow_corrections c SET consumed_attempt_id=$3
+		WHERE organization_id=$1 AND task_id=$2 AND id=ANY($4::uuid[]) AND `+retryableCorrection,
 		a.OrganizationID, a.TaskID, a.ID, corrections)
 	if err != nil {
 		return err

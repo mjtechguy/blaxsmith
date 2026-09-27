@@ -37,12 +37,13 @@ type ProjectFile struct {
 // .blaxsmith.json supplied everything, "detected" when manifests did, and
 // "none" otherwise. FileError explains an ignored .blaxsmith.json.
 type Result struct {
-	Source       string
-	FileError    string
-	Verification []Command
-	Setup        []Command
-	Recipe       string
-	Evidence     []string // Human-readable reasons, e.g. "go.mod", "package.json scripts (pnpm)".
+	PackageManager string // Detected from lockfiles/package.json; empty for non-Node repositories.
+	Source         string
+	FileError      string
+	Verification   []Command
+	Setup          []Command
+	Recipe         string
+	Evidence       []string // Human-readable reasons, e.g. "go.mod", "package.json scripts (pnpm)".
 }
 
 // Wanted lists the root files Inspect reads; every other file only matters
@@ -124,6 +125,7 @@ func detect(files []string, contents map[string][]byte) Result {
 		}
 		if json.Unmarshal(data, &pkg) == nil {
 			pm, install := nodeManager(has, pkg.PackageManager)
+			r.PackageManager = pm
 			found := []string{}
 			for _, script := range []string{"test", "lint", "typecheck"} {
 				body := strings.TrimSpace(pkg.Scripts[script])

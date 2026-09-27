@@ -29,6 +29,7 @@ type RunTask struct {
 	Instructions    []FrozenFile
 	Skills          []FrozenFile
 	Kind            string
+	ReviewMode      string
 	LoopWith        string // Set only on a stage that owns a loop.
 	MaxCycles       int32  // Loop cap including human-granted raises.
 	LoopCycles      int32  // Corrections the loop has requested.
@@ -107,7 +108,7 @@ func (s *Store) ListRunTasks(ctx context.Context, orgID, runID string) ([]RunTas
 					continue
 				}
 				found = true
-				task.Kind = stage.Kind
+				task.Kind, task.ReviewMode = stage.Kind, stage.Mode
 				if stage.Loop != nil {
 					count := loops[stage.ID]
 					task.LoopWith, task.MaxCycles, task.LoopCycles = stage.Loop.With, int32(stage.Loop.MaxCycles)+count.granted, count.used

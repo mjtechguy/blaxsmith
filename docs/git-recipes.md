@@ -1,156 +1,89 @@
-# Git-backed Guild recipes: first implementation
+# Factory-neutral recipes
 
-Git stores authorable inputs: recipe definitions, explicit tool/model/effort
-profiles, prompts, skills, repository instructions, specifications, and interview
-transcripts. A recipe does not contain a particular ticket's specification:
-`check`/`freeze` bind those separate inputs so the same team recipe can be reused.
+Blaxsmith owns admission, authorization, immutable inputs, task ownership, AX dispatch, evidence and acceptance. AX remains the execution engine. A factory produces recipe content and chooses a workflow; it cannot grant itself access or redefine platform evidence.
 
-The platform will own tenants, RBAC, approved versions, connections, grants,
-bindings, leases, live workflow state, conversations, check policy, and final
-human decisions. A Git commit is provenance, not authorization. A compiled
-bundle is not a run or an approval, and its digest is not a signature.
+Anvil is the default factory starter. Guild is an optional integration, imported explicitly. Both use the same `blaxsmith.recipe/v1alpha1` contract, freezer, scheduler, API and workers. There is no factory-specific compatibility path.
 
-## Working commands
-
-Requires Go 1.27.1, Git, and Python 3.10+. No Go dependencies are added.
+## Run a recipe
 
 ```sh
-make check
-make build
-make example
-
-./bin/blaxsmith freeze \
-  --repo . --ref HEAD \
-  --recipe examples/guild/recipe.json \
-  --spec examples/guild/spec.md \
-  --transcript examples/guild/transcript.md \
-  --scope examples/guild > /tmp/blaxsmith-bundle.json
+go run ./cmd/blaxsmith check --recipe examples/anvil/recipe.json --scope .
+go run ./cmd/blaxsmith freeze --recipe examples/anvil/recipe.json --scope . > /tmp/anvil-bundle.json
+# Optional Guild integration, explicitly declared by this recipe:
+go run ./cmd/blaxsmith check --recipe examples/guild/recipe.json --scope examples/guild
 ```
 
-Only committed files at the selected ref are read. Commit your recipe changes
-before checking them. The compiler resolves the ref once and then reads Git
-objects directly; dirty files, branch movement after resolution, Git replacement
-objects, and checkout filters cannot change those selected bytes. It does not
-fetch missing objects, execute recipe commands, or start any agent tool.
+The CLI reads committed files at `--ref` (HEAD by default), not working-tree changes. Native freezing needs Go and Git. The optional Guild Forge validator additionally needs Python. Example model selections must be adjusted to approved runtimes and account access before launch.
 
-The example's transcript is synthetic test data, not a record of user decisions.
-Model names and effort values are explicit example settings, not claims about
-availability in an account. Adapter preflight must eventually validate the exact
-combination and return a blocker when unsupported; no automatic substitution.
+## Contract
 
-## Recipe contract
+A recipe supplies:
 
-`blaxsmith.recipe/v1alpha1` is a deliberately provisional JSON format, implemented
-in `internal/recipe`. Unknown fields and duplicate JSON keys fail validation.
-Paths are relative to the repository root. Profiles select a harness, model,
-effort, and explicit instruction/skill files. A skill with supporting files must
-list each file; the compiler does not infer Markdown imports or execute hooks.
+- `profiles`: explicit harness, model, effort, instruction and skill paths. Supported harnesses are Claude Code, Codex and OpenCode. OpenCode uses provider/model identifiers.
+- `stages`: named tasks, prompt paths and acyclic dependencies. The factory chooses whether to include planning, interviews, reviews and checks. The engine does not impose an architect review sequence.
+- `documents`: optional repository-relative context files, available to every stage. Use profile instructions for stage-specific context.
+- `validation`: optional installed validator ID and named input paths. Unknown validators fail closed. No validator is inferred from a factory name or attempted as a fallback.
+- `factory`: optional ID/version attribution. It grants no authority and does not select executable code.
+- `required_checks`: names that must be required in the frozen project policy, or required extension gates. An empty list is valid.
+- `acceptance`: explicitly `manual` or `policy`.
+- `limits`: 0–10 correction cycles (0 permits one attempt per stage), idle timeout, and optional total runtime cap.
 
-Supported stage kinds are `plan`, `implement`, `review`, `verify`,
-`architect_review`, `human_review`, `research`, `integrate`, `ui_review`, and
-`documentation`. Dependencies form an acyclic graph. Planning must precede each
-implementation; review and verification must follow it. All agent work must
-precede the single final architect review, which precedes the single human
-review. Human review has no agent profile or prompt. Multiple implement/review
-stages and parallel review/verification are supported by the graph.
+For example, the Guild integration declares:
 
-Profiles accept `claude-code`, `codex`, and `opencode`, matching the updated launch
-scope. OpenCode requires an explicit `provider/model` identifier. The companion
-`examples/guild/recipe-opencode.json` keeps Claude planning and Codex implementation
-and selects an OpenCode reviewer. Its `example-provider/example-model` and
-`provider-default` effort are fixture values to replace with a verified selection.
-This compiler is harness-independent; actual launch adapters and the recent-version
-installation catalog are not implemented. Compilation proves input validity, not
-model availability, authentication, or runtime compatibility. Native Grok remains
-outside the initial adapter scope.
+```json
+"validation": {
+  "id": "guild-forge",
+  "inputs": {
+    "spec": "docs/spec.md",
+    "transcript": "docs/interview.md"
+  }
+}
+```
 
-Limits are explicit: 1–10 correction cycles and 1–86400 timeout seconds. These
-are initial compiler bounds, not measured workflow defaults. The graph captures
-the forward path; correction dispatch, retries, per-stage usage budgets,
-escalations, and adjudication are still controller work. The compiler validates
-limits but cannot enforce elapsed execution time because it starts no execution.
+The platform freezes those files and invokes the validator installed by the application composition layer. The result records its ID, source revision, validator digest and report. The recipe/workflow/dispatch packages import neither Guild nor Anvil. Other factories can produce recipes without adding a validator. A new trusted validator is registered in the application, never executed from arbitrary repository code.
 
-`required_checks` contains names, never executable shell commands. Future launch
-admission must merge them with mandatory organization/project policy and freeze
-the resolved trusted check definitions separately. The recipe cannot establish
-the authority to modify tests, waive failures, or publish a candidate.
+## User-selected quality
 
-## Frozen bundle
+Project checks use `required`, `advisory` or `off`. Required failures block completion and acceptance; advisory failures are preserved as findings; off checks are not executed. An explicitly saved empty policy selects no automated checks. Recipe requirements cannot be downgraded by an advisory/off project check. Active project checks require a verify stage downstream of implementation.
 
-`blaxsmith.bundle/v1alpha1` records the full source commit, recipe/spec/transcript
-paths, source scope, parsed recipe, deterministic stage order, and sorted
-artifacts. Every artifact has its original bytes encoded as JSON base64 and a
-SHA-256 digest. Included artifacts are:
+Review stages can use `mode: "advisory"` or `mode: "required"` (the default). Omit a review stage to turn it off. Advisory reviews cannot own mandatory correction loops and cannot waive required extension evidence. Verification uses the platform runner and frozen argv, with no model invocation. Its runtime profile still supplies the approved sandbox configuration.
 
-- Recipe, specification, and transcript.
-- Every declared stage prompt and profile instruction/skill file.
-- Root and ancestor `AGENTS.md` files plus nested `AGENTS.md` within the selected
-  scope. Paths remain intact so nested instructions retain their directory scope;
-  an adapter must not apply every nested instruction globally.
+Every completed run gets an immutable evidence package. Manual acceptance awaits a human decision; policy acceptance records that the user-selected requirements were satisfied. Policy acceptance never fabricates a human approval and grants no merge/deploy authority. Empty/off checks are not claimed as passing tests. Required evidence is checked against the current attempt, candidate revision and frozen policy.
 
-The pinned Guild Forge validator runs over the frozen specification and
-transcript. Its exact source revision, content hash, and output accompany the
-bundle. Failure prevents bundle output. Upstream v2.0 compatibility warnings are
-retained; the example exercises v2.1's stricter typed-table checks. This gate
-checks specification fidelity and coverage, not implementation correctness.
+## Integration through the API
 
-The bundle digest is SHA-256 over Go `encoding/json.Marshal` of the bundle with
-the `digest` field omitted. Artifact order is lexical; dependency ordering uses
-declaration order for ties; timestamps and local filesystem paths are absent.
-For cross-language consumption, define a standard canonical encoding before
-making this alpha digest a public API or signing format. Keep source commit and
-per-file hashes regardless of later serialization changes.
+1. Configure the project source, approved runtime/model access and verification policy.
+2. Commit prompts/documents/skills, or create an immutable recipe library version whose referenced files are committed.
+3. Validate with RecipeService.ValidateRecipe. This validates structure; launch freezes actual files and performs integration validation.
+4. Call WorkflowService.LaunchRun with project_id, launch_key, recipe_path **or** recipe_version_id, and scope. Document paths belong in the recipe, not launch arguments.
+5. Read run/task state, events, interactions, immutable evidence and the current review package through the existing services. Package acceptance_mode distinguishes policy acceptance from a manual decision.
 
-Compiler limits: 64 stages, 256 artifacts, 1 MiB per artifact, 16 MiB of artifact
-content. Selected artifacts must be regular UTF-8 text without NUL bytes.
-Symlink artifacts, unresolved LFS pointers, path traversal, and submodules in
-scope are rejected. Code files themselves are referenced through the source
-commit, not copied into the instruction bundle. Git refs must be retained by
-future artifact retention; a digest alone does not keep a repository available.
+The browser and generated Go/TypeScript clients use these same operations. Existing browser authentication/CSRF and resource grants remain enforced. Project-scoped machine credentials and the MCP stdio bridge use the same stores; see [machine API and MCP](machine-api-and-mcp.md). Worker bx tools remain attempt-scoped.
 
-## What follows
+## Frozen inputs and safety boundaries
 
-The first slice binds all inputs from one repository and one commit. Add managed
-recipe repositories and separate project commits when the platform importer and
-version policy exist; retain an independent revision and digest for each source.
-UI editing should export the same versioned representation and show its diff.
-An edit creates a new version and cannot retune an active run.
+The bundle records the source commit, recipe path, scope, parsed recipe, deterministic stage order, optional validator result and sorted artifacts with exact bytes and SHA-256 digests. Documents, validator inputs, prompts, declared instructions/skills and applicable AGENTS.md files are frozen. Mutating a selected profile, factory attribution, policy or document changes provenance. Editing a library recipe creates a new version; active runs do not change.
 
-Before dispatch, Blaxsmith still needs authenticated admission, approved recipe
-and profile versions, frozen check policy, Connection → Grant → Binding → Lease,
-capability validation, and AX assignment/result contracts. Repository text cannot
-grant those capabilities. Do not put credentials into recipes or prompt files:
-the current compiler preserves selected bytes and is not a secret scanner.
+The compiler rejects unknown/duplicate JSON fields, invalid dependency graphs, path traversal, symlink artifacts, unresolved LFS pointers and submodules in scope. Limits are 64 stages, 256 files, 1 MiB per artifact and 16 MiB total. A digest identifies bytes; it is not authorization or proof that code passed checks.
 
-Recipe experiments will use the same frozen project/spec/check inputs, with
-separately versioned profile or stage changes. Quality comparisons, isolated
-execution, and the final human gate belong to the platform, not Git hooks.
+Anvil is seeded for new organizations and granted to members, admins and owners. Seed replay never restores a revoked grant. The migration adds Anvil to existing organizations without rewriting their saved versions or grants. Guild is not seeded for newly created organizations.
 
-## Managed recipe library
+## Discovery and optional launch preview
 
-Recipes can also live in PostgreSQL (`RecipeService`, migration
-`0060_recipe_library.sql`). A recipe is organization-scoped or project-scoped;
-each version is immutable validated JSON stored as exact bytes with its SHA-256,
-author, and a repository-relative *frozen path label*. A trigger rejects any
-update or delete of a version, and a check constraint ties the digest to the
-bytes. One version per recipe is marked current; changing it affects only new
-runs.
+`WorkflowService.GetPlatformCapabilities` reports the recipe schema, supported harnesses, acceptance/check modes, and stage limits. This describes implemented platform support, not a caller's model grants or current runtime readiness.
 
-Launching from a version freezes its bytes under the path label exactly as a
-committed file at that path would be frozen (`recipe.Input.RecipeData`), so the
-bundle digest and downstream engine are unchanged. Prompts, skills, the spec,
-the transcript, and `AGENTS.md` still come from the project's commit. The run
-also records `workflow_runs.recipe_version_id`. The seeded "Guild engineering"
-recipe uses the label `examples/guild/recipe.json`, so it freezes to the same
-digest as the committed example.
+`WorkflowService.PreviewRun` accepts `project_id`, exactly one of `recipe_path` or `recipe_version_id`, and `scope`. It fetches the configured Git source, resolves the same recipe and extension grants as launch, and returns the source commit, resolved recipe, ordered stages, frozen input paths/digests, selected checks, and readiness blockers. It creates no run and starts no worker. Browser sessions and CSRF are required because preview uses private source credentials and checks runtime readiness.
 
-Seeding happens in the migration: existing organizations are seeded when it
-runs and an `identity_organizations` insert trigger seeds new ones (including
-first-owner bootstrap after startup). The per-scope unique name makes it
-idempotent. A startup seed would miss organizations created while running.
+The launch screen renders selectable stage cards with execution details, acceptance, checks and frozen inputs. Preview is optional. If used, `LaunchRun.expected_bundle_sha256` and `expected_verification_sha256` must be supplied together. A changed source, recipe, scope, input artifact, or check policy rejects admission (`aborted` for mismatched digests). Invalid policies still fail validation. Refresh the preview or explicitly dismiss it to launch without these pins. Admission always rechecks live authority, project settings and installed extensions; a preview is never an approval token.
 
-Any organization role reads recipes. Owners and admins edit organization
-recipes and, since there are no project-level roles, project recipes too. A
-project sees its own recipes plus organization recipes that `CanUse` allows;
-until lane U's `access.CanUse` is wired in, every organization recipe is usable
-by every project in the organization.
+Readiness is a snapshot. A disconnected dispatcher or missing model/worker/egress setup prevents readiness, but the resolved recipe can still be inspected. Invalid recipe/source inputs return a request error. These endpoints also accept scoped credentials on the separate machine API surface; browser sessions retain CSRF enforcement.
+
+## Current execution limits
+
+The run branch transport supports one implement stage per run; unsupported multi-writer graphs are rejected explicitly. Other stages may form a DAG, including parallel reviews. A future multi-branch integration capability must define candidate composition and fresh verification before this restriction is lifted. Human request-changes currently targets the implement stage, so review-only runs can be approved but cannot request an implementation repair. Extension execution remains limited to the capabilities documented in extensions-and-runtimes.md.
+
+This change does not migrate the AX runtime pin or claim live AX qualification. The Anvil starter is an executable starting workflow; the full interview, planning, model-routing and long-goal factory remains the separate Anvil implementation plan.
+
+The native [goal workspace](goal-workspace.md) now owns briefs, context messages, and starter-question decisions before a run exists. Saved context and versioned plans compile into immutable task packets through [native execution](anvil-execution.md). [Scoped project inputs](project-inputs.md) add shared stack profiles, rules, and agent definitions for any factory.
+
+A profile may include `"connection": "<exact model connection ID>"` to pin its billing account. The initiating principal must hold the applicable personal grant or the project must select that workload grant. Revocation, ownership change or a missing matching grant stops dispatch; the platform never falls back to a different account for a pinned profile. Omit this field to use the documented personal-first/project grant selection. Account pinning grants no new authority.

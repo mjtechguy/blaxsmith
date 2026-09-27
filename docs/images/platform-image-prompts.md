@@ -1,0 +1,11 @@
+# Platform illustration prompts
+
+Generated on 2026-09-24 with the built-in GPT Image tool. The images are conceptual illustrations, not deployment evidence.
+
+## platform-architecture.png
+
+Use case: infographic-diagram. Create a polished landscape engineering architecture illustration for a Markdown document about Blaxsmith, AX and Substrate. Clean restrained technical editorial design with legible typography, generous spacing, white background. Three stacked layers, exact labels: "Blaxsmith" with subtitle "Engineering workflow and authority"; "AX" with subtitle "Execution orchestration"; "Substrate" with subtitle "Sandbox runtime". Above the stack show a human engineering team reviewing work. Beside the top layer show small symbols for recipes, access policy, evidence and review. Bottom layer contains three separated sandbox blocks with labels "Claude Code", "Codex", "OpenCode". Communicate that coding tools run inside sandboxes and Blaxsmith directs work through AX. Footer exact text "Conceptual architecture". No claims of production readiness, no invented dashboards, no vendor logos, no additional text. This is an overview illustration; avoid detailed protocol arrows.
+
+## engineering-workflow.png
+
+Use case: infographic-diagram. Create a polished wide landscape editorial illustration for an engineering architecture document about Blaxsmith. White background, restrained blue, amber and sage palette, fine dark outlines, generous spacing, clear readable typography. Five connected illustrated stations left to right with exact labels: "Define intent", "Compose team", "Run and steer", "Inspect evidence", "Human review". Human engineer with specification at station 1; role cards at station 2; separated sandbox cubes with small agent symbols and a human interaction bubble at station 3; code diff and test report at station 4; human reviewer at station 5. Title exact text "Blaxsmith engineering workflow". Footer exact text "Intended product workflow". At final station two arrows labeled "Approve" and "Request changes"; Request changes loops back toward Run and steer. Approve ends at a small document marked "PR / MR". No merge or production deployment shown. No invented UI screenshots, vendor logos, extra text, or production readiness claims. Keep all five stations readable and cohesive.

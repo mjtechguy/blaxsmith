@@ -10,7 +10,7 @@ RUN printf '%s\n' \
       > /etc/apt/sources.list \
     && rm -f /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates tmux bsdutils \
+    && apt-get install -y --no-install-recommends git ca-certificates tmux bsdutils util-linux \
     && rm -rf /var/lib/apt/lists/* \
     && tmux -V | awk '{ split($2, v, "."); if (v[1] < 3 || (v[1] == 3 && v[2] + 0 < 2)) { print "tmux 3.2+ required (attach -f ignore-size), got " $0; exit 1 } }' \
     && script --version

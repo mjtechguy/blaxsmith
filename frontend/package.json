@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@bufbuild/buf": "1.73.0",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/router-plugin": "1.168.37",
     "@types/react": "19.3.0",

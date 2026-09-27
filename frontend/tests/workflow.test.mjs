@@ -115,3 +115,100 @@ test("session scope change removes cached run activity", async () => {
     globalThis.window = previousWindow;
   }
 });
+
+test("goal writes send CSRF, retry keys, and exact revisions; reads carry cursors", async () => {
+  const previousWindow = globalThis.window, previousFetch = globalThis.fetch;
+  globalThis.window = { location: { origin: "https://blaxsmith.test" } };
+  const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: "custom" });
+  let request;
+  globalThis.fetch = async (input, init) => {
+    if (String(input).endsWith("/GetCsrf")) return new Response(JSON.stringify({ token: "A".repeat(43) }), { headers: { "content-type": "application/json" } });
+    request = { body: JSON.parse(new TextDecoder().decode(init.body)), csrf: new Headers(init.headers).get("X-Blaxsmith-CSRF") };
+    return new Response("{}", { headers: { "content-type": "application/json" } });
+  };
+  try {
+    const goals = await server.ssrLoadModule("/src/goals.ts");
+    await goals.createGoal("project", "retry-create", "Title", "Brief");
+    assert.equal(request.csrf, "A".repeat(43));
+    assert.deepEqual(request.body, { projectId: "project", requestKey: "retry-create", title: "Title", brief: "Brief" });
+    await goals.replyGoal({ goalId: "goal", requestKey: "retry-answer", expectedRevision: 7n, kind: "answer", questionId: "depth", optionIds: ["focused"], text: "Small scope" });
+    assert.equal(request.csrf, "A".repeat(43));
+    assert.equal(request.body.expectedRevision, "7");
+    assert.equal(request.body.requestKey, "retry-answer");
+    await goals.getGoal("goal", 40n);
+    assert.equal(request.csrf, null);
+    assert.deepEqual(request.body, { goalId: "goal", beforeSequence: "40" });
+    await goals.startGoalPlanning({ goalId: "goal", expectedRevision: 7n, requestKey: "plan-retry", harness: "codex", model: "test-model", effort: "medium", scope: ".", runtimeSeconds: 900, instructionFiles: ["docs/stack.md"], skillFiles: ["skills/testing/SKILL.md"] });
+    assert.equal(request.csrf, "A".repeat(43));
+    assert.equal(request.body.expectedRevision, "7");
+    assert.equal(request.body.runtimeSeconds, 900);
+    assert.deepEqual(request.body.instructionFiles, ["docs/stack.md"]);
+    assert.deepEqual(request.body.skillFiles, ["skills/testing/SKILL.md"]);
+    await goals.saveGoalPlan({ goalId: "goal", requestKey: "save-retry", expectedGoalRevision: 7n, expectedPlanVersion: 2n, evidenceId: "artifact" });
+    assert.equal(request.csrf, "A".repeat(43));
+    assert.equal(request.body.expectedPlanVersion, "2");
+    assert.equal(request.body.evidenceId, "artifact");
+    await goals.getGoalPlans("goal", 20n);
+    assert.equal(request.csrf, null);
+    assert.deepEqual(request.body, { goalId: "goal", beforeVersion: "20" });
+    const execution = { goalId: "goal", expectedGoalRevision: 7n, planVersion: 2n, harness: "codex", model: "test-model", effort: "medium", runtimeSeconds: 900, correctionCycles: 2, acceptance: "policy", instructionFiles: ["docs/architecture.md"], skillFiles: ["skills/testing/SKILL.md", "skills/testing/checks.md"] };
+    await goals.previewGoalExecution("project", ".", execution);
+    assert.equal(request.csrf, "A".repeat(43));
+    assert.equal(request.body.goalExecution.planVersion, "2");
+    assert.equal(request.body.goalExecution.acceptance, "policy");
+    assert.deepEqual(request.body.goalExecution.instructionFiles, execution.instructionFiles);
+    assert.deepEqual(request.body.goalExecution.skillFiles, execution.skillFiles);
+    await goals.launchGoalExecution("project", "execution-retry", ".", execution, { bundleSha256: "a".repeat(64), verificationSha256: "b".repeat(64) });
+    assert.equal(request.csrf, "A".repeat(43));
+    assert.equal(request.body.launchKey, "execution-retry");
+    assert.equal(request.body.expectedBundleSha256, "a".repeat(64));
+    assert.equal(request.body.expectedVerificationSha256, "b".repeat(64));
+    assert.equal(request.body.goalExecution.expectedGoalRevision, "7");
+    assert.deepEqual(request.body.goalExecution.instructionFiles, execution.instructionFiles);
+    assert.deepEqual(request.body.goalExecution.skillFiles, execution.skillFiles);
+    await goals.listGoals("project", "older");
+    assert.deepEqual(request.body, { projectId: "project", beforeId: "older" });
+  } finally {
+    await server.close(); globalThis.window = previousWindow; globalThis.fetch = previousFetch;
+  }
+});
+
+test("visual plan edits preserve IDs, citations, multiline criteria and unrelated assignments", async () => {
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { PlanEditor } = await server.ssrLoadModule("/src/plan-editor.tsx");
+    const task = (id) => ({ id, title: id, phase: "P1", reason: "Preserve behavior", instructions: "Inspect callers", depends_on: null, requirement_ids: ["R1"], acceptance: ["First line\nSecond line"], validation: null });
+    const original = { schema_version: "anvil.plan/v1alpha1", title: "Saved search", summary: "Retain user settings", assumptions: null, out_of_scope: [], open_questions: [], phases: [{ id: "P1", title: "Deliver", outcome: "Working search" }], requirements: [{ id: "R1", description: "Reload restores settings", sources: ["brief", "message:2"], examples: ["Reload the page"] }], tasks: [task("T1"), task("T2")] };
+    let value = structuredClone(original);
+    function* nodes(node) {
+      if (!node || typeof node !== "object") return;
+      if (Array.isArray(node)) { for (const child of node) yield* nodes(child); return; }
+      if (typeof node.type === "function") { yield* nodes(node.type(node.props)); return; }
+      yield node;
+      yield* nodes(node.props?.children);
+    }
+    const text = (node) => Array.isArray(node) ? node.map(text).join("") : typeof node === "object" ? text(node?.props?.children ?? "") : String(node ?? "");
+    const tree = () => [...nodes(PlanEditor({ value, onChange: (next) => { value = next; } }))];
+    const field = (label) => {
+      const parent = tree().find((n) => n.type === "label" && text(n.props.children?.[0]) === label);
+      assert.ok(parent, `labelled field ${label}`);
+      return parent.props.children[1];
+    };
+    field("T1 instructions").props.onChange({ target: { value: "Read callers.\nPreserve errors." } });
+    field("T1 acceptance criteria 1").props.onChange({ target: { value: "Reload succeeds\nInvalid input keeps prior settings" } });
+    tree().find((n) => n.type === "button" && text(n) === "Add t1 acceptance criteria item").props.onClick();
+    field("T1 acceptance criteria 2").props.onChange({ target: { value: "Keyboard flow works" } });
+    tree().find((n) => n.type === "input" && n.props.type === "checkbox").props.onChange({ target: { checked: true } });
+    field("R1 examples 1").props.onChange({ target: { value: "Save filters, reload, restore" } });
+    const saved = JSON.parse(JSON.stringify(value));
+    assert.equal(saved.tasks[0].instructions, "Read callers.\nPreserve errors.");
+    assert.deepEqual(saved.tasks[0].acceptance, ["Reload succeeds\nInvalid input keeps prior settings", "Keyboard flow works"]);
+    assert.deepEqual(saved.tasks[0].depends_on, ["T2"]);
+    assert.deepEqual(saved.tasks[1], original.tasks[1]);
+    assert.deepEqual(saved.requirements[0].sources, original.requirements[0].sources);
+    assert.deepEqual(saved.phases, original.phases);
+    assert.deepEqual(saved.requirements[0].examples, ["Save filters, reload, restore"]);
+    assert.equal(original.tasks[0].instructions, "Inspect callers");
+    assert.equal(saved.assumptions, null);
+  } finally { await server.close(); }
+});

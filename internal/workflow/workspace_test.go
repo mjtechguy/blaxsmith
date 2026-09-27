@@ -39,8 +39,9 @@ func TestWorkspaceViewsAreScopedRoleAwareAndPaged(t *testing.T) {
 	}
 	newRun := func(orgID, project, key string) (Run, string) {
 		t.Helper()
+		bundleJSON, bundleSHA := reviewTestBundle("build")
 		input := RunInput{OrganizationID: orgID, ProjectID: project, LaunchKey: key,
-			SourceCommit: strings.Repeat("a", 40), BundleSHA256: strings.Repeat("b", 64), VerificationSHA256: strings.Repeat("c", 64)}
+			SourceCommit: strings.Repeat("a", 40), BundleSHA256: bundleSHA, VerificationSHA256: sha([]byte(reviewTestPolicy))}
 		run, err := store.CreateRun(ctx, input)
 		if err != nil {
 			t.Fatal(err)
@@ -50,8 +51,8 @@ func TestWorkspaceViewsAreScopedRoleAwareAndPaged(t *testing.T) {
 			t.Fatal(err)
 		}
 		if _, err := pool.Exec(ctx, `INSERT INTO workflow_run_bundles (organization_id,run_id,bundle_json,verification_json)
-			VALUES ($1,$2,$3::jsonb,'{}')`, orgID, run.ID,
-			`{"recipe":{"profiles":{"p":{"harness":"codex","model":"gpt-5"}},"stages":[{"id":"build","kind":"implement","profile":"p"}]}}`); err != nil {
+			VALUES ($1,$2,$3::jsonb,$4::jsonb)`, orgID, run.ID,
+			bundleJSON, reviewTestPolicy); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`,
@@ -101,11 +102,13 @@ func TestWorkspaceViewsAreScopedRoleAwareAndPaged(t *testing.T) {
 		org, review.ID, decided.ID, done.ID)
 	exec(`UPDATE workflow_runs SET state='failed' WHERE organization_id=$1 AND id=$2`, org, failed.ID)
 	exec(`UPDATE workflow_tasks SET state='escalated' WHERE organization_id=$1 AND id=$2`, org, escalatedTask)
-	pkg, err := store.PresentForReview(ctx, org, review.ID, strings.Repeat("d", 40), strings.Repeat("e", 64), strings.Repeat("c", 64))
+	seedReviewProof(t, pool, org, review.ID, strings.Repeat("d", 40))
+	pkg, err := store.PresentForReview(ctx, org, review.ID, strings.Repeat("d", 40), strings.Repeat("e", 64), sha([]byte(reviewTestPolicy)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	decidedPkg, err := store.PresentForReview(ctx, org, decided.ID, strings.Repeat("d", 40), strings.Repeat("e", 64), strings.Repeat("c", 64))
+	seedReviewProof(t, pool, org, decided.ID, strings.Repeat("d", 40))
+	decidedPkg, err := store.PresentForReview(ctx, org, decided.ID, strings.Repeat("d", 40), strings.Repeat("e", 64), sha([]byte(reviewTestPolicy)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +318,7 @@ func TestWorkspaceRunStatusFallsBackToRunState(t *testing.T) {
 	newRun := func(key, state, taskState string) {
 		t.Helper()
 		input := RunInput{OrganizationID: org, ProjectID: project, LaunchKey: key,
-			SourceCommit: strings.Repeat("a", 40), BundleSHA256: strings.Repeat("b", 64), VerificationSHA256: strings.Repeat("c", 64)}
+			SourceCommit: strings.Repeat("a", 40), BundleSHA256: strings.Repeat("b", 64), VerificationSHA256: sha([]byte(reviewTestPolicy))}
 		run, err := store.CreateRun(ctx, input)
 		if err != nil {
 			t.Fatal(err)

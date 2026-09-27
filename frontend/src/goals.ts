@@ -1,0 +1,30 @@
+import { createClient } from "@connectrpc/connect";
+import { browserTransport, csrfToken } from "./auth";
+import { WorkflowService } from "./gen/blaxsmith/api/v1/workflow_pb";
+const client = createClient(WorkflowService, browserTransport);
+const csrf = async () => ({ headers: { "X-Blaxsmith-CSRF": await csrfToken() } });
+export const goalsKey = (scope: string, project: string) => ["goals", scope, project] as const;
+export const goalKey = (scope: string, goal: string) => ["goal", scope, goal] as const;
+export const listGoals = (projectId: string, beforeId = "", signal?: AbortSignal) => client.listGoals({ projectId, beforeId }, { signal });
+export const getGoal = (goalId: string, beforeSequence = 0n, signal?: AbortSignal) => client.getGoal({ goalId, beforeSequence }, { signal });
+export const createGoal = async (projectId: string, requestKey: string, title: string, brief: string) => client.createGoal({ projectId, requestKey, title, brief }, await csrf());
+export type GoalReply = { goalId: string; requestKey: string; expectedRevision: bigint; kind: string; questionId?: string; optionIds?: string[]; text?: string };
+export const replyGoal = async (reply: GoalReply) => client.replyGoal(reply, await csrf());
+export const goalPlansKey = (scope: string, goal: string) => ["goal-plans", scope, goal] as const;
+export const getGoalPlans = (goalId: string, beforeVersion = 0n, signal?: AbortSignal) => client.getGoalPlans({ goalId, beforeVersion }, { signal });
+export type PlanningInput = { goalId: string; expectedRevision: bigint; requestKey: string; harness: string; model: string; effort: string; connectionId?: string; scope: string; runtimeSeconds: number; instructionFiles?: string[]; skillFiles?: string[]; inputsFile?: string; agentDefinition?: string };
+export const startGoalPlanning = async (input: PlanningInput) => client.startGoalPlanning(input, await csrf());
+export type PlanInput = { goalId: string; requestKey: string; expectedGoalRevision: bigint; expectedPlanVersion: bigint; contentJson?: string; evidenceId?: string };
+export const saveGoalPlan = async (input: PlanInput) => client.saveGoalPlan(input, await csrf());
+export type GoalExecutionInput = Omit<PlanningInput, "requestKey" | "expectedRevision" | "scope"> & { checkpointId?: string; expectedGoalRevision: bigint; planVersion: bigint; correctionCycles: number; acceptance: string; readinessMode?: string; review?: { mode: string; harness: string; model: string; effort: string; connectionId?: string; instructionFiles?: string[]; skillFiles?: string[]; inputsFile?: string; agentDefinition?: string } };
+export const previewGoalExecution = async (projectId: string, scope: string, goalExecution: GoalExecutionInput) => client.previewRun({ projectId, scope, goalExecution }, await csrf());
+export const launchGoalExecution = async (projectId: string, launchKey: string, scope: string, goalExecution: GoalExecutionInput, preview: { bundleSha256: string; verificationSha256: string }) => client.launchRun({ projectId, launchKey, scope, goalExecution, expectedBundleSha256: preview.bundleSha256, expectedVerificationSha256: preview.verificationSha256 }, await csrf());
+export const goalAllowanceKey = (scope: string, goalId: string) => ["goal-allowance", scope, goalId] as const;
+export const getGoalAllowance = (goalId: string, signal?: AbortSignal) => client.getGoalAllowance({ goalId }, { signal });
+export const setGoalAllowance = async (input: { goalId: string; expectedVersion: bigint; maxRuns: number; maxAttempts: number; admitUntil: string; maxRepeatedCheckFailures: number; noProgressSeconds: number; resetStallWindow: boolean }) => client.setGoalAllowance(input, await csrf());
+
+export const goalControlKey = (scope: string, goalId: string) => ["goal-control", scope, goalId] as const;
+export const getGoalControl = (goalId: string, signal?: AbortSignal) => client.getGoalControl({ goalId }, { signal });
+export const controlGoal = async (input: { goalId: string; action: string; expectedVersion: bigint; requestKey: string }) => client.controlGoal(input, await csrf());
+
+export const getProjectModelOptions = (projectId: string, harness: string, signal?: AbortSignal) => client.getProjectModelOptions({ projectId, harness }, { signal });

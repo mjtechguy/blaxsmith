@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package blaxsmith.api.v1;
 
+import "blaxsmith/api/v1/connections.proto";
+
 message Project {
   string id = 1;
   string slug = 2;
@@ -84,20 +86,28 @@ message SetProjectSourceResponse { ProjectSource source = 1; }
 message VerificationCheck {
   string id = 1;
   repeated string command = 2;
+  repeated string trusted_paths = 3; // Files or directories that must match the frozen source revision.
+  string mode = 4; // required (default), advisory, or off.
+  string category = 5; // build, test, review, e2e, security, performance, or other.
 }
 message ProjectVerification {
   string project_id = 1;
   int64 version = 2;
   repeated VerificationCheck checks = 3;
   string updated_at = 4; // RFC 3339.
+  string preset = 5; // mvp, balanced, thorough, or custom.
 }
 message GetProjectVerificationRequest { string project_id = 1; }
 message GetProjectVerificationResponse { ProjectVerification verification = 1; }
 message SetProjectVerificationRequest {
   string project_id = 1;
   repeated VerificationCheck checks = 2;
+  int64 expected_version = 3; // Zero only when creating the first revision.
+  string preset = 4;
 }
 message SetProjectVerificationResponse { ProjectVerification verification = 1; }
+message ListProjectVerificationHistoryRequest { string project_id = 1; int64 before_version = 2; }
+message ListProjectVerificationHistoryResponse { repeated ProjectVerification revisions = 1; int64 next_before_version = 2; }
 
 // An organization-owned model connection and project grant. Credential bytes
 // are accepted only on creation and are never returned to the browser.
@@ -158,25 +168,279 @@ message ListProjectsResponse {
   string next_page_token = 2;
 }
 
+// A goal owns planning context before any run or attempt exists.
+message Goal {
+  string id = 1;
+  string project_id = 2;
+  string title = 3;
+  string brief = 4;
+  string factory_id = 5;
+  string factory_version = 6;
+  int64 revision = 7;
+  string created_by = 8;
+  string created_at = 9;
+  string updated_at = 10;
+  repeated Interaction questions = 11; // Current decisions; history is append-only.
+}
+message GoalEntry {
+  int64 sequence = 1;
+  string kind = 2; // message, answer, deferred. No implicit worker steering.
+  string question_id = 3;
+  repeated string option_ids = 4;
+  string text = 5;
+  string principal_id = 6;
+  string created_at = 7;
+}
+// Factory intake is data. It grants no tool, runtime or billing authority.
+message GoalQuestion {
+  string id = 1;
+  string title = 2;
+  string body_md = 3;
+  repeated InteractionOption options = 4;
+  bool multi_select = 5;
+  bool allow_free_text = 6;
+  bool blocking = 7;
+}
+message CreateGoalRequest {
+  string project_id = 1;
+  string request_key = 2;
+  string title = 3;
+  string brief = 4;
+  string factory_id = 5; // Empty selects shipped Anvil. External factories supply an explicit version.
+  string factory_version = 6;
+  repeated GoalQuestion questions = 7; // External factory intake, at most 16. Anvil supplies its own.
+}
+message CreateGoalResponse { Goal goal = 1; }
+message ListGoalsRequest { string project_id = 1; string before_id = 2; }
+message ListGoalsResponse { repeated Goal goals = 1; string next_before_id = 2; }
+message GetGoalRequest { string goal_id = 1; int64 before_sequence = 2; }
+message GetGoalResponse {
+  Goal goal = 1;
+  repeated GoalEntry entries = 2; // At most 50, in chronological order.
+  int64 next_before_sequence = 3; // Zero means no older entries.
+}
+message ReplyGoalRequest {
+  string goal_id = 1;
+  string request_key = 2; // Retry the same payload with the same key.
+  int64 expected_revision = 3; // An old tab cannot replace a newer decision.
+  string kind = 4; // message, answer, deferred (optional questions only).
+  string question_id = 5;
+  repeated string option_ids = 6;
+  string text = 7;
+}
+message ReplyGoalResponse {}
+
+message ProjectModelOption {
+ string connection_id = 1;
+ string label = 2;
+ string provider = 3;
+ string owner_kind = 4;
+ string auth_method = 5;
+ repeated ConnectionModel models = 6;
+ string checked_at = 7;
+ string catalog_error = 8;
+}
+message GetProjectModelOptionsRequest { string project_id = 1; string harness = 2; }
+message GetProjectModelOptionsResponse { repeated ProjectModelOption connections = 1; }
+
+message GoalControl {
+ string state = 1; // active, paused, cancel_requested, or confirmed cancelled.
+ int64 version = 2;
+ int64 active_runs = 3;
+ int64 stopping_runs = 4;
+}
+message GetGoalControlRequest { string goal_id = 1; }
+message GetGoalControlResponse { GoalControl control = 1; }
+message ControlGoalRequest {
+ string goal_id = 1;
+ string action = 2; // pause (drain), resume, or cancel (stop active runs).
+ int64 expected_version = 3;
+ string request_key = 4;
+}
+message ControlGoalResponse { int64 version = 1; }
+
+message GoalAllowance {
+ int64 version = 1;
+ int32 max_runs = 2; // Zero means no goal-specific run cap.
+ int32 max_attempts = 3; // Includes all stages/retries; zero means no goal-specific attempt cap.
+ string admit_until = 4; // RFC3339; empty means no admission deadline. Does not terminate live workers.
+ int64 runs = 5;
+ int64 attempts = 6;
+ bool admission_closed = 7; // Deadline or stall boundary reached; compare counts to run/attempt caps too.
+ string updated_at = 8;
+ string principal_id = 9;
+ int32 max_repeated_check_failures = 10; // Zero disables; otherwise 1–100 exact consecutive required-check failures.
+ int32 no_progress_seconds = 11; // Zero disables; otherwise 60–2592000 seconds without new accepted code or passing check evidence.
+ int64 repeated_check_failures = 12;
+ string last_progress_at = 13; // First run starts the timer. Activity/logs do not reset it.
+ string stall_reset_at = 15; // Explicit human recovery window; counts and history are retained.
+ string stall_reason = 14; // Advisory read; admission rechecks the persisted policy.
+}
+message GetGoalAllowanceRequest { string goal_id = 1; }
+message GetGoalAllowanceResponse { GoalAllowance allowance = 1; }
+message SetGoalAllowanceRequest {
+ string goal_id = 1;
+ int64 expected_version = 2;
+ int32 max_runs = 3;
+ int32 max_attempts = 4;
+ string admit_until = 5;
+ int32 max_repeated_check_failures = 6;
+ int32 no_progress_seconds = 7;
+ bool reset_stall_window = 8; // Explicit recovery; does not reset runs, attempts, usage or deadline.
+}
+message SetGoalAllowanceResponse {}
+
+message StartGoalPlanningRequest {
+  string goal_id = 1;
+  int64 expected_revision = 2;
+  string request_key = 3;
+  string harness = 4;
+  string model = 5;
+  string effort = 6;
+  string scope = 7;
+  int32 runtime_seconds = 8; // 60–3600, per stage; one attempt per stage.
+  repeated string instruction_files = 9; // Committed repository-relative rules; frozen with the run.
+  repeated string skill_files = 10; // Committed SKILL.md entry points and explicit support files; not tool grants.
+ string inputs_file = 11; // Committed blaxsmith.inputs/v1alpha1 configuration.
+ string agent_definition = 12; // Optional definition ID in inputs_file.
+ string connection_id = 13; // Optional exact model account; no automatic fallback.
+}
+message StartGoalPlanningResponse { Run run = 1; }
+message GoalRun { string id = 1; string state = 2; int64 goal_revision = 3; int64 plan_version = 4; string checkpoint_id = 5; }
+message GoalPlan {
+  int64 version = 1;
+  int64 goal_revision = 2;
+  string content_json = 3;
+  string sha256 = 4;
+  string source_run_id = 5;
+  string source_evidence_id = 6;
+  string created_at = 7;
+}
+message GetGoalPlansRequest { string goal_id = 1; int64 before_version = 2; }
+message GetGoalPlansResponse {
+  repeated GoalPlan plans = 1;
+  repeated GoalRun runs = 2; // Latest 20; full execution history is in Runs.
+  int64 next_before_version = 3;
+}
+message SaveGoalPlanRequest {
+  string goal_id = 1;
+  string request_key = 2;
+  int64 expected_goal_revision = 3;
+  int64 expected_plan_version = 4;
+  string content_json = 5; // Edited plan; mutually exclusive with evidence_id.
+  string evidence_id = 6; // Import the completed planner's immutable artifact.
+}
+message SaveGoalPlanResponse { int64 version = 1; }
+
+message GetDeliveryReportRequest { string run_id = 1; }
+message GetDeliveryReportResponse { string markdown = 1; string sha256 = 2; string generated_at = 3; }
 message GetRunRequest { string run_id = 1; }
 message GetRunResponse { Run run = 1; }
 
+// Anvil compiles this saved plan through the ordinary recipe/dispatch path.
+message GoalReviewOptions {
+  string mode = 1; // off (default), advisory, or required.
+  string harness = 2;
+  string model = 3;
+  string effort = 4;
+  repeated string instruction_files = 5;
+  repeated string skill_files = 6;
+ string inputs_file = 7;
+ string agent_definition = 8;
+ string connection_id = 9;
+}
+message GoalExecutionOptions {
+  string goal_id = 1;
+  int64 expected_goal_revision = 2;
+  int64 plan_version = 3;
+  string harness = 4;
+  string model = 5;
+  string effort = 6;
+  int32 runtime_seconds = 7; // 60–3600, per attempt/stage; not a spending cap.
+  int32 correction_cycles = 8; // 0–10; 0 permits one attempt per stage.
+  string acceptance = 9; // Explicit manual or policy; project checks remain unchanged.
+  repeated string instruction_files = 10; // Committed repository-relative rules; frozen with the run.
+  repeated string skill_files = 11; // Committed SKILL.md entry points and explicit support files; not tool grants.
+  GoalReviewOptions review = 12;
+ string inputs_file = 13;
+ string agent_definition = 14;
+ string connection_id = 16;
+ string checkpoint_id = 17; // Optional accepted checkpoint from this goal; exact source commit, rechecked at admission.
+ string readiness_mode = 15; // off, advisory (default), required; blocks unresolved planning questions only when required.
+}
+message ExecutionTaskPacket {
+  string task_id = 1;
+  string title = 2;
+  repeated string depends_on = 3;
+  string path = 4;
+  string sha256 = 5;
+  string content_json = 6; // Exact compiled assignment bytes frozen into the run.
+}
+// Bind an ordinary recipe to a factory-owned goal without invoking Anvil.
+message GoalContext {
+ string goal_id = 1;
+ int64 expected_revision = 2;
+ int64 plan_version = 3; // Zero for planning; a positive revision for execution.
+ string checkpoint_id = 4; // Optional accepted checkpoint from this goal; no implicit continuation.
+}
 message LaunchRunRequest {
   string project_id = 1;
   string launch_key = 2; // Project-scoped idempotency key.
   string recipe_path = 3; // Committed repository path.
-  string spec_path = 4; // Committed repository path.
-  string transcript_path = 5; // Committed repository path.
   string scope = 6; // Repository-relative code scope.
   // Library recipe version to freeze instead of recipe_path. Its bytes are
   // frozen under the version's path label; prompts and skills come from Git.
   string recipe_version_id = 7;
+  // Optional pair returned by PreviewRun. Admission rejects changed inputs.
+  string expected_bundle_sha256 = 8;
+  string expected_verification_sha256 = 9;
+  GoalExecutionOptions goal_execution = 10; // Exclusive with recipe path/version; requires both preview hashes.
+  GoalContext goal_context = 11; // Ordinary recipe binding; exclusive with goal_execution; requires preview hashes.
 }
 message LaunchRunResponse { Run run = 1; }
 message GetLaunchAvailabilityRequest { string project_id = 1; }
 message GetLaunchAvailabilityResponse {
   bool enabled = 1;
   string reason = 2; // Actionable when disabled; never contains secret material.
+}
+
+// Discovery describes platform support, not caller grants or runtime readiness.
+message GetPlatformCapabilitiesRequest {}
+message GetPlatformCapabilitiesResponse {
+  repeated string recipe_schemas = 1;
+  repeated string harnesses = 2;
+  repeated string acceptance_modes = 3;
+  repeated string check_modes = 4;
+  int32 max_stages = 5;
+  int32 max_implement_stages = 6;
+  bool launch_preview = 7;
+  bool machine_api = 8;
+  repeated string mcp_transports = 9;
+  repeated string api_scopes = 10;
+}
+message PreviewRunRequest {
+  string project_id = 1;
+  string recipe_path = 2;
+  string recipe_version_id = 3;
+  string scope = 4;
+  GoalExecutionOptions goal_execution = 5; // Exclusive with recipe path/version.
+  GoalContext goal_context = 6;
+}
+message PreviewRunResponse {
+  string source_commit = 1;
+  string bundle_sha256 = 2;
+  string verification_sha256 = 3;
+  // Resolved recipe includes extension stages. No prompt/artifact bytes.
+  string recipe_json = 4;
+  repeated string stage_order = 5;
+  repeated FrozenInputFile artifacts = 6;
+  repeated VerificationCheck checks = 7;
+  repeated string blockers = 8;
+  bool can_launch = 9; // Advisory snapshot; admission always rechecks.
+  repeated ExecutionTaskPacket task_packets = 10; // Instructions within one implementation stage.
+ string effective_inputs_json = 11; // Scoped, resolved guidance, keyed by profile; not authority.
+ string checkpoint_id = 13; // Source lineage included in the frozen bundle digest.
+ string repository_baseline_json = 12; // Observed setup and limitations; never passing test evidence.
 }
 
 message RunTask {
@@ -196,6 +460,7 @@ message RunTask {
   string loop_with = 14; // Correction target when this stage owns a loop.
   int32 max_cycles = 15; // Loop cap before escalation, including granted raises.
   int32 loop_cycles = 16; // Corrections this loop has requested so far.
+  string review_mode = 17; // required (default) or advisory for review stages.
   // Removed with the model gateway's stage pacing.
   reserved 30, 31;
   reserved "paced_reason", "paced_resets_at";
@@ -272,6 +537,7 @@ message ReviewPackage {
   string evidence_sha256 = 8;
   string presented_at = 9; // RFC 3339.
   ReviewDecision decision = 10;
+  string acceptance_mode = 11; // manual or policy; policy is accepted at presentation, never a human approval.
 }
 
 message GetCurrentReviewRequest { string run_id = 1; }
@@ -366,15 +632,143 @@ message TakeOverAttemptResponse { AttemptControl control = 1; }
 message HandBackAttemptRequest { string attempt_id = 1; }
 message HandBackAttemptResponse { AttemptControl control = 1; }
 
-// Browser requests derive their organization exclusively from a live session.
+message RunEvidence {
+  string id = 1;
+  string attempt_id = 2;
+  string stage = 3;
+  string kind = 4; // artifact, gate, or verification.
+  string key = 5;
+  string revision = 6;
+  string sha256 = 7;
+  string metadata_json = 8;
+  bool current = 9; // Belongs to the current running/succeeded stage attempt.
+}
+message ListRunEvidenceRequest { string run_id = 1; string after_id = 2; }
+message ListRunEvidenceResponse { repeated RunEvidence evidence = 1; string next_after_id = 2; }
+message GetEvidenceContentRequest { string run_id = 1; string evidence_id = 2; }
+message GetEvidenceContentResponse { bytes content = 1; string content_type = 2; }
+
+message ServicePrincipal {
+ string id = 1;
+ string project_id = 2;
+ string label = 3;
+ string state = 4;
+ string created_by = 5;
+ string created_at = 6;
+}
+message CreateServicePrincipalRequest { string project_id = 1; string label = 2; string request_key = 3; }
+message CreateServicePrincipalResponse { ServicePrincipal principal = 1; }
+message ListServicePrincipalsRequest { string project_id = 1; }
+message ListServicePrincipalsResponse { repeated ServicePrincipal principals = 1; }
+message DisableServicePrincipalRequest { string principal_id = 1; }
+message DisableServicePrincipalResponse {}
+
+message ApiToken {
+  string id = 1;
+  string project_id = 2;
+  string label = 3;
+  repeated string scopes = 4;
+  string expires_at = 5;
+  string revoked_at = 6;
+  string principal_id = 7;
+  string kind = 8; // api (delegated user) or service.
+  string resource = 9; // Nonempty for an OAuth credential restricted to this resource.
+}
+message CreateApiTokenRequest {
+  string project_id = 1;
+  string label = 2;
+  repeated string scopes = 3;
+  int32 lifetime_seconds = 4; // 3600 to 2592000.
+  string service_principal_id = 5; // Browser owner/admin only; empty delegates the caller.
+}
+message CreateApiTokenResponse {
+  ApiToken credential = 1;
+  string token = 2; // Returned once; only its digest is stored.
+}
+message ListApiTokensRequest { string project_id = 1; string service_principal_id = 2; }
+message ListApiTokensResponse { repeated ApiToken credentials = 1; }
+message RevokeApiTokenRequest { string token_id = 1; }
+message RevokeApiTokenResponse {}
+message DescribeMachineAccessRequest {}
+message DescribeMachineAccessResponse { ApiToken credential = 1; }
+
+// Browser and scoped machine requests resolve an authenticated caller.
+// Harness-reported subtotals. All attempts include retries and cancelled work.
+// Coverage is not proof of complete measurement. No provider billing/quota claim.
+message UsageSummary {
+ int64 attempts = 1;
+ int64 reported_attempts = 2;
+ int64 reports = 3;
+ int64 cost_reports = 4;
+ string input_tokens = 5; // Exact nonnegative decimal sum, includes cache.
+ string output_tokens = 6; // Exact nonnegative decimal sum, includes reasoning.
+ string cost_micros_usd = 7; // Reported estimate only; cost_reports=0 means unknown.
+}
+message GetRunUsageRequest { string run_id = 1; }
+message GetRunUsageResponse { UsageSummary usage = 1; }
+message GetGoalUsageRequest { string goal_id = 1; }
+message GetGoalUsageResponse { UsageSummary usage = 1; }
+
+message GoalCheckpoint {
+ string id = 1;
+ string goal_id = 2;
+ string run_id = 3;
+ string package_id = 4;
+ string candidate_revision = 5;
+ string title = 6;
+ string principal_id = 7;
+ int64 sequence = 8;
+ int64 plan_version = 9;
+ int64 goal_revision = 10;
+ string created_at = 11;
+ bool current_acceptance = 12; // False after the recorded package is superseded.
+}
+message ListGoalCheckpointsRequest { string goal_id = 1; int64 before_sequence = 2; }
+message ListGoalCheckpointsResponse { repeated GoalCheckpoint checkpoints = 1; int64 next_before_sequence = 2; }
+message RecordGoalCheckpointRequest {
+ string goal_id = 1;
+ string run_id = 2;
+ string package_id = 3; // Exact observed accepted package; cannot approve work.
+ string title = 4;
+ string request_key = 5;
+ int64 expected_goal_revision = 6;
+}
+message RecordGoalCheckpointResponse { GoalCheckpoint checkpoint = 1; }
+
 service WorkflowService {
+ rpc ListGoalCheckpoints(ListGoalCheckpointsRequest) returns (ListGoalCheckpointsResponse);
+ rpc RecordGoalCheckpoint(RecordGoalCheckpointRequest) returns (RecordGoalCheckpointResponse);
+ rpc GetRunUsage(GetRunUsageRequest) returns (GetRunUsageResponse);
+ rpc GetGoalUsage(GetGoalUsageRequest) returns (GetGoalUsageResponse);
+ rpc CreateServicePrincipal(CreateServicePrincipalRequest) returns (CreateServicePrincipalResponse);
+ rpc ListServicePrincipals(ListServicePrincipalsRequest) returns (ListServicePrincipalsResponse);
+ rpc DisableServicePrincipal(DisableServicePrincipalRequest) returns (DisableServicePrincipalResponse);
+ rpc GetProjectModelOptions(GetProjectModelOptionsRequest) returns (GetProjectModelOptionsResponse);
+ rpc GetGoalControl(GetGoalControlRequest) returns (GetGoalControlResponse);
+ rpc ControlGoal(ControlGoalRequest) returns (ControlGoalResponse);
+ rpc GetGoalAllowance(GetGoalAllowanceRequest) returns (GetGoalAllowanceResponse);
+ rpc SetGoalAllowance(SetGoalAllowanceRequest) returns (SetGoalAllowanceResponse);
+  rpc DescribeMachineAccess(DescribeMachineAccessRequest) returns (DescribeMachineAccessResponse);
+  rpc CreateApiToken(CreateApiTokenRequest) returns (CreateApiTokenResponse);
+  rpc ListApiTokens(ListApiTokensRequest) returns (ListApiTokensResponse);
+  rpc RevokeApiToken(RevokeApiTokenRequest) returns (RevokeApiTokenResponse);
+  rpc ListRunEvidence(ListRunEvidenceRequest) returns (ListRunEvidenceResponse);
+  rpc GetEvidenceContent(GetEvidenceContentRequest) returns (GetEvidenceContentResponse);
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
+  rpc StartGoalPlanning(StartGoalPlanningRequest) returns (StartGoalPlanningResponse);
+  rpc GetGoalPlans(GetGoalPlansRequest) returns (GetGoalPlansResponse);
+  rpc SaveGoalPlan(SaveGoalPlanRequest) returns (SaveGoalPlanResponse);
+  rpc CreateGoal(CreateGoalRequest) returns (CreateGoalResponse);
+  rpc ListGoals(ListGoalsRequest) returns (ListGoalsResponse);
+  rpc GetGoal(GetGoalRequest) returns (GetGoalResponse);
+  rpc ReplyGoal(ReplyGoalRequest) returns (ReplyGoalResponse);
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc GetProjectSource(GetProjectSourceRequest) returns (GetProjectSourceResponse);
   rpc SetProjectSource(SetProjectSourceRequest) returns (SetProjectSourceResponse);
   rpc ListGitConnections(ListGitConnectionsRequest) returns (ListGitConnectionsResponse);
   rpc CreateGitConnection(CreateGitConnectionRequest) returns (CreateGitConnectionResponse);
   rpc GetProjectVerification(GetProjectVerificationRequest) returns (GetProjectVerificationResponse);
+  rpc ListProjectVerificationHistory(ListProjectVerificationHistoryRequest) returns (ListProjectVerificationHistoryResponse);
   rpc SetProjectVerification(SetProjectVerificationRequest) returns (SetProjectVerificationResponse);
   rpc ListProjectModelAccess(ListProjectModelAccessRequest) returns (ListProjectModelAccessResponse);
   rpc CreateProjectModelAccess(CreateProjectModelAccessRequest) returns (CreateProjectModelAccessResponse);
@@ -383,7 +777,10 @@ service WorkflowService {
   rpc CreateSubscriptionConnection(CreateSubscriptionConnectionRequest) returns (CreateSubscriptionConnectionResponse);
   rpc RevokeSubscriptionConnection(RevokeSubscriptionConnectionRequest) returns (RevokeSubscriptionConnectionResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc GetDeliveryReport(GetDeliveryReportRequest) returns (GetDeliveryReportResponse);
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  rpc GetPlatformCapabilities(GetPlatformCapabilitiesRequest) returns (GetPlatformCapabilitiesResponse);
+  rpc PreviewRun(PreviewRunRequest) returns (PreviewRunResponse);
   rpc LaunchRun(LaunchRunRequest) returns (LaunchRunResponse);
   rpc GetLaunchAvailability(GetLaunchAvailabilityRequest) returns (GetLaunchAvailabilityResponse);
   rpc ListRunTasks(ListRunTasksRequest) returns (ListRunTasksResponse);

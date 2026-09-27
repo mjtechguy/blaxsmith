@@ -83,5 +83,8 @@
   "limits": {
     "max_correction_cycles": 3,
     "timeout_seconds": 1800
-  }
+  },
+  "acceptance": "manual",
+  "factory": {"id": "guild", "version": "1.0.0"},
+  "validation": {"id": "guild-forge", "inputs": {"spec": "examples/guild/spec.md", "transcript": "examples/guild/transcript.md"}}
 }

@@ -117,10 +117,13 @@ func interactionStore(pool *pgxpool.Pool) *workflow.Store {
 // interactionWatcher runs guest `bx` commands over the shared guest router
 // (BLAXSMITH_GUEST_ROUTER, one connection with terminals). Without it,
 // platform escalations still work and guest watchers stay off.
-func interactionWatcher(store *interact.Store, guests *terminal.Router) *interact.Watcher {
+func interactionWatcher(store *interact.Store, guests *terminal.Router, workflows ...*workflow.Store) *interact.Watcher {
 	watcher := &interact.Watcher{Store: store}
 	if guests != nil {
 		watcher.Guest = &interact.AteGuest{Router: guests}
+		if len(workflows) > 0 {
+			watcher.Evidence = gateWatcher(workflows[0], watcher.Guest)
+		}
 	}
 	return watcher
 }

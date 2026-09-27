@@ -507,3 +507,125 @@ func organization(t *testing.T, pool *pgxpool.Pool, suffix string) string {
 	}
 	return id
 }
+
+func TestBlockedDependenciesProgressPostgres(t *testing.T) {
+	pool := testPool(t)
+	store, _ := New(pool)
+	ctx := tenant.System(t.Context())
+	org := organization(t, pool, "blocked-graph")
+	other := organization(t, pool, "blocked-foreign")
+	project, err := store.CreateProject(ctx, org, "blocked-graph", "Blocked graph")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, failure := range []string{"worker-stopped", "check-failed"} {
+		t.Run(failure, func(t *testing.T) {
+			run, err := store.CreateRun(ctx, RunInput{org, project, failure, strings.Repeat("a", 40), strings.Repeat("b", 64), strings.Repeat("c", 64)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			tasks := map[string]string{}
+			for _, key := range []string{"root", "left", "right", "join", "final", "independent", "independent-child"} {
+				id, err := store.AddTask(ctx, org, run.ID, key, run.BundleSHA256, 2)
+				if err != nil {
+					t.Fatal(err)
+				}
+				tasks[key] = id
+			}
+			for _, edge := range [][2]string{{"left", "root"}, {"right", "root"}, {"join", "left"}, {"join", "right"}, {"final", "join"}, {"independent-child", "independent"}} {
+				if _, err := pool.Exec(ctx, `INSERT INTO workflow_task_dependencies(organization_id,run_id,task_id,depends_on_task_id) VALUES($1,$2,$3,$4)`, org, run.ID, tasks[edge[0]], tasks[edge[1]]); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, org, run.ID); err != nil {
+				t.Fatal(err)
+			}
+			start := func(key string) Attempt {
+				t.Helper()
+				a, err := store.ReserveAttempt(ctx, org, run.ID, tasks[key])
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := store.ConfirmStarting(ctx, a); err != nil {
+					t.Fatal(err)
+				}
+				if err := store.ConfirmStarted(ctx, a); err != nil {
+					t.Fatal(err)
+				}
+				return a
+			}
+			state := func(key string) string {
+				t.Helper()
+				var state string
+				if err := pool.QueryRow(ctx, `SELECT state FROM workflow_tasks WHERE organization_id=$1 AND id=$2`, org, tasks[key]).Scan(&state); err != nil {
+					t.Fatal(err)
+				}
+				return state
+			}
+			// A retryable failure must not poison the dependent graph.
+			root := start("root")
+			if err := store.ConfirmStopped(ctx, root); err != nil {
+				t.Fatal(err)
+			}
+			if batch, err := store.Progress(ctx, "", "", 100, nil); err != nil || batch.Examined != 0 {
+				t.Fatalf("retryable run progressed: %+v %v", batch, err)
+			}
+			if state("left") != "pending" {
+				t.Fatal("retryable dependency blocked")
+			}
+			// An independent live owner and its pending child must survive propagation.
+			independent := start("independent")
+			root = start("root")
+			if failure == "worker-stopped" {
+				err = store.ConfirmStopped(ctx, root)
+			} else {
+				err = store.FinishAttempt(ctx, root, false, run.BundleSHA256)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := store.FinalizeRun(ctx, other, run.ID); !errors.Is(err, ErrNotFound) {
+				t.Fatalf("foreign finalization: %v", err)
+			}
+			batch, err := store.Progress(ctx, "", "", 100, nil)
+			if err != nil || batch.Examined != 1 || batch.Finalized != 0 {
+				t.Fatalf("propagation sweep: %+v %v", batch, err)
+			}
+			for _, key := range []string{"root", "left", "right", "join", "final"} {
+				if state(key) != "blocked" {
+					t.Fatalf("%s remained %s", key, state(key))
+				}
+			}
+			if state("independent") != "running" || state("independent-child") != "pending" {
+				t.Fatal("unrelated work was blocked")
+			}
+			current, err := store.GetRun(ctx, org, run.ID)
+			if err != nil || current.State != "active" {
+				t.Fatalf("live owner finalized: %+v %v", current, err)
+			}
+			var count, explained int
+			if err := pool.QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE payload->>'blocked_by'='root') FROM workflow_events WHERE organization_id=$1 AND run_id=$2 AND kind='task.blocked'`, org, run.ID).Scan(&count, &explained); err != nil || count != 4 || explained != 4 {
+				t.Fatalf("failure provenance: %d/%d %v", count, explained, err)
+			}
+			if again, err := store.Progress(ctx, "", "", 100, nil); err != nil || again.Examined != 0 {
+				t.Fatalf("propagation repeated: %+v %v", again, err)
+			}
+			if err := store.FinishAttempt(ctx, independent, true, run.BundleSHA256); err != nil {
+				t.Fatal(err)
+			}
+			child := start("independent-child")
+			if err := store.FinishAttempt(ctx, child, true, run.BundleSHA256); err != nil {
+				t.Fatal(err)
+			}
+			if batch, err := store.Progress(ctx, "", "", 100, nil); err != nil || batch.Finalized != 1 || batch.Presented != 0 {
+				t.Fatalf("failed run not finalized: %+v %v", batch, err)
+			}
+			if result, err := store.FinalizeRun(ctx, org, run.ID); err != nil || result != "failed" {
+				t.Fatalf("terminal run: %s %v", result, err)
+			}
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM workflow_events WHERE organization_id=$1 AND run_id=$2 AND kind='task.blocked'`, org, run.ID).Scan(&count); err != nil || count != 4 {
+				t.Fatalf("duplicate propagation: %d %v", count, err)
+			}
+		})
+	}
+}

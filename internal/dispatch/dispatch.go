@@ -112,24 +112,8 @@ func (d *Dispatcher) toolRequest(ctx context.Context, orgID, runID, taskID, hand
 	if err != nil {
 		return tooladapter.Request{}, frozen, approved, err
 	}
-	prompt, artifacts, err := frozenPrompt(frozen, handoff)
-	if err != nil {
-		return tooladapter.Request{}, frozen, approved, err
-	}
-	mount, _, err := extensionMount(frozen.Bundle, frozen.Stage)
-	if err != nil {
-		return tooladapter.Request{}, frozen, approved, err
-	}
-	timeout := min(frozen.Bundle.Recipe.Limits.TimeoutSeconds, approved.MaxTimeoutSeconds)
-	request := tooladapter.Request{AttemptID: "preflight", RepositoryURL: frozen.RepositoryURL,
-		SourceRef: frozen.SourceRef, SourceCommit: input,
-		Runtime: approved.Runtime, Profile: frozen.Profile,
-		Prompt: prompt, FrozenArtifacts: artifacts, TimeoutSeconds: timeout,
-		MaxRuntimeSeconds: frozen.Bundle.Recipe.Limits.MaxRuntimeSeconds, MaxOutputBytes: approved.MaxOutputBytes, Extension: mount}
-	if _, err := tooladapter.Command(request); err != nil {
-		return tooladapter.Request{}, frozen, approved, err
-	}
-	return request, frozen, approved, nil
+	request, err := PrepareToolRequest(frozen, approved, handoff, input)
+	return request, frozen, approved, err
 }
 
 // attemptBridge scopes the shared bridge to one attempt's tool selection and
@@ -206,7 +190,7 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		outcome.Err = err
 		return outcome
 	}
-	selection, err := d.Workflow.ResolveModelGrant(ctx, candidate.OrganizationID, candidate.ProjectID, initiator, provider, model)
+	selection, err := d.Workflow.ResolveModelGrant(ctx, candidate.OrganizationID, candidate.ProjectID, initiator, provider, model, frozen.Profile.Connection)
 	if err != nil {
 		outcome.Err = err
 		return outcome
@@ -274,7 +258,7 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		})
 	if err != nil {
 		outcome.Err = err
-		if errors.Is(err, workflow.ErrConflict) || errors.Is(err, workflow.ErrFenced) {
+		if errors.Is(err, workflow.ErrConflict) || errors.Is(err, workflow.ErrFenced) || errors.Is(err, workflow.ErrGoalStopped) || errors.Is(err, workflow.ErrGoalAllowance) {
 			outcome.State = "conflict"
 		}
 		return outcome
@@ -323,6 +307,12 @@ func (d *Dispatcher) dispatchOne(ctx context.Context, candidate workflow.ReadyTa
 		} else {
 			outcome.State, outcome.Err = "unresolved", errors.Join(err, stopErr)
 		}
+		return outcome
+	}
+	// Verify stages remain behind the model gate. Completion runs the frozen
+	// checks through the authenticated guest process API, without a harness.
+	if frozen.Stage.Kind == "verify" {
+		outcome.State = "started"
 		return outcome
 	}
 	if err := d.ReleaseModel(ctx, attempt, runtime, runtimeBinding, invoke); err != nil {

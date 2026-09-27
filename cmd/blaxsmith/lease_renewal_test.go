@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -11,14 +12,61 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/access"
 )
 
+func TestLeaseDeliveryCursorSurvivesStalledGuest(t *testing.T) {
+	leases := []access.RenewedLease{
+		{OrganizationID: "org-a", LeaseID: "one"},
+		{OrganizationID: "org-a", LeaseID: "two"},
+		{OrganizationID: "org-b", LeaseID: "one"},
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var attempted []string
+	// Simulate a guest still waiting when the pass is interrupted.
+	after := deliverLeasePage(ctx, [2]string{}, leases, func(ctx context.Context, lease access.RenewedLease) error {
+		attempted = append(attempted, lease.OrganizationID+"/"+lease.LeaseID)
+		cancel()
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	if after != [2]string{"org-a", "one"} || !slices.Equal(attempted, []string{"org-a/one"}) {
+		t.Fatalf("interrupted pass skipped unattempted leases: cursor=%v attempted=%v", after, attempted)
+	}
+	// The next page resumes after the stalled guest. An ordinary failure also
+	// advances the cursor, and does not prevent the healthy guest's delivery.
+	after = deliverLeasePage(t.Context(), after, leases[1:], func(_ context.Context, lease access.RenewedLease) error {
+		attempted = append(attempted, lease.OrganizationID+"/"+lease.LeaseID)
+		if lease.LeaseID == "two" {
+			return errors.New("guest unavailable")
+		}
+		return nil
+	})
+	if after != [2]string{"org-b", "one"} || !slices.Equal(attempted, []string{"org-a/one", "org-a/two", "org-b/one"}) {
+		t.Fatalf("failed guest blocked later delivery: cursor=%v attempted=%v", after, attempted)
+	}
+	noDelivery := func(context.Context, access.RenewedLease) error {
+		t.Fatal("cancelled or empty pass attempted delivery")
+		return nil
+	}
+	if got := deliverLeasePage(ctx, after, leases, noDelivery); got != after {
+		t.Fatalf("cancelled pass lost cursor: %v", got)
+	}
+	if got := deliverLeasePage(ctx, after, nil, noDelivery); got != after {
+		t.Fatalf("cancelled empty pass lost cursor: %v", got)
+	}
+	if got := deliverLeasePage(t.Context(), after, nil, noDelivery); got != [2]string{} {
+		t.Fatalf("completed pass did not wrap to retry failures: %v", got)
+	}
+}
+
 type fakeGuestFile struct {
 	data []byte
 	mode uint32
 }
 
 type fakeGuest struct {
-	files  map[string]fakeGuestFile
-	writes []string
+	files     map[string]fakeGuestFile
+	writes    []string
+	failWrite string
 }
 
 func (g *fakeGuest) ReadFile(_ context.Context, path string, max int) ([]byte, error) {
@@ -33,6 +81,9 @@ func (g *fakeGuest) ReadFile(_ context.Context, path string, max int) ([]byte, e
 }
 
 func (g *fakeGuest) WriteFile(_ context.Context, path string, data []byte, mode uint32) error {
+	if path == g.failWrite {
+		return errors.New("guest write failed")
+	}
 	g.files[path] = fakeGuestFile{append([]byte(nil), data...), mode}
 	g.writes = append(g.writes, path)
 	return nil
@@ -80,6 +131,23 @@ func TestOAuthRenewalHookRewritesCodexAuthInPlace(t *testing.T) {
 	}
 	if len(renewed) != 1 || renewed[0] != lease {
 		t.Fatalf("renewal got %+v", renewed)
+	}
+	for _, failPath := range []string{authPath, leaseExpiresPath} {
+		guest := newGuest(authPath + "\n")
+		guest.failWrite = failPath
+		if err := announceRenewal(t.Context(), renewers, lease, guest); err == nil {
+			t.Fatalf("failed write to %s reported delivery", failPath)
+		}
+		if _, ok := guest.files[leaseExpiresPath]; ok {
+			t.Fatal("failed credential/expiry delivery announced renewal")
+		}
+		guest.failWrite = ""
+		if err := announceRenewal(t.Context(), renewers, lease, guest); err != nil {
+			t.Fatalf("delivery retry failed: %v", err)
+		}
+		if got := string(guest.files[leaseExpiresPath].data); got != strconv.FormatInt(tokenExpiry.Add(-5*time.Minute).Unix(), 10)+"\n" {
+			t.Fatalf("retry changed renewal expiry: %q", got)
+		}
 	}
 
 	// Within the window: the renewed lease expiry is announced as is.

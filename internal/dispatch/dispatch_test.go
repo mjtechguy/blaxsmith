@@ -188,8 +188,8 @@ func TestDispatchBatchPostgres(t *testing.T) {
 		return recipe.Artifact{Path: name, Data: []byte(body), SHA256: dispatchSHA([]byte(body))}
 	}
 	bundle := recipe.Bundle{SchemaVersion: "blaxsmith.bundle/v1alpha1",
-		Source: recipe.Source{Commit: strings.Repeat("b", 40), Spec: "spec.md", Transcript: "transcript.md", Scope: "."},
-		Recipe: recipe.Recipe{Profiles: map[string]recipe.Profile{"engineer": {Harness: "codex", Model: "gpt-6-luna", Effort: "xhigh"}},
+		Source: recipe.Source{Commit: strings.Repeat("b", 40), Scope: "."},
+		Recipe: recipe.Recipe{Documents: []string{"spec.md", "transcript.md"}, Profiles: map[string]recipe.Profile{"engineer": {Harness: "codex", Model: "gpt-6-luna", Effort: "xhigh"}},
 			Stages:         []recipe.Stage{{ID: "plan", Kind: "plan", Profile: "engineer", Prompt: "plan.md"}},
 			RequiredChecks: []string{"checks"}, Limits: recipe.Limits{MaxCorrectionCycles: 1, TimeoutSeconds: 60}},
 		StageOrder: []string{"plan"}, Artifacts: []recipe.Artifact{artifact("spec.md", "requirements"),
@@ -625,6 +625,40 @@ func TestDispatchBatchPostgres(t *testing.T) {
 	// the project's workload key.
 	codexSubscriptionBindsOnlyForOwnersRun(t, ctx, pool, store, secretStore, ax, &dispatcher, orgID, projectID,
 		bundleJSON, policyJSON, bundle.Source.Commit, bundle.Digest, policySHA, inputSHA)
+	// A verify stage reaches workspace readiness without releasing any model credential.
+	verifyBundle := bundle
+	verifyBundle.Recipe.Stages = append([]recipe.Stage(nil), bundle.Recipe.Stages...)
+	verifyBundle.Recipe.Stages[0].Kind = "verify"
+	verifyBundle.Digest = ""
+	canonical, _ = json.Marshal(verifyBundle)
+	verifyBundle.Digest = dispatchSHA(canonical)
+	verifyJSON, _ := json.Marshal(verifyBundle)
+	verifyRun, err := store.CreateRun(ctx, workflow.RunInput{OrganizationID: orgID, ProjectID: projectID, LaunchKey: "independent-verifier", SourceCommit: bundle.Source.Commit, BundleSHA256: verifyBundle.Digest, VerificationSHA256: policySHA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workflow_run_bundles(organization_id,run_id,bundle_json,verification_json,repository_url,git_ref) VALUES($1,$2,$3,$4,'https://github.com/owner/repo','main')`, orgID, verifyRun.ID, verifyJSON, policyJSON); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddTask(ctx, orgID, verifyRun.ID, "plan", dispatchSHA([]byte(verifyBundle.Digest+":"+policySHA+":plan")), 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, orgID, verifyRun.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workflow_tasks SET state='cancelled' WHERE organization_id=$1 AND run_id<>$2 AND state='pending'`, orgID, verifyRun.ID); err != nil {
+		t.Fatal(err)
+	}
+	ax.task, ax.delayWorkspaceReady, ax.invalidateGatewayAfterTask = nil, false, false
+	dispatcher.ReleaseModel = func(context.Context, workflow.Attempt, bootstrap.Runtime, workflow.RuntimeBinding, access.ModelInvoke) error {
+		t.Fatal("verification released model credentials")
+		return nil
+	}
+	verified, err := dispatcher.DispatchBatch(ctx, "", 1, 1)
+	if err != nil || len(verified.Outcomes) != 1 || verified.Outcomes[0].State != "started" {
+		t.Fatalf("verify dispatch: %+v %v", verified, err)
+	}
+
 }
 
 func codexSubscriptionBindsOnlyForOwnersRun(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store *workflow.Store,

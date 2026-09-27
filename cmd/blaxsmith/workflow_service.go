@@ -7,7 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -18,6 +18,7 @@ import (
 	"github.com/mjtechguy/blaxsmith/internal/access"
 	"github.com/mjtechguy/blaxsmith/internal/dispatch"
 	"github.com/mjtechguy/blaxsmith/internal/gitfetch"
+	"github.com/mjtechguy/blaxsmith/internal/guild"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/interact"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
@@ -26,7 +27,10 @@ import (
 )
 
 type workflowService struct {
-	guard         *identity.BrowserGuard
+	guard interface {
+		Caller(context.Context, http.Header, bool) (identity.Caller, error)
+	}
+	sessions      *identity.SessionManager
 	interactions  *interact.Store
 	store         *workflow.Store
 	secrets       *access.SecretStore
@@ -125,22 +129,44 @@ func (s *workflowService) SetProjectVerification(ctx context.Context, req *conne
 	if err != nil {
 		return nil, err
 	}
-	policy := workflow.VerificationPolicy{SchemaVersion: "blaxsmith.verification/v1alpha1"}
+	policy := workflow.VerificationPolicy{SchemaVersion: "blaxsmith.verification/v1alpha1", Preset: req.Msg.Preset}
 	for _, check := range req.Msg.Checks {
-		policy.Checks = append(policy.Checks, workflow.VerificationCheck{ID: check.Id, Command: check.Command})
+		policy.Checks = append(policy.Checks, workflow.VerificationCheck{ID: check.Id, Command: check.Command, TrustedPaths: check.TrustedPaths, Mode: check.Mode, Category: check.Category})
 	}
-	verification, err := s.store.SetProjectVerificationAs(ctx, caller, req.Msg.ProjectId, policy)
+	verification, err := s.store.SetProjectVerificationAs(ctx, caller, req.Msg.ProjectId, req.Msg.ExpectedVersion, policy)
+	if errors.Is(err, workflow.ErrConflict) {
+		return nil, connect.NewError(connect.CodeAborted, errors.New("verification revision changed"))
+	}
 	if err != nil {
 		return nil, workflowError(err)
 	}
 	return connect.NewResponse(&api.SetProjectVerificationResponse{Verification: projectVerificationMessage(req.Msg.ProjectId, verification)}), nil
 }
 
+func (s *workflowService) ListProjectVerificationHistory(ctx context.Context, req *connect.Request[api.ListProjectVerificationHistoryRequest]) (*connect.Response[api.ListProjectVerificationHistoryResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.store.ListProjectVerificationHistory(ctx, caller.OrganizationID, req.Msg.ProjectId, req.Msg.BeforeVersion)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	response := &api.ListProjectVerificationHistoryResponse{}
+	for _, item := range items {
+		response.Revisions = append(response.Revisions, projectVerificationMessage(req.Msg.ProjectId, item))
+	}
+	if len(items) == 50 {
+		response.NextBeforeVersion = items[len(items)-1].Version
+	}
+	return connect.NewResponse(response), nil
+}
+
 func projectVerificationMessage(projectID string, verification workflow.ProjectVerification) *api.ProjectVerification {
-	message := &api.ProjectVerification{ProjectId: projectID, Version: verification.Version,
+	message := &api.ProjectVerification{ProjectId: projectID, Version: verification.Version, Preset: verification.Policy.Preset,
 		UpdatedAt: verification.UpdatedAt.UTC().Format(time.RFC3339Nano)}
 	for _, check := range verification.Policy.Checks {
-		message.Checks = append(message.Checks, &api.VerificationCheck{Id: check.ID, Command: check.Command})
+		message.Checks = append(message.Checks, &api.VerificationCheck{Id: check.ID, Command: check.Command, TrustedPaths: check.TrustedPaths, Mode: check.Mode, Category: check.Category})
 	}
 	return message
 }
@@ -276,6 +302,21 @@ func (s *workflowService) ListProjects(ctx context.Context, req *connect.Request
 	return connect.NewResponse(response), nil
 }
 
+func (s *workflowService) GetDeliveryReport(ctx context.Context, req *connect.Request[api.GetDeliveryReportRequest]) (*connect.Response[api.GetDeliveryReportResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	report, err := s.store.DeliveryReport(ctx, caller.OrganizationID, req.Msg.RunId)
+	if errors.Is(err, workflow.ErrReportTooLarge) {
+		return nil, connect.NewError(connect.CodeResourceExhausted, err)
+	}
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.GetDeliveryReportResponse{Markdown: report.Markdown, Sha256: report.SHA256, GeneratedAt: report.GeneratedAt.UTC().Format(time.RFC3339Nano)}), nil
+}
+
 func (s *workflowService) GetRun(ctx context.Context, req *connect.Request[api.GetRunRequest]) (*connect.Response[api.GetRunResponse], error) {
 	caller, err := s.guard.Caller(ctx, req.Header(), false)
 	if err != nil {
@@ -288,59 +329,205 @@ func (s *workflowService) GetRun(ctx context.Context, req *connect.Request[api.G
 	return connect.NewResponse(&api.GetRunResponse{Run: runMessage(run)}), nil
 }
 
+func (s *workflowService) GetPlatformCapabilities(ctx context.Context, req *connect.Request[api.GetPlatformCapabilitiesRequest]) (*connect.Response[api.GetPlatformCapabilitiesResponse], error) {
+	if _, err := s.guard.Caller(ctx, req.Header(), false); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&api.GetPlatformCapabilitiesResponse{
+		RecipeSchemas: []string{recipe.Schema}, Harnesses: []string{"codex", "claude-code", "opencode"},
+		AcceptanceModes: []string{"manual", "policy"}, CheckModes: []string{"required", "advisory", "off"},
+		MaxStages: 64, MaxImplementStages: 1, LaunchPreview: true,
+		MachineApi: true, McpTransports: []string{"stdio", "streamable-http"}, ApiScopes: slices.Clone(identity.APIScopes),
+	}), nil
+}
+
+type preparedLaunch struct {
+	packets          []*api.ExecutionTaskPacket
+	input            workflow.FrozenRunInput
+	bundle           *recipe.Bundle
+	repositoryURL    string
+	hasGitConnection bool
+	close            func() error
+}
+
+// Both entry points resolve exactly the same committed inputs and grants.
+func (s *workflowService) prepareLaunch(ctx context.Context, caller identity.Caller, projectID, path, versionID, scope string, goal *api.GoalExecutionOptions, goalContext *api.GoalContext) (*preparedLaunch, error) {
+	if !workflow.CanLaunch(caller) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("run launch denied"))
+	}
+	if goal != nil {
+		if path != "" || versionID != "" || goalContext != nil {
+			return nil, workflowError(workflow.ErrInvalid)
+		}
+		return s.prepareGoalExecution(ctx, caller, projectID, scope, goal)
+	}
+	if (path == "") == (versionID == "") || scope == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("choose one recipe path or library version, and a code scope"))
+	}
+	var binding workflow.FrozenRunInput
+	var goalFactory *recipe.Factory
+	var goalFiles map[string]recipe.PlatformFile
+	if goalContext != nil {
+		var err error
+		binding, goalFactory, goalFiles, err = s.resolveFactoryGoal(ctx, caller, projectID, goalContext)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var library workflow.RecipeVersion
+	var err error
+	if versionID != "" {
+		if library, err = s.store.LibraryRecipeForLaunch(ctx, caller, projectID, versionID); err != nil {
+			return nil, workflowError(err)
+		}
+	}
+	verification, err := s.store.GetProjectVerification(ctx, caller.OrganizationID, projectID)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	source, repositoryURL, fetched, err := s.fetchGoalSource(ctx, caller.OrganizationID, projectID, binding.GoalID, binding.CheckpointID)
+	if err != nil {
+		return nil, err
+	}
+	input := recipe.Input{CheckpointID: binding.CheckpointID, PlatformFiles: goalFiles, Validators: map[string]recipe.Validator{"guild-forge": guild.ValidateInputs}, Repo: fetched.Directory, Ref: fetched.Commit, Recipe: path, Scope: scope}
+	if library.ID != "" {
+		input.Recipe, input.RecipeData = library.FrozenPath, library.JSON
+	}
+	bundle, err := s.store.PreviewSource(ctx, caller, projectID, input)
+	if err != nil {
+		fetched.Close()
+		return nil, workflowError(err)
+	}
+	if goalFactory != nil && (bundle.Recipe.Factory == nil || *bundle.Recipe.Factory != *goalFactory) {
+		fetched.Close()
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("recipe factory identity must match the bound goal"))
+	}
+	return &preparedLaunch{bundle: bundle, repositoryURL: repositoryURL, hasGitConnection: source.GitConnectionID != "", close: fetched.Close,
+		input: workflow.FrozenRunInput{CheckpointID: binding.CheckpointID, OrganizationID: caller.OrganizationID, ProjectID: projectID, Source: input,
+			Verification: verification.Policy, Caller: &caller, SourceRepositoryURL: source.RepositoryURL,
+			SourceRef: source.Ref, VerificationVersion: verification.Version, RecipeVersionID: library.ID, GoalID: binding.GoalID, GoalRevision: binding.GoalRevision, GoalPlanVersion: binding.GoalPlanVersion, GoalPlanSHA256: binding.GoalPlanSHA256}}, nil
+}
+
+func (s *workflowService) launchBlockers(ctx context.Context, prepared *preparedLaunch) []string {
+	blockers := []string{}
+	checkoutRef := prepared.input.SourceRef
+	if prepared.input.CheckpointID != "" {
+		checkoutRef = prepared.bundle.Source.Commit
+	}
+	if prepared.input.GoalID != "" {
+		control, err := s.store.GetGoalControl(ctx, prepared.input.OrganizationID, prepared.input.GoalID)
+		if err != nil {
+			blockers = append(blockers, "Goal admission state could not be checked.")
+		} else if control.State != "active" {
+			blockers = append(blockers, "Goal admission is "+control.State+".")
+		}
+		allowance, err := s.store.GetGoalAllowance(ctx, prepared.input.OrganizationID, prepared.input.GoalID)
+		if err != nil {
+			blockers = append(blockers, "Goal execution allowance could not be checked.")
+		} else if allowance.AdmissionClosed || (allowance.MaxRuns > 0 && allowance.Runs >= int64(allowance.MaxRuns)) || (allowance.MaxAttempts > 0 && allowance.Attempts >= int64(allowance.MaxAttempts)) {
+			if allowance.StallReason != "" {
+				blockers = append(blockers, allowance.StallReason)
+			} else {
+				blockers = append(blockers, "Goal execution allowance or admission deadline reached. The goal owner or an administrator can update it.")
+			}
+		}
+	}
+	if !prepared.hasGitConnection && slices.ContainsFunc(prepared.bundle.Recipe.Stages, func(st recipe.Stage) bool { return st.Kind == "implement" }) {
+		blockers = append(blockers, "Implement stages push a run branch. Select a Git connection with write access on the project source.")
+	}
+	if err := s.requireDispatch(ctx); err != nil {
+		blockers = append(blockers, "The run dispatcher is not connected on this installation.")
+	} else if err := s.preflightFrozenRun(ctx, prepared.input.OrganizationID, prepared.input.ProjectID, prepared.input.Caller.PrincipalID, prepared.repositoryURL, checkoutRef, prepared.bundle); err != nil {
+		if errors.Is(err, dispatch.ErrStageInputs) {
+			blockers = append(blockers, err.Error())
+		} else {
+			blockers = append(blockers, "Model access, approved worker image, or AX egress is not ready. Check the selected profiles and project access.")
+		}
+	}
+	return blockers
+}
+
+func (s *workflowService) PreviewRun(ctx context.Context, req *connect.Request[api.PreviewRunRequest]) (*connect.Response[api.PreviewRunResponse], error) {
+	// Preview fetches private Git and checks runtime readiness: require the same
+	// CSRF protection as launch even though no workflow state is persisted.
+	caller, err := s.guard.Caller(ctx, req.Header(), true)
+	if err != nil {
+		return nil, err
+	}
+	prepared, err := s.prepareLaunch(ctx, caller, req.Msg.ProjectId, req.Msg.RecipePath, req.Msg.RecipeVersionId, req.Msg.Scope, req.Msg.GoalExecution, req.Msg.GoalContext)
+	if err != nil {
+		return nil, err
+	}
+	defer prepared.close()
+	bundle := prepared.bundle
+	body, err := json.Marshal(bundle.Recipe)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	result := &api.PreviewRunResponse{CheckpointId: bundle.Source.CheckpointID, SourceCommit: bundle.Source.Commit, BundleSha256: bundle.Digest, RecipeJson: string(body), StageOrder: bundle.StageOrder, TaskPackets: prepared.packets}
+	if bundle.Baseline != nil {
+		data, err := json.Marshal(bundle.Baseline)
+		if err != nil {
+			return nil, workflowError(err)
+		}
+		result.RepositoryBaselineJson = string(data)
+	}
+	if len(bundle.ProfileInputs) > 0 {
+		inputs, err := json.Marshal(bundle.ProfileInputs)
+		if err != nil {
+			return nil, workflowError(err)
+		}
+		result.EffectiveInputsJson = string(inputs)
+	}
+	result.VerificationSha256, err = workflow.PreviewVerification(bundle, prepared.input.Verification)
+	if err != nil {
+		result.Blockers = append(result.Blockers, "Selected checks do not match this recipe. Required checks must remain required, and active checks need a verify stage after implementation.")
+	}
+	result.Blockers = append(result.Blockers, s.launchBlockers(ctx, prepared)...)
+	result.CanLaunch = len(result.Blockers) == 0
+	for _, artifact := range bundle.Artifacts {
+		result.Artifacts = append(result.Artifacts, &api.FrozenInputFile{Path: artifact.Path, Sha256: artifact.SHA256})
+	}
+	for _, check := range prepared.input.Verification.Checks {
+		result.Checks = append(result.Checks, &api.VerificationCheck{Id: check.ID, Command: check.Command, TrustedPaths: check.TrustedPaths, Mode: check.Mode, Category: check.Category})
+	}
+	return connect.NewResponse(result), nil
+}
+
 func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[api.LaunchRunRequest]) (*connect.Response[api.LaunchRunResponse], error) {
 	caller, err := s.guard.Caller(ctx, req.Header(), true)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.requireDispatch(ctx); err != nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("run dispatcher is not connected on this installation"))
+	if len(req.Msg.LaunchKey) < 1 || len(req.Msg.LaunchKey) > 128 {
+		return nil, workflowError(workflow.ErrInvalid)
 	}
-	if !workflow.CanLaunch(caller) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("run launch denied"))
+	if (req.Msg.GoalExecution != nil || req.Msg.GoalContext != nil) && (req.Msg.ExpectedBundleSha256 == "" || req.Msg.ExpectedVerificationSha256 == "") {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("preview the selected plan before launching implementation"))
 	}
-	var library workflow.RecipeVersion
-	if req.Msg.RecipeVersionId != "" {
-		if req.Msg.RecipePath != "" {
-			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("choose a library recipe version or a recipe path, not both"))
-		}
-		if library, err = s.store.LibraryRecipeForLaunch(ctx, caller, req.Msg.ProjectId, req.Msg.RecipeVersionId); err != nil {
-			return nil, workflowError(err)
-		}
-	}
-	verification, err := s.store.GetProjectVerification(ctx, caller.OrganizationID, req.Msg.ProjectId)
-	if err != nil {
+	// Reject malformed optional pins before fetching Git.
+	if err := workflow.CheckPreview(req.Msg.ExpectedBundleSha256, req.Msg.ExpectedVerificationSha256, req.Msg.ExpectedBundleSha256, req.Msg.ExpectedVerificationSha256); err != nil {
 		return nil, workflowError(err)
 	}
-	source, repositoryURL, fetched, err := s.fetchProjectSource(ctx, caller.OrganizationID, req.Msg.ProjectId)
+	prepared, err := s.prepareLaunch(ctx, caller, req.Msg.ProjectId, req.Msg.RecipePath, req.Msg.RecipeVersionId, req.Msg.Scope, req.Msg.GoalExecution, req.Msg.GoalContext)
 	if err != nil {
 		return nil, err
 	}
-	defer fetched.Close()
-	sourceInput := recipe.Input{Repo: fetched.Directory, Ref: fetched.Commit, Recipe: req.Msg.RecipePath,
-		Spec: req.Msg.SpecPath, Transcript: req.Msg.TranscriptPath, Scope: req.Msg.Scope}
-	if library.ID != "" {
-		// The chosen version's exact bytes are frozen as the committed file was.
-		sourceInput.Recipe, sourceInput.RecipeData = library.FrozenPath, library.JSON
-	}
-	bundle, err := recipe.Freeze(ctx, sourceInput)
+	defer prepared.close()
+	policySHA, err := workflow.PreviewVerification(prepared.bundle, prepared.input.Verification)
 	if err != nil {
-		return nil, workflowError(fmt.Errorf("%w: %v", workflow.ErrRecipe, err))
+		return nil, workflowError(err)
 	}
-	if source.GitConnectionID == "" && slices.ContainsFunc(bundle.Recipe.Stages, func(st recipe.Stage) bool { return st.Kind == "implement" }) {
-		// Implement stages deliver through a platform-pushed run branch.
-		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			errors.New("implement stages push a run branch; select a Git connection with write access on the project source"))
+	if err := workflow.CheckPreview(req.Msg.ExpectedBundleSha256, req.Msg.ExpectedVerificationSha256, prepared.bundle.Digest, policySHA); err != nil {
+		return nil, workflowError(err)
 	}
-	if err := s.preflightFrozenRun(ctx, caller.OrganizationID, req.Msg.ProjectId, caller.PrincipalID, repositoryURL, bundle); err != nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("run recipe, model access, worker image, or AX egress is not ready"))
+	if blockers := s.launchBlockers(ctx, prepared); len(blockers) > 0 {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(strings.Join(blockers, " ")))
 	}
-	run, err := s.store.CreateFrozenRun(ctx, workflow.FrozenRunInput{
-		OrganizationID: caller.OrganizationID, ProjectID: req.Msg.ProjectId, LaunchKey: req.Msg.LaunchKey,
-		Source:       sourceInput,
-		Verification: verification.Policy, Caller: &caller, SourceRepositoryURL: source.RepositoryURL,
-		SourceRef: source.Ref, VerificationVersion: verification.Version, RecipeVersionID: library.ID,
-	})
+	prepared.input.LaunchKey = req.Msg.LaunchKey
+	prepared.input.ExpectedBundleSHA256 = req.Msg.ExpectedBundleSha256
+	prepared.input.ExpectedVerificationSHA256 = req.Msg.ExpectedVerificationSha256
+	run, err := s.store.CreateFrozenRun(ctx, prepared.input)
 	if err != nil {
 		return nil, workflowError(err)
 	}
@@ -350,11 +537,22 @@ func (s *workflowService) LaunchRun(ctx context.Context, req *connect.Request[ap
 // fetchProjectSource materializes the project's configured source at its ref,
 // with the granted Git connection when the source is private.
 func (s *workflowService) fetchProjectSource(ctx context.Context, orgID, projectID string) (workflow.ProjectSource, string, gitfetch.Source, error) {
+	return s.fetchGoalSource(ctx, orgID, projectID, "", "")
+}
+
+func (s *workflowService) fetchGoalSource(ctx context.Context, orgID, projectID, goalID, checkpointID string) (workflow.ProjectSource, string, gitfetch.Source, error) {
 	source, err := s.store.GetProjectSource(ctx, orgID, projectID)
 	if err != nil {
 		return source, "", gitfetch.Source{}, workflowError(err)
 	}
-	repositoryURL, ref, err := workflow.ValidatePublicGitSource(ctx, source.RepositoryURL, source.Ref)
+	checkoutRef := source.Ref
+	if checkpointID != "" {
+		checkoutRef, err = s.store.GoalCheckpointSource(ctx, orgID, goalID, checkpointID, source.RepositoryURL)
+		if err != nil {
+			return source, "", gitfetch.Source{}, workflowError(err)
+		}
+	}
+	repositoryURL, ref, err := workflow.ValidatePublicGitSource(ctx, source.RepositoryURL, checkoutRef)
 	if err != nil {
 		return source, "", gitfetch.Source{}, workflowError(err)
 	}
@@ -371,6 +569,10 @@ func (s *workflowService) fetchProjectSource(ctx context.Context, orgID, project
 		}
 	} else if fetched, err = gitfetch.Fetch(ctx, repositoryURL, ref); err != nil {
 		return source, "", gitfetch.Source{}, connect.NewError(connect.CodeFailedPrecondition, errors.New("repository fetch failed; check the URL, ref, and public access"))
+	}
+	if checkpointID != "" && fetched.Commit != checkoutRef {
+		fetched.Close()
+		return source, "", gitfetch.Source{}, workflowError(workflow.ErrConflict)
 	}
 	return source, repositoryURL, fetched, nil
 }
@@ -413,7 +615,7 @@ func (s *workflowService) requireDispatch(ctx context.Context) error {
 	return s.dispatchReady(checkCtx)
 }
 
-func (s *workflowService) preflightFrozenRun(ctx context.Context, orgID, projectID, initiator, repositoryURL string, bundle *recipe.Bundle) error {
+func (s *workflowService) preflightFrozenRun(ctx context.Context, orgID, projectID, initiator, repositoryURL, sourceRef string, bundle *recipe.Bundle) error {
 	if s == nil || s.dispatcher == nil || s.dispatcher.Bridge == nil || bundle == nil {
 		return dispatch.ErrNotReady
 	}
@@ -426,7 +628,14 @@ func (s *workflowService) preflightFrozenRun(ctx context.Context, orgID, project
 		if !ok {
 			return workflow.ErrRecipe
 		}
-		key := profile.Harness + "\x00" + profile.Model + "\x00" + profile.Effort
+		approved, err := s.store.GetApprovedToolRuntime(ctx, orgID, profile.Harness, profile.Model, profile.Effort)
+		if err != nil {
+			return err
+		}
+		if _, err := dispatch.PrepareToolRequest(workflow.FrozenTask{Bundle: bundle, Stage: stage, Profile: profile, RepositoryURL: repositoryURL, SourceRef: sourceRef}, approved, "", bundle.Source.Commit); err != nil {
+			return err
+		}
+		key := profile.Harness + "\x00" + profile.Model + "\x00" + profile.Effort + "\x00" + profile.Connection
 		if seen[key] {
 			continue
 		}
@@ -435,17 +644,13 @@ func (s *workflowService) preflightFrozenRun(ctx context.Context, orgID, project
 		if err != nil {
 			return err
 		}
-		selection, err := s.store.ResolveModelGrant(ctx, orgID, projectID, initiator, provider, model)
+		selection, err := s.store.ResolveModelGrant(ctx, orgID, projectID, initiator, provider, model, profile.Connection)
 		if err != nil {
 			return err
 		}
 		if err := s.dispatcher.PreflightModel(ctx, access.ModelGrant{OrganizationID: orgID, ProjectID: projectID,
 			GrantID: selection.GrantID, GranteeKind: selection.GranteeKind, GranteeID: selection.GranteeID,
 			Provider: provider, Model: model}); err != nil {
-			return err
-		}
-		approved, err := s.store.GetApprovedToolRuntime(ctx, orgID, profile.Harness, profile.Model, profile.Effort)
-		if err != nil {
 			return err
 		}
 		if err := s.dispatcher.PreflightWorker(ctx, approved, repositoryURL, provider); err != nil {
@@ -489,7 +694,7 @@ func (s *workflowService) ListRunTasks(ctx context.Context, req *connect.Request
 	for _, task := range tasks {
 		item := &api.RunTask{Id: task.ID, Key: task.Key, State: task.State, Generation: task.Generation,
 			MaxAttempts: task.MaxAttempts, DependsOn: task.DependsOn, Harness: task.Harness,
-			Model: task.Model, Effort: task.Effort, Kind: task.Kind, LoopWith: task.LoopWith,
+			Model: task.Model, Effort: task.Effort, Kind: task.Kind, ReviewMode: task.ReviewMode, LoopWith: task.LoopWith,
 			MaxCycles: task.MaxCycles, LoopCycles: task.LoopCycles}
 		if task.ActiveAttemptID != nil {
 			item.ActiveAttemptId = *task.ActiveAttemptID
@@ -634,7 +839,7 @@ func (s *workflowService) DecideReview(ctx context.Context, req *connect.Request
 }
 
 func reviewPackageMessage(current workflow.ReviewPackage) *api.ReviewPackage {
-	message := &api.ReviewPackage{Id: current.ID, RunId: current.RunID, Revision: current.Revision,
+	message := &api.ReviewPackage{AcceptanceMode: current.AcceptanceMode, Id: current.ID, RunId: current.RunID, Revision: current.Revision,
 		SourceCommit: current.SourceCommit, BundleSha256: current.BundleSHA256,
 		VerificationSha256: current.VerificationSHA256, IntegratedCommit: current.IntegratedCommit,
 		EvidenceSha256: current.EvidenceSHA256, PresentedAt: current.PresentedAt.UTC().Format(time.RFC3339Nano)}
@@ -731,6 +936,14 @@ func encodeCursor(at time.Time, key, id, scope string) string {
 
 func workflowError(err error) error {
 	switch {
+	case errors.Is(err, workflow.ErrGoalControlDenied):
+		return connect.NewError(connect.CodePermissionDenied, err)
+	case errors.Is(err, workflow.ErrGoalStopped):
+		return connect.NewError(connect.CodeFailedPrecondition, err)
+	case errors.Is(err, workflow.ErrGoalAllowance):
+		return connect.NewError(connect.CodeResourceExhausted, err)
+	case errors.Is(err, workflow.ErrPreviewChanged):
+		return connect.NewError(connect.CodeAborted, workflow.ErrPreviewChanged)
 	case errors.Is(err, workflow.ErrInvalid):
 		return connect.NewError(connect.CodeInvalidArgument, errors.New("invalid workflow input"))
 	case errors.Is(err, workflow.ErrNotFound):
@@ -738,7 +951,7 @@ func workflowError(err error) error {
 	case errors.Is(err, workflow.ErrConflict):
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("workflow state conflict"))
 	case errors.Is(err, workflow.ErrRecipe):
-		return connect.NewError(connect.CodeFailedPrecondition, errors.New("committed recipe, specification, or transcript failed validation"))
+		return connect.NewError(connect.CodeFailedPrecondition, errors.New("recipe, declared inputs, or selected checks failed validation"))
 	case errors.Is(err, workflow.ErrProjectDenied):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("project creation denied"))
 	case errors.Is(err, workflow.ErrProjectSourceDenied):
@@ -757,9 +970,44 @@ func workflowError(err error) error {
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("repository host has no verified public route"))
 	case errors.Is(err, workflow.ErrAttemptControlDenied):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("attempt control denied"))
+	case errors.Is(err, workflow.ErrEvidencePending):
+		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, workflow.ErrReviewDenied):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("human review denied"))
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("workflow unavailable"))
 	}
+}
+
+func (s *workflowService) ListRunEvidence(ctx context.Context, req *connect.Request[api.ListRunEvidenceRequest]) (*connect.Response[api.ListRunEvidenceResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = s.store.GetRun(ctx, caller.OrganizationID, req.Msg.RunId); err != nil {
+		return nil, workflowError(err)
+	}
+	records, err := s.store.ListEvidencePage(ctx, caller.OrganizationID, req.Msg.RunId, req.Msg.AfterId, 100)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	result := &api.ListRunEvidenceResponse{}
+	for _, e := range records {
+		result.Evidence = append(result.Evidence, &api.RunEvidence{Id: e.ID, AttemptId: e.AttemptID, Stage: e.Stage, Kind: e.Kind, Key: e.Key, Revision: e.Revision, Sha256: e.SHA256, MetadataJson: e.Metadata, Current: e.Current})
+	}
+	if len(records) == 100 {
+		result.NextAfterId = records[len(records)-1].ID
+	}
+	return connect.NewResponse(result), nil
+}
+func (s *workflowService) GetEvidenceContent(ctx context.Context, req *connect.Request[api.GetEvidenceContentRequest]) (*connect.Response[api.GetEvidenceContentResponse], error) {
+	caller, err := s.guard.Caller(ctx, req.Header(), false)
+	if err != nil {
+		return nil, err
+	}
+	data, mime, err := s.store.EvidenceContent(ctx, caller.OrganizationID, req.Msg.RunId, req.Msg.EvidenceId)
+	if err != nil {
+		return nil, workflowError(err)
+	}
+	return connect.NewResponse(&api.GetEvidenceContentResponse{Content: data, ContentType: mime}), nil
 }

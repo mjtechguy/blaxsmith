@@ -125,7 +125,7 @@ and is reproduced in [Appendix A](#appendix-a-guild-manifest).
 - **Exceptions to plan §8.** Native subagents stay disabled for platform
   stages. An embedded template that declares `native_subagents` and whose
   version was approved with that permission may use the harness's own
-  subagents/teams *inside its one sandbox*. This is the "legacy Guild run
+  subagents/teams *inside its one sandbox*. This is the "embedded Guild run
   inside one isolated environment" compatibility step in plan §6; it does not
   satisfy separately isolated worker acceptance. Decomposed mode and
   `bx spawn` (Phase 3) replace it.
@@ -178,7 +178,7 @@ codes: 0 ok, 1 failure, 2 invalid, 3 cancelled/stopped.
 `bx answer`, `bx steer`, unchanged. `bx event` gains no new types; embedded
 signals use `phase` and `handoff`.
 
-**`bx gate` (Phase 2)**: platform-enforced, audited gates and verdicts.
+**`bx gate` (implemented)**: platform-enforced, audited gates and verdicts.
 
 ```
 bx gate --json '{"id":"<ulid>","check":"<manifest check id>","verdict":"pass|fail|blocked",
@@ -189,7 +189,7 @@ bx gate --json '{"id":"<ulid>","check":"<manifest check id>","verdict":"pass|fai
   `{"gate_id":"...","accepted":true|false,"reason":"..."}`. Exit 0 when
   accepted, 1 when the platform refuses (unknown check, evidence missing from
   the stage commit, digest mismatch), 3 when stopped.
-- The watcher persists it as a `workflow_gate_results` row (attempt, stage,
+- The watcher persists it as a `workflow_evidence` gate row (attempt, stage,
   check, verdict, evidence digests, recorded_at) and a `gate.recorded` event.
   The check must be declared by the frozen extension version and required by
   the recipe to affect acceptance; otherwise it is informational.
@@ -197,7 +197,7 @@ bx gate --json '{"id":"<ulid>","check":"<manifest check id>","verdict":"pass|fai
   a required check and a `fail` result cannot be accepted, and the record is
   audited.
 
-**`bx artifact` (Phase 2)**: publish reports and ledgers to review.
+**`bx artifact` (implemented)**: publish reports and ledgers to review.
 
 ```
 bx artifact --json '{"id":"<ulid>","path":"foundry-archive/run-1/report.md",
@@ -330,7 +330,7 @@ and `hooks`; profile `implementer` uses `codex`".
 | Phase | Delivers |
 |---|---|
 | 1 (this lane) | Extension registry (install from a pinned Git ref, validation, admin approval, immutable versions, "update available"), `extension` resource grants, Guild manifest, `extension@version/template` stage references frozen with digests, Claude Code embedded materialization (plugins, approved MCP/hooks), `AskUserQuestion` → `bx ask` mapping, Foundry phase/handoff signals → `bx event`, `guild` runtime image variant |
-| 2 | `bx gate` and `bx artifact`, gate results in acceptance, review-page artifact rendering |
+| 2 | Implemented: `bx gate`, `bx artifact`, required gate enforcement, review artifacts, and independent platform checks. See [review evidence](review-evidence.md) for rollout and current limits. |
 | 3 | `bx spawn`, recipe fan-out and conditional edges, decomposed Guild recipe |
 | Alongside | Runner image pool and per-run selection; AX multi-image allowlist overlay; generic ACP adapter |
 

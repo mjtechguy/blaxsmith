@@ -41,11 +41,14 @@ func (s *Store) GetProjectVerification(ctx context.Context, orgID, projectID str
 	return result, nil
 }
 
-func (s *Store) SetProjectVerificationAs(ctx context.Context, caller identity.Caller, projectID string, policy VerificationPolicy) (ProjectVerification, error) {
+func (s *Store) SetProjectVerificationAs(ctx context.Context, caller identity.Caller, projectID string, expectedVersion int64, policy VerificationPolicy) (ProjectVerification, error) {
 	ctx = tenant.Org(ctx, caller.OrganizationID)
 	if !ids(caller.OrganizationID, caller.PrincipalID, caller.SessionID, projectID) ||
 		(caller.Role != "owner" && caller.Role != "admin") {
 		return ProjectVerification{}, ErrProjectVerificationDenied
+	}
+	if expectedVersion < 0 {
+		return ProjectVerification{}, ErrInvalid
 	}
 	data, err := validateVerification(policy, nil)
 	if err != nil {
@@ -76,13 +79,21 @@ func (s *Store) SetProjectVerificationAs(ctx context.Context, caller identity.Ca
 		return ProjectVerification{}, err
 	}
 	var exists bool
-	err = tx.QueryRow(ctx, `SELECT true FROM workflow_projects WHERE organization_id=$1 AND id=$2 FOR SHARE`,
+	err = tx.QueryRow(ctx, `SELECT true FROM workflow_projects WHERE organization_id=$1 AND id=$2 FOR UPDATE`,
 		caller.OrganizationID, projectID).Scan(&exists)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ProjectVerification{}, ErrNotFound
 	}
 	if err != nil {
 		return ProjectVerification{}, err
+	}
+	var version int64
+	err = tx.QueryRow(ctx, `SELECT version FROM workflow_project_verification WHERE organization_id=$1 AND project_id=$2`, caller.OrganizationID, projectID).Scan(&version)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return ProjectVerification{}, err
+	}
+	if version != expectedVersion {
+		return ProjectVerification{}, ErrConflict
 	}
 	var result ProjectVerification
 	err = tx.QueryRow(ctx, `INSERT INTO workflow_project_verification
@@ -94,6 +105,9 @@ func (s *Store) SetProjectVerificationAs(ctx context.Context, caller identity.Ca
 	if err != nil {
 		return ProjectVerification{}, fmt.Errorf("set project verification: %w", err)
 	}
+	if _, err := tx.Exec(ctx, `INSERT INTO workflow_verification_history (organization_id,project_id,version,policy_json,updated_at,principal_id) VALUES ($1,$2,$3,$4,$5,$6)`, caller.OrganizationID, projectID, result.Version, data, result.UpdatedAt, caller.PrincipalID); err != nil {
+		return ProjectVerification{}, err
+	}
 	if _, err := tx.Exec(ctx, `INSERT INTO identity_audit_events
 		(organization_id,actor_kind,actor_id,action,subject_id)
 		VALUES ($1,'principal',$2,'workflow.project_verification.set',$3)`,
@@ -102,4 +116,29 @@ func (s *Store) SetProjectVerificationAs(ctx context.Context, caller identity.Ca
 	}
 	result.Policy = policy
 	return result, tx.Commit(ctx)
+}
+
+// BeforeVersion is an exclusive revision cursor; zero starts at the newest.
+func (s *Store) ListProjectVerificationHistory(ctx context.Context, orgID, projectID string, beforeVersion int64) ([]ProjectVerification, error) {
+	if !ids(orgID, projectID) || beforeVersion < 0 {
+		return nil, ErrInvalid
+	}
+	rows, err := s.pool.Query(tenant.Org(ctx, orgID), `SELECT policy_json,version,updated_at FROM workflow_verification_history WHERE organization_id=$1 AND project_id=$2 AND ($3::bigint=0 OR version<$3) ORDER BY version DESC LIMIT 50`, orgID, projectID, beforeVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	results := []ProjectVerification{}
+	for rows.Next() {
+		var item ProjectVerification
+		var data []byte
+		if err := rows.Scan(&data, &item.Version, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &item.Policy); err != nil {
+			return nil, err
+		}
+		results = append(results, item)
+	}
+	return results, rows.Err()
 }

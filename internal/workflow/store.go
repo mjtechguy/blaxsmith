@@ -365,6 +365,16 @@ func (s *Store) reserveAttempt(ctx context.Context, orgID, runID, taskID string,
 		return Attempt{}, err
 	}
 	defer tx.Rollback(ctx)
+	var goalID string
+	err = tx.QueryRow(ctx, `SELECT goal_id FROM workflow_goal_runs WHERE organization_id=$1 AND run_id=$2`, orgID, runID).Scan(&goalID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return Attempt{}, err
+	}
+	if goalID != "" {
+		if err := checkGoalAllowance(ctx, tx, orgID, goalID, true); err != nil {
+			return Attempt{}, err
+		}
+	}
 	var runState string
 	var graphSealed bool
 	if err := tx.QueryRow(ctx, `SELECT state,graph_sealed FROM workflow_runs WHERE organization_id=$1 AND id=$2 FOR UPDATE`, orgID, runID).Scan(&runState, &graphSealed); err != nil {
@@ -678,7 +688,9 @@ func (s *Store) ConfirmStopped(ctx context.Context, a Attempt) error {
 
 // FinalizeRun closes an executed task graph once every task has a result.
 // Succeeded means engineering tasks finished; human approval is separate.
-// All task mutations lock the run first, so cancellation cannot race this gate.
+// Pending descendants of blocked stages are blocked in this transaction, even
+// when independent work keeps finalization pending. All task mutations lock the
+// run first, so cancellation cannot race this gate.
 func (s *Store) FinalizeRun(ctx context.Context, orgID, runID string) (string, error) {
 	ctx = tenant.Org(ctx, orgID)
 	if !ids(orgID, runID) {
@@ -702,15 +714,22 @@ func (s *Store) FinalizeRun(ctx context.Context, orgID, runID string) (string, e
 	if state != "active" {
 		return "", ErrConflict
 	}
+	if err := blockDependents(ctx, tx, orgID, runID); err != nil {
+		return "", err
+	}
 	var total, incomplete, blocked int
 	if err := tx.QueryRow(ctx, `SELECT count(*),
-		count(*) FILTER (WHERE state NOT IN ('succeeded','blocked')),
+		count(*) FILTER (WHERE state NOT IN ('succeeded','blocked') OR active_attempt_id IS NOT NULL),
 		count(*) FILTER (WHERE state='blocked')
 		FROM workflow_tasks WHERE organization_id=$1 AND run_id=$2`, orgID, runID).
 		Scan(&total, &incomplete, &blocked); err != nil {
 		return "", err
 	}
 	if total == 0 || incomplete != 0 {
+		// Save failure propagation while independent work or live owners finish.
+		if err := tx.Commit(ctx); err != nil {
+			return "", err
+		}
 		return "", ErrConflict
 	}
 	final := "succeeded"
@@ -857,7 +876,7 @@ func event(ctx context.Context, tx pgx.Tx, orgID, runID, taskID, attemptID, kind
 }
 
 // AppendEvent writes one workflow_events row with an optional JSON object
-// payload (attempt.progress carries one; other kinds pass nil).
+// payload (for example attempt.progress and task.blocked).
 func AppendEvent(ctx context.Context, tx pgx.Tx, orgID, runID, taskID, attemptID, kind string, payload []byte) error {
 	// A per-run counter is advanced under the run row lock in this transaction.
 	// Sequence IDs therefore commit in cursor order, unlike global sequences.

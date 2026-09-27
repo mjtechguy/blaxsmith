@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mjtechguy/blaxsmith/internal/guild"
 	"github.com/mjtechguy/blaxsmith/internal/recipe"
 	"github.com/mjtechguy/blaxsmith/internal/runbranch"
 	"github.com/mjtechguy/blaxsmith/internal/tenant"
@@ -64,8 +65,8 @@ func TestRunBranchDeliveryPostgres(t *testing.T) {
 	remotePath := filepath.Join(root, "project.git")
 	runGit(t, root, "clone", "-q", "--bare", work, remotePath)
 	run, err := store.CreateFrozenRun(ctx, workflow.FrozenRunInput{OrganizationID: org, ProjectID: project, LaunchKey: "rb",
-		Source: recipe.Input{Repo: work, Ref: "HEAD", Recipe: "examples/guild/recipe.json",
-			Spec: "examples/guild/spec.md", Transcript: "examples/guild/transcript.md", Scope: "examples/guild"},
+		Source: recipe.Input{Validators: map[string]recipe.Validator{"guild-forge": guild.ValidateInputs}, Repo: work, Ref: "HEAD", Recipe: "examples/guild/recipe.json",
+			Scope: "examples/guild"},
 		Verification: workflow.VerificationPolicy{SchemaVersion: "blaxsmith.verification/v1alpha1", Checks: []workflow.VerificationCheck{
 			{ID: "project-tests", Command: []string{"go", "test", "./..."}},
 			{ID: "requirement-coverage", Command: []string{"verify-coverage"}}}}})

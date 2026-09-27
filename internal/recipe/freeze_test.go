@@ -1,13 +1,18 @@
-package recipe
+package recipe_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"github.com/mjtechguy/blaxsmith/internal/guild"
+	. "github.com/mjtechguy/blaxsmith/internal/recipe"
 	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -39,7 +44,7 @@ func TestFreezeCommittedGuildWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(first.Guild.Report, "PASS") || strings.Contains(first.Guild.Report, "WARNING") || first.StageOrder[len(first.StageOrder)-1] != "human-review" {
+	if !strings.Contains(first.Validation.Report, "PASS") || strings.Contains(first.Validation.Report, "WARNING") || first.StageOrder[len(first.StageOrder)-1] != "human-review" {
 		t.Fatalf("invalid gate result: %+v", first)
 	}
 	got := map[string]string{}
@@ -52,7 +57,7 @@ func TestFreezeCommittedGuildWorkflow(t *testing.T) {
 	if got["AGENTS.md"] == "" || got[example+"AGENTS.md"] == "" || got[example+"prompts/AGENTS.md"] == "" || got["unrelated/AGENTS.md"] != "" {
 		t.Fatalf("incorrect AGENTS.md scope: %v", sortedKeys(got))
 	}
-	if got[example+"skills/evidence/SKILL.md"] == "" || !strings.Contains(got[in.Spec], "FR-001") {
+	if got[example+"skills/evidence/SKILL.md"] == "" || !strings.Contains(got[(example+"spec.md")], "FR-001") {
 		t.Fatal("missing skill or Guild requirement IDs")
 	}
 	// A dirty prompt and hostile caller Git environment must not change the source.
@@ -92,26 +97,19 @@ func TestRejectInvalidRunInputs(t *testing.T) {
 		edit func(*testing.T, *Input, *Recipe)
 		want string
 	}{
-		{"missing human", func(t *testing.T, in *Input, r *Recipe) { r.Stages = r.Stages[:5] }, "missing mandatory human_review"},
 		{"agent approving", func(t *testing.T, in *Input, r *Recipe) { r.Stages[5].Profile = "architect" }, "cannot have an agent"},
 		{"cycle", func(t *testing.T, in *Input, r *Recipe) { r.Stages[0].DependsOn = []string{"implement"} }, "cycle"},
 		{"unknown dependency", func(t *testing.T, in *Input, r *Recipe) { r.Stages[1].DependsOn = []string{"missing"} }, "invalid or duplicate dependency"},
 		{"duplicate dependency", func(t *testing.T, in *Input, r *Recipe) { r.Stages[1].DependsOn = []string{"plan", "plan"} }, "invalid or duplicate dependency"},
 		{"duplicate stage", func(t *testing.T, in *Input, r *Recipe) { r.Stages[1].ID = "plan" }, "duplicate stage"},
-		{"unbounded corrections", func(t *testing.T, in *Input, r *Recipe) { r.Limits.MaxCorrectionCycles = 0 }, "limits require"},
+		{"negative corrections", func(t *testing.T, in *Input, r *Recipe) { r.Limits.MaxCorrectionCycles = -1 }, "limits require"},
 		{"unbounded timeout", func(t *testing.T, in *Input, r *Recipe) { r.Limits.TimeoutSeconds = 0 }, "limits require"},
-		{"unchecked implementation", func(t *testing.T, in *Input, r *Recipe) { r.Stages[3].DependsOn = []string{"plan"} }, "subsequent review and verification"},
 		{"unreviewed work", func(t *testing.T, in *Input, r *Recipe) { r.Stages[4].DependsOn = []string{"review"} }, "must precede final"},
-		{"post architect work", func(t *testing.T, in *Input, r *Recipe) {
-			r.Stages = append(r.Stages, Stage{ID: "late", Kind: "documentation", Profile: "architect", Prompt: example + "prompts/plan.md", DependsOn: []string{"architect-review"}})
-			r.Stages[5].DependsOn = []string{"late"}
-		}, "must precede final architect"},
 		{"loop on plan", func(t *testing.T, in *Input, r *Recipe) {
 			r.Stages[0].Loop = &Loop{With: "plan", Until: "pass", MaxCycles: 2}
 		}, "review/verify stage"},
 		{"unbounded loop", func(t *testing.T, in *Input, r *Recipe) { r.Stages[3].Loop.MaxCycles = 11 }, "1–10 cycles"},
 		{"loop downstream", func(t *testing.T, in *Input, r *Recipe) { r.Stages[3].Loop.With = "architect-review" }, "upstream agent stage"},
-		{"missing policy checks", func(t *testing.T, in *Input, r *Recipe) { r.RequiredChecks = nil }, "require checks"},
 		{"duplicate checks", func(t *testing.T, in *Input, r *Recipe) { r.RequiredChecks = []string{"tests", "tests"} }, "duplicate required check"},
 		{"missing profile", func(t *testing.T, in *Input, r *Recipe) { r.Stages[1].Profile = "unknown" }, "known profile"},
 		{"unsupported harness", func(t *testing.T, in *Input, r *Recipe) {
@@ -125,8 +123,8 @@ func TestRejectInvalidRunInputs(t *testing.T) {
 			r.Profiles["implementer"] = p
 		}, "provider/model"},
 		{"path escape", func(t *testing.T, in *Input, r *Recipe) { r.Stages[1].Prompt = "../outside.md" }, "prompt file"},
-		{"missing file", func(t *testing.T, in *Input, r *Recipe) { in.Transcript = "missing.md" }, "not committed"},
-		{"scope is file", func(t *testing.T, in *Input, r *Recipe) { in.Scope = in.Spec }, "contains no committed files"},
+		{"missing file", func(t *testing.T, in *Input, r *Recipe) { r.Validation.Inputs["transcript"] = "missing.md" }, "not committed"},
+		{"scope is file", func(t *testing.T, in *Input, r *Recipe) { in.Scope = (example + "spec.md") }, "contains no committed files"},
 		{"scope traversal", func(t *testing.T, in *Input, r *Recipe) { in.Scope = "../outside" }, "repository-relative"},
 		{"symlink", func(t *testing.T, in *Input, r *Recipe) {
 			name := filepath.Join(in.Repo, example+"AGENTS.md")
@@ -138,17 +136,17 @@ func TestRejectInvalidRunInputs(t *testing.T) {
 			}
 		}, "regular Git blob"},
 		{"LFS pointer", func(t *testing.T, in *Input, r *Recipe) {
-			write(t, in.Repo, in.Spec, "version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 3\n")
+			write(t, in.Repo, (example + "spec.md"), "version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 3\n")
 		}, "LFS pointer"},
 		{"oversized input", func(t *testing.T, in *Input, r *Recipe) {
-			write(t, in.Repo, in.Spec, strings.Repeat("x", maxArtifactBytes+1))
+			write(t, in.Repo, (example + "spec.md"), strings.Repeat("x", maxArtifactBytes+1))
 		}, "must contain"},
 		{"forged locked quote", func(t *testing.T, in *Input, r *Recipe) {
-			data, err := os.ReadFile(filepath.Join(in.Repo, in.Spec))
+			data, err := os.ReadFile(filepath.Join(in.Repo, (example + "spec.md")))
 			if err != nil {
 				t.Fatal(err)
 			}
-			write(t, in.Repo, in.Spec, strings.Replace(string(data), "Freeze recipe inputs at an exact Git commit.", "Invent a requirement the user never gave.", 1))
+			write(t, in.Repo, (example + "spec.md"), strings.Replace(string(data), "Freeze recipe inputs at an exact Git commit.", "Invent a requirement the user never gave.", 1))
 		}, "NOT_VERBATIM"},
 	}
 	for _, tc := range cases {
@@ -158,9 +156,9 @@ func TestRejectInvalidRunInputs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r, err := parse(data)
-			if err != nil {
-				t.Fatal(err)
+			r, _, fe := Validate(data)
+			if fe != nil {
+				t.Fatal(fe)
 			}
 			tc.edit(t, &in, &r)
 			data, err = json.Marshal(r)
@@ -182,26 +180,27 @@ func TestRejectAmbiguousJSON(t *testing.T) {
 		`{"name":"a","name":"b"}`, `{"profiles":{"a":{},"A":{}}}`,
 		`{"unknown":true}`, `{} {}`, `{"limits":{"timeout_seconds":"oops"}}`,
 	} {
-		if _, err := parse([]byte(data)); err == nil {
+		if _, _, err := Validate([]byte(data)); err == nil {
 			t.Fatalf("accepted ambiguous recipe: %s", data)
 		}
 	}
 }
 
-func TestInterviewSatisfiesPlanning(t *testing.T) {
+func TestInterviewStage(t *testing.T) {
 	data, err := os.ReadFile("../../" + example + "recipe.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := parse(data)
-	if err != nil {
-		t.Fatal(err)
+	r, _, fe := Validate(data)
+	if fe != nil {
+		t.Fatal(fe)
 	}
 	if r.Stages[3].Loop == nil || r.Stages[3].Loop.With != "implement" {
 		t.Fatalf("example verify loop missing: %+v", r.Stages[3])
 	}
 	r.Stages[0].Kind = "interview"
-	if _, err := r.validate(); err != nil {
+	encoded, _ := json.Marshal(r)
+	if _, _, err := Validate(encoded); err != nil {
 		t.Fatalf("interview did not satisfy planning: %v", err)
 	}
 }
@@ -233,7 +232,7 @@ func testRepo(t *testing.T) Input {
 	}
 	testGit(t, dir, "init", "--template=", "--initial-branch=main")
 	commit(t, dir)
-	return Input{Repo: dir, Ref: "HEAD", Recipe: example + "recipe.json", Spec: example + "spec.md", Transcript: example + "transcript.md", Scope: "examples/guild"}
+	return Input{Validators: map[string]Validator{"guild-forge": guild.ValidateInputs}, Repo: dir, Ref: "HEAD", Recipe: example + "recipe.json", Scope: "examples/guild"}
 }
 
 func write(t *testing.T, repo, name, data string) {
@@ -260,4 +259,17 @@ func testGit(t *testing.T, repo string, args ...string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
+}
+
+const maxArtifactBytes = MaxRecipeBytes
+const maxBundleBytes = 16 << 20
+
+func digest(data []byte) string { return fmt.Sprintf("%x", sha256.Sum256(data)) }
+func sortedKeys(m map[string]string) []string {
+	out := []string{}
+	for k := range m {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return out
 }

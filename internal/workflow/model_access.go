@@ -243,7 +243,7 @@ func lockCallerSession(ctx context.Context, tx pgx.Tx, caller identity.Caller, a
 		AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
 		AND m.state='active' AND p.state='active'
 		AND (s.auth_method<>'local' OR o.login_policy IN ('local','mixed'))
-		AND (o.mfa_policy<>'required' OR s.mfa_level='totp')
+		AND (s.credential_kind='service' OR o.mfa_policy<>'required' OR s.mfa_level='totp')
 		FOR SHARE OF s,m,p,o`, caller.OrganizationID, caller.SessionID, caller.PrincipalID,
 		caller.Role, caller.AccessExpires, anyRole).Scan(&role)
 	if errors.Is(err, pgx.ErrNoRows) {

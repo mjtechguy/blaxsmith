@@ -379,19 +379,58 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 			t.Fatalf("same-attempt lease not delivered: %t %v", delivered, err)
 		}
 		// A still-authorized running attempt's short lease is renewed near expiry.
-		renewed, err := access.RenewModelLeases(tenant.System(t.Context()), pool, 30*time.Minute)
+		renewed, err := access.RenewModelLeases(tenant.System(t.Context()), pool, 30*time.Minute, "", "", 100)
 		if err != nil || len(renewed) != 1 || renewed[0].AttemptID != model.Attempt.ID ||
 			time.Until(renewed[0].ExpiresAt) < 25*time.Minute {
 			t.Fatalf("renewal: %+v %v", renewed, err)
 		}
-		if again, err := access.RenewModelLeases(tenant.System(t.Context()), pool, 30*time.Minute); err != nil || len(again) != 0 {
+		ctx := tenant.System(t.Context())
+		// Losing delivery (or its acknowledgement) replays the exact renewal.
+		for range 2 {
+			if again, err := access.RenewModelLeases(ctx, pool, 30*time.Minute, "", "", 100); err != nil || len(again) != 1 || again[0] != renewed[0] {
+				t.Fatalf("pending renewal was not replayed: %+v %v", again, err)
+			}
+		}
+		wrongOrg := renewed[0]
+		wrongOrg.OrganizationID = "another-org"
+		if err := access.MarkRenewalDelivered(ctx, pool, wrongOrg); !errors.Is(err, access.ErrDenied) {
+			t.Fatalf("acknowledgement crossed organizations: %v", err)
+		}
+		for range 2 { // acknowledging twice is harmless
+			if err := access.MarkRenewalDelivered(ctx, pool, renewed[0]); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if again, err := access.RenewModelLeases(ctx, pool, 30*time.Minute, "", "", 100); err != nil || len(again) != 0 {
 			t.Fatalf("a fresh lease was renewed again: %+v %v", again, err)
 		}
-		// A revoked grant is never renewed; the worker stops at the old expiry.
+		testRenewalPages(t, pool, renewed[0])
+		// A stale acknowledgement cannot consume the next renewal.
 		if _, err := pool.Exec(tenant.System(t.Context()), `UPDATE access_leases SET expires_at=clock_timestamp()+interval '1 minute'
 			WHERE attempt_id=$1`, model.Attempt.ID); err != nil {
 			t.Fatal(err)
 		}
+		next, err := access.RenewModelLeases(ctx, pool, 30*time.Minute, "", "", 100)
+		if err != nil || len(next) != 1 || next[0].Generation != renewed[0].Generation+1 {
+			t.Fatalf("next renewal: %+v %v", next, err)
+		}
+		if err := access.MarkRenewalDelivered(ctx, pool, renewed[0]); !errors.Is(err, access.ErrDenied) {
+			t.Fatalf("stale acknowledgement accepted: %v", err)
+		}
+		if again, err := access.RenewModelLeases(ctx, pool, 30*time.Minute, "", "", 100); err != nil || len(again) != 1 || again[0] != next[0] {
+			t.Fatalf("stale acknowledgement consumed renewal: %+v %v", again, err)
+		}
+		// Cancellation fences even an already-pending renewal.
+		if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET state='cancel_requested' WHERE id=$1`, model.Attempt.RunID); err != nil {
+			t.Fatal(err)
+		}
+		if again, err := access.RenewModelLeases(ctx, pool, 30*time.Minute, "", "", 100); err != nil || len(again) != 0 {
+			t.Fatalf("cancelled run renewal delivered: %+v %v", again, err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET state='active' WHERE id=$1`, model.Attempt.RunID); err != nil {
+			t.Fatal(err)
+		}
+		// A revoked grant never replays pending delivery.
 		var grantID string
 		if err := pool.QueryRow(tenant.System(t.Context()), `SELECT grant_id FROM access_bindings WHERE organization_id=$1 AND id=$2`,
 			model.Invoke.OrganizationID, model.Invoke.BindingID).Scan(&grantID); err != nil {
@@ -400,8 +439,11 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 		if err := access.RevokeGrant(tenant.System(t.Context()), pool, model.Invoke.OrganizationID, grantID); err != nil {
 			t.Fatal(err)
 		}
-		if revoked, err := access.RenewModelLeases(tenant.System(t.Context()), pool, 30*time.Minute); err != nil || len(revoked) != 0 {
+		if revoked, err := access.RenewModelLeases(tenant.System(t.Context()), pool, 30*time.Minute, "", "", 100); err != nil || len(revoked) != 0 {
 			t.Fatalf("revoked lease renewed: %+v %v", revoked, err)
+		}
+		if err := access.MarkRenewalDelivered(ctx, pool, next[0]); !errors.Is(err, access.ErrDenied) {
+			t.Fatalf("revoked lease acknowledgement accepted: %v", err)
 		}
 	})
 	t.Run("grant revoked after intent", func(t *testing.T) {
@@ -448,4 +490,56 @@ func TestModelAttemptCallbacksPostgres(t *testing.T) {
 			t.Fatalf("foreign attempt binding reached release: %v", err)
 		}
 	})
+}
+
+func testRenewalPages(t *testing.T, pool *pgxpool.Pool, seed access.RenewedLease) {
+	t.Helper()
+	ctx := tenant.System(t.Context())
+	// Clone three delivered leases in reverse order; the acknowledged seed
+	// remains fresh and is not eligible for this pass.
+	for _, id := range []string{"page-3", "page-2", "page-1"} {
+		if _, err := pool.Exec(ctx, `INSERT INTO bootstrap_challenges
+			(id,cluster_id,attempt_id,owner_generation,actor_atespace,actor_name,actor_uid,nonce_sha256,expires_at,consumed_at,release_attempted_at,phase)
+			SELECT $3,c.cluster_id,c.attempt_id,c.owner_generation,c.actor_atespace,c.actor_name,c.actor_uid,
+			decode(md5($3)||md5($3),'hex'),c.expires_at,c.consumed_at,c.release_attempted_at,c.phase
+			FROM bootstrap_challenges c JOIN access_leases l ON l.bootstrap_challenge_id=c.id
+			WHERE l.organization_id=$1 AND l.id=$2`, seed.OrganizationID, seed.LeaseID, id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO access_leases
+			(organization_id,id,binding_id,connection_id,bootstrap_challenge_id,cluster_id,attempt_id,
+			owner_generation,actor_uid,capability,resource,audience,secret_version,expires_at,delivery_attempted_at,delivered_at)
+			SELECT organization_id,$3,binding_id,connection_id,$3,cluster_id,attempt_id,
+			owner_generation,actor_uid,capability,resource,audience,secret_version,clock_timestamp()+interval '1 minute',delivery_attempted_at,delivered_at
+			FROM access_leases WHERE organization_id=$1 AND id=$2`, seed.OrganizationID, seed.LeaseID, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, err := access.RenewModelLeases(ctx, pool, 30*time.Minute, "", "", 1)
+	if err != nil || len(first) != 1 || first[0].LeaseID != "page-1" {
+		t.Fatalf("first renewal page: %+v %v", first, err)
+	}
+	var pending int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM access_leases WHERE renewal_pending`).Scan(&pending); err != nil || pending != 1 {
+		t.Fatalf("renewal extended leases beyond the page: pending=%d err=%v", pending, err)
+	}
+	// No acknowledgement of page one: its failure must not block page two.
+	next, err := access.RenewModelLeases(ctx, pool, 30*time.Minute, first[0].OrganizationID, first[0].LeaseID, 2)
+	if err != nil || len(next) != 2 || next[0].LeaseID != "page-2" || next[1].LeaseID != "page-3" {
+		t.Fatalf("next renewal page: %+v %v", next, err)
+	}
+	if end, err := access.RenewModelLeases(ctx, pool, 30*time.Minute, next[1].OrganizationID, next[1].LeaseID, 2); err != nil || len(end) != 0 {
+		t.Fatalf("renewal pass did not end: %+v %v", end, err)
+	}
+	if retry, err := access.RenewModelLeases(ctx, pool, 30*time.Minute, "", "", 1); err != nil || len(retry) != 1 || retry[0] != first[0] {
+		t.Fatalf("wrapped pass did not replay pending renewal: %+v %v", retry, err)
+	}
+	for _, limit := range []int{0, 101} {
+		if _, err := access.RenewModelLeases(ctx, pool, 30*time.Minute, "", "", limit); !errors.Is(err, access.ErrDenied) {
+			t.Fatalf("invalid renewal page limit %d accepted: %v", limit, err)
+		}
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM access_leases WHERE organization_id=$1 AND id IN ('page-1','page-2','page-3')`, seed.OrganizationID); err != nil {
+		t.Fatal(err)
+	}
 }

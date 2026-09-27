@@ -94,15 +94,16 @@ func codexRenewer(renew func(context.Context, access.RenewedLease) (access.Deliv
 func leaseRenewer(pool *pgxpool.Pool, store *workflow.Store, guests *terminal.Router, ttl time.Duration,
 	oauth *access.OAuthRefresher) func(context.Context) {
 	renewers := deliveryRenewers(oauth)
+	var after [2]string
 	return func(ctx context.Context) {
-		renewed, err := access.RenewModelLeases(ctx, pool, ttl)
+		renewed, err := access.RenewModelLeases(ctx, pool, ttl, after[0], after[1], 10)
 		if err != nil {
 			if ctx.Err() == nil {
 				log.Printf("model lease renewal: %v", err)
 			}
 			return
 		}
-		for _, lease := range renewed {
+		after = deliverLeasePage(ctx, after, renewed, func(ctx context.Context, lease access.RenewedLease) error {
 			t, err := store.GetAttemptTerminal(ctx, lease.OrganizationID, lease.AttemptID)
 			var guest *terminal.Guest
 			if err == nil {
@@ -111,11 +112,31 @@ func leaseRenewer(pool *pgxpool.Pool, store *workflow.Store, guests *terminal.Ro
 			if err == nil {
 				err = announceRenewal(ctx, renewers, lease, guest)
 			}
-			if err != nil {
-				log.Printf("model lease renewal for attempt %s not delivered: %v", lease.AttemptID, err)
+			if err == nil {
+				err = access.MarkRenewalDelivered(ctx, pool, lease)
 			}
+			return err
+		})
+	}
+}
+
+// Advance past each attempted delivery, even if it consumes the pass deadline.
+// Unattempted leases remain ahead of the cursor; failures retry after wrapping.
+func deliverLeasePage(ctx context.Context, after [2]string, leases []access.RenewedLease,
+	deliver func(context.Context, access.RenewedLease) error) [2]string {
+	if len(leases) == 0 && ctx.Err() == nil {
+		return [2]string{}
+	}
+	for _, lease := range leases {
+		if ctx.Err() != nil {
+			break
+		}
+		after = [2]string{lease.OrganizationID, lease.LeaseID}
+		if err := deliver(ctx, lease); err != nil && ctx.Err() == nil {
+			log.Printf("model lease renewal for attempt %s pending delivery acknowledgement: %v", lease.AttemptID, err)
 		}
 	}
+	return after
 }
 
 // announceRenewal refreshes the delivered payload for the lease's delivery

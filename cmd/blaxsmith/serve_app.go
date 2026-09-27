@@ -220,7 +220,7 @@ func serveAppContext(ctx context.Context, args []string) error {
 	interactionDone := make(chan struct{})
 	go func() {
 		defer close(interactionDone)
-		runInteractionCoordinator(serveCtx, pool, interactionStore(pool), interactionWatcher(interactions, guests))
+		runInteractionCoordinator(serveCtx, pool, interactionStore(pool), interactionWatcher(interactions, guests, interactionStore(pool)))
 	}()
 	fmt.Fprintf(os.Stderr, "Blaxsmith HTTPS API on %s\n", listener.Addr())
 	err = server.ServeTLS(listener, "", "")
@@ -338,7 +338,7 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	terminals := terminal.NewHub()
 	mux := http.NewServeMux()
 	mux.Handle("/api"+authPath, http.StripPrefix("/api", authHandler))
-	service := &workflowService{guard: guard, store: store, secrets: secrets, interactions: interactions,
+	service := &workflowService{guard: guard, sessions: manager, store: store, secrets: secrets, interactions: interactions,
 		guests: guests, terminals: terminals}
 	if product != nil {
 		service.dispatcher = product.Dispatcher
@@ -347,6 +347,21 @@ func newAppHandler(ctx context.Context, pool *pgxpool.Pool, manager *identity.Se
 	}
 	workflowPath, workflowHandler := apiv1connect.NewWorkflowServiceHandler(service, connect.WithReadMaxBytes(1<<20))
 	mux.Handle("/api"+workflowPath, http.StripPrefix("/api", guard.Wrap(workflowHandler)))
+	machine := machineGuard{sessions: manager, pool: pool}
+	machineService := *service
+	machineService.guard = machine
+	machinePath, machineHandler := apiv1connect.NewWorkflowServiceHandler(&machineService, connect.WithReadMaxBytes(1<<20), connect.WithInterceptors(machine.interceptor()))
+	mux.Handle("/machine"+machinePath, http.StripPrefix("/machine", guard.Wrap(machineHandler)))
+	oauth, err := newMCPOAuth(manager, guard, origin)
+	if err != nil {
+		return nil, nil, err
+	}
+	challenge := `Bearer realm="blaxsmith"`
+	if oauth != nil {
+		oauth.register(mux)
+		challenge = oauth.challenge()
+	}
+	mux.Handle("/mcp", guard.Wrap(mcpHTTPHandler(machineHandler, origin+"/mcp", challenge)))
 	admin := newAdminService(guard, store, dispatchConfig.workerPool)
 	admin.sessions = manager.Policy()
 	adminPath, adminHandler := apiv1connect.NewAdminServiceHandler(admin,

@@ -1,0 +1,15 @@
+{
+  "schema_version": "blaxsmith.inputs/v1alpha1",
+  "stack": {
+    "name": "Small static web application",
+    "prerequisites": ["A committed repository baseline", "A browser environment for selected E2E checks"],
+    "conventions": ["Start with semantic HTML, CSS and native browser APIs", "Add dependencies only for concrete requirements", "Include keyboard navigation, empty states and error states"]
+  },
+  "agents": {
+    "planner": {
+      "responsibility": "Plan the smallest complete vertical slice from the user's examples",
+      "capabilities": ["read_repository", "ask_user", "publish_artifacts"],
+      "completion_criteria": ["Name the selected checks and missing environment prerequisites", "Separate assumptions from user decisions"]
+    }
+  }
+}

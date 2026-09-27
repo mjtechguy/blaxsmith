@@ -329,7 +329,8 @@ func (r *ExtensionResolver) Resolve(ctx context.Context, id, version string) (ex
 }
 
 // recordRunExtensions checks that the launching caller may use every frozen
-// extension in the project and records the versions against the run.
+// extension in the project and records the versions against the run. An empty
+// runID performs the same grant checks for a read-only preview.
 func (r *ExtensionResolver) recordRunExtensions(ctx context.Context, tx pgx.Tx, caller *identity.Caller, projectID, runID string, frozen []extension.Frozen) error {
 	for _, f := range frozen {
 		key := f.ID + "@" + f.Version
@@ -348,6 +349,9 @@ func (r *ExtensionResolver) recordRunExtensions(ctx context.Context, tx pgx.Tx, 
 				return ErrNotFound
 			}
 		}
+		if runID == "" {
+			continue
+		} // Read-only preview; admission repeats these checks.
 		if _, err := tx.Exec(ctx, `INSERT INTO workflow_run_extensions
 			(organization_id,run_id,extension_version_id,manifest_sha256,permissions_sha256)
 			VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, r.org, runID, versionID, f.ManifestSHA256, f.PermissionsSHA256); err != nil {

@@ -15,7 +15,8 @@ import (
 
 // AttemptInput is the commit a new attempt of taskID starts from: the latest
 // accepted revision of its code-producing upstream (the nearest implement
-// ancestor), or the run's source commit when there is none yet.
+// ancestor), or its own latest accepted revision when repairing the first implement stage,
+// falling back to the run's source commit when neither exists.
 // ponytail: the first proof is linear; with several implement ancestors the
 // first in recipe order wins, and parallel code-producing stages are deferred.
 func (s *Store) AttemptInput(ctx context.Context, orgID, runID, taskID string) (string, error) {
@@ -56,7 +57,12 @@ func (s *Store) AttemptInput(ctx context.Context, orgID, runID, taskID string) (
 	walk(key)
 	i := slices.IndexFunc(bundle.Recipe.Stages, func(st recipe.Stage) bool { return ancestors[st.ID] && st.Kind == "implement" })
 	if i < 0 {
-		return source, nil
+		// The root implement stage repairs its existing work. Its base source
+		// cannot change; stages with implement ancestors still use their inputs.
+		i = slices.IndexFunc(bundle.Recipe.Stages, func(st recipe.Stage) bool { return st.ID == key && st.Kind == "implement" })
+		if i < 0 {
+			return source, nil
+		}
 	}
 	var revision string
 	err = s.pool.QueryRow(ctx, `SELECT COALESCE(res.revision,'') FROM workflow_tasks t
@@ -64,10 +70,16 @@ func (s *Store) AttemptInput(ctx context.Context, orgID, runID, taskID string) (
 			AND state='succeeded' ORDER BY generation DESC LIMIT 1) a ON true
 		JOIN workflow_attempt_results res ON res.organization_id=t.organization_id AND res.attempt_id=a.id
 		WHERE t.organization_id=$1 AND t.run_id=$2 AND t.task_key=$3`, orgID, runID, bundle.Recipe.Stages[i].ID).Scan(&revision)
-	if errors.Is(err, pgx.ErrNoRows) || revision == "" {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return source, nil
 	}
-	return revision, err
+	if err != nil {
+		return "", err
+	}
+	if revision == "" {
+		return source, nil
+	}
+	return revision, nil
 }
 
 // RecordInputCommit freezes an attempt's input commit inside its reservation

@@ -4,7 +4,7 @@
 // /admin layout and every admin RPC is enforced on the server.
 import {
   Activity, BookCopy, FolderKanban, GitBranch, GitPullRequest, House, Inbox, KeyRound, LayoutDashboard,
-  ListChecks, Package, PlugZap, ScrollText, Settings, ShieldCheck, Timer, Users, Wrench, type LucideIcon,
+  ListChecks, MessageSquare, Package, PlugZap, ScrollText, Settings, ShieldCheck, Timer, Users, Wrench, type LucideIcon,
 } from "lucide-react";
 
 export type NavItem = {
@@ -49,6 +49,7 @@ export function navigation({ role, projectId, projectName }: NavContext): NavGro
     const base = `/projects/${encodeURIComponent(projectId)}`;
     groups.push({ id: "project", label: projectName || "Project", collapsible: true, items: [
       { id: "project-overview", label: "Overview", href: base, icon: LayoutDashboard, exact: true, also: [`${base}/setup`] },
+      { id: "project-goals", label: "Goals", href: `${base}/goals`, icon: MessageSquare },
       { id: "project-runs", label: "Runs", href: `${base}/runs`, icon: GitBranch },
       { id: "project-recipes", label: "Project recipes", href: `${base}/recipes`, icon: BookCopy },
       { id: "project-connections", label: "Project connections", href: `${base}/connections`, icon: KeyRound, also: [`${base}/model-access`] },
@@ -154,7 +155,7 @@ export function switchPath(pathname: string, nextProjectId: string): string {
   const section = /^\/projects\/[^/]+\/([^/]+)(\/([^/]+))?/.exec(pathname);
   if (!section) return base;
   if (section[1] === "settings") return section[3] ? `${base}/settings/${section[3]}` : `${base}/settings`;
-  return ["runs", "recipes", "connections"].includes(section[1]) ? `${base}/${section[1]}` : base;
+  return ["goals", "runs", "recipes", "connections"].includes(section[1]) ? `${base}/${section[1]}` : base;
 }
 
 // Where to go after sign-in: a same-origin app path only. Anything else

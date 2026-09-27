@@ -18,7 +18,7 @@ test("recipe mutations send CSRF, launch sends the library version, and the form
   };
   try {
     const recipes = await server.ssrLoadModule("/src/recipes.ts");
-    const { launchRun } = await server.ssrLoadModule("/src/workflow.ts");
+    const { launchRun, previewRun, getPlatformCapabilities } = await server.ssrLoadModule("/src/workflow.ts");
     await recipes.createRecipe("", "Fast", "", "{}", "");
     await recipes.createRecipeVersion("r1", "{}", "", true);
     await recipes.setCurrentRecipeVersion("r1", "v2");
@@ -26,7 +26,7 @@ test("recipe mutations send CSRF, launch sends the library version, and the form
     await recipes.validateRecipe("{}", "");
     await recipes.grantRecipe("r1", "p1", "project", "");
     await recipes.revokeRecipeGrant("g1");
-    await launchRun("p1", "key", "", "spec.md", "t.md", ".", "v2");
+    await launchRun("p1", "key", "", ".", "v2");
     assert.deepEqual(requests.map((r) => [r.url, r.csrf]), [
       ["blaxsmith.api.v1.RecipeService/CreateRecipe", "C".repeat(43)],
       ["blaxsmith.api.v1.RecipeService/CreateRecipeVersion", "C".repeat(43)],
@@ -41,6 +41,17 @@ test("recipe mutations send CSRF, launch sends the library version, and the form
     assert.deepEqual(requests[6].body, { grantId: "g1" });
     assert.equal(requests[7].body.recipeVersionId, "v2");
     assert.equal(requests[7].body.recipePath, undefined);
+    assert.equal(requests[7].body.specPath, undefined);
+    assert.equal(recipes.emptyRecipe().acceptance, "manual");
+    await previewRun("p1", "", ".", "v2");
+    assert.equal(requests.at(-1).url, "blaxsmith.api.v1.WorkflowService/PreviewRun");
+    assert.equal(requests.at(-1).csrf, "C".repeat(43));
+    assert.deepEqual(requests.at(-1).body, { projectId: "p1", scope: ".", recipeVersionId: "v2" });
+    await launchRun("p1", "key", "", ".", "v2", { bundleSha256: "a".repeat(64), verificationSha256: "b".repeat(64) });
+    assert.equal(requests.at(-1).body.expectedBundleSha256, "a".repeat(64));
+    assert.equal(requests.at(-1).body.expectedVerificationSha256, "b".repeat(64));
+    await getPlatformCapabilities();
+    assert.equal(requests.at(-1).url, "blaxsmith.api.v1.WorkflowService/GetPlatformCapabilities");
 
     const guild = recipes.parseRecipe(await readFile(new URL("../../examples/guild/recipe.json", import.meta.url), "utf8"));
     assert.ok(guild);

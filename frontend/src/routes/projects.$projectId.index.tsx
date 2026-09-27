@@ -57,6 +57,7 @@ function ProjectOverview() {
 
   return <DashboardLayout title={p.name} description={`${p.slug} · created ${new Date(p.createdAt).toLocaleDateString()}`}
     actions={<>
+      {mayLaunch ? <Link className="primary-button" to="/projects/$projectId/goals" params={{ projectId }}><Plus size={15} aria-hidden="true" /> New goal</Link> : null}
       {canLaunch ? <Link className="primary-button" to="/projects/$projectId/runs/new" params={{ projectId }}><Plus size={15} aria-hidden="true" /> New run</Link> : null}
       <Link className="secondary-button" to="/projects/$projectId/settings" params={{ projectId }}><Settings size={15} aria-hidden="true" /> Settings</Link>
     </>}

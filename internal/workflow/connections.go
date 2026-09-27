@@ -801,16 +801,22 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 	if err != nil {
 		return nil, nil, "", err
 	}
+	return s.connectionModels(ctx, caller.OrganizationID, connectionID, r, harness)
+}
+
+// Caller must establish catalog visibility or a project model grant first.
+func (s *Store) connectionModels(ctx context.Context, org, connectionID string, r connectionRow, harness string) ([]ConnectionModel, *time.Time, string, error) {
 	if harness != "" && !knownHarness(harness) {
 		return nil, nil, "", ErrInvalid
 	}
 	var checked *time.Time
 	var modelsErr string
 	if err := s.pool.QueryRow(ctx, `SELECT models_checked_at,COALESCE(models_error,'') FROM access_connections
-		WHERE organization_id=$1 AND id=$2`, caller.OrganizationID, connectionID).Scan(&checked, &modelsErr); err != nil {
+		WHERE organization_id=$1 AND id=$2`, org, connectionID).Scan(&checked, &modelsErr); err != nil {
 		return nil, nil, "", err
 	}
 	var rows pgx.Rows
+	var err error
 	subscription := r.AuthMethod == access.CodexSubscriptionAuth || r.AuthMethod == access.ClaudeSetupTokenAuth
 	subscriptionHarness := "codex"
 	if r.AuthMethod == access.ClaudeSetupTokenAuth {
@@ -824,12 +830,12 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 		rows, err = s.pool.Query(ctx, `SELECT DISTINCT model,model,NULL::timestamptz,NULL::integer,'',
 			false,false,''::text,'{}'::text[],''::text
 			FROM workflow_tool_runtime_approvals WHERE organization_id=$1 AND harness=$2 AND revoked_at IS NULL
-			ORDER BY 1`, caller.OrganizationID, subscriptionHarness)
+			ORDER BY 1`, org, subscriptionHarness)
 	} else {
 		rows, err = s.pool.Query(ctx, `SELECT model_id,display_name,released_at,context_tokens,COALESCE(capabilities::text,''),
 			is_default,legacy,COALESCE(badge,''),efforts,COALESCE(default_effort,'')
 			FROM access_connection_models WHERE organization_id=$1 AND connection_id=$2
-			ORDER BY released_at DESC NULLS LAST,model_id`, caller.OrganizationID, connectionID)
+			ORDER BY released_at DESC NULLS LAST,model_id`, org, connectionID)
 	}
 	if err != nil {
 		return nil, nil, "", err
@@ -854,7 +860,7 @@ func (s *Store) ListConnectionModelsAs(ctx context.Context, caller identity.Call
 			}
 		}
 	}
-	recommended, err := s.recommendedModels(ctx, caller.OrganizationID, connectionID)
+	recommended, err := s.recommendedModels(ctx, org, connectionID)
 	if err != nil {
 		return nil, nil, "", err
 	}

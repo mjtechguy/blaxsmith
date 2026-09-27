@@ -40,7 +40,7 @@ func guildFrozen(t *testing.T, optional ...string) extension.Frozen {
 
 func TestExtensionMountHonoursApprovals(t *testing.T) {
 	stage := recipe.Stage{ID: "build", Kind: "implement", Prompt: "build.md", Template: "guild@1.0.0/foundry-build"}
-	bundle := &recipe.Bundle{Extensions: []extension.Frozen{guildFrozen(t)}}
+	bundle := &recipe.Bundle{Recipe: recipe.Recipe{Documents: []string{"spec.md", "t.md"}}, Extensions: []extension.Frozen{guildFrozen(t)}}
 	mount, prompt, err := extensionMount(bundle, stage)
 	if err != nil || mount == nil || mount.Commit != strings.Repeat("b", 40) || len(mount.Plugins) != 1 {
 		t.Fatalf("mount: %+v, %v", mount, err)
@@ -79,12 +79,12 @@ func TestFrozenPromptAppendsTemplateBeforeHandoff(t *testing.T) {
 		sum := sha256.Sum256([]byte(body))
 		return recipe.Artifact{Path: name, Data: []byte(body), SHA256: hex.EncodeToString(sum[:])}
 	}
-	bundle := &recipe.Bundle{Source: recipe.Source{Commit: strings.Repeat("a", 40), Scope: "src", Spec: "spec.md", Transcript: "t.md"},
+	bundle := &recipe.Bundle{Source: recipe.Source{Commit: strings.Repeat("a", 40), Scope: "src"},
 		Artifacts:  []recipe.Artifact{artifact("spec.md", "requirements"), artifact("t.md", "decisions"), artifact("build.md", "stage prompt")},
 		Extensions: []extension.Frozen{guildFrozen(t)}}
 	task := workflow.FrozenTask{Bundle: bundle,
 		Stage: recipe.Stage{ID: "build", Kind: "implement", Prompt: "build.md", Template: "guild@1.0.0/foundry-build"}}
-	prompt, _, err := frozenPrompt(task, "upstream")
+	prompt, _, err := frozenPrompt(task, "upstream", task.Bundle.Source.Commit)
 	if err != nil {
 		t.Fatal(err)
 	}

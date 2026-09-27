@@ -1,0 +1,5 @@
+{
+  "schema_version": "example-factory/plan/v1",
+  "requirements": [{"id": "understand", "text": "Identify existing behavior and verification commands before editing."}],
+  "tasks": [{"id": "inspect", "requirement_ids": ["understand"], "title": "Inspect the repository", "done_when": "Cite relevant files, constraints and runnable checks."}]
+}

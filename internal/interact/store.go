@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mjtechguy/blaxsmith/internal/evidence"
 	"github.com/mjtechguy/blaxsmith/internal/identity"
 	"github.com/mjtechguy/blaxsmith/internal/tenant"
 	"github.com/mjtechguy/blaxsmith/internal/workflow"
@@ -73,6 +74,7 @@ func AppendEvent(ctx context.Context, tx pgx.Tx, orgID, runID, taskID, attemptID
 }
 
 type watchLine struct {
+	Usage       *json.RawMessage `json:"usage"`
 	Seq         int64            `json:"seq"`
 	Interaction *json.RawMessage `json:"interaction"`
 	Event       *json.RawMessage `json:"event"`
@@ -125,6 +127,19 @@ func (s *Store) Persist(ctx context.Context, a workflow.Attempt, raw []byte) err
 	}
 	var invalid bool
 	switch {
+	case line.Usage != nil:
+		var u evidence.Usage
+		if json.Unmarshal(*line.Usage, &u) != nil || u.Validate() != nil {
+			invalid = true
+			break
+		}
+		if err := workflow.RecordUsage(ctx, tx, a, u); err != nil {
+			if errors.Is(err, workflow.ErrInvalid) || errors.Is(err, workflow.ErrConflict) {
+				invalid = true
+				break
+			}
+			return err
+		}
 	case line.Interaction != nil:
 		var ix Interaction
 		if json.Unmarshal(*line.Interaction, &ix) != nil || ix.validate() != nil {
@@ -266,7 +281,7 @@ func lockRunControl(ctx context.Context, tx pgx.Tx, caller identity.Caller) erro
 		AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
 		AND m.state='active' AND p.state='active'
 		AND (s.auth_method<>'local' OR o.login_policy IN ('local','mixed'))
-		AND (o.mfa_policy<>'required' OR s.mfa_level='totp')
+		AND (s.credential_kind='service' OR o.mfa_policy<>'required' OR s.mfa_level='totp')
 		FOR SHARE OF s,m,p,o`, caller.OrganizationID, caller.SessionID, caller.PrincipalID,
 		caller.Role, caller.AccessExpires).Scan(&role)
 	if errors.Is(err, pgx.ErrNoRows) {

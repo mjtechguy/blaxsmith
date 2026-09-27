@@ -61,3 +61,12 @@ export async function renderMarkdown(text: string) {
   const { Markdown } = await import("../src/markdown");
   return renderToString(<Markdown text={text} />);
 }
+
+export async function renderFactoryMap(review: import("../src/gen/blaxsmith/api/v1/workflow_pb").ReviewPackage | undefined, state = "succeeded", reviewError = false) {
+  const { create } = await import("@bufbuild/protobuf");
+  const { RunTaskSchema } = await import("../src/gen/blaxsmith/api/v1/workflow_pb");
+  const { RunStageMap } = await import("../src/run-stage-map");
+  const tasks = [create(RunTaskSchema, { id: "i", key: "implement", kind: "implement", state: "succeeded", generation: 2n }),
+    create(RunTaskSchema, { id: "v", key: "verify", kind: "verify", state: "succeeded", dependsOn: ["implement"], loopWith: "implement", loopCycles: 1, maxCycles: 2 })];
+  return renderInRouter(<RunStageMap tasks={tasks} statuses={new Map()} projectId="project" runId="run" selected="verify" state={state} review={review} reviewError={reviewError} />);
+}

@@ -400,7 +400,7 @@ func (m *SessionManager) liveSession(ctx context.Context, caller Caller) (Caller
 		AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
 		AND m.state='active' AND p.state='active'
 		AND (s.auth_method<>'local' OR o.login_policy IN ('local','mixed'))
-		AND (o.mfa_policy<>'required' OR s.mfa_level='totp')`,
+		AND (s.credential_kind='service' OR o.mfa_policy<>'required' OR s.mfa_level='totp')`,
 		caller.OrganizationID, caller.SessionID, caller.PrincipalID).Scan(&role, &emailRequired)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && role != caller.Role) {
 		return Caller{}, ErrUnauthenticated

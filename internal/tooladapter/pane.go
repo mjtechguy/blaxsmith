@@ -169,6 +169,10 @@ func Pane(args []string) int {
 					_, _ = events.Write(line)
 					text, id, final := renderEvent(line)
 					work.Observe(bytes.TrimSpace(line))
+					if usage := HarnessUsage(l.Harness, line); usage != nil {
+						payload, _ := json.Marshal(usage)
+						_ = appendRecord("log", "usage", payload)
+					}
 					for _, event := range signalEvents(bytes.TrimSpace(line), l.Signals) {
 						_ = appendRecord("log", "event", event)
 					}

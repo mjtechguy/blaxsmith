@@ -1,3 +1,4 @@
+import { ModelAdvice, type AdvicePhase } from "./model-advice";
 import { useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Star } from "lucide-react";
@@ -11,7 +12,7 @@ import { Disclosure } from "./ui";
 const harnesses = [["", "Any harness"], ["codex", "Codex"], ["claude-code", "Claude Code"], ["opencode", "OpenCode"]] as const;
 const modelId = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/;
 
-export type PickerConnection = { id: string; label: string; provider: string };
+export type PickerConnection = { id: string; label: string; provider: string; models?: ConnectionModel[]; checkedAt?: string; error?: string };
 
 // Favourite models are a per-user browser preference (connection:model keys).
 function useFavorites(key: string): [Set<string>, (modelKey: string) => void] {
@@ -36,10 +37,10 @@ const optionText = (m: PickerModel, info?: ConnectionModel) =>
 // base URL may not list any). With `connections`, picking a model also picks
 // its connection (onChange's second argument). harness fixes the harness
 // filter; fieldId keeps element ids unique when several pickers share a page.
-export function ModelSelect({ connectionId, connections, value, onChange, harness: fixedHarness, fieldId, error }: {
+export function ModelSelect({ connectionId, connections, value, onChange, harness: fixedHarness, fieldId, error, advicePhase, onAdviceEffort }: {
   connectionId: string; connections?: PickerConnection[]; value: string;
   onChange: (model: string, connectionId?: string, info?: ConnectionModel) => void;
-  harness?: string; fieldId?: string; error?: string;
+  harness?: string; fieldId?: string; error?: string; advicePhase?: AdvicePhase; onAdviceEffort?: (model: string, connectionId: string, info: ConnectionModel | undefined, effort: string | undefined) => void;
 }) {
   const session = useQuery({ queryKey: sessionQueryKey, queryFn: ({ signal }) => currentSession(signal) });
   const org = session.data?.organizationId || "";
@@ -49,11 +50,11 @@ export function ModelSelect({ connectionId, connections, value, onChange, harnes
   const [showLegacy, setShowLegacy] = useState(false);
   const [favorites, toggleFavorite] = useFavorites(`blaxsmith-model-favourites:${org}:${session.data?.principalId ?? ""}`);
   const sources: PickerConnection[] = connections ?? (connectionId ? [{ id: connectionId, label: "Models", provider: "" }] : []);
-  const queries = useQueries({ queries: sources.map((c) => ({ queryKey: connectionModelsKey(org, c.id, harness), enabled: Boolean(org),
+  const queries = useQueries({ queries: sources.map((c) => ({ queryKey: connectionModelsKey(org, c.id, harness), enabled: Boolean(org) && c.models === undefined,
     queryFn: ({ signal }: { signal: AbortSignal }) => listConnectionModels(c.id, harness, signal) })) });
-  const pending = sources.length > 0 && queries.some((q) => q.isPending);
+  const pending = sources.length > 0 && queries.some((q, i) => sources[i].models === undefined && q.isPending);
   const info = new Map<string, ConnectionModel>();
-  const models: PickerModel[] = sources.flatMap((c, i) => (queries[i]?.data?.models ?? []).map((m) => {
+  const models: PickerModel[] = sources.flatMap((c, i) => (c.models ?? queries[i]?.data?.models ?? []).map((m) => {
     info.set(providerModelKey(c.id, m.id), m);
     return { instanceId: c.id, slug: m.id, name: m.displayName || m.id, connectionLabel: c.label, provider: c.provider,
       recommended: m.recommended, legacy: m.legacy, isDefault: m.isDefault, badge: m.badge };
@@ -63,7 +64,7 @@ export function ModelSelect({ connectionId, connections, value, onChange, harnes
   const groups = pickerGroups(models, { favorites, showLegacy, query: search, selected, connectionOrder: sources.map((c) => c.id) });
   const legacyCount = models.filter((m) => m.legacy).length;
   const id = fieldId || connectionId || "none";
-  const errors = sources.flatMap((c, i) => queries[i]?.data?.error ? [`${c.label}: ${queries[i]?.data?.error}`] : []);
+  const errors = sources.flatMap((c, i) => { const error = c.error ?? queries[i]?.data?.error; return error ? [`${c.label}: ${error}`] : []; });
   const choose = (key: string) => {
     if (!key) return onChange("", connectionId);
     const at = key.indexOf(":");
@@ -96,6 +97,7 @@ export function ModelSelect({ connectionId, connections, value, onChange, harnes
       {queries.some((q) => q.isError) ? <span className="form-field-error">Models could not be loaded.</span> : null}
       {error && listed ? <span className="form-field-error">{error}</span> : null}
     </div> : null}
+    {advicePhase ? <ModelAdvice phase={advicePhase} models={models} info={info} checkedAt={sources.map((c, i) => c.checkedAt ?? queries[i]?.data?.checkedAt ?? "")} onApply={(model, effort) => { const metadata = info.get(providerModelKey(model.instanceId, model.slug)); if (onAdviceEffort) onAdviceEffort(model.slug, model.instanceId, metadata, effort); else onChange(model.slug, model.instanceId, metadata); }} /> : null}
     <Disclosure key={`${id}:${pending ? "loading" : "ready"}`} summary="Advanced: type a model id" defaultOpen={!sources.length || (!pending && (!models.length || errors.length > 0)) || (Boolean(value) && !listed && !pending)}>
       <TextField label="Model id" name={`model-free-text-${id}`} autoComplete="off" placeholder="Exact provider model id" value={listed ? "" : value} onChange={(v) => onChange(v, connectionId)} onBlur={() => {}} required={false}
         error={value && !listed && !modelId.test(value) ? "Use up to 128 letters, numbers, periods, underscores, slashes, or hyphens." : !listed ? error : undefined} />

@@ -105,6 +105,22 @@ export const needsYou = (status: AgentStatus | null) => status === "needs_approv
 export type StageLike = { key: string; kind: string; state: string; dependsOn: string[]; activeAttemptId?: string };
 export type OpenItem = { stage: string; kind: string; state: string };
 
+// Frozen graphs have at most 64 stages. Keep each dependency layer in server
+// order; unresolved dependencies stay visible instead of inventing an order.
+export function stageLayers<T extends Pick<StageLike, "key" | "dependsOn">>(tasks: T[]): { layers: T[][]; unresolved: T[] } {
+  const layers: T[][] = [];
+  const placed = new Set<string>();
+  let remaining = [...tasks];
+  while (remaining.length) {
+    const ready = remaining.filter((task) => task.dependsOn.every((key) => placed.has(key)));
+    if (!ready.length) break;
+    layers.push(ready);
+    for (const task of ready) placed.add(task.key);
+    remaining = remaining.filter((task) => !placed.has(task.key));
+  }
+  return { layers, unresolved: remaining };
+}
+
 // stageStatus derives one stage's pill from its task row and the run's interactions.
 // reviewWaiting marks a presented, undecided final review (the human_review stage).
 export function stageStatus(task: StageLike, interactions: OpenItem[], tasks: StageLike[], reviewWaiting = false): AgentStatus | null {
@@ -131,6 +147,7 @@ export function rollup(statuses: Array<AgentStatus | null | undefined>): AgentSt
 
 // runStatus rolls a run's stages up, falling back to the run state when no stage says more.
 export function runStatus(runState: string, tasks: StageLike[], interactions: OpenItem[], reviewWaiting = false): AgentStatus | null {
+  if (runState === "succeeded" && reviewWaiting) return "needs_approval";
   const stages = rollup(tasks.map((task) => stageStatus(task, interactions, tasks, reviewWaiting)));
   if (stages && stages !== "done") return stages;
   if (runState === "succeeded") return "done";

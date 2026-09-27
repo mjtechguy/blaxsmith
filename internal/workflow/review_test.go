@@ -27,9 +27,10 @@ func TestReviewPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	bundleJSON, bundleSHA := reviewTestBundle("implement")
 	input := RunInput{OrganizationID: org, ProjectID: project, LaunchKey: "review-run",
-		SourceCommit: strings.Repeat("a", 40), BundleSHA256: strings.Repeat("b", 64),
-		VerificationSHA256: strings.Repeat("c", 64)}
+		SourceCommit: strings.Repeat("a", 40), BundleSHA256: bundleSHA,
+		VerificationSHA256: sha([]byte(reviewTestPolicy))}
 	run, err := store.CreateRun(ctx, input)
 	if err != nil {
 		t.Fatal(err)
@@ -56,6 +57,9 @@ func TestReviewPostgres(t *testing.T) {
 	}
 	task, err := store.AddTask(ctx, org, run.ID, "implement", input.BundleSHA256, 1)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workflow_run_bundles(organization_id,run_id,bundle_json,verification_json) VALUES($1,$2,$3::jsonb,$4::jsonb)`, org, run.ID, bundleJSON, reviewTestPolicy); err != nil {
 		t.Fatal(err)
 	}
 	// The frozen-launch API is integrated separately; seal this fixture before dispatch.
@@ -85,6 +89,10 @@ func TestReviewPostgres(t *testing.T) {
 	if _, err := store.PresentForReview(ctx, other, run.ID, commit, evidence, input.VerificationSHA256); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cross-tenant presentation: %v", err)
 	}
+	if _, err := store.PresentForReview(ctx, org, run.ID, commit, evidence, input.VerificationSHA256); !errors.Is(err, ErrEvidencePending) {
+		t.Fatalf("missing evidence accepted: %v", err)
+	}
+	seedReviewProof(t, pool, org, run.ID, commit)
 	first, err := store.PresentForReview(ctx, org, run.ID, commit, evidence, input.VerificationSHA256)
 	if err != nil || first.Revision != 1 || first.Decision != nil || first.SourceCommit != input.SourceCommit ||
 		first.BundleSHA256 != input.BundleSHA256 || first.VerificationSHA256 != input.VerificationSHA256 {
@@ -201,6 +209,7 @@ func TestReviewPostgres(t *testing.T) {
 	if current, err := store.GetCurrentReview(ctx, org, run.ID); err != nil || current.Decision == nil || current.Decision.Feedback != strings.TrimSpace(feedback) {
 		t.Fatalf("correction feedback not visible: %+v, %v", current, err)
 	}
+	seedReviewProof(t, pool, org, run.ID, strings.Repeat("1", 40))
 	third, err := store.PresentForReview(ctx, org, run.ID, strings.Repeat("1", 40), evidence, input.VerificationSHA256)
 	if err != nil || third.Revision != 3 || third.Decision != nil {
 		t.Fatalf("integrated revision invalidation: %+v, %v", third, err)
@@ -252,6 +261,7 @@ func TestReviewPostgres(t *testing.T) {
 
 	// Approval and replacement both lock the run. Either may win, but the
 	// replacement must leave no approval effective for its new evidence.
+	seedReviewProof(t, pool, org, run.ID, strings.Repeat("2", 40))
 	fourth, err := store.PresentForReview(ctx, org, run.ID, strings.Repeat("2", 40), evidence, input.VerificationSHA256)
 	if err != nil {
 		t.Fatal(err)
@@ -269,6 +279,7 @@ func TestReviewPostgres(t *testing.T) {
 	}()
 	go func() {
 		<-start
+		seedReviewProof(t, pool, org, run.ID, strings.Repeat("3", 40))
 		result, err := store.PresentForReview(ctx, org, run.ID, strings.Repeat("3", 40), evidence, input.VerificationSHA256)
 		replaced <- struct {
 			packageID string
@@ -277,7 +288,7 @@ func TestReviewPostgres(t *testing.T) {
 	}()
 	close(start)
 	approvalErr, replacement := <-approved, <-replaced
-	if approvalErr != nil && !errors.Is(approvalErr, ErrConflict) || replacement.err != nil {
+	if approvalErr != nil && !errors.Is(approvalErr, ErrConflict) && !errors.Is(approvalErr, ErrEvidencePending) || replacement.err != nil {
 		t.Fatalf("approve/present race: %v, %v", approvalErr, replacement.err)
 	}
 	current, err = store.GetCurrentReview(ctx, org, run.ID)

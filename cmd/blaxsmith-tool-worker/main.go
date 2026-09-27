@@ -17,6 +17,12 @@ func main() {
 	}
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
+		case "verify-prepare":
+			if len(os.Args) != 2 {
+				os.Exit(2)
+			}
+			exitOn(tooladapter.PrepareVerification("/workspace/source"))
+			return
 		case "pane":
 			os.Exit(tooladapter.Pane(os.Args[2:]))
 		case "bx":

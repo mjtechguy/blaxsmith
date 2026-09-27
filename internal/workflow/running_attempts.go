@@ -12,6 +12,15 @@ const zeroUUID = "00000000-0000-0000-0000-000000000000"
 // after the last returned (organization ID, attempt ID) pair and resets both
 // cursors after an empty page. It does not claim or mutate an attempt.
 func (s *Store) ListRunningAttempts(ctx context.Context, afterOrgID, afterAttemptID string, limit int) ([]Attempt, error) {
+	return s.listRunningAttempts(ctx, afterOrgID, afterAttemptID, limit, false)
+}
+
+// ListCancellingAttempts keeps urgent stops separate from long verification passes.
+func (s *Store) ListCancellingAttempts(ctx context.Context, afterOrgID, afterAttemptID string, limit int) ([]Attempt, error) {
+	return s.listRunningAttempts(ctx, afterOrgID, afterAttemptID, limit, true)
+}
+
+func (s *Store) listRunningAttempts(ctx context.Context, afterOrgID, afterAttemptID string, limit int, cancelling bool) ([]Attempt, error) {
 	ctx = tenant.System(ctx)
 	if afterOrgID == "" {
 		afterOrgID = zeroUUID
@@ -29,7 +38,8 @@ func (s *Store) ListRunningAttempts(ctx context.Context, afterOrgID, afterAttemp
 		WHERE (a.organization_id,a.id)>($1::uuid,$2::uuid)
 		AND a.state='running' AND t.state='running' AND t.active_attempt_id=a.id
 		AND r.state IN ('active','cancel_requested') AND r.graph_sealed
-		ORDER BY a.organization_id,a.id LIMIT $3`, afterOrgID, afterAttemptID, limit)
+		AND (NOT $4::boolean OR r.state='cancel_requested')
+		ORDER BY a.organization_id,a.id LIMIT $3`, afterOrgID, afterAttemptID, limit, cancelling)
 	if err != nil {
 		return nil, err
 	}

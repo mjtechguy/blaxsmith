@@ -198,8 +198,8 @@ const dagFeatures = tableFeatures({});
 const dagColumns: ColumnDef<typeof dagFeatures, StageRow>[] = [
   { id: "id", header: "Stage", cell: ({ row }) => <span><strong className="mono">{row.original.id}</strong>{row.original.template
     ? <><br /><span className="state-badge extension-badge" title={`Extension stage template ${row.original.template}`}><Package size={11} aria-hidden="true" /> {row.original.template}</span></> : null}</span> },
-  { id: "kind", header: "Kind", cell: ({ row }) => <span className="state-badge">{sentence(row.original.kind)}</span> },
-  { id: "profile", header: "Profile", cell: ({ row }) => row.original.profile ? <span>{row.original.profile}<br /><small className="mono">{row.original.harness} · {row.original.model} · {row.original.effort}</small></span> : <span className="state-badge">Human</span> },
+  { id: "kind", header: "Kind", cell: ({ row }) => <span className="state-badge">{sentence(row.original.kind)}{row.original.mode === "advisory" ? " · advisory" : ""}</span> },
+  { id: "profile", header: "Profile", cell: ({ row }) => row.original.profile ? <span>{row.original.profile}{row.original.harness ? <><br /><small className="mono">{row.original.harness} · {row.original.model} · {row.original.effort}</small></> : null}</span> : <span className="state-badge">Human</span> },
   { id: "deps", header: "Depends on", cell: ({ row }) => row.original.dependsOn.length ? <span className="mono">{row.original.dependsOn.join(", ")}</span> : "—" },
   { id: "loop", header: "Loop", cell: ({ row }) => row.original.loop || "—" },
 ];
@@ -307,7 +307,7 @@ function RecipeEditor({ org, projectId, recipeId, source, baseName }: { org: str
         <p>{projectId ? "Project recipe. Prompt and skill paths resolve against this project's repository at launch." : "Organization recipe. Paths resolve against each launching project's repository."}</p></div></div>
       <form className="editor-form" noValidate onSubmit={(event) => { event.preventDefault(); void submit(); }}>
         {!recipeId ? <>
-          <TextField label="Library name" name="name" autoComplete="off" placeholder="Guild engineering (fast)" value={name} onChange={setName} onBlur={() => undefined} />
+          <TextField label="Library name" name="name" autoComplete="off" placeholder="Anvil starter (fast)" value={name} onChange={setName} onBlur={() => undefined} />
           <TextField label="Description" name="description" autoComplete="off" placeholder="What this recipe is for" value={description} onChange={setDescription} onBlur={() => undefined} required={false} />
         </> : null}
         <TextField label="Frozen path label" name="frozenPath" autoComplete="off" placeholder=".blaxsmith/recipes/<recipe name>.json" value={frozenPath} onChange={setFrozenPath} onBlur={() => undefined} required={false}
@@ -372,8 +372,10 @@ const int = (value: string) => Number.parseInt(value, 10) || 0;
 function RecipeForm(props: FormProps) {
   const { doc, update, errors } = props;
   return <>
-    <TextField label="Recipe ID" name="recipe-name" autoComplete="off" placeholder="guild-engineering" value={doc.name || ""} onChange={(name) => update({ ...doc, name })} onBlur={() => undefined} error={fieldError(errors, "name")} />
-    <TextField label="Required checks (comma separated)" name="required-checks" autoComplete="off" placeholder="project-tests, requirement-coverage" value={(doc.required_checks || []).join(", ")}
+    <TextField label="Recipe ID" name="recipe-name" autoComplete="off" placeholder="anvil-starter" value={doc.name || ""} onChange={(name) => update({ ...doc, name })} onBlur={() => undefined} error={fieldError(errors, "name")} />
+    {doc.schema_version === "blaxsmith.recipe/v1alpha1" ? <Select label="Acceptance" value={doc.acceptance || ""} choices={[["manual", "Manual — human decision on the evidence package"], ["policy", "Policy — accept when selected required checks pass"]]} onChange={(value) => update({ ...doc, acceptance: value as "manual" | "policy" })} error={fieldError(errors, "acceptance")} /> : <p className="notice">Choose manual or policy acceptance.</p>}
+    <TextField required={false} label="Shared documents (comma separated)" name="recipe-documents" autoComplete="off" placeholder="docs/task.md, docs/stack-rules.md" value={(doc.documents || []).join(", ")} onChange={(value) => update({ ...doc, documents: list(value) })} onBlur={() => undefined} error={fieldError(errors, "documents")} />
+    <TextField required={false} label="Required checks (comma separated)" name="required-checks" autoComplete="off" placeholder="project-tests, requirement-coverage" value={(doc.required_checks || []).join(", ")}
       onChange={(value) => update({ ...doc, required_checks: list(value) })} onBlur={() => undefined} error={fieldError(errors, "required_checks")} />
     <div className="recipe-grid">
       <TextField label="Max correction cycles" name="max-corrections" autoComplete="off" placeholder="3" value={String(doc.limits?.max_correction_cycles ?? "")} onChange={(value) => update({ ...doc, limits: { ...doc.limits, max_correction_cycles: int(value) } })} onBlur={() => undefined} error={fieldError(errors, "limits")} />
@@ -442,6 +444,8 @@ function ProfileCard({ id, profile, errors, harnesses, allHarnesses, connections
     <ModelSelect connectionId={connectionId} connections={eligible.map((c) => ({ id: c.id, label: `${c.provider} · ${c.account}`, provider: c.provider }))}
       harness={harness ? profile.harness : ""} fieldId={`${at}-model`} value={shownModel} onChange={(model, chosen, info) => setModel(model, chosen || connectionId, info)} error={fieldError(errors, `${at}.model`)} />
     {!eligible.length ? <p className="form-hint">No active {harness?.provider || "model"} connection lists models yet; type the model ID under Advanced.</p> : null}
+    <TextField label="Project inputs file" name={`${at}-inputs`} autoComplete="off" placeholder=".blaxsmith/inputs.json" value={profile.inputs || ""} onChange={(inputs) => onChange({ ...profile, inputs, agent: inputs ? profile.agent : "" })} onBlur={() => undefined} required={false} error={fieldError(errors, at)} />
+    <TextField label="Agent definition" name={`${at}-agent`} autoComplete="off" placeholder="implementer" value={profile.agent || ""} onChange={(agent) => onChange({ ...profile, agent })} onBlur={() => undefined} required={false} error={fieldError(errors, at)} />
     {skillPaths ? <fieldset className="recipe-fieldset"><legend>Skills</legend>
       {[...new Set([...skillPaths, ...skills])].map((path) => <label key={path} className="recipe-check"><input type="checkbox" checked={skills.includes(path)}
         onChange={(event) => onChange({ ...profile, skills: event.target.checked ? [...skills, path] : skills.filter((s) => s !== path) })} /> <span className="mono">{path}</span></label>)}
@@ -479,7 +483,7 @@ function StageCard({ index, stage, doc, errors, stageKinds, profiles, promptPath
   const human = stage.kind === "human_review";
   const others = doc.stages.filter((s) => s.id !== stage.id).map((s) => s.id);
   const deps = stage.depends_on || [];
-  const loopable = stage.kind === "review" || stage.kind === "verify";
+  const loopable = stage.mode !== "advisory" && (stage.kind === "review" || stage.kind === "verify");
   const templates = extensions.flatMap((e) => templateChoices(e.versions, e.currentVersion, stage.kind, e.key));
   const template = templates.find((t) => t.reference === stage.template);
   const harness = stage.profile ? doc.profiles[stage.profile]?.harness : "";
@@ -490,6 +494,7 @@ function StageCard({ index, stage, doc, errors, stageKinds, profiles, promptPath
       <Select label="Kind" value={stage.kind} choices={stageKinds.map((k) => [k, k.replaceAll("_", " ")])} error={fieldError(errors, `${at}.kind`)}
         onChange={(kind) => onChange(kind === "human_review" ? { id: stage.id, kind, depends_on: stage.depends_on }
           : { ...stage, kind, profile: stage.profile || profiles[0] || "", prompt: stage.prompt || "", ...(kind === "review" || kind === "verify" ? {} : { loop: undefined }) })} />
+      {doc.schema_version === "blaxsmith.recipe/v1alpha1" && ["review", "architect_review", "ui_review"].includes(stage.kind) ? <Select label="Review enforcement" value={stage.mode || "required"} choices={[["required", "Required"], ["advisory", "Advisory — findings do not block"]]} onChange={(mode) => onChange({ ...stage, mode, ...(mode === "advisory" ? { loop: undefined } : {}) })} error={fieldError(errors, `${at}.mode`)} /> : null}
       {!human ? <Select label="Profile" value={stage.profile || ""} choices={profiles.map((p) => [p, `${p} · ${doc.profiles[p]?.harness} ${doc.profiles[p]?.model}`])} onChange={(profile) => onChange({ ...stage, profile })} error={fieldError(errors, `${at}.profile`)} /> : null}
       {!human ? promptPaths?.length ? <Select label="Prompt file" value={stage.prompt || ""} choices={promptPaths.map((p) => [p, p])} onChange={(prompt) => onChange({ ...stage, prompt })} error={fieldError(errors, `${at}.prompt`)} />
         : <TextField label="Prompt file" name={`${at}-prompt`} autoComplete="off" placeholder="prompts/implement.md" value={stage.prompt || ""} onChange={(prompt) => onChange({ ...stage, prompt })} onBlur={() => undefined} error={fieldError(errors, `${at}.prompt`)} /> : null}

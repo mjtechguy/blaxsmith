@@ -56,7 +56,14 @@ func (s *Store) GetAttemptTerminal(ctx context.Context, orgID, attemptID string)
 // included. Otherwise owners/admins may take over, or a principal who owns
 // every connection the attempt is bound to. The role must already be verified
 // against the live membership.
-const takeOverAllowed = `SELECT NOT EXISTS (SELECT 1 FROM access_bindings b
+const takeOverAllowed = `SELECT NOT EXISTS (
+ SELECT 1 FROM workflow_attempts a
+ JOIN workflow_tasks t ON t.organization_id=a.organization_id AND t.id=a.task_id
+ JOIN workflow_run_bundles b ON b.organization_id=t.organization_id AND b.run_id=t.run_id,
+ jsonb_array_elements(b.bundle_json->'recipe'->'stages') stage
+ WHERE a.organization_id=$1::text::uuid AND a.id=$2::text::uuid
+ AND stage->>'id'=t.task_key AND stage->>'kind'='verify')
+ AND NOT EXISTS (SELECT 1 FROM access_bindings b
 		JOIN access_grants g ON g.organization_id=b.organization_id AND g.id=b.grant_id
 		JOIN access_connections c ON c.organization_id=g.organization_id AND c.id=g.connection_id
 		WHERE b.organization_id=$1::text AND b.attempt_id=$2::text AND b.capability='model.invoke'

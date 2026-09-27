@@ -258,3 +258,87 @@ func TestCommandExitConnectorRecordsOnlyBoundObservation(t *testing.T) {
 		}
 	}
 }
+
+func TestCancellationBypassesVerificationAndRequiresActorGone(t *testing.T) {
+	pool := bridgePool(t)
+	store, _ := workflow.New(pool)
+	ctx := tenant.System(t.Context())
+	var org string
+	if err := pool.QueryRow(ctx, `INSERT INTO identity_organizations(id,slug,name) VALUES(gen_random_uuid(),'cancel-verify','Cancel verify') RETURNING id`).Scan(&org); err != nil {
+		t.Fatal(err)
+	}
+	project, err := store.CreateProject(ctx, org, "cancel-verify", "Cancel verify")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"before-verification", "during-verification", "cancellation-pass"} {
+		t.Run(mode, func(t *testing.T) {
+			run, err := store.CreateRun(ctx, workflow.RunInput{OrganizationID: org, ProjectID: project, LaunchKey: mode, SourceCommit: strings.Repeat("a", 40), BundleSHA256: strings.Repeat("b", 64), VerificationSHA256: strings.Repeat("c", 64)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			task, err := store.AddTask(ctx, org, run.ID, "verify", run.BundleSHA256, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, `UPDATE workflow_runs SET graph_sealed=true WHERE organization_id=$1 AND id=$2`, org, run.ID); err != nil {
+				t.Fatal(err)
+			}
+			attempt, err := store.ReserveAttempt(ctx, org, run.ID, task)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.ConfirmStarting(ctx, attempt); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.ConfirmStarted(ctx, attempt); err != nil {
+				t.Fatal(err)
+			}
+			gone, revoked := false, 0
+			bridge := &Bridge{Workflow: store, AX: &fakeAX{}, Actor: completionActor{fakeActor{}, &gone}, Image: "runner@sha256:" + strings.Repeat("e", 64), Pool: "pool-a", Signer: "synthetic", Storage: "gs://snapshots/test/", RevokeOwner: func(context.Context, workflow.Attempt) error { revoked++; return nil }}
+			verified := 0
+			sweep := &CompletionSweep{Workflow: store, Connector: func(context.Context, workflow.Attempt) (*CommandExitConnector, error) {
+				return &CommandExitConnector{Bridge: bridge}, nil
+			}, Verify: func(context.Context, workflow.Attempt, *Bridge) (bool, error) {
+				verified++
+				if mode != "during-verification" {
+					t.Fatal("cancelled attempt entered verifier")
+				}
+				if err := store.RequestCancel(ctx, org, run.ID); err != nil {
+					t.Fatal(err)
+				}
+				return true, context.Canceled
+			}, Result: func(context.Context, workflow.Attempt) ([]byte, error) {
+				t.Fatal("cancelled attempt read guest results")
+				return nil, nil
+			}}
+			scan := sweep.Sweep
+			if mode == "cancellation-pass" {
+				scan = sweep.SweepCancelled
+				if batch, err := scan(ctx, "", "", 10); err != nil || batch.Examined != 0 {
+					t.Fatalf("cancellation pass touched active run: %+v %v", batch, err)
+				}
+			}
+			if mode != "during-verification" {
+				if err := store.RequestCancel(ctx, org, run.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			batch, err := scan(ctx, "", "", 10)
+			if err != nil || batch.Waiting != 1 || batch.Stopped != 0 || revoked != 1 {
+				t.Fatalf("stop skipped actor proof: %+v revoked=%d %v", batch, revoked, err)
+			}
+			gone = true
+			batch, err = scan(ctx, "", "", 10)
+			if err != nil || batch.Stopped != 1 || revoked != 2 {
+				t.Fatalf("stop not recovered: %+v revoked=%d %v", batch, revoked, err)
+			}
+			if (mode == "during-verification" && verified != 1) || (mode != "during-verification" && verified != 0) {
+				t.Fatalf("verification calls: %d", verified)
+			}
+			if err := store.FinalizeCancel(ctx, org, run.ID); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

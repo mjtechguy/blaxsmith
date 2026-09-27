@@ -3,6 +3,8 @@ package workflow
 import (
 	"context"
 	"errors"
+	"github.com/mjtechguy/blaxsmith/internal/recipe"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -28,6 +30,7 @@ type ReviewPackage struct {
 	EvidenceSHA256     string
 	PresentedAt        time.Time
 	Decision           *ReviewDecision
+	AcceptanceMode     string
 }
 
 type ReviewDecision struct {
@@ -74,6 +77,9 @@ func (s *Store) PresentForReview(ctx context.Context, orgID, runID, integratedCo
 	if state != "succeeded" || !sealed || frozen != verificationSHA256 {
 		return ReviewPackage{}, ErrConflict
 	}
+	if err := checkReviewEvidence(ctx, tx, orgID, runID, integratedCommit, verificationSHA256); err != nil {
+		return ReviewPackage{}, err
+	}
 	if currentID != nil && currentCommit != nil && currentEvidence != nil &&
 		*currentCommit == integratedCommit && *currentEvidence == evidenceSHA256 {
 		result, err := readCurrentReview(ctx, tx, orgID, runID)
@@ -87,10 +93,18 @@ func (s *Store) PresentForReview(ctx context.Context, orgID, runID, integratedCo
 		next = *revision + 1
 	}
 	var packageID string
+	compiled, err := runBundle(ctx, tx, orgID, runID)
+	if err != nil {
+		return ReviewPackage{}, err
+	}
+	acceptance := compiled.Recipe.Acceptance
+	if acceptance != "manual" && acceptance != "policy" {
+		return ReviewPackage{}, ErrConflict
+	}
 	err = tx.QueryRow(ctx, `INSERT INTO workflow_review_packages
-		(organization_id,run_id,revision,source_commit,bundle_sha256,verification_sha256,integrated_commit,evidence_sha256)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, orgID, runID, next,
-		source, bundle, frozen, integratedCommit, evidenceSHA256).Scan(&packageID)
+		(organization_id,run_id,revision,source_commit,bundle_sha256,verification_sha256,integrated_commit,evidence_sha256,acceptance_mode)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`, orgID, runID, next,
+		source, bundle, frozen, integratedCommit, evidenceSHA256, acceptance).Scan(&packageID)
 	if err != nil {
 		return ReviewPackage{}, err
 	}
@@ -152,6 +166,31 @@ func (s *Store) DecideReview(ctx context.Context, caller identity.Caller, runID,
 	}
 	if state != "succeeded" || currentID == nil || *currentID != packageID {
 		return ReviewDecision{}, ErrConflict
+	}
+	var acceptance string
+	if err := tx.QueryRow(ctx, `SELECT acceptance_mode FROM workflow_review_packages WHERE organization_id=$1 AND id=$2`, caller.OrganizationID, packageID).Scan(&acceptance); err != nil {
+		return ReviewDecision{}, err
+	}
+	if acceptance != "manual" {
+		return ReviewDecision{}, ErrConflict
+	}
+	if action == "request_changes" {
+		bundle, err := runBundle(ctx, tx, caller.OrganizationID, runID)
+		if err != nil {
+			return ReviewDecision{}, err
+		}
+		if !slices.ContainsFunc(bundle.Recipe.Stages, func(s recipe.Stage) bool { return s.Kind == "implement" }) {
+			return ReviewDecision{}, ErrConflict
+		}
+	}
+	if action == "approve" {
+		var commit, policy string
+		if err := tx.QueryRow(ctx, `SELECT integrated_commit,verification_sha256 FROM workflow_review_packages WHERE organization_id=$1 AND id=$2`, caller.OrganizationID, packageID).Scan(&commit, &policy); err != nil {
+			return ReviewDecision{}, err
+		}
+		if err := checkReviewEvidence(ctx, tx, caller.OrganizationID, runID, commit, policy); err != nil {
+			return ReviewDecision{}, err
+		}
 	}
 	var role string
 	err = tx.QueryRow(ctx, `SELECT m.role FROM identity_sessions s
@@ -233,7 +272,7 @@ func readCurrentReview(ctx context.Context, q reviewQuerier, orgID, runID string
 	var decisionID, principalID, sessionID, action, feedback *string
 	var decidedAt *time.Time
 	err := q.QueryRow(ctx, `SELECT p.id,p.organization_id,p.run_id,p.revision,p.source_commit,p.bundle_sha256,
-		p.verification_sha256,p.integrated_commit,p.evidence_sha256,p.presented_at,
+		p.verification_sha256,p.integrated_commit,p.evidence_sha256,p.presented_at,p.acceptance_mode,
 		d.id::text,d.principal_id::text,d.session_id::text,d.action,d.feedback,d.decided_at
 		FROM workflow_runs r JOIN workflow_review_packages p
 		ON p.organization_id=r.organization_id AND p.run_id=r.id AND p.id=r.review_package_id
@@ -241,7 +280,7 @@ func readCurrentReview(ctx context.Context, q reviewQuerier, orgID, runID string
 		ON d.organization_id=p.organization_id AND d.run_id=p.run_id AND d.package_id=p.id
 		WHERE r.organization_id=$1 AND r.id=$2`, orgID, runID).
 		Scan(&p.ID, &p.OrganizationID, &p.RunID, &p.Revision, &p.SourceCommit, &p.BundleSHA256,
-			&p.VerificationSHA256, &p.IntegratedCommit, &p.EvidenceSHA256, &p.PresentedAt,
+			&p.VerificationSHA256, &p.IntegratedCommit, &p.EvidenceSHA256, &p.PresentedAt, &p.AcceptanceMode,
 			&decisionID, &principalID, &sessionID, &action, &feedback, &decidedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ReviewPackage{}, ErrNotFound
